@@ -114,8 +114,6 @@ path.wire.hot{stroke-width:2.2;opacity:1}
   padding:3px 6px;display:flex;align-items:center;gap:6px}
 #panel .dot{width:7px;height:7px;border-radius:2px;flex:0 0 auto}
 #panel .close{position:absolute;top:9px;right:10px;padding:2px 7px}
-#panel .hint{font-size:11.5px;line-height:1.55;color:var(--muted)}
-#panel .hint code{font-family:var(--font-mono);font-size:10.5px}
 
 #legend{position:absolute;bottom:max(12px,env(safe-area-inset-bottom,0px));
   left:max(12px,env(safe-area-inset-left,0px));background:var(--surface);
@@ -386,16 +384,8 @@ function render(){
 
 /* --------------------------------------------------------------- inspector */
 function drawPanel(){
-  if(!selected){
-    panel.innerHTML='<h2 style="font-family:var(--font-ui);font-size:13px">Pick a card</h2>'+
-      '<p class="hint">One card per <code>.py</code> file, one wire per import that lands '+
-      'back inside this codebase. The dashed cards on the right are what the code reaches '+
-      'outside itself — hosts, databases, the environment — read out of its calls '+
-      'and the URLs it has written down.<br><br>Turn <b>Imports</b> off to leave only those. '+
-      'Click a card to trace it; drag cards to rearrange, and the layout is kept in this '+
-      'browser.</p>';
-    return;
-  }
+  panel.hidden=!selected;
+  if(!selected) return;
   var n=nodes[selected], c=gcolor(n.group);
   var h='<button class="close" id="p-close" aria-label="Clear selection">×</button>';
   h+='<h2 style="--gc:'+c+'">'+esc(n.label)+'</h2>';
