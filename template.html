@@ -503,7 +503,12 @@ function drag(el,n){
     if(id===null||ev.pointerId!==id) return;
     panX=px+(ev.clientX-sx); panY=py+(ev.clientY-sy); applyView();
   });
-  stage.addEventListener("pointerup",function(){ id=null; stage.classList.remove("panning"); });
+  stage.addEventListener("pointerup",function(ev){
+    if(id===null||ev.pointerId!==id) return;
+    id=null; stage.classList.remove("panning");
+    // a click on empty space, not the end of a pan, clears the selection
+    if(selected&&Math.abs(ev.clientX-sx)+Math.abs(ev.clientY-sy)<3) select(null);
+  });
   stage.addEventListener("pointercancel",function(){ id=null; stage.classList.remove("panning"); });
 })();
 
