@@ -531,20 +531,6 @@ def build(root: Path, externals: bool = False, hidden: bool = False,
         ]
     nodes += [endpoints[k] for k in sorted(endpoints)]
 
-    # Nothing importing a file can mean it is run (a script, an app, a test),
-    # loaded by name at runtime, or dead. The page marks it and says so,
-    # rather than guessing which.
-    imported = {d for (_, d), k in edges.items() if k in ("import", "lazy")}
-    # Python runs a folder's __init__.py before anything inside it, so
-    # importing atp.engine.book counts as using atp/engine/__init__.py too
-    for f in files:
-        if f.path.name == "__init__.py" and \
-                any(d.startswith(f.name + ".") for d in imported):
-            imported.add(f.name)
-    for n in nodes:
-        if n["kind"] == "file":
-            n["unimported"] = n["id"] not in imported
-
     wires = [{"from": s, "to": d, "kind": k} for (s, d), k in sorted(edges.items())]
     used = sorted({w["kind"] for w in wires}, key=list(KINDS).index)
 
@@ -1103,11 +1089,6 @@ def module_views(root: Path, graph: dict, decl: dict, hidden: bool = False,
         if n["kind"] == "file":
             members[card(n["id"])].append(n["id"])
 
-    # a module nothing outside it imports, judged on the whole codebase so the
-    # mark does not change with which neighbours a view happens to draw
-    reached = {card(e["to"]) for e in graph["edges"]
-               if e["kind"] in ("import", "lazy") and card(e["from"]) != card(e["to"])}
-
     cards = {}
     for cid, ids in members.items():
         name = cid[4:]
@@ -1117,7 +1098,6 @@ def module_views(root: Path, graph: dict, decl: dict, hidden: bool = False,
             "group": name, "lines": sum(shown[i]["lines"] for i in ids),
             "kind": "module", "files": sorted(ids),
             "door": sorted(mods.get(name, {}).get("front_door", [])),
-            "unimported": cid not in reached,
         }
 
     def view(title: str, unit: str, own: list, mapping) -> dict:

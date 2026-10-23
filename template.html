@@ -131,7 +131,6 @@ path.wire.hot{stroke-width:2.2;opacity:1}
 #legend.closed #legend-toggle{margin:0}
 #legend.closed #legend-toggle .chev{transform:rotate(180deg)}
 #legend.closed #legend-body{display:none}
-.start{flex:0 0 auto;font-size:9px;line-height:16px;color:var(--accent);font-weight:400}
 #legend .shapes{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:7px;padding-bottom:7px;
   border-bottom:1px solid var(--hair-soft);color:var(--ink)}
 #legend .shapes span{margin-right:8px}
@@ -268,8 +267,6 @@ var CW=170, CH=62, COLGAP=112, HEADY=26;
 var MODS=GRAPH.modules||null;
 var VIEWS={files:{title:"Files",unit:"files",nodes:GRAPH.nodes,edges:GRAPH.edges,
                   columns:GRAPH.columns,groups:GRAPH.groups}};
-var UNIMPORTED="Nothing in the codebase imports this. It is run directly "+
-  "(a script, an app, a test), loaded by name at runtime, or unused.";
 var FILES={};
 GRAPH.nodes.forEach(function(n){ FILES[n.id]=n; });
 if(MODS) Object.keys(MODS.views).forEach(function(k){ VIEWS[k]=MODS.views[k]; });
@@ -347,8 +344,7 @@ var gWires=document.createElementNS(NS,"g"); svg.appendChild(gWires);
   if(MODS) row("var(--breach)",2.3,"","uses a name not on the front door");
   var shapes=document.createElement("div"); shapes.className="shapes";
   shapes.innerHTML='<i class="s-mod"></i><span>module</span><i class="s-file"></i><span>file</span>'+
-    '<i class="s-ext"></i><span>outside</span>'+
-    '<b class="start">▶</b><span title="'+UNIMPORTED+'">nothing imports it: run, loaded by name, or unused</span>';
+    '<i class="s-ext"></i><span>outside</span>';
   rows.insertBefore(shapes,rows.firstChild);
 })();
 (function(){
@@ -510,11 +506,6 @@ function show(key){
     el.style.setProperty("--gc",gcolor(n.group));
     el.tabIndex=0; el.setAttribute("role","button");
     var hd=document.createElement("div"); hd.className="hd";
-    if(n.unimported){
-      var st=document.createElement("span"); st.className="start"; st.textContent="▶";
-      st.title=UNIMPORTED; st.setAttribute("aria-label",UNIMPORTED);
-      hd.appendChild(st);
-    }
     var nm=document.createElement("div"); nm.className="nm"; nm.textContent=n.label;
     hd.appendChild(nm);
     var dir=document.createElement("div"); dir.className="dir"; dir.textContent=n.dir;

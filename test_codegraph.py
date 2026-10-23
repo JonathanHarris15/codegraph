@@ -395,23 +395,10 @@ class Placement(unittest.TestCase):
         self.assertEqual(g["columns"][0]["label"], "outside")
 
     def test_no_column_claims_to_be_entry_points(self):
-        # nothing importing a file can mean it is run, loaded by name or dead;
-        # the card says so, the column does not pretend to know which
+        # nothing importing a file can mean it is run, loaded by name or dead,
+        # so the column does not pretend to know which
         labels = [c["label"] for c in cg.build(self.root)["columns"]]
         self.assertNotIn("entry points", labels)
-
-    def test_an_init_runs_when_its_folder_is_imported(self):
-        # importing core.models runs core/__init__.py first, so it is not unused
-        tree(self.root, {"core/__init__.py": "VERSION = 1\n"})
-        mark = {n["id"]: n.get("unimported") for n in cg.build(self.root)["nodes"]}
-        self.assertFalse(mark["core"])
-
-    def test_a_file_nothing_imports_is_marked(self):
-        g = cg.build(self.root)
-        mark = {n["id"]: n.get("unimported") for n in g["nodes"] if n["kind"] == "file"}
-        self.assertTrue(mark["app.cli"])
-        self.assertFalse(mark["app.work"])
-        self.assertFalse(mark["core.models"])
 
     def test_rows_within_a_column_are_distinct(self):
         g = cg.build(self.root)
@@ -703,20 +690,6 @@ class ModuleViews(unittest.TestCase):
             for e in view["edges"]:
                 self.assertIn(e["from"], ids, name)
                 self.assertIn(e["to"], ids, name)
-
-    def test_a_module_nothing_outside_it_imports_is_marked(self):
-        mark = {n["id"]: n.get("unimported") for n in self.views["modules"]["nodes"]
-                if n["kind"] == "module"}
-        self.assertEqual(mark, {"mod:app": True, "mod:(tests)": True,
-                                "mod:engine": False, "mod:util": False})
-
-    def test_the_mark_is_the_same_in_every_view(self):
-        # inside engine, app has no wire coming in only because its importers
-        # are not drawn there; the mark comes from the whole codebase
-        app = next(n for n in self.views["mod:engine"]["nodes"] if n["id"] == "mod:app")
-        util = next(n for n in self.views["mod:engine"]["nodes"] if n["id"] == "mod:util")
-        self.assertTrue(app["unimported"])
-        self.assertFalse(util["unimported"])
 
     def test_the_card_says_what_the_module_is(self):
         card = next(n for n in self.views["modules"]["nodes"] if n["id"] == "mod:engine")

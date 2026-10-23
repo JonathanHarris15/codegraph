@@ -184,13 +184,6 @@ to left: what nothing imports lines up on the right, the things everything
 depends on sit on the left, and outside connections, where data comes from,
 take the first column of all.
 
-A card nothing imports carries a ▶. That can mean three things, and the card
-does not guess which: it is run directly (a script, an app, a test), it is
-loaded by name at runtime (a plugin, a bot), or it is unused. A folder's
-`__init__.py` never gets one when anything inside the folder is imported,
-because Python runs it first. On a module card the mark means no other module
-imports it, judged across the whole codebase rather than one view.
-
 That rule has a useful consequence. Since a file always sits at least one
 column left of anything that imports it, **every import wire points
 rightward**. A wire going backwards would mean a cycle, and there are none to
