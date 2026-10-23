@@ -728,6 +728,17 @@ class Drafting(unittest.TestCase):
     def test_the_front_door_is_what_the_program_uses_today(self):
         self.assertEqual(self.decl["modules"]["engine"]["front_door"], ["Book"])
 
+    def test_a_generic_folder_name_gives_way_to_its_parent(self):
+        tree(self.root, {
+            "packages/core/src/index.py": "", "packages/web/src/main.py": "",
+            "packages/web/build.py": "",
+        })
+        names = {n: m["files"] for n, m in cg.draft(self.root)["modules"].items()}
+        self.assertEqual(names["core"], ["packages/core/src/*"])
+        # two folders that would both be "web" keep their paths apart
+        self.assertEqual(names["packages/web/src"], ["packages/web/src/*"])
+        self.assertEqual(names["packages/web"], ["packages/web/*"])
+
     def test_tests_are_found_by_their_names(self):
         self.assertEqual(self.decl["tests"]["files"], ["tests/**"])
         self.assertNotIn("tests", self.decl["modules"])
@@ -735,6 +746,170 @@ class Drafting(unittest.TestCase):
     def test_the_draft_passes_except_where_tests_reach_in(self):
         r = cg.check(self.root, self.decl)
         self.assertEqual([m.rel for m in r.mismatches], ["tests/test_book.py"])
+
+
+HAS_SCRIPT = any(r.lang == "script" for r in cg.READERS)
+
+
+@unittest.skipUnless(HAS_SCRIPT, "tree-sitter is not installed")
+class ScriptImports(unittest.TestCase):
+    """TypeScript and JavaScript: which file an import lands on. Parsing is
+    tree-sitter's job; resolving is ours, and it is where the bugs live."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.addCleanup(self.tmp.cleanup)
+
+    def graph(self, files: dict, **kw):
+        tree(self.root, files)
+        return cg.build(self.root, **kw)
+
+    def edges(self, g) -> set:
+        return {(e["from"], e["to"]) for e in g["edges"] if e["kind"] in ("import", "lazy")}
+
+    def test_a_relative_import_finds_the_ts_file(self):
+        g = self.graph({"src/a.ts": 'import { b } from "./b";\n',
+                        "src/b.ts": "export const b = 1;\n"})
+        self.assertIn(("src/a.ts", "src/b.ts"), self.edges(g))
+
+    def test_a_folder_import_finds_its_index(self):
+        g = self.graph({"src/a.ts": 'import { x } from "./lib";\n',
+                        "src/lib/index.ts": "export const x = 1;\n"})
+        self.assertIn(("src/a.ts", "src/lib/index.ts"), self.edges(g))
+
+    def test_a_js_ending_finds_the_ts_file(self):
+        # ES modules write the .js the compiler will emit, not the .ts on disk
+        g = self.graph({"src/a.ts": 'import { b } from "./b.js";\n',
+                        "src/b.ts": "export const b = 1;\n"})
+        self.assertIn(("src/a.ts", "src/b.ts"), self.edges(g))
+
+    def test_a_tsconfig_shortcut(self):
+        g = self.graph({
+            "tsconfig.json": (
+                '{\n  // comments and a trailing comma, as tsconfig allows\n'
+                '  "compilerOptions": {\n    "baseUrl": ".",\n'
+                '    "paths": {\n      "@app/core": ["packages/core/src/index.ts"],\n'
+                '      "@/*": ["src/*"],\n    },\n  },\n}\n'),
+            "packages/core/src/index.ts": "export const core = 1;\n",
+            "src/util/time.ts": "export const now = 1;\n",
+            "src/main.ts": 'import { core } from "@app/core";\nimport { now } from "@/util/time";\n',
+        })
+        self.assertIn(("src/main.ts", "packages/core/src/index.ts"), self.edges(g))
+        self.assertIn(("src/main.ts", "src/util/time.ts"), self.edges(g))
+
+    def test_a_workspace_package_by_its_name(self):
+        g = self.graph({
+            "packages/core/package.json": '{"name": "@acme/core", "main": "src/index.ts"}',
+            "packages/core/src/index.ts": "export const core = 1;\n",
+            "packages/app/src/main.ts": 'import { core } from "@acme/core";\n',
+        })
+        self.assertIn(("packages/app/src/main.ts", "packages/core/src/index.ts"), self.edges(g))
+
+    def test_node_built_ins_are_ignored(self):
+        g = self.graph({"a.ts": 'import * as os from "node:os";\nimport fs from "fs";\n'})
+        self.assertEqual((self.edges(g), g["externals_seen"]), (set(), {}))
+
+    def test_a_package_is_counted_by_its_whole_name(self):
+        g = self.graph({"a.ts": 'import { X } from "@scope/pkg/sub/types.js";\nimport lodash from "lodash";\n'})
+        self.assertEqual(sorted(g["externals_seen"]), ["@scope/pkg", "lodash"])
+
+    def test_require_export_from_and_dynamic_import(self):
+        g = self.graph({
+            "a.js": 'const b = require("./b");\nexport * from "./c";\n'
+                    'async function later() { return import("./d"); }\n',
+            "b.js": "", "c.js": "", "d.js": "",
+        })
+        kinds = {e["to"]: e["kind"] for e in g["edges"] if e["from"] == "a.js"}
+        self.assertEqual(kinds, {"b.js": "import", "c.js": "import", "d.js": "lazy"})
+
+    def test_declaration_files_are_left_out(self):
+        g = self.graph({"a.ts": "export const a = 1;\n", "types.d.ts": "declare const x: number;\n"})
+        self.assertEqual([n["id"] for n in g["nodes"]], ["a.ts"])
+
+    def test_python_and_typescript_in_one_codebase(self):
+        g = self.graph({"api/app.py": "", "web/main.ts": 'import { a } from "./a";\n',
+                        "web/a.ts": "export const a = 1;\n"})
+        self.assertEqual({n["id"] for n in g["nodes"]}, {"api.app", "web/main.ts", "web/a.ts"})
+
+
+@unittest.skipUnless(HAS_SCRIPT, "tree-sitter is not installed")
+class ScriptUses(unittest.TestCase):
+    """Which names a TypeScript file takes from another, for front doors."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.addCleanup(self.tmp.cleanup)
+        tree(self.root, {"core/book.ts": "export class Book {}\nexport function fill() {}\n"})
+        self.decl = {"modules": {
+            "core": {"files": ["core/*"], "front_door": ["Book"]},
+            "app": {"files": ["app/*"], "front_door": []},
+        }}
+
+    def check(self, source: str):
+        tree(self.root, {"app/main.ts": source})
+        return cg.check(self.root, self.decl)
+
+    def test_a_named_import_on_the_door_passes(self):
+        self.assertEqual(self.check('import { Book } from "../core/book";\n').mismatches, [])
+
+    def test_a_named_import_off_the_door_is_a_mismatch(self):
+        r = self.check('import { Book, fill as f } from "../core/book";\n')
+        self.assertEqual([("fill" in m.text, m.line) for m in r.mismatches], [(True, 1)])
+
+    def test_a_namespace_import_is_read_by_what_it_touches(self):
+        r = self.check('import * as book from "../core/book";\nnew book.Book();\nbook.fill();\n')
+        self.assertEqual([m.line for m in r.mismatches], [3])
+
+    def test_a_namespace_handed_around_whole_cannot_be_told(self):
+        r = self.check('import * as book from "../core/book";\nkeep(book);\n')
+        self.assertEqual((r.mismatches, [u.line for u in r.unknown]), ([], [2]))
+
+    def test_a_default_import_uses_default(self):
+        r = self.check('import Book from "../core/book";\n')
+        self.assertTrue(any("default" in m.text for m in r.mismatches))
+
+    def test_test_files_are_found_by_their_names(self):
+        self.assertTrue(cg.looks_like_test("src/book.test.ts"))
+        self.assertTrue(cg.looks_like_test("src/book.spec.tsx"))
+        self.assertFalse(cg.looks_like_test("src/book.ts"))
+
+
+@unittest.skipUnless(HAS_SCRIPT, "tree-sitter is not installed")
+class ScriptOutside(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.addCleanup(self.tmp.cleanup)
+
+    def conns(self, source: str) -> dict:
+        tree(self.root, {"a.ts": source})
+        f = cg.files_in(self.root)[0]
+        return {c.target: c.kind for c in cg.reader_of(f).outside(f)}
+
+    def test_a_fetched_url_becomes_its_host(self):
+        self.assertEqual(self.conns('await fetch("https://api.example.com/v1/x");\n'),
+                         {"net:api.example.com": "http"})
+
+    def test_the_environment(self):
+        self.assertEqual(self.conns("const key = process.env.API_KEY;\n"),
+                         {"env:environment": "env"})
+
+    def test_a_library_found_through_its_import(self):
+        found = self.conns('import { spawn } from "node:child_process";\nspawn("git");\n'
+                           'import Anthropic from "@anthropic-ai/sdk";\nnew Anthropic();\n')
+        self.assertEqual(found, {"svc:child_process": "process", "svc:anthropic": "http"})
+
+    def test_a_plain_file_reaches_nothing(self):
+        self.assertEqual(self.conns("export const add = (a: number, b: number) => a + b;\n"), {})
+
+    def test_a_port_filled_in_later_leaves_the_host(self):
+        self.assertEqual(self.conns("const u = `http://127.0.0.1:${port}/x`;\n"),
+                         {"net:127.0.0.1": "http"})
+
+    def test_an_app_link_is_not_a_web_call(self):
+        self.assertEqual(self.conns('open("obsidian://open?vault=x");\n'), {})
 
 
 if __name__ == "__main__":

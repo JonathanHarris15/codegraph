@@ -1,11 +1,20 @@
 # codegraph
 
-Point it at a Python codebase. It reads the imports and writes a page where
-every file is a card and every import is a wire you can trace. It also hunts
-for what the code reaches outside itself — hosts, databases, feeds, the
+Point it at a codebase. It reads the imports and writes a page where every
+module and file is a card and every import is a wire you can trace. It also
+hunts for what the code reaches outside itself — hosts, databases, feeds, the
 environment — and draws those as cards too.
 
-No model in the loop, no third-party packages. Python 3.10 or newer.
+No model in the loop. Python 3.10 or newer to run it. It reads Python on its
+own; for TypeScript and JavaScript it needs tree-sitter (docs/adr/0001):
+
+```
+pip install tree-sitter tree-sitter-typescript tree-sitter-javascript
+```
+
+Without it, Python is still read and TypeScript and JavaScript files are left
+out. A codebase can mix languages; each file is read by the reader for its
+language.
 
 ```
 python codegraph.py ~/Personal\ Projects/Agent\ Trading\ Portal
@@ -19,7 +28,7 @@ reaches outside: 4 feed, 3 HTTP call, 2 serves HTTP, 1 market data / orders, 1 e
     127.0.0.1:8787             http /
     alpaca                     market data / orders
     api.typesafe.ai            https /v1/systemone
-    environment                .env + os.environ
+    environment                environment variables
     sqlite                     database
     www.coindesk.com           https /arc/outboundfeeds/rss/
     ...
@@ -131,14 +140,32 @@ colour is a connection that leaves the process, and the legend names each one.
 
 ## What it sees
 
-It parses with the `ast` module, so it reads what is written, not what runs.
+It parses, it does not run: it reads what is written. Everything that depends
+on the language sits in one reader per language — `PythonReader` and
+`ScriptReader` — which says what a file imports, which names it takes from
+other files, and what it calls outside. The modules, the check and the page
+work the same whatever the language. A new language is a new reader.
 
-**Imports**
+**Imports in Python**
 
 - `import a.b` and `from a.b import c`, resolved against the files it found
 - `from . import x` and `from ..y import z`, counted from the file's package
 - imports inside a `def` or a `class`, marked separately
 - `from helpers import x` in a folder of loose scripts, meaning the file next door
+
+**Imports in TypeScript and JavaScript**
+
+- `import ... from`, `export ... from`, `require()`, and `import()` written
+  inside a function, which counts as an import inside a function
+- a relative path with or without its ending, a folder's `index` file, and a
+  `.js` ending standing for the `.ts` file on disk
+- the shortcuts in `tsconfig.json` under `paths` and `baseUrl`, following
+  `extends`, with the comments and trailing commas tsconfig allows
+- a package in the same repository, by the name in its `package.json`
+- Node's own modules (`node:fs`, `path`) left out; anything else that does not
+  land on a file counted as a third-party package, `@scope/name` whole
+- `.d.ts` files left out: they declare types and run nothing
+- a name taken through `import * as x` is read by what is used off it, `x.Book`
 
 **Connections out**
 
@@ -160,16 +187,23 @@ named after the library, saying the destination is not in the source. That is
 the honest answer: the URL lives in another file and following it there is
 dataflow analysis, not parsing.
 
-Adding a probe is one line in `PROBES`: a glob over the call's dotted name, the
-kind of wire, and a fixed service name or `None` to take the destination from a
-URL in the same file.
+Adding a probe is one line in `PROBES`, or `SCRIPT_PROBES` for TypeScript and
+JavaScript: a glob over the call's dotted name, the kind of wire, and a fixed
+service name or `None` to take the destination from a URL in the same file.
+In TypeScript the name is the package and what is taken from it, so
+`import { spawn } from "node:child_process"` then `spawn()` is
+`child_process.spawn`, and `new Anthropic()` is `@anthropic-ai/sdk`.
+
+A URL with a scheme codegraph does not know, `obsidian://` or `slack://`,
+opens an app rather than reaching a host, and is left out.
 
 ## What it does not see
 
 Imports built at runtime (`importlib`, `__import__`), a module loaded from a
 file path, anything behind a plugin registry. A URL assembled from pieces, or
 held in another file, or read from config at runtime. Connections made by
-something that is not Python — a launchd job, a shell script, a Dockerfile.
+something no reader reads — a launchd job, a shell script, a Dockerfile.
+Languages other than Python, TypeScript and JavaScript, for now.
 Which account a client picks at runtime: a broker that chooses paper or live
 from a flag is one card, not two.
 
@@ -209,7 +243,8 @@ layout is a Python function and nothing else.
 python -m unittest -v
 ```
 
-99 of them, over the parts that can be quietly wrong: turning a path and an
-import statement into the name of another file, deciding that a call reaches
-outside the process, laying the result out so no wire points backwards, and
-deciding whether a name crossed a front door.
+128 of them, over the parts that can be quietly wrong: turning a path and an
+import statement into the name of another file, in each language, deciding
+that a call reaches outside the process, laying the result out so no wire
+points backwards, and deciding whether a name crossed a front door. The
+TypeScript ones skip themselves where tree-sitter is not installed.
