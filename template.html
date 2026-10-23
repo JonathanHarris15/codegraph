@@ -393,7 +393,8 @@ function render(){
   });
   edges.forEach(function(e){
     var p=wireEls[e.i], vis=edgeVisible(e);
-    p.hidden=!vis; if(!vis) return;
+    // SVG ignores the hidden property, so it has to be display
+    p.style.display=vis?"":"none"; if(!vis) return;
     ev++;
     p.setAttribute("d",pathOf(e));
     var hot=!!selected&&(e.from===selected||e.to===selected);
