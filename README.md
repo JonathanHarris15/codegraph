@@ -104,6 +104,15 @@ The search box jumps to a file. Scroll to zoom, drag the background to pan;
 neither has a limit, so you can wander off the graph and **Fit** brings it
 back. The legend folds away from its header.
 
+The page opens on **Modules**: one card per module, wires between them, and
+the outside connections each module makes. Click a module to see its front
+door and the names that cross each wire; a red wire, and a red name, is one
+that is not on the front door. Double-click a module, or press **Open**, to go
+inside it: its own files, with the modules and connections they touch on
+either side. Escape climbs back out. **Files** is the full file-by-file graph.
+The modules come from `codegraph.json` if the codebase has one, and otherwise
+from a draft, one module per folder, which the header says.
+
 Grey wires are imports — dotted means the import is written inside a function,
 the trick a CLI uses so that starting it loads nothing heavy. Every other
 colour is a connection that leaves the process, and the legend names each one.
@@ -184,7 +193,7 @@ layout is a Python function and nothing else.
 python -m unittest -v
 ```
 
-88 of them, over the parts that can be quietly wrong: turning a path and an
+99 of them, over the parts that can be quietly wrong: turning a path and an
 import statement into the name of another file, deciding that a call reaches
 outside the process, laying the result out so no wire points backwards, and
 deciding whether a name crossed a front door.

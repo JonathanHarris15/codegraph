@@ -446,7 +446,8 @@ def _vague(kind: str) -> str:
 
 def build(root: Path, externals: bool = False, hidden: bool = False,
           outside: bool = True, layout: str = "file",
-          keep_empty: bool = False) -> dict:
+          keep_empty: bool = False, decl: dict | None = None,
+          source: str = "declared") -> dict:
     files = [file_of(p, root) for p in discover(root, hidden)]
     index = {m.name: m for m in files}
 
@@ -541,7 +542,7 @@ def build(root: Path, externals: bool = False, hidden: bool = False,
     for n in nodes:
         n["col"], n["row"] = col[n["id"]], row[n["id"]]
 
-    return {
+    graph = {
         "root": root.resolve().name,
         "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "layout": layout,
@@ -552,6 +553,9 @@ def build(root: Path, externals: bool = False, hidden: bool = False,
         "edges": wires,
         "externals_seen": dict(sorted(ext_hits.items(), key=lambda kv: (-kv[1], kv[0]))),
     }
+    if decl is not None:
+        graph["modules"] = module_views(root, graph, decl, hidden, source)
+    return graph
 
 
 def order_groups(files: list, edges: dict, tail: list) -> list[str]:
@@ -906,14 +910,29 @@ def _sorted(findings: list) -> list:
     return sorted(set(findings))
 
 
-def check(root: Path, decl: dict, hidden: bool = False) -> Report:
-    """Read the code back against a declaration.
+@dataclass(frozen=True)
+class Crossing:
+    """One name one module takes from another."""
+    src: str             # dotted name of the file that uses it
+    dst: str             # dotted name of the file it comes from
+    there: str           # the module it comes from
+    name: str
+    ok: bool             # on that module's front door
 
-    Every program file belongs to exactly one module. Every name one module
-    takes from another is on that module's front door. A test is an outside
-    caller, unless declared inside one module, and the program never imports
-    a test.
-    """
+
+@dataclass
+class Reading:
+    """The code, read against a declaration. The check and the page's module
+    views both start here, so they cannot disagree."""
+    files: list
+    owner: dict          # file -> module; a test declared inside one counts
+    tests: set
+    mismatches: list
+    unknown: list
+    crossings: list
+
+
+def read_against(root: Path, decl: dict, hidden: bool = False) -> Reading:
     validate(decl)
     mods = decl["modules"]
     tests = decl.get("tests", {})
@@ -924,12 +943,15 @@ def check(root: Path, decl: dict, hidden: bool = False) -> Report:
     index = {f.name: f for f in files}
     mismatches: list = []
     unknown: list = []
+    crossings: list = []
 
     is_test = {f.name for f in files if _any_match(f.rel, test_pats)}
     owner: dict = {}
     claimed: dict = defaultdict(int)
     for f in files:
         if f.name in is_test:
+            if f.rel in inside:
+                owner[f.name] = inside[f.rel]
             continue
         homes = [n for n, m in mods.items() if _any_match(f.rel, m["files"])]
         for n in homes:
@@ -947,23 +969,121 @@ def check(root: Path, decl: dict, hidden: bool = False) -> Report:
                                       'module "{}" matches no files'.format(n)))
 
     for f in files:
-        here = inside.get(f.rel) if f.name in is_test else owner.get(f.name)
+        here = owner.get(f.name)
         for u in read_uses(f.path, f.package, index):
             if u.target in is_test and f.name not in is_test:
                 mismatches.append(Finding(f.rel, u.line, "imports a test, "
                                           + index[u.target].rel))
                 continue
             there = owner.get(u.target)
-            if there is None or there == here:
+            if there is None or there == here or u.target in is_test:
                 continue
             if u.name is None:
                 unknown.append(Finding(f.rel, u.line, "uses {} in a way that cannot be "
                                        "read ({})".format(there, u.why)))
-            elif u.name not in door[there]:
+                continue
+            ok = u.name in door[there]
+            crossings.append(Crossing(f.name, u.target, there, u.name, ok))
+            if not ok:
                 mismatches.append(Finding(f.rel, u.line, "uses {} from {}, which is not "
                                           "on its front door".format(u.name, there)))
 
-    return Report(_sorted(mismatches), _sorted(unknown))
+    return Reading(files, owner, is_test, _sorted(mismatches), _sorted(unknown),
+                   crossings)
+
+
+def check(root: Path, decl: dict, hidden: bool = False) -> Report:
+    """Read the code back against a declaration.
+
+    Every program file belongs to exactly one module. Every name one module
+    takes from another is on that module's front door. A test is an outside
+    caller, unless declared inside one module, and the program never imports
+    a test.
+    """
+    r = read_against(root, decl, hidden)
+    return Report(r.mismatches, r.unknown)
+
+
+# ------------------------------------------------------------- module views
+#
+# The page's second level: one card per module, wires between them carrying
+# the names that cross, and for each module a view of its own files beside the
+# modules and outside connections they touch.
+
+TESTS_CARD, LOOSE_CARD = "(tests)", "(no module)"
+
+
+def module_views(root: Path, graph: dict, decl: dict, hidden: bool = False,
+                 source: str = "declared") -> dict:
+    r = read_against(root, decl, hidden)
+    mods = decl["modules"]
+    shown = {n["id"]: n for n in graph["nodes"]}
+    is_file = {f.name for f in r.files}
+
+    def card(fid: str) -> str:
+        if fid not in is_file:
+            return fid                                  # outside or third party
+        if fid in r.owner:
+            return "mod:" + r.owner[fid]
+        return "mod:" + (TESTS_CARD if fid in r.tests else LOOSE_CARD)
+
+    members: dict = defaultdict(list)
+    for n in graph["nodes"]:
+        if n["kind"] == "file":
+            members[card(n["id"])].append(n["id"])
+
+    cards = {}
+    for cid, ids in members.items():
+        name = cid[4:]
+        cards[cid] = {
+            "id": cid, "label": name.strip("()"),
+            "dir": "1 file" if len(ids) == 1 else "{} files".format(len(ids)),
+            "group": name, "lines": sum(shown[i]["lines"] for i in ids),
+            "kind": "module", "files": sorted(ids),
+            "door": sorted(mods.get(name, {}).get("front_door", [])),
+        }
+
+    def view(title: str, unit: str, own: list, mapping) -> dict:
+        """Lift the file graph through `mapping`, keep the wires that touch
+        `own`, and lay out what is left."""
+        wires: dict = {}
+        for e in graph["edges"]:
+            a, b = mapping(e["from"]), mapping(e["to"])
+            if a == b or not (a in own or b in own):
+                continue
+            wiring = e["kind"] in ("import", "lazy")
+            key = (a, b, "import" if wiring else e["kind"])
+            if wiring and wires.get(key, {}).get("kind") == "import":
+                continue
+            wires[key] = {"from": a, "to": b, "kind": e["kind"], "names": set(), "bad": set()}
+        for c in r.crossings:
+            w = wires.get((mapping(c.src), mapping(c.dst), "import"))
+            if w:
+                w["names"].add(c.name)
+                if not c.ok:
+                    w["bad"].add(c.name)
+        edges = [dict(w, names=sorted(w["names"]), bad=sorted(w["bad"]))
+                 for _, w in sorted(wires.items())]
+
+        ids = list(dict.fromkeys(own + [x for w in edges for x in (w["from"], w["to"])]))
+        nodes = [dict(cards.get(i) or shown[i]) for i in ids]
+        tail = [g for g in (EXTERNAL, OUTSIDE) if any(n["group"] == g for n in nodes)]
+        col, row, columns = place_by_file(nodes, [(w["from"], w["to"]) for w in edges], tail)
+        for n in nodes:
+            n["col"], n["row"] = col[n["id"]], row[n["id"]]
+        groups = list(dict.fromkeys(n["group"] for n in nodes if n["group"] not in tail))
+        return {"title": title, "unit": unit, "nodes": nodes, "edges": edges,
+                "columns": columns, "groups": groups + tail}
+
+    views = {"modules": view("Modules", "modules", sorted(cards), card)}
+    for cid, c in cards.items():
+        own = c["files"]
+        views[cid] = view(c["label"], "cards", own,
+                          lambda fid, own=set(own): fid if fid in own else card(fid))
+
+    return {"source": source, "views": views,
+            "mismatches": [str(m) for m in r.mismatches],
+            "unknown": [str(u) for u in r.unknown]}
 
 
 def looks_like_test(rel: str) -> bool:
@@ -1098,9 +1218,21 @@ def main(argv: list[str] | None = None) -> int:
             len(report.mismatches), len(report.unknown)))
         return 1 if report.mismatches else 0
 
+    # The page's module views come from the declaration, or failing that from
+    # a draft, which the page labels as a draft.
+    source = "declared"
+    try:
+        decl = json.loads(decl_path.read_text(encoding="utf-8"))
+        validate(decl)
+    except FileNotFoundError:
+        decl, source = draft(root, hidden=args.hidden), "draft"
+    except (json.JSONDecodeError, DeclarationError) as e:
+        print("{}: {}; module views left out".format(decl_path, e))
+        decl = None
+
     graph = build(root, externals=args.externals, hidden=args.hidden,
                   outside=args.outside, layout=args.layout,
-                  keep_empty=args.keep_empty)
+                  keep_empty=args.keep_empty, decl=decl, source=source)
 
     if args.json:
         print(json.dumps(graph, indent=2))
@@ -1139,6 +1271,13 @@ def main(argv: list[str] | None = None) -> int:
         ))
         for n in sorted(outs, key=lambda n: n["label"]):
             print("    {:<26} {}".format(n["label"], n["dir"]))
+
+    mv = graph.get("modules")
+    if mv:
+        print("{} modules ({}), {} off a front door".format(
+            sum(1 for n in mv["views"]["modules"]["nodes"] if n["kind"] == "module"),
+            "from " + decl_path.name if source == "declared" else "drafted from folders",
+            len(mv["mismatches"])))
 
     seen = list(graph["externals_seen"])[:6]
     if seen:

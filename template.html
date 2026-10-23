@@ -12,7 +12,7 @@
   --bg:#eceef3; --grid:#dfe3ea; --surface:#fff; --surface-2:#f6f7fa;
   --ink:#121820; --muted:#5d6878; --hair:#ced5e0; --hair-soft:#e3e8f0;
   --accent:#2f5fe0; --on-accent:#fff;
-  --w-import:#8c97a8; --w-lazy:#9aa5b6;
+  --w-import:#8c97a8; --w-lazy:#9aa5b6; --breach:#cf3434;
   --sat:58%; --lig:38%;
   --font-ui:ui-sans-serif,system-ui,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
   --font-mono:ui-monospace,'Cascadia Mono','JetBrains Mono',Consolas,'Liberation Mono',monospace;
@@ -22,7 +22,7 @@
   --bg:#0d1117; --grid:#161d26; --surface:#161d26; --surface-2:#1c2531;
   --ink:#e4ebf4; --muted:#8c98a9; --hair:#2b3644; --hair-soft:#222c38;
   --accent:#6f9bff; --on-accent:#0d1117;
-  --w-import:#6d7a8c; --w-lazy:#5c6878;
+  --w-import:#6d7a8c; --w-lazy:#5c6878; --breach:#ff6e6e;
   --sat:62%; --lig:68%;
   color-scheme:dark;
 }}
@@ -30,7 +30,7 @@
   --bg:#0d1117; --grid:#161d26; --surface:#161d26; --surface-2:#1c2531;
   --ink:#e4ebf4; --muted:#8c98a9; --hair:#2b3644; --hair-soft:#222c38;
   --accent:#6f9bff; --on-accent:#0d1117;
-  --w-import:#6d7a8c; --w-lazy:#5c6878;
+  --w-import:#6d7a8c; --w-lazy:#5c6878; --breach:#ff6e6e;
   --sat:62%; --lig:68%;
   color-scheme:dark;
 }
@@ -140,6 +140,30 @@ path.wire.hot{stroke-width:2.2;opacity:1}
 #legend .key i{width:7px;height:7px;border-radius:2px;flex:0 0 auto}
 #legend .key b{font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
+/* module views */
+#crumbs{font-family:var(--font-mono);font-size:12px;color:var(--muted);white-space:nowrap}
+#crumbs button{font-family:var(--font-mono);font-size:12px;padding:1px 4px;border:0;
+  background:none;color:var(--accent)}
+#crumbs button:hover{text-decoration:underline}
+#crumbs b{color:var(--ink);font-weight:600}
+.issues{color:var(--breach)}
+.seg{display:inline-flex}
+.seg button{border-radius:0;margin-left:-1px}
+.seg button:first-child{border-radius:6px 0 0 6px;margin-left:0}
+.seg button:last-child{border-radius:0 6px 6px 0}
+.card.mod{border-left-width:5px}
+.card.mod.opens .nm::after{content:" ›";color:var(--muted)}
+path.wire.breach{stroke-width:2}
+#panel .names{font-family:var(--font-mono);font-size:9.5px;color:var(--muted);
+  padding:1px 6px 2px 19px;line-height:1.45;word-break:break-word}
+#panel .names b{color:var(--breach);font-weight:600}
+#panel .chips{display:flex;flex-wrap:wrap;gap:4px}
+#panel .chips span{font-family:var(--font-mono);font-size:10px;padding:1px 6px;
+  border:1px solid var(--hair);border-radius:4px;background:var(--surface-2)}
+#panel .note{font-size:11px;color:var(--muted);line-height:1.5}
+#panel .open{display:block;width:100%;margin-top:10px;background:var(--accent);
+  border-color:var(--accent);color:var(--on-accent)}
+
 @media (max-width:860px){
   #panel{left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));
     width:auto;top:auto;bottom:max(12px,env(safe-area-inset-bottom,0px));max-height:52%}
@@ -153,10 +177,16 @@ path.wire.hot{stroke-width:2.2;opacity:1}
 <div id="shell">
   <header>
     <h1>codegraph <span id="rootname"></span></h1>
+    <span id="crumbs"></span>
     <span class="counts" id="counts"></span>
+    <span class="counts issues" id="issues"></span>
     <span class="spacer"></span>
     <div class="toolbar">
-      <input type="search" id="q" placeholder="find a file" aria-label="Find a file">
+      <span class="seg" id="viewseg" hidden>
+        <button id="v-modules" aria-pressed="false">Modules</button>
+        <button id="v-files" aria-pressed="false">Files</button>
+      </span>
+      <input type="search" id="q" placeholder="find a card" aria-label="Find a card">
       <button id="t-imports" aria-pressed="true">Imports</button>
       <button id="t-lazy" aria-pressed="true">Lazy</button>
       <button id="b-fit">Fit</button>
@@ -188,19 +218,22 @@ if(!GRAPH){document.getElementById("panel").textContent="No graph data.";return;
 
 var CW=170, CH=62, COLGAP=112, ROWGAP=78, HEADY=26;
 
-var nodes={}, order=GRAPH.nodes.slice();
-order.forEach(function(n){ nodes[n.id]=n; });
+/* ------------------------------------------------------------------- views
+   The file graph is always one view. A declaration (or a draft of one) adds
+   the module view and one view inside each module. The generator places
+   every card in every view; the page only draws whichever is open. */
+var MODS=GRAPH.modules||null;
+var VIEWS={files:{title:"Files",unit:"files",nodes:GRAPH.nodes,edges:GRAPH.edges,
+                  columns:GRAPH.columns,groups:GRAPH.groups}};
+if(MODS) Object.keys(MODS.views).forEach(function(k){ VIEWS[k]=MODS.views[k]; });
 
-var edges=GRAPH.edges.filter(function(e){ return nodes[e.from]&&nodes[e.to]; })
-  .map(function(e,i){ return {i:i,from:e.from,to:e.to,kind:e.kind}; });
-
-var out={}, inn={};
-order.forEach(function(n){ out[n.id]=[]; inn[n.id]=[]; });
-edges.forEach(function(e){ out[e.from].push(e); inn[e.to].push(e); });
-
-/* a folder's colour comes from its place in the order, golden angle apart */
-var hue={};
-GRAPH.groups.forEach(function(g,i){ hue[g]=Math.round((i*137.508)%360); });
+/* every folder and module gets one hue, golden angle apart, the same in every view */
+var hue={}, hues=0;
+Object.keys(VIEWS).forEach(function(k){
+  VIEWS[k].groups.forEach(function(g){
+    if(hue[g]===undefined) hue[g]=Math.round((hues++*137.508)%360);
+  });
+});
 function gcolor(g){
   if(g==="(external)"||g==="(outside)") return "var(--muted)";
   return "hsl("+(hue[g]||0)+" var(--sat) var(--lig))";
@@ -219,25 +252,6 @@ function kcolor(k){
 }
 function isWiring(k){ return k==="import"||k==="lazy"; }
 
-/* ------------------------------------------------------------------ layout
-   The generator decides which column and row each card belongs in; all this
-   does is turn that into pixels, and centre each column. */
-var base={}, colX={}, tallest=1;
-(function(){
-  var count={};
-  order.forEach(function(n){ count[n.col]=(count[n.col]||0)+1; });
-  Object.keys(count).forEach(function(c){ tallest=Math.max(tallest,count[c]); });
-  order.forEach(function(n){
-    if(colX[n.col]===undefined) colX[n.col]=n.col*(CW+COLGAP);
-    var pad=(tallest-count[n.col])/2;
-    base[n.id]={x:colX[n.col], y:HEADY+(pad+n.row)*ROWGAP};
-  });
-})();
-
-var pos={};
-function resetPos(){ order.forEach(function(n){ pos[n.id]={x:base[n.id].x,y:base[n.id].y}; }); }
-resetPos();
-
 var KEY="codegraph."+(GRAPH.root||"x");
 function save(k,v){ try{ localStorage.setItem(KEY+"."+k,JSON.stringify(v)); }catch(e){} }
 function load(k){ try{ var s=localStorage.getItem(KEY+"."+k); return s?JSON.parse(s):null; }catch(e){ return null; } }
@@ -247,10 +261,6 @@ var showLazy=true, showImports=true, selected=null, query="", scale=1, panX=0, p
   var s=load("show")||{};
   if(typeof s.lazy==="boolean") showLazy=s.lazy;
   if(typeof s.imports==="boolean") showImports=s.imports;
-  var p=load("pos");
-  if(p) Object.keys(p).forEach(function(id){
-    if(pos[id]&&p[id]&&typeof p[id].x==="number") pos[id]={x:p[id].x,y:p[id].y};
-  });
 })();
 
 function edgeVisible(e){
@@ -262,50 +272,44 @@ function edgeVisible(e){
 /* --------------------------------------------------------------------- DOM */
 var stage=document.getElementById("stage"), canvas=document.getElementById("canvas"),
     svg=document.getElementById("wires"), panel=document.getElementById("panel"),
-    counts=document.getElementById("counts");
+    counts=document.getElementById("counts"), issues=document.getElementById("issues"),
+    crumbs=document.getElementById("crumbs"), qbox=document.getElementById("q");
 document.getElementById("rootname").textContent=GRAPH.root||"";
 document.getElementById("gen").textContent="read "+(GRAPH.generated||"").replace("T"," ").replace("+00:00"," UTC");
 document.title="codegraph "+(GRAPH.root||"");
 
 var NS="http://www.w3.org/2000/svg";
 var defs=document.createElementNS(NS,"defs");
-Object.keys(KINDS).forEach(function(k){
+function marker(id,fill){
   var m=document.createElementNS(NS,"marker");
-  m.setAttribute("id","ar-"+k); m.setAttribute("viewBox","0 0 8 8");
+  m.setAttribute("id","ar-"+id); m.setAttribute("viewBox","0 0 8 8");
   m.setAttribute("refX","7"); m.setAttribute("refY","4");
   m.setAttribute("markerWidth","6"); m.setAttribute("markerHeight","6");
   m.setAttribute("orient","auto-start-reverse");
   var p=document.createElementNS(NS,"path");
-  p.setAttribute("d","M0 0.8 L7.4 4 L0 7.2 Z"); p.setAttribute("fill",kcolor(k));
+  p.setAttribute("d","M0 0.8 L7.4 4 L0 7.2 Z"); p.setAttribute("fill",fill);
   m.appendChild(p); defs.appendChild(m);
-});
+}
+Object.keys(KINDS).forEach(function(k){ marker(k,kcolor(k)); });
+marker("breach","var(--breach)");
 svg.appendChild(defs);
-
-(function(){
-  var key=document.getElementById("folder-key");
-  var seen={};
-  order.forEach(function(n){ seen[n.group]=(seen[n.group]||0)+1; });
-  GRAPH.groups.forEach(function(g){
-    if(!seen[g]) return;
-    var s=document.createElement("span");
-    s.innerHTML='<i style="background:'+gcolor(g)+'"></i><b>'+
-      g.replace(/[<>&]/g,"")+'</b>';
-    s.title=g+" · "+seen[g]+" files";
-    key.appendChild(s);
-  });
-})();
+var gWires=document.createElementNS(NS,"g"); svg.appendChild(gWires);
 
 (function(){
   var rows=document.getElementById("legend-rows");
-  Object.keys(KINDS).forEach(function(k){
-    var d=KINDS[k], r=document.createElement("div");
+  function row(stroke,width,dash,label){
+    var r=document.createElement("div");
     r.className="row";
     r.innerHTML='<svg width="26" height="8" aria-hidden="true"><line x1="1" y1="4" x2="25" y2="4" '+
-      'stroke="'+kcolor(k)+'" stroke-width="'+(d.width+0.3)+'"'+
-      (d.dash?' stroke-dasharray="'+d.dash+'"':'')+' stroke-linecap="round"/></svg>'+
-      '<span>'+d.label+'</span>';
+      'stroke="'+stroke+'" stroke-width="'+width+'"'+
+      (dash?' stroke-dasharray="'+dash+'"':'')+' stroke-linecap="round"/></svg>'+
+      '<span>'+label+'</span>';
     rows.appendChild(r);
+  }
+  Object.keys(KINDS).forEach(function(k){
+    var d=KINDS[k]; row(kcolor(k),d.width+0.3,d.dash,d.label);
   });
+  if(MODS) row("var(--breach)",2.3,"","uses a name not on the front door");
 })();
 (function(){
   var legend=document.getElementById("legend"), btn=document.getElementById("legend-toggle");
@@ -318,44 +322,121 @@ svg.appendChild(defs);
     var open=legend.classList.contains("closed"); set(open); save("legend",open);
   });
 })();
-var gWires=document.createElementNS(NS,"g"); svg.appendChild(gWires);
 
-(GRAPH.columns||[]).forEach(function(c,i){
-  if(!c.label||colX[i]===undefined) return;
-  var d=document.createElement("div");
-  d.className="colhead"; d.textContent=c.label;
-  d.style.setProperty("--gc","var(--muted)");
-  d.style.left=colX[i]+"px"; d.style.top="0px"; d.style.width=CW+"px";
-  canvas.appendChild(d);
-});
+/* ------------------------------------------------------------- open a view */
+var cur=null, trail=[], V=null, nodes={}, order=[], edges=[], out={}, inn={},
+    base={}, colX={}, pos={}, cardEls={}, wireEls={};
 
-var cardEls={};
-order.forEach(function(n){
-  var el=document.createElement("div");
-  el.className="card"+(n.kind==="file"?"":" ext");
-  el.style.setProperty("--gc",gcolor(n.group));
-  el.tabIndex=0; el.setAttribute("role","button");
-  var nm=document.createElement("div"); nm.className="nm"; nm.textContent=n.label;
-  var dir=document.createElement("div"); dir.className="dir"; dir.textContent=n.dir;
-  var foot=document.createElement("div"); foot.className="foot";
-  foot.textContent=(n.lines?n.lines+" lines  ":"")+"↱"+inn[n.id].length+" ↳"+out[n.id].length;
-  el.appendChild(nm); el.appendChild(dir); el.appendChild(foot);
-  canvas.appendChild(el); cardEls[n.id]=el;
-  drag(el,n);
-});
+function posKey(){ return cur==="files"?"pos":"pos:"+cur; }
+function resetPos(){ order.forEach(function(n){ pos[n.id]={x:base[n.id].x,y:base[n.id].y}; }); }
 
-var wireEls={};
-edges.forEach(function(e){
-  var d=KINDS[e.kind]||KINDS["import"];
-  var p=document.createElementNS(NS,"path");
-  p.setAttribute("class","wire");
-  p.setAttribute("stroke",kcolor(e.kind));
-  p.setAttribute("stroke-width",String(d.width));
-  if(d.dash) p.setAttribute("stroke-dasharray",d.dash);
-  p.setAttribute("marker-end","url(#ar-"+e.kind+")");
-  p.setAttribute("opacity",isWiring(e.kind)?"0.6":"0.9");
-  gWires.appendChild(p); wireEls[e.i]=p;
-});
+function show(key){
+  V=VIEWS[key]; cur=key; selected=null; query=""; qbox.value="";
+  nodes={}; order=V.nodes.slice();
+  order.forEach(function(n){ nodes[n.id]=n; });
+  edges=V.edges.filter(function(e){ return nodes[e.from]&&nodes[e.to]; })
+    .map(function(e,i){ return {i:i,from:e.from,to:e.to,kind:e.kind,
+                                names:e.names||[],bad:e.bad||[]}; });
+  out={}; inn={};
+  order.forEach(function(n){ out[n.id]=[]; inn[n.id]=[]; });
+  edges.forEach(function(e){ out[e.from].push(e); inn[e.to].push(e); });
+
+  /* turn the generator's columns and rows into pixels, each column centred */
+  base={}; colX={};
+  var count={}, tallest=1;
+  order.forEach(function(n){ count[n.col]=(count[n.col]||0)+1; });
+  Object.keys(count).forEach(function(c){ tallest=Math.max(tallest,count[c]); });
+  order.forEach(function(n){
+    if(colX[n.col]===undefined) colX[n.col]=n.col*(CW+COLGAP);
+    base[n.id]={x:colX[n.col], y:HEADY+((tallest-count[n.col])/2+n.row)*ROWGAP};
+  });
+  pos={}; resetPos();
+  var p=load(posKey());
+  if(p) Object.keys(p).forEach(function(id){
+    if(pos[id]&&p[id]&&typeof p[id].x==="number") pos[id]={x:p[id].x,y:p[id].y};
+  });
+
+  Array.prototype.slice.call(canvas.children).forEach(function(c){
+    if(c!==svg) canvas.removeChild(c);
+  });
+  while(gWires.firstChild) gWires.removeChild(gWires.firstChild);
+
+  (V.columns||[]).forEach(function(c,i){
+    if(!c.label||colX[i]===undefined) return;
+    var d=document.createElement("div");
+    d.className="colhead"; d.textContent=c.label;
+    d.style.setProperty("--gc","var(--muted)");
+    d.style.left=colX[i]+"px"; d.style.top="0px"; d.style.width=CW+"px";
+    canvas.appendChild(d);
+  });
+
+  cardEls={};
+  order.forEach(function(n){
+    var el=document.createElement("div");
+    el.className="card"+(n.kind==="file"?"":n.kind==="module"?" mod":" ext")+
+      (VIEWS[n.id]&&n.id!==cur?" opens":"");
+    el.style.setProperty("--gc",gcolor(n.group));
+    el.tabIndex=0; el.setAttribute("role","button");
+    var nm=document.createElement("div"); nm.className="nm"; nm.textContent=n.label;
+    var dir=document.createElement("div"); dir.className="dir"; dir.textContent=n.dir;
+    var foot=document.createElement("div"); foot.className="foot";
+    foot.textContent=(n.lines?n.lines+" lines  ":"")+"↱"+inn[n.id].length+" ↳"+out[n.id].length;
+    el.appendChild(nm); el.appendChild(dir); el.appendChild(foot);
+    canvas.appendChild(el); cardEls[n.id]=el;
+    drag(el,n);
+  });
+
+  wireEls={};
+  edges.forEach(function(e){
+    var d=KINDS[e.kind]||KINDS["import"], bad=e.bad.length>0;
+    var p=document.createElementNS(NS,"path");
+    p.setAttribute("class","wire"+(bad?" breach":""));
+    p.setAttribute("stroke",bad?"var(--breach)":kcolor(e.kind));
+    p.setAttribute("stroke-width",String(d.width));
+    if(d.dash) p.setAttribute("stroke-dasharray",d.dash);
+    p.setAttribute("marker-end","url(#ar-"+(bad?"breach":e.kind)+")");
+    p.setAttribute("opacity",bad?"0.95":isWiring(e.kind)?"0.6":"0.9");
+    gWires.appendChild(p); wireEls[e.i]=p;
+  });
+
+  drawKey(); drawCrumbs(); save("trail",trail);
+  render(); drawPanel(); openView();
+}
+
+/* from the top: Modules, then the module you went into. Files stands alone. */
+function open(key){
+  if(!VIEWS[key]) return;
+  trail = key==="files"||key==="modules" ? [key] : ["modules",key];
+  show(key);
+}
+
+function drawKey(){
+  var key=document.getElementById("folder-key"), seen={};
+  key.innerHTML="";
+  order.forEach(function(n){ seen[n.group]=(seen[n.group]||0)+1; });
+  V.groups.forEach(function(g){
+    if(!seen[g]||g==="(outside)"||g==="(external)") return;
+    var s=document.createElement("span");
+    s.innerHTML='<i style="background:'+gcolor(g)+'"></i><b>'+esc(g)+'</b>';
+    s.title=g+" · "+seen[g]+" cards";
+    key.appendChild(s);
+  });
+}
+
+function drawCrumbs(){
+  var seg=document.getElementById("viewseg");
+  seg.hidden=!MODS;
+  document.getElementById("v-modules").setAttribute("aria-pressed",String(cur!=="files"));
+  document.getElementById("v-files").setAttribute("aria-pressed",String(cur==="files"));
+  crumbs.innerHTML="";
+  if(trail.length<2) return;
+  var up=document.createElement("button");
+  up.textContent="Modules"; up.addEventListener("click",function(){ open("modules"); });
+  crumbs.appendChild(up);
+  crumbs.appendChild(document.createTextNode(" › "));
+  var here=document.createElement("b"); here.textContent=V.title;
+  crumbs.appendChild(here);
+}
 
 /* ------------------------------------------------------------------ render */
 function anchors(a,b){
@@ -379,23 +460,26 @@ function extent(){
   order.forEach(function(n){ w=Math.max(w,pos[n.id].x+CW); h=Math.max(h,pos[n.id].y+CH); });
   return {w:w,h:h};
 }
+function hits(n){
+  return n.id.toLowerCase().indexOf(query)>=0||String(n.label).toLowerCase().indexOf(query)>=0;
+}
 
 function render(){
   var ring=selected?near(selected):null;
-  var ev=0;
+  var ev=0, bad=0;
   order.forEach(function(n){
     var el=cardEls[n.id];
     el.style.transform="translate("+pos[n.id].x+"px,"+pos[n.id].y+"px)";
     el.classList.toggle("sel",selected===n.id);
     el.classList.toggle("near",!!ring&&ring[n.id]&&selected!==n.id);
     el.classList.toggle("dim",!!ring&&!ring[n.id]);
-    el.classList.toggle("hit",!!query&&!selected&&n.id.toLowerCase().indexOf(query)>=0);
+    el.classList.toggle("hit",!!query&&!selected&&hits(n));
   });
   edges.forEach(function(e){
     var p=wireEls[e.i], vis=edgeVisible(e);
     // SVG ignores the hidden property, so it has to be display
     p.style.display=vis?"":"none"; if(!vis) return;
-    ev++;
+    ev++; if(e.bad.length) bad++;
     p.setAttribute("d",pathOf(e));
     var hot=!!selected&&(e.from===selected||e.to===selected);
     p.classList.toggle("hot",hot);
@@ -405,7 +489,12 @@ function render(){
   svg.setAttribute("width",b.w+40); svg.setAttribute("height",b.h+40);
   canvas.style.width=(b.w+40)+"px"; canvas.style.height=(b.h+40)+"px";
   applyView();
-  counts.textContent=order.length+" files · "+ev+" wires · "+GRAPH.groups.length+" folders";
+  var mine=order.filter(function(n){ return n.kind===(cur==="modules"?"module":"file"); }).length;
+  var unit=cur==="modules"?"modules":"files";
+  counts.textContent=mine+" "+unit+" · "+ev+" wires"+
+    (cur==="files"?" · "+GRAPH.groups.length+" folders":
+     MODS&&MODS.source==="draft"?" · drafted from folders":"");
+  issues.textContent=cur!=="files"&&bad?bad+(bad===1?" wire":" wires")+" off a front door":"";
 }
 /* panning and zooming only move the canvas, so they skip redrawing the wires;
    the dot grid moves with it so the background reads as the same surface.
@@ -429,10 +518,19 @@ function drawPanel(){
   var n=nodes[selected], c=gcolor(n.group);
   var h='<button class="close" id="p-close" aria-label="Clear selection">×</button>';
   h+='<h2 style="--gc:'+c+'">'+esc(n.label)+'</h2>';
-  h+='<div class="ppath">'+esc(n.id)+'</div>';
+  h+='<div class="ppath">'+esc(n.kind==="module"?"module":n.id)+'</div>';
   h+='<div class="meta"><span>'+esc(n.dir)+'</span>';
   if(n.lines) h+='<span>'+n.lines+' lines</span>';
   h+='<span>'+inn[n.id].length+' in</span><span>'+out[n.id].length+' out</span></div>';
+  if(VIEWS[n.id]&&n.id!==cur)
+    h+='<button class="open" data-open="'+esc(n.id)+'">Open '+esc(n.label)+' ›</button>';
+
+  if(n.kind==="module"){
+    h+='<h3>Front door ('+n.door.length+')</h3>';
+    h+=n.door.length
+      ? '<div class="chips">'+n.door.map(function(d){ return '<span>'+esc(d)+'</span>'; }).join("")+'</div>'
+      : '<p class="note">Nothing declared. Every name taken from here is off the door.</p>';
+  }
 
   function list(title,arr,key,want){
     var vis=arr.filter(function(e){ return edgeVisible(e)&&want(e.kind); });
@@ -444,16 +542,20 @@ function drawPanel(){
               : isWiring(e.kind) ? "" : (KINDS[e.kind]||{}).label||e.kind;
       s+='<li><button data-go="'+esc(o.id)+'">'+
          '<span class="dot" style="background:'+
-           (isWiring(e.kind)?gcolor(o.group):kcolor(e.kind))+'"></span>'+
+           (e.bad.length?"var(--breach)":isWiring(e.kind)?gcolor(o.group):kcolor(e.kind))+'"></span>'+
          '<span>'+esc(o.label)+'</span>'+
          '<span style="color:var(--muted);margin-left:auto">'+esc(tag)+
-         '</span></button></li>';
+         '</span></button>';
+      if(e.names.length) s+='<div class="names">'+e.names.map(function(nm){
+        return e.bad.indexOf(nm)>=0?'<b>'+esc(nm)+'</b>':esc(nm);
+      }).join(", ")+'</div>';
+      s+='</li>';
     });
     return s+'</ul>';
   }
   h+=list("Reaches outside",out[n.id],"to",function(k){ return !isWiring(k); });
-  h+=list("Imports",out[n.id],"to",isWiring);
-  h+=list("Used by",inn[n.id],"from",function(){ return true; });
+  h+=list(n.kind==="module"?"Uses":"Imports",out[n.id],"to",isWiring);
+  h+=list("Used by",inn[n.id],"from",isWiring);
   panel.innerHTML=h;
 
   document.getElementById("p-close").addEventListener("click",function(){ select(null); });
@@ -461,6 +563,9 @@ function drawPanel(){
     b.addEventListener("click",function(){
       var id=b.getAttribute("data-go"); select(id); focus(id);
     });
+  });
+  Array.prototype.forEach.call(panel.querySelectorAll("[data-open]"),function(b){
+    b.addEventListener("click",function(){ open(b.getAttribute("data-open")); });
   });
 }
 function esc(s){ return String(s).replace(/[&<>"]/g,function(c){
@@ -491,9 +596,11 @@ function drag(el,n){
   el.addEventListener("pointerup",function(ev){
     if(id===null||ev.pointerId!==id) return;
     id=null;
-    if(moved) save("pos",pos); else select(selected===n.id?null:n.id);
+    if(moved) save(posKey(),pos); else select(selected===n.id?null:n.id);
   });
   el.addEventListener("pointercancel",function(){ id=null; });
+  // a double click goes into a module
+  el.addEventListener("dblclick",function(){ if(VIEWS[n.id]&&n.id!==cur) open(n.id); });
   el.addEventListener("keydown",function(ev){
     if(ev.key==="Enter"||ev.key===" "){ ev.preventDefault(); select(selected===n.id?null:n.id); }
   });
@@ -562,27 +669,42 @@ function syncToggles(){
   lazyBtn.disabled=!showImports;
   lazyBtn.style.opacity=showImports?"":"0.45";
   save("show",{lazy:showLazy,imports:showImports});
-  render(); drawPanel();
+  if(V){ render(); drawPanel(); }
 }
 impBtn.addEventListener("click",function(){ showImports=!showImports; syncToggles(); });
 lazyBtn.addEventListener("click",function(){ showLazy=!showLazy; syncToggles(); });
 syncToggles();
+document.getElementById("v-modules").addEventListener("click",function(){
+  if(cur==="files") open(trail.length&&trail[0]!=="files"?trail[trail.length-1]:"modules");
+});
+document.getElementById("v-files").addEventListener("click",function(){
+  if(cur!=="files") open("files");
+});
 document.getElementById("b-fit").addEventListener("click",fit);
 document.getElementById("b-reset").addEventListener("click",function(){
-  resetPos(); save("pos",pos); openView();
+  resetPos(); save(posKey(),pos); openView(); render();
 });
-document.getElementById("q").addEventListener("input",function(ev){
+qbox.addEventListener("input",function(ev){
   query=ev.target.value.trim().toLowerCase();
   if(query){
-    var hit=order.filter(function(n){ return n.id.toLowerCase().indexOf(query)>=0; });
+    var hit=order.filter(hits);
     if(hit.length===1){ select(hit[0].id); focus(hit[0].id); return; }
     if(selected) select(null);
   }
   render();
 });
-document.addEventListener("keydown",function(ev){ if(ev.key==="Escape") select(null); });
+document.addEventListener("keydown",function(ev){
+  if(ev.key!=="Escape"||ev.target===qbox) return;
+  if(selected) select(null);
+  else if(trail.length>1) open(trail[0]);       // Escape climbs back out of a module
+});
 
-render(); drawPanel(); openView();
+/* start where this browser left off, else at the top */
+(function(){
+  var t=load("trail");
+  if(t&&t.length&&VIEWS[t[t.length-1]]){ trail=t; show(t[t.length-1]); }
+  else open(MODS?"modules":"files");
+})();
 })();
 </script>
 </body>

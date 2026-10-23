@@ -578,6 +578,89 @@ class FrontDoors(unittest.TestCase):
         self.assertIn("engine", str(e.exception))
 
 
+class ModuleViews(unittest.TestCase):
+    """The page's module view, and the view inside each module, built from
+    the same declaration the check reads."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.addCleanup(self.tmp.cleanup)
+        tree(self.root, {
+            "engine/book.py": "class Book: pass\ndef _fill(): pass\n",
+            "engine/gate.py": "from engine.book import _fill\n",
+            "app/main.py": (
+                "import sqlite3\n"
+                "from engine.book import Book, _fill\n"
+                "sqlite3.connect('x.db')\n"
+            ),
+            "tests/test_book.py": "from engine.book import Book\n",
+        })
+        self.decl = {
+            "modules": {
+                "engine": {"files": ["engine/*"], "front_door": ["Book"]},
+                "app": {"files": ["app/*"], "front_door": []},
+            },
+            "tests": {"files": ["tests/**"]},
+        }
+        self.g = cg.build(self.root, decl=self.decl, source="declared")
+        self.views = self.g["modules"]["views"]
+
+    def edge(self, view, src, dst):
+        return next((e for e in self.views[view]["edges"]
+                     if e["from"] == src and e["to"] == dst), None)
+
+    def ids(self, view):
+        return {n["id"] for n in self.views[view]["nodes"]}
+
+    def test_one_card_per_module_plus_tests_and_outside(self):
+        self.assertEqual(self.ids("modules"),
+                         {"mod:engine", "mod:app", "mod:(tests)", "svc:sqlite"})
+
+    def test_a_wire_between_modules_carries_the_names_that_cross(self):
+        e = self.edge("modules", "mod:app", "mod:engine")
+        self.assertEqual(e["names"], ["Book", "_fill"])
+        self.assertEqual(e["bad"], ["_fill"])
+
+    def test_a_clean_wire_has_nothing_bad(self):
+        self.assertEqual(self.edge("modules", "mod:(tests)", "mod:engine")["bad"], [])
+
+    def test_outside_connections_rise_to_the_module(self):
+        self.assertEqual(self.edge("modules", "mod:app", "svc:sqlite")["kind"], "database")
+
+    def test_wires_inside_a_module_do_not_show_at_module_level(self):
+        self.assertIsNone(self.edge("modules", "mod:engine", "mod:engine"))
+
+    def test_inside_a_module_its_files_and_its_neighbours(self):
+        self.assertEqual(self.ids("mod:engine"),
+                         {"engine.book", "engine.gate", "mod:app", "mod:(tests)"})
+
+    def test_inside_a_module_the_bad_wire_lands_on_the_file(self):
+        self.assertEqual(self.edge("mod:engine", "mod:app", "engine.book")["bad"], ["_fill"])
+        self.assertEqual(self.edge("mod:engine", "engine.gate", "engine.book")["bad"], [])
+
+    def test_every_view_is_placed_and_closed(self):
+        for name, view in self.views.items():
+            ids = self.ids(name)
+            for n in view["nodes"]:
+                self.assertIn("col", n, name)
+            for e in view["edges"]:
+                self.assertIn(e["from"], ids, name)
+                self.assertIn(e["to"], ids, name)
+
+    def test_the_card_says_what_the_module_is(self):
+        card = next(n for n in self.views["modules"]["nodes"] if n["id"] == "mod:engine")
+        self.assertEqual(card["files"], ["engine.book", "engine.gate"])
+        self.assertEqual(card["door"], ["Book"])
+
+    def test_the_mismatches_travel_with_the_page(self):
+        self.assertEqual(self.g["modules"]["source"], "declared")
+        self.assertEqual(len(self.g["modules"]["mismatches"]), 1)
+
+    def test_no_declaration_no_module_views(self):
+        self.assertNotIn("modules", cg.build(self.root))
+
+
 class Drafting(unittest.TestCase):
     """A first declaration, made from what the code does today."""
 
