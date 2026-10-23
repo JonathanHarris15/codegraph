@@ -394,7 +394,8 @@ function show(key){
     p.setAttribute("stroke",bad?"var(--breach)":kcolor(e.kind));
     p.setAttribute("stroke-width",String(d.width));
     if(d.dash) p.setAttribute("stroke-dasharray",d.dash);
-    p.setAttribute("marker-end","url(#ar-"+(bad?"breach":e.kind)+")");
+    // the arrowhead sits on the importer: what is imported flows into it
+    p.setAttribute("marker-start","url(#ar-"+(bad?"breach":e.kind)+")");
     p.setAttribute("opacity",bad?"0.95":isWiring(e.kind)?"0.6":"0.9");
     gWires.appendChild(p); wireEls[e.i]=p;
   });

@@ -373,28 +373,29 @@ class Placement(unittest.TestCase):
             self.assertIsInstance(n["col"], int)
             self.assertIsInstance(n["row"], int)
 
-    def test_no_import_wire_points_backwards(self):
+    def test_what_is_imported_sits_left_of_what_imports_it(self):
+        # so every wire, drawn as flowing into the importer, runs rightward
         g = cg.build(self.root)
         col = {n["id"]: n["col"] for n in g["nodes"]}
         for e in g["edges"]:
             if e["kind"] in ("import", "lazy"):
-                self.assertLess(col[e["from"]], col[e["to"]],
+                self.assertLess(col[e["to"]], col[e["from"]],
                                 "%s -> %s" % (e["from"], e["to"]))
 
-    def test_the_entry_point_is_left_of_the_leaf(self):
+    def test_the_entry_point_is_right_of_the_leaf(self):
         g = cg.build(self.root)
         col = {n["id"]: n["col"] for n in g["nodes"]}
-        self.assertLess(col["app.cli"], col["app.work"])
-        self.assertLess(col["app.work"], col["core.models"])
+        self.assertGreater(col["app.cli"], col["app.work"])
+        self.assertGreater(col["app.work"], col["core.models"])
 
-    def test_outside_cards_get_the_last_column(self):
+    def test_outside_cards_get_the_first_column(self):
         g = cg.build(self.root)
         col = {n["id"]: n["col"] for n in g["nodes"]}
-        self.assertEqual(col["svc:sqlite"], max(col.values()))
-        self.assertEqual(g["columns"][-1]["label"], "outside")
+        self.assertEqual(col["svc:sqlite"], 0)
+        self.assertEqual(g["columns"][0]["label"], "outside")
 
-    def test_the_first_column_is_named(self):
-        self.assertEqual(cg.build(self.root)["columns"][0]["label"], "entry points")
+    def test_the_entry_point_column_is_named(self):
+        self.assertEqual(cg.build(self.root)["columns"][-1]["label"], "entry points")
 
     def test_rows_within_a_column_are_distinct(self):
         g = cg.build(self.root)
@@ -415,7 +416,8 @@ class Placement(unittest.TestCase):
         self.assertEqual(g["layout"], "folder")
         cols = {n["id"]: n["col"] for n in g["nodes"]}
         self.assertEqual(cols["app.cli"], cols["app.work"])   # same folder
-        self.assertNotEqual(cols["app.cli"], cols["core.models"])
+        self.assertGreater(cols["app.cli"], cols["core.models"])
+        self.assertEqual(cols["svc:sqlite"], 0)
 
 
 class GroupOrder(unittest.TestCase):

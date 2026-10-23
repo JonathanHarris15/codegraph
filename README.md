@@ -163,16 +163,20 @@ from a flag is one card, not two.
 
 ## How the columns are chosen
 
-Each **file** gets a column: one past the furthest thing that imports it. A
-file nothing imports starts at column 0, so entry points line up on the left
-and the things everything depends on end up on the right. Outside connections
-take a column of their own at the far end.
+A wire is drawn as flowing *into* the file that imports: the arrowhead sits
+on the importer, the way information moves. So the columns run the same way.
+
+Each **file** is given a depth: one past the furthest thing that imports it,
+so a file nothing imports has depth 0. The columns are those depths read right
+to left: entry points and tests line up on the right, the things everything
+depends on sit on the left, and outside connections, where data comes from,
+take the first column of all.
 
 That rule has a useful consequence. Since a file always sits at least one
-column past anything that imports it, **every import wire points rightward**.
-A wire going backwards would mean a cycle, and there are none to draw because
-cycles are broken first: one depth-first walk marks the edges that close a
-loop, and the layering ignores them.
+column left of anything that imports it, **every import wire points
+rightward**. A wire going backwards would mean a cycle, and there are none to
+draw because cycles are broken first: one depth-first walk marks the edges
+that close a loop, and the layering ignores them.
 
 Rows inside a column are then shuffled to cut down crossings — the barycentre
 heuristic, which puts a card level with the average of the cards it is wired

@@ -728,7 +728,18 @@ def place_by_file(nodes: list, pairs: list, pinned: list) -> tuple:
         columns[c].sort(key=lambda n: order[n])
 
     row = order_rows(columns, pairs)
-    return col, row, [{"label": labels.get(c, "")} for c in sorted(columns)]
+    return mirror(col, row, [{"label": labels.get(c, "")} for c in sorted(columns)])
+
+
+def mirror(col: dict, row: dict, labels: list) -> tuple:
+    """Flip the columns end to end.
+
+    The page draws a wire as flowing from what is imported into what imports
+    it, so what is imported has to sit on the left for the wires to run
+    rightward. Outside connections, where data comes from, end up first.
+    """
+    last = len(labels) - 1
+    return {k: last - c for k, c in col.items()}, row, labels[::-1]
 
 
 def place_by_folder(nodes: list, groups: list) -> tuple:
@@ -746,7 +757,7 @@ def place_by_folder(nodes: list, groups: list) -> tuple:
                 row[n["id"]] = i
             labels.append({"label": group if start == 0 else ""})
             index += 1
-    return col, row, labels
+    return mirror(col, row, labels)
 
 
 # ---------------------------------------------------------------- front doors
@@ -1249,12 +1260,12 @@ def main(argv: list[str] | None = None) -> int:
         )
     )
     if args.layout == "file":
-        deep = max((n["col"] for n in graph["nodes"] if n["kind"] == "file"),
-                   default=0)
+        cols = [n["col"] for n in graph["nodes"] if n["kind"] == "file"] or [0]
+        deep = max(cols) - min(cols)
         back = sum(1 for e in graph["edges"]
                    if e["kind"] in ("import", "lazy")
                    and nodes_by_id(graph)[e["to"]]["col"]
-                   <= nodes_by_id(graph)[e["from"]]["col"])
+                   >= nodes_by_id(graph)[e["from"]]["col"])
         print("{} columns deep{}".format(
             deep + 1,
             "" if not back else "; {} wires point back (a loop)".format(back)))
