@@ -1,7 +1,7 @@
 # codegraph
 
 A map of a codebase drawn at the level people think in (systems, features,
-modules, pages), not files. People declare the shape they intend; codegraph
+modules, stores, pages), not files. People declare the shape they intend; codegraph
 reads the code and says where the two disagree. The same map is how a person
 tells an agent what to build.
 
@@ -14,13 +14,33 @@ _Rule_: each feature belongs to exactly one system.
 _Avoid_: area, category, subsystem, domain
 
 **Feature**:
-Something a user can do, such as planning an order of service, declared with
-the modules it uses. In code it is thin: it takes the request, calls those
-modules, and hands back the result.
-_Rule_: a feature's code reaches only the modules declared for it, and only
-through their front doors; it lives in one place in the code however many
-pages start it; real work belongs in a module, not in the feature.
-_Avoid_: use case, capability, action, flow
+One whole piece of work the application does when something asks for it: a
+person, a schedule or an event. Planning an order of service and sending the
+week's reminders are features. It is declared with the modules it uses, and in
+code it is thin: it takes the request, calls those modules, and hands back the
+result.
+_Rule_: a feature has at least one trigger; its code reaches only the modules
+declared for it, and only through their front doors; it lives in one place in
+the code however many triggers start it; real work belongs in a module, not
+in the feature.
+_Avoid_: use case, capability, action, flow, job
+
+**Trigger**:
+What starts a feature: a person through a page, a schedule, or an event.
+_Rule_: a feature with two triggers is still one feature, written once.
+_Avoid_: entry point, caller, hook
+
+**Schedule**:
+A trigger that fires at set times, such as every day at 08:00.
+_Rule_: its timing is declared; the check finds the code that registers it,
+and reports a declared schedule with no code, or code with no declaration.
+_Avoid_: cron, timer, job
+
+**Event**:
+A trigger that arrives from outside the program, such as a webhook, a message
+on a queue or a file landing in a folder.
+_Rule_: what it carries flows into the feature it starts.
+_Avoid_: hook, signal, message
 
 ## Code
 
@@ -55,6 +75,16 @@ _Avoid_: spec, check, suite
 Something the code reaches beyond its own process: a host, a database, a
 broker, a feed, the environment.
 _Avoid_: external, integration, dependency
+
+## Data
+
+**Store**:
+One named place data is kept: a table or a collection inside a database, such
+as members, services or reminders. The database is the outside connection;
+its stores sit inside it.
+_Rule_: each store has exactly one owning module, the only one that writes to
+it; anything else that reads it is declared as a reader.
+_Avoid_: table, collection, model, entity, database
 
 ## UI
 
@@ -107,6 +137,23 @@ _Rule_: two-way, since the feature answers; lands on a feature, never straight
 on a module.
 _Avoid_: calls, drives, commands, writes
 
+**Starts**:
+A wire from a schedule or an event into the feature it starts.
+_Rule_: one-way, into the feature; a person starts a feature through acts-on
+instead.
+_Avoid_: triggers, fires, calls
+
+**Writes**:
+A wire from a module into a store it changes.
+_Rule_: one-way, into the store; only the store's owning module writes.
+_Avoid_: saves, stores, updates
+
+**Reads**:
+A wire from a store into a module, or a page, that uses what it holds.
+_Rule_: one-way, out of the store; comes from the owning module or a declared
+reader.
+_Avoid_: loads, fetches, queries
+
 **Leads to**:
 A wire from one page to another that a person can follow, by clicking or
 otherwise.
@@ -121,8 +168,8 @@ _Avoid_: renders, includes
 ## Checking
 
 **Declaration**:
-The file in a repo where people state the systems, features, modules, pages
-and wires they intend.
+The file in a repo where people state the systems, features, triggers,
+modules, stores, pages and wires they intend.
 _Rule_: the declaration is the single source of truth; the code is checked
 against it, never the other way round.
 _Avoid_: config, manifest, spec
