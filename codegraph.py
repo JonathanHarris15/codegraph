@@ -531,6 +531,20 @@ def build(root: Path, externals: bool = False, hidden: bool = False,
         ]
     nodes += [endpoints[k] for k in sorted(endpoints)]
 
+    # Nothing importing a file can mean it is run (a script, an app, a test),
+    # loaded by name at runtime, or dead. The page marks it and says so,
+    # rather than guessing which.
+    imported = {d for (_, d), k in edges.items() if k in ("import", "lazy")}
+    # Python runs a folder's __init__.py before anything inside it, so
+    # importing atp.engine.book counts as using atp/engine/__init__.py too
+    for f in files:
+        if f.path.name == "__init__.py" and \
+                any(d.startswith(f.name + ".") for d in imported):
+            imported.add(f.name)
+    for n in nodes:
+        if n["kind"] == "file":
+            n["unimported"] = n["id"] not in imported
+
     wires = [{"from": s, "to": d, "kind": k} for (s, d), k in sorted(edges.items())]
     used = sorted({w["kind"] for w in wires}, key=list(KINDS).index)
 
@@ -713,7 +727,7 @@ def place_by_file(nodes: list, pairs: list, pinned: list) -> tuple:
     depth = max(col.values(), default=0)
 
     # the cards that are not files go in columns of their own, at the end
-    labels = {0: "entry points"}
+    labels: dict = {}
     for extra, group in enumerate(pinned, start=1):
         for n in nodes:
             if n["group"] == group:
@@ -740,6 +754,52 @@ def mirror(col: dict, row: dict, labels: list) -> tuple:
     """
     last = len(labels) - 1
     return {k: last - c for k, c in col.items()}, row, labels[::-1]
+
+
+def place_inside(nodes: list, pairs: list, own: set, pinned: list) -> tuple:
+    """Lay out the view inside one module so its own files sit in one block.
+
+    Left to right: outside connections, the modules it uses, its own files by
+    import depth, then the modules that use it. Every wire crossing the edge
+    of the block is then another module coming in or going out. A module that
+    does both goes on the side with more wires.
+    """
+    mine = [n["id"] for n in nodes if n["id"] in own]
+    depth = layer(mine, [(s, d) for s, d in pairs if s in own and d in own])
+    deepest = max(depth.values(), default=0)
+
+    left, right = [], []
+    for n in nodes:
+        if n["id"] in own or n["group"] in pinned:
+            continue
+        uses = sum(1 for s, d in pairs if s in own and d == n["id"])
+        used = sum(1 for s, d in pairs if d in own and s == n["id"])
+        (right if used > uses else left).append(n["id"])
+
+    col: dict = {}
+    labels: list = []
+    for group in pinned:
+        for n in nodes:
+            if n["group"] == group:
+                col[n["id"]] = len(labels)
+        labels.append(group.strip("()"))
+    if left:
+        col.update({i: len(labels) for i in left})
+        labels.append("uses")
+    for i in mine:
+        col[i] = len(labels) + deepest - depth[i]      # imported on the left
+    labels += [""] * (deepest + 1) if mine else []
+    if right:
+        col.update({i: len(labels) for i in right})
+        labels.append("used by")
+
+    columns: dict = defaultdict(list)
+    order = {n["id"]: (n["group"], n["label"]) for n in nodes}
+    for n in nodes:
+        columns[col[n["id"]]].append(n["id"])
+    for c in columns:
+        columns[c].sort(key=lambda i: order[i])
+    return col, order_rows(columns, pairs), [{"label": l} for l in labels]
 
 
 def place_by_folder(nodes: list, groups: list) -> tuple:
@@ -1043,6 +1103,11 @@ def module_views(root: Path, graph: dict, decl: dict, hidden: bool = False,
         if n["kind"] == "file":
             members[card(n["id"])].append(n["id"])
 
+    # a module nothing outside it imports, judged on the whole codebase so the
+    # mark does not change with which neighbours a view happens to draw
+    reached = {card(e["to"]) for e in graph["edges"]
+               if e["kind"] in ("import", "lazy") and card(e["from"]) != card(e["to"])}
+
     cards = {}
     for cid, ids in members.items():
         name = cid[4:]
@@ -1052,6 +1117,7 @@ def module_views(root: Path, graph: dict, decl: dict, hidden: bool = False,
             "group": name, "lines": sum(shown[i]["lines"] for i in ids),
             "kind": "module", "files": sorted(ids),
             "door": sorted(mods.get(name, {}).get("front_door", [])),
+            "unimported": cid not in reached,
         }
 
     def view(title: str, unit: str, own: list, mapping) -> dict:
@@ -1083,7 +1149,13 @@ def module_views(root: Path, graph: dict, decl: dict, hidden: bool = False,
         ids = list(dict.fromkeys(own + [x for w in edges for x in (w["from"], w["to"])]))
         nodes = [dict(cards.get(i) or shown[i]) for i in ids]
         tail = [g for g in (EXTERNAL, OUTSIDE) if any(n["group"] == g for n in nodes)]
-        col, row, columns = place_by_file(nodes, [(w["from"], w["to"]) for w in edges], tail)
+        pairs = [(w["from"], w["to"]) for w in edges]
+        if unit == "files":
+            for n in nodes:
+                n["own"] = n["id"] in own
+            col, row, columns = place_inside(nodes, pairs, set(own), tail)
+        else:
+            col, row, columns = place_by_file(nodes, pairs, tail)
         for n in nodes:
             n["col"], n["row"] = col[n["id"]], row[n["id"]]
         groups = list(dict.fromkeys(n["group"] for n in nodes if n["group"] not in tail))
@@ -1093,7 +1165,7 @@ def module_views(root: Path, graph: dict, decl: dict, hidden: bool = False,
     views = {"modules": view("Modules", "modules", sorted(cards), card)}
     for cid, c in cards.items():
         own = c["files"]
-        views[cid] = view(c["label"], "cards", own,
+        views[cid] = view(c["label"], "files", own,
                           lambda fid, own=set(own): fid if fid in own else card(fid))
 
     return {"source": source, "views": views,

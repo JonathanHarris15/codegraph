@@ -47,7 +47,6 @@ header{flex:0 0 auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap;
   padding-right:max(16px,env(safe-area-inset-right,0px));
   background:var(--surface);border-bottom:1px solid var(--hair);z-index:4}
 h1{margin:0;font-size:14px;font-weight:700;white-space:nowrap;letter-spacing:-.01em}
-h1 span{font-family:var(--font-mono);font-weight:500;color:var(--muted)}
 .counts{font-family:var(--font-mono);font-size:11px;color:var(--muted);
   font-variant-numeric:tabular-nums;white-space:nowrap}
 .spacer{flex:1 1 auto;min-width:0}
@@ -61,7 +60,6 @@ button{font:inherit;font-size:12px;font-weight:500;color:var(--ink);
   padding:5px 9px;cursor:pointer;line-height:1.2}
 button:hover{border-color:var(--accent)}
 button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
 
 #stage{position:relative;flex:1 1 auto;min-height:0;overflow:hidden;cursor:grab;
   touch-action:none;background-image:radial-gradient(var(--grid) 1px,transparent 1px);
@@ -79,7 +77,7 @@ button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);
 
 .card{position:absolute;width:170px;background:var(--surface);
   border:1px solid var(--hair);border-left:3px solid var(--gc);border-radius:7px;
-  padding:7px 9px 8px;cursor:grab;box-shadow:0 1px 2px rgba(10,20,40,.06);
+  padding:7px 9px 8px;cursor:grab;--stack:0 1px 2px rgba(10,20,40,.06);box-shadow:var(--stack);
   transition:opacity .14s,box-shadow .14s}
 .card:active{cursor:grabbing}
 .card .nm{font-family:var(--font-mono);font-size:12px;font-weight:500;line-height:1.25;
@@ -90,17 +88,21 @@ button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);
   font-variant-numeric:tabular-nums}
 .card.ext{border:1px dashed var(--gc);border-left:3px solid var(--gc);background:var(--surface-2)}
 .card.dim{opacity:.15}
-.card.sel{box-shadow:0 0 0 2px var(--accent),0 4px 12px rgba(10,20,40,.14)}
-.card.near{box-shadow:0 0 0 1px var(--accent)}
-.card.hit{box-shadow:0 0 0 2px var(--w-lazy)}
+.card.sel{box-shadow:0 0 0 2px var(--accent),0 4px 12px rgba(10,20,40,.14),var(--stack)}
+.card.near{box-shadow:0 0 0 1px var(--accent),var(--stack)}
+.card.hit{box-shadow:0 0 0 2px var(--w-lazy),var(--stack)}
 .card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.card.picked{outline:2px solid var(--accent);outline-offset:3px}
+#stage.boxing{cursor:crosshair}
+#marquee{position:absolute;z-index:2;pointer-events:none;border:1px dashed var(--accent);
+  border-radius:3px;background:color-mix(in srgb,var(--accent) 10%,transparent)}
 
 path.wire{fill:none;stroke-linecap:round;transition:opacity .14s}
 path.wire.dim{opacity:.06}
 path.wire.hot{stroke-width:2.2;opacity:1}
 
 #panel{position:absolute;top:12px;right:max(12px,env(safe-area-inset-right,0px));
-  width:266px;max-height:calc(100% - 24px);overflow:auto;background:var(--surface);
+  width:266px;max-height:calc(100% - 68px);overflow:auto;background:var(--surface);
   border:1px solid var(--hair);border-radius:9px;padding:12px 13px 14px;z-index:3;
   box-shadow:0 6px 22px rgba(10,20,40,.13)}
 #panel h2{margin:0;font-family:var(--font-mono);font-size:13px;font-weight:700;
@@ -120,7 +122,7 @@ path.wire.hot{stroke-width:2.2;opacity:1}
 #legend{position:absolute;bottom:max(12px,env(safe-area-inset-bottom,0px));
   left:max(12px,env(safe-area-inset-left,0px));background:var(--surface);
   border:1px solid var(--hair);border-radius:9px;padding:9px 11px 10px;z-index:3;
-  box-shadow:0 4px 14px rgba(10,20,40,.1);font-size:10.5px;color:var(--muted)}
+  box-shadow:0 4px 14px rgba(10,20,40,.1);font-size:10.5px;color:var(--muted);max-width:290px}
 #legend-toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;
   width:100%;margin:0 0 6px;padding:0;border:0;background:none;font-size:10px;font-weight:700;
   letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
@@ -129,6 +131,17 @@ path.wire.hot{stroke-width:2.2;opacity:1}
 #legend.closed #legend-toggle{margin:0}
 #legend.closed #legend-toggle .chev{transform:rotate(180deg)}
 #legend.closed #legend-body{display:none}
+.start{flex:0 0 auto;font-size:9px;line-height:16px;color:var(--accent);font-weight:400}
+#legend .shapes{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:7px;padding-bottom:7px;
+  border-bottom:1px solid var(--hair-soft);color:var(--ink)}
+#legend .shapes span{margin-right:8px}
+#legend .shapes i{flex:0 0 auto;display:block}
+.s-mod{width:17px;height:12px;border:1px solid var(--muted);border-radius:3px;
+  background:linear-gradient(var(--hair) 0 0) top/100% 4px no-repeat,var(--surface);
+  box-shadow:2px 2px 0 -1px var(--surface),2px 2px 0 0 var(--muted)}
+.s-file{width:11px;height:13px;background:var(--muted);
+  clip-path:polygon(0 0,62% 0,100% 32%,100% 100%,0 100%)}
+.s-ext{width:17px;height:12px;border:1px dashed var(--muted);border-radius:3px}
 #legend .row{display:flex;align-items:center;gap:6px;color:var(--ink);margin-bottom:3px}
 #legend .gen{margin-top:7px;padding-top:6px;border-top:1px solid var(--hair-soft);
   font-family:var(--font-mono);font-size:9.5px}
@@ -141,17 +154,35 @@ path.wire.hot{stroke-width:2.2;opacity:1}
 #legend .key b{font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* module views */
-#crumbs{font-family:var(--font-mono);font-size:12px;color:var(--muted);white-space:nowrap}
-#crumbs button{font-family:var(--font-mono);font-size:12px;padding:1px 4px;border:0;
+#crumbs{font-family:var(--font-mono);font-size:14px;color:var(--muted);white-space:nowrap;
+  min-width:0;overflow:hidden;text-overflow:ellipsis}
+#crumbs button{font-family:var(--font-mono);font-size:14px;padding:2px 4px;border:0;
   background:none;color:var(--accent)}
 #crumbs button:hover{text-decoration:underline}
-#crumbs b{color:var(--ink);font-weight:600}
+#crumbs b{color:var(--ink);font-weight:600;padding:2px 4px}
 .issues{color:var(--breach)}
-.seg{display:inline-flex}
-.seg button{border-radius:0;margin-left:-1px}
-.seg button:first-child{border-radius:6px 0 0 6px;margin-left:0}
-.seg button:last-child{border-radius:0 6px 6px 0}
-.card.mod{border-left-width:5px}
+#corner{position:absolute;right:max(12px,env(safe-area-inset-right,0px));
+  bottom:max(12px,env(safe-area-inset-bottom,0px));display:flex;gap:6px;z-index:3}
+#corner button{background:var(--surface);box-shadow:0 4px 14px rgba(10,20,40,.1)}
+/* A module is a stack of files: a coloured band across its head, a second
+   sheet showing behind it, its name in plain bold. A file is one sheet with a
+   folded corner and a typewriter name. The two read apart at a glance. */
+.card.mod{border:1px solid color-mix(in srgb,var(--gc) 55%,var(--hair));padding:0;border-radius:8px}
+.card.mod{--stack:5px 5px 0 -1px var(--surface),5px 5px 0 0 color-mix(in srgb,var(--gc) 40%,var(--hair))}
+.card.mod .band{background:color-mix(in srgb,var(--gc) 16%,var(--surface));
+  border-radius:7px 7px 0 0;padding:7px 9px 7px;border-bottom:1px solid color-mix(in srgb,var(--gc) 30%,var(--hair))}
+.card.mod.folded .band{border-radius:7px;border-bottom:0}
+.card.mod .nm{font-family:var(--font-ui);font-size:13px;font-weight:700;color:color-mix(in srgb,var(--gc) 70%,var(--ink))}
+.card.mod .dir,.card.mod .foot{color:color-mix(in srgb,var(--gc) 35%,var(--muted))}
+.card.mod ul.flist{margin:0;padding:5px 5px 7px;border-top:0}
+.card.file{border-top-right-radius:0}
+.card.file::before{content:"";position:absolute;top:-1px;right:-1px;width:11px;height:11px;
+  background:linear-gradient(225deg,var(--bg) 50%,var(--hair) 50%,var(--hair) calc(50% + 1px),var(--surface-2) calc(50% + 1px));
+  border-bottom-left-radius:2px}
+.frame{position:absolute;border:1px solid var(--gc);border-radius:12px;pointer-events:none;
+  background:color-mix(in srgb,var(--gc) 4%,transparent)}
+.frame span{position:absolute;top:5px;left:12px;font-family:var(--font-mono);font-size:11px;
+  font-weight:700;letter-spacing:.04em;color:var(--gc)}
 .card .hd{display:flex;align-items:flex-start;gap:6px}
 .card .hd .nm{flex:1 1 auto;min-width:0}
 .card .fold{flex:0 0 auto;padding:0 5px;font-size:10px;line-height:15px;border-radius:4px;
@@ -180,7 +211,7 @@ path.wire.breach{stroke-width:2}
 
 @media (max-width:860px){
   #panel{left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));
-    width:auto;top:auto;bottom:max(12px,env(safe-area-inset-bottom,0px));max-height:52%}
+    width:auto;top:auto;bottom:calc(max(12px,env(safe-area-inset-bottom,0px)) + 40px);max-height:52%}
   #legend{display:none}
   input[type=search]{width:96px}
 }
@@ -190,33 +221,31 @@ path.wire.breach{stroke-width:2}
 <body>
 <div id="shell">
   <header>
-    <h1>codegraph <span id="rootname"></span></h1>
-    <span id="crumbs"></span>
+    <h1>codegraph</h1>
+    <nav id="crumbs" aria-label="Where you are in the codebase"></nav>
     <span class="counts" id="counts"></span>
     <span class="counts issues" id="issues"></span>
     <span class="spacer"></span>
     <div class="toolbar">
-      <span class="seg" id="viewseg" hidden>
-        <button id="v-modules" aria-pressed="false">Modules</button>
-        <button id="v-files" aria-pressed="false">Files</button>
-      </span>
       <input type="search" id="q" placeholder="find a card" aria-label="Find a card">
-      <button id="t-imports" aria-pressed="true">Imports</button>
-      <button id="t-lazy" aria-pressed="true">Lazy</button>
-      <button id="b-fit">Fit</button>
-      <button id="b-reset">Reset layout</button>
     </div>
   </header>
   <div id="stage">
     <div id="canvas"><svg id="wires"></svg></div>
     <aside id="panel"></aside>
+    <div id="marquee" hidden></div>
+    <div id="corner">
+      <button id="b-fit">Fit</button>
+      <button id="b-reset">Reset layout</button>
+    </div>
     <div id="legend">
       <button id="legend-toggle" aria-expanded="true" aria-controls="legend-body">
         <span>Legend</span><span class="chev" aria-hidden="true">▾</span></button>
       <div id="legend-body">
         <div id="legend-rows"></div>
         <div class="key" id="folder-key"></div>
-        <div class="gen">drag a card &middot; drag the background to pan &middot; scroll to zoom</div>
+        <div class="gen">drag a card &middot; drag the background to pan &middot; scroll to zoom
+          &middot; shift-drag to pick several</div>
         <div class="gen" id="gen"></div>
       </div>
     </div>
@@ -239,6 +268,8 @@ var CW=170, CH=62, COLGAP=112, HEADY=26;
 var MODS=GRAPH.modules||null;
 var VIEWS={files:{title:"Files",unit:"files",nodes:GRAPH.nodes,edges:GRAPH.edges,
                   columns:GRAPH.columns,groups:GRAPH.groups}};
+var UNIMPORTED="Nothing in the codebase imports this. It is run directly "+
+  "(a script, an app, a test), loaded by name at runtime, or unused.";
 var FILES={};
 GRAPH.nodes.forEach(function(n){ FILES[n.id]=n; });
 if(MODS) Object.keys(MODS.views).forEach(function(k){ VIEWS[k]=MODS.views[k]; });
@@ -272,25 +303,13 @@ var KEY="codegraph."+(GRAPH.root||"x");
 function save(k,v){ try{ localStorage.setItem(KEY+"."+k,JSON.stringify(v)); }catch(e){} }
 function load(k){ try{ var s=localStorage.getItem(KEY+"."+k); return s?JSON.parse(s):null; }catch(e){ return null; } }
 
-var showLazy=true, showImports=true, selected=null, query="", scale=1, panX=0, panY=0;
-(function(){
-  var s=load("show")||{};
-  if(typeof s.lazy==="boolean") showLazy=s.lazy;
-  if(typeof s.imports==="boolean") showImports=s.imports;
-})();
-
-function edgeVisible(e){
-  if(e.kind==="lazy") return showImports&&showLazy;
-  if(e.kind==="import") return showImports;
-  return true;                       // a connection out of the process
-}
+var selected=null, query="", scale=1, panX=0, panY=0;
 
 /* --------------------------------------------------------------------- DOM */
 var stage=document.getElementById("stage"), canvas=document.getElementById("canvas"),
     svg=document.getElementById("wires"), panel=document.getElementById("panel"),
     counts=document.getElementById("counts"), issues=document.getElementById("issues"),
     crumbs=document.getElementById("crumbs"), qbox=document.getElementById("q");
-document.getElementById("rootname").textContent=GRAPH.root||"";
 document.getElementById("gen").textContent="read "+(GRAPH.generated||"").replace("T"," ").replace("+00:00"," UTC");
 document.title="codegraph "+(GRAPH.root||"");
 
@@ -326,6 +345,11 @@ var gWires=document.createElementNS(NS,"g"); svg.appendChild(gWires);
     var d=KINDS[k]; row(kcolor(k),d.width+0.3,d.dash,d.label);
   });
   if(MODS) row("var(--breach)",2.3,"","uses a name not on the front door");
+  var shapes=document.createElement("div"); shapes.className="shapes";
+  shapes.innerHTML='<i class="s-mod"></i><span>module</span><i class="s-file"></i><span>file</span>'+
+    '<i class="s-ext"></i><span>outside</span>'+
+    '<b class="start">▶</b><span title="'+UNIMPORTED+'">nothing imports it: run, loaded by name, or unused</span>';
+  rows.insertBefore(shapes,rows.firstChild);
 })();
 (function(){
   var legend=document.getElementById("legend"), btn=document.getElementById("legend-toggle");
@@ -341,7 +365,19 @@ var gWires=document.createElementNS(NS,"g"); svg.appendChild(gWires);
 
 /* ------------------------------------------------------------- open a view */
 var cur=null, trail=[], V=null, nodes={}, order=[], edges=[], out={}, inn={},
-    base={}, colX={}, pos={}, cardEls={}, wireEls={}, threadEls={}, rowY={};
+    base={}, colX={}, pos={}, cardEls={}, wireEls={}, threadEls={}, rowY={}, frame=null;
+
+function drawFrame(){
+  if(!frame) return;
+  var x0=Infinity, y0=Infinity, x1=-Infinity, y1=-Infinity, PAD=16;
+  order.forEach(function(n){
+    if(!n.own) return;
+    x0=Math.min(x0,pos[n.id].x); y0=Math.min(y0,pos[n.id].y);
+    x1=Math.max(x1,pos[n.id].x+CW); y1=Math.max(y1,pos[n.id].y+hgt[n.id]);
+  });
+  frame.style.left=(x0-PAD)+"px"; frame.style.top=(y0-PAD-18)+"px";
+  frame.style.width=(x1-x0+2*PAD)+"px"; frame.style.height=(y1-y0+2*PAD+18)+"px";
+}
 
 /* where each file sits in a card's list, measured while the list is drawn */
 function measureRows(id){
@@ -439,7 +475,7 @@ function toggleFold(id){
 }
 
 function show(key){
-  V=VIEWS[key]; cur=key; selected=null; query=""; qbox.value="";
+  V=VIEWS[key]; cur=key; selected=null; query=""; qbox.value=""; picked={};
   nodes={}; order=V.nodes.slice();
   order.forEach(function(n){ nodes[n.id]=n; });
   edges=V.edges.filter(function(e){ return nodes[e.from]&&nodes[e.to]; })
@@ -454,20 +490,42 @@ function show(key){
   });
   while(gWires.firstChild) gWires.removeChild(gWires.firstChild);
 
+  /* inside a module, a thin box around its own files: anything outside the
+     box is another module or an outside connection */
+  frame=null;
+  if(order.some(function(n){ return n.own; })){
+    frame=document.createElement("div");
+    frame.className="frame";
+    frame.style.setProperty("--gc",gcolor(cur.slice(4)));
+    var tag=document.createElement("span"); tag.textContent=V.title;
+    frame.appendChild(tag);
+    canvas.insertBefore(frame,svg);          // behind the wires too
+  }
+
   cardEls={}; hgt={};
   order.forEach(function(n){
     var el=document.createElement("div");
-    el.className="card"+(n.kind==="file"?"":n.kind==="module"?" mod":" ext")+
+    el.className="card"+(n.kind==="file"?" file":n.kind==="module"?" mod":" ext")+
       (VIEWS[n.id]&&n.id!==cur?" opens":"")+(folded[n.id]?" folded":"");
     el.style.setProperty("--gc",gcolor(n.group));
     el.tabIndex=0; el.setAttribute("role","button");
     var hd=document.createElement("div"); hd.className="hd";
+    if(n.unimported){
+      var st=document.createElement("span"); st.className="start"; st.textContent="▶";
+      st.title=UNIMPORTED; st.setAttribute("aria-label",UNIMPORTED);
+      hd.appendChild(st);
+    }
     var nm=document.createElement("div"); nm.className="nm"; nm.textContent=n.label;
     hd.appendChild(nm);
     var dir=document.createElement("div"); dir.className="dir"; dir.textContent=n.dir;
     var foot=document.createElement("div"); foot.className="foot";
     foot.textContent=(n.lines?n.lines+" lines  ":"")+"↱"+inn[n.id].length+" ↳"+out[n.id].length;
-    el.appendChild(hd); el.appendChild(dir); el.appendChild(foot);
+    if(n.kind==="module"){
+      // a module's name and counts sit together in its coloured band
+      var band=document.createElement("div"); band.className="band";
+      band.appendChild(hd); band.appendChild(dir); band.appendChild(foot);
+      el.appendChild(band);
+    } else { el.appendChild(hd); el.appendChild(dir); el.appendChild(foot); }
     if(n.files&&n.files.length) fileList(el,hd,n);
     canvas.appendChild(el); cardEls[n.id]=el;
     hgt[n.id]=el.offsetHeight;
@@ -533,19 +591,24 @@ function drawKey(){
   });
 }
 
+/* where you are, from the codebase down: every step but the last goes back
+   up to it */
 function drawCrumbs(){
-  var seg=document.getElementById("viewseg");
-  seg.hidden=!MODS;
-  document.getElementById("v-modules").setAttribute("aria-pressed",String(cur!=="files"));
-  document.getElementById("v-files").setAttribute("aria-pressed",String(cur==="files"));
   crumbs.innerHTML="";
-  if(trail.length<2) return;
-  var up=document.createElement("button");
-  up.textContent="Modules"; up.addEventListener("click",function(){ open("modules"); });
-  crumbs.appendChild(up);
-  crumbs.appendChild(document.createTextNode(" › "));
-  var here=document.createElement("b"); here.textContent=V.title;
-  crumbs.appendChild(here);
+  var steps=[{key:trail[0],label:GRAPH.root||"codebase"}];
+  trail.slice(1).forEach(function(k){ steps.push({key:k,label:VIEWS[k].title}); });
+  steps.forEach(function(s,i){
+    if(i) crumbs.appendChild(document.createTextNode(" › "));
+    if(i===steps.length-1){
+      var here=document.createElement("b"); here.textContent=s.label;
+      here.setAttribute("aria-current","location");
+      crumbs.appendChild(here);
+    } else {
+      var up=document.createElement("button"); up.textContent=s.label;
+      up.addEventListener("click",function(){ open(s.key); });
+      crumbs.appendChild(up);
+    }
+  });
 }
 
 /* ------------------------------------------------------------------ render */
@@ -639,8 +702,8 @@ function drawWire(e,show){
 }
 function near(id){
   var set={}; set[id]=true;
-  out[id].forEach(function(e){ if(edgeVisible(e)) set[e.to]=true; });
-  inn[id].forEach(function(e){ if(edgeVisible(e)) set[e.from]=true; });
+  out[id].forEach(function(e){ set[e.to]=true; });
+  inn[id].forEach(function(e){ set[e.from]=true; });
   return set;
 }
 function extent(){
@@ -655,7 +718,8 @@ function hits(n){
 function render(){
   var ring=selected?near(selected):null;
   var ev=0, bad=0;
-  placePorts(edges.filter(edgeVisible));
+  placePorts(edges);
+  drawFrame();
   order.forEach(function(n){
     var el=cardEls[n.id];
     el.style.transform="translate("+pos[n.id].x+"px,"+pos[n.id].y+"px)";
@@ -663,11 +727,10 @@ function render(){
     el.classList.toggle("near",!!ring&&ring[n.id]&&selected!==n.id);
     el.classList.toggle("dim",!!ring&&!ring[n.id]);
     el.classList.toggle("hit",!!query&&!selected&&hits(n));
+    el.classList.toggle("picked",!!picked[n.id]);
   });
   edges.forEach(function(e){
-    // SVG ignores the hidden property, so drawWire sets display instead
-    var vis=edgeVisible(e), strands=drawWire(e,vis);
-    if(!vis) return;
+    var strands=drawWire(e,true);
     ev++; if(e.bad.length) bad++;
     var hot=!!selected&&(e.from===selected||e.to===selected);
     strands.forEach(function(p){
@@ -723,7 +786,7 @@ function drawPanel(){
   }
 
   function list(title,arr,key,want){
-    var vis=arr.filter(function(e){ return edgeVisible(e)&&want(e.kind); });
+    var vis=arr.filter(function(e){ return want(e.kind); });
     if(!vis.length) return "";
     var s='<h3>'+title+' ('+vis.length+')</h3><ul>';
     vis.sort(function(a,b){ return a[key]<b[key]?-1:1; }).forEach(function(e){
@@ -769,24 +832,41 @@ function focus(id){
 }
 
 /* ------------------------------------------------------------ interactions */
+/* Cards picked with a shift-drag box, or shift-clicks, move together. */
+var picked={};
+function pickedIds(){ return Object.keys(picked).filter(function(k){ return picked[k]; }); }
+
 function drag(el,n){
-  var id=null,sx,sy,ox,oy,went=false,hit=null;
+  var id=null,sx,sy,went=false,hit=null,from={};
   el.addEventListener("pointerdown",function(ev){
     if(ev.button!==0&&ev.pointerType==="mouse") return;
     ev.stopPropagation(); id=ev.pointerId; went=false; hit=ev.target;
-    sx=ev.clientX; sy=ev.clientY; ox=pos[n.id].x; oy=pos[n.id].y;
+    sx=ev.clientX; sy=ev.clientY;
+    // dragging a picked card carries the rest of the picked set with it
+    from={};
+    (picked[n.id]?pickedIds():[n.id]).forEach(function(k){
+      if(pos[k]) from[k]={x:pos[k].x,y:pos[k].y};
+    });
     el.setPointerCapture(id);
   });
   el.addEventListener("pointermove",function(ev){
     if(id===null||ev.pointerId!==id) return;
     var dx=(ev.clientX-sx)/scale, dy=(ev.clientY-sy)/scale;
     if(!went&&Math.abs(dx)+Math.abs(dy)<3) return;
-    went=true; pos[n.id]={x:Math.round(ox+dx),y:Math.round(oy+dy)}; render();
+    went=true;
+    Object.keys(from).forEach(function(k){
+      pos[k]={x:Math.round(from[k].x+dx),y:Math.round(from[k].y+dy)};
+    });
+    render();
   });
   el.addEventListener("pointerup",function(ev){
     if(id===null||ev.pointerId!==id) return;
     id=null;
-    if(went){ moved[n.id]=pos[n.id]; save(posKey(),moved); return; }
+    if(went){
+      Object.keys(from).forEach(function(k){ moved[k]=pos[k]; });
+      save(posKey(),moved); return;
+    }
+    if(ev.shiftKey){ picked[n.id]=!picked[n.id]; render(); return; }
     // a click lands on the fold toggle, a file in the list, or the card itself
     var file=hit&&hit.closest("[data-file]");
     if(hit&&hit.closest(".fold")) toggleFold(n.id);
@@ -805,25 +885,54 @@ function drag(el,n){
   });
 }
 
+/* Dragging empty space pans. With shift held it draws a box instead, and
+   every card the box touches joins the picked set. */
 (function(){
-  var id=null,sx,sy,px,py;
+  var id=null,sx,sy,px,py,boxing=false,before={};
+  var box=document.getElementById("marquee");
+  function inBox(ev){
+    var r=stage.getBoundingClientRect();
+    var a={x:Math.min(sx,ev.clientX)-r.left, y:Math.min(sy,ev.clientY)-r.top};
+    var b={x:Math.max(sx,ev.clientX)-r.left, y:Math.max(sy,ev.clientY)-r.top};
+    box.style.left=a.x+"px"; box.style.top=a.y+"px";
+    box.style.width=(b.x-a.x)+"px"; box.style.height=(b.y-a.y)+"px";
+    // the box in canvas units, to test against each card
+    var x0=(a.x-panX)/scale, y0=(a.y-panY)/scale, x1=(b.x-panX)/scale, y1=(b.y-panY)/scale;
+    picked={};
+    Object.keys(before).forEach(function(k){ picked[k]=before[k]; });
+    order.forEach(function(n){
+      var p=pos[n.id];
+      if(p.x<x1&&p.x+CW>x0&&p.y<y1&&p.y+hgt[n.id]>y0) picked[n.id]=true;
+    });
+    render();
+  }
   stage.addEventListener("pointerdown",function(ev){
-    if(ev.target.closest(".card")||ev.target.closest("#panel")||ev.target.closest("#legend")) return;
+    if(ev.target.closest(".card")||ev.target.closest("#panel")||ev.target.closest("#legend")||
+       ev.target.closest("#corner")) return;
     stopZoom();
     id=ev.pointerId; sx=ev.clientX; sy=ev.clientY; px=panX; py=panY;
-    stage.classList.add("panning"); stage.setPointerCapture(id);
+    boxing=ev.shiftKey;
+    if(boxing){ before={}; pickedIds().forEach(function(k){ before[k]=true; }); }
+    stage.classList.add(boxing?"boxing":"panning"); stage.setPointerCapture(id);
   });
   stage.addEventListener("pointermove",function(ev){
     if(id===null||ev.pointerId!==id) return;
+    if(boxing){ box.hidden=false; inBox(ev); return; }
     panX=px+(ev.clientX-sx); panY=py+(ev.clientY-sy); applyView();
   });
   stage.addEventListener("pointerup",function(ev){
     if(id===null||ev.pointerId!==id) return;
-    id=null; stage.classList.remove("panning");
+    id=null; stage.classList.remove("panning","boxing"); box.hidden=true;
+    if(boxing) return;
     // a click on empty space, not the end of a pan, clears the selection
-    if(selected&&Math.abs(ev.clientX-sx)+Math.abs(ev.clientY-sy)<3) select(null);
+    if(Math.abs(ev.clientX-sx)+Math.abs(ev.clientY-sy)<3){
+      picked={};
+      if(selected) select(null); else render();
+    }
   });
-  stage.addEventListener("pointercancel",function(){ id=null; stage.classList.remove("panning"); });
+  stage.addEventListener("pointercancel",function(){
+    id=null; stage.classList.remove("panning","boxing"); box.hidden=true;
+  });
 })();
 
 /* The wheel sets a target zoom and each frame closes part of the gap, so a
@@ -861,24 +970,6 @@ function openView(){
   panX=22; panY=18; applyView();
 }
 
-var impBtn=document.getElementById("t-imports"), lazyBtn=document.getElementById("t-lazy");
-function syncToggles(){
-  impBtn.setAttribute("aria-pressed",String(showImports));
-  lazyBtn.setAttribute("aria-pressed",String(showImports&&showLazy));
-  lazyBtn.disabled=!showImports;
-  lazyBtn.style.opacity=showImports?"":"0.45";
-  save("show",{lazy:showLazy,imports:showImports});
-  if(V){ render(); drawPanel(); }
-}
-impBtn.addEventListener("click",function(){ showImports=!showImports; syncToggles(); });
-lazyBtn.addEventListener("click",function(){ showLazy=!showLazy; syncToggles(); });
-syncToggles();
-document.getElementById("v-modules").addEventListener("click",function(){
-  if(cur==="files") open(trail.length&&trail[0]!=="files"?trail[trail.length-1]:"modules");
-});
-document.getElementById("v-files").addEventListener("click",function(){
-  if(cur!=="files") open("files");
-});
 document.getElementById("b-fit").addEventListener("click",fit);
 document.getElementById("b-reset").addEventListener("click",function(){
   moved={}; save(posKey(),moved); layout(); openView(); render();
@@ -894,14 +985,18 @@ qbox.addEventListener("input",function(ev){
 });
 document.addEventListener("keydown",function(ev){
   if(ev.key!=="Escape"||ev.target===qbox) return;
-  if(selected) select(null);
+  if(pickedIds().length){ picked={}; render(); }
+  else if(selected) select(null);
   else if(trail.length>1) open(trail[0]);       // Escape climbs back out of a module
 });
 
 /* start where this browser left off, else at the top */
 (function(){
   var t=load("trail");
-  if(t&&t.length&&VIEWS[t[t.length-1]]){ trail=t; show(t[t.length-1]); }
+  // the file graph is only the fallback now, for a codebase with no modules
+  if(t&&t.length&&VIEWS[t[t.length-1]]&&!(MODS&&t[0]==="files")){
+    trail=t; show(t[t.length-1]);
+  }
   else open(MODS?"modules":"files");
 })();
 })();

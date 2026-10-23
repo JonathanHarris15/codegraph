@@ -98,18 +98,23 @@ a record of now, not a design: narrow each door to what *should* cross.
 ## On the page
 
 Click a card and everything unrelated dims, so you can see what it imports,
-what imports it, and what it reaches outside. Turn **Imports** off to leave
-only the outside wires. Drag cards about; the layout is kept in that browser.
-The search box jumps to a file. Scroll to zoom, drag the background to pan;
-neither has a limit, so you can wander off the graph and **Fit** brings it
-back. The legend folds away from its header.
+what imports it, and what it reaches outside. Drag cards about; the layout is
+kept in that browser. Hold shift and drag across empty space to pick several
+cards, or shift-click to add or drop one; dragging any picked card moves them
+all. The search box jumps to a card. Scroll to zoom, drag the
+background to pan; neither has a limit, so you can wander off the graph and
+**Fit**, in the corner, brings it back. The legend folds away from its header.
 
-The page opens on **Modules**: one card per module, wires between them, and
-the outside connections each module makes. Click a module to see its front
-door and the names that cross each wire; a red wire, and a red name, is one
-that is not on the front door. Double-click a module, or press **Open**, to go
-inside it: its own files, with the modules and connections they touch on
-either side. Escape climbs back out. **Files** is the full file-by-file graph.
+The page opens on the codebase's modules: one card per module, wires between
+them, and the outside connections each module makes. Click a module to see
+its front door and the names that cross each wire; a red wire, and a red
+name, is one that is not on the front door. Double-click a module, or press
+**Open**, to go inside it: its own files sit in a thin box, the modules it
+uses and its outside connections to the left, the modules that use it to the
+right, so every wire crossing the box is another module coming in or going
+out. The trail at the top says where you are, and a
+step in it, or Escape, climbs back out. A codebase with no modules at all
+falls back to one card per file.
 A module card lists its files; the small arrow folds the list away, and a
 click on a file goes inside the module with that file picked out. With the
 list open, an arrow lands on the file that pulls the wire in, and when
@@ -175,9 +180,16 @@ on the importer, the way information moves. So the columns run the same way.
 
 Each **file** is given a depth: one past the furthest thing that imports it,
 so a file nothing imports has depth 0. The columns are those depths read right
-to left: entry points and tests line up on the right, the things everything
+to left: what nothing imports lines up on the right, the things everything
 depends on sit on the left, and outside connections, where data comes from,
 take the first column of all.
+
+A card nothing imports carries a ▶. That can mean three things, and the card
+does not guess which: it is run directly (a script, an app, a test), it is
+loaded by name at runtime (a plugin, a bot), or it is unused. A folder's
+`__init__.py` never gets one when anything inside the folder is imported,
+because Python runs it first. On a module card the mark means no other module
+imports it, judged across the whole codebase rather than one view.
 
 That rule has a useful consequence. Since a file always sits at least one
 column left of anything that imports it, **every import wire points
