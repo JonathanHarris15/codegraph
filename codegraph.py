@@ -142,13 +142,14 @@ SCHEME_KIND = {
 
 @dataclass(frozen=True)
 class File:
-    """One .py file, and the dotted name other files would import it by."""
-    name: str          # atp.engine.tick
+    """One source file, and the name other files would import it by."""
+    name: str          # atp.engine.tick, or src/lib/calendar.ts
     path: Path
     rel: str           # atp/engine/tick.py
     group: str         # atp/engine  (the folder it sits in)
     package: str       # atp.engine  (what a relative import counts from)
     lines: int
+    lang: str = "python"   # which reader made it
 
     @property
     def label(self) -> str:
@@ -157,15 +158,17 @@ class File:
 
 # ----------------------------------------------------------------- discovery
 
-def discover(root: Path, hidden: bool = False) -> list[Path]:
-    """Every .py file under root, minus the usual noise.
+def discover(root: Path, hidden: bool = False,
+             suffixes: tuple = (".py",)) -> list[Path]:
+    """Every source file under root with one of these endings, minus the
+    usual noise.
 
     Dotted folders are skipped unless asked for: a folder whose name starts
     with a dot cannot be imported, so anything in one is tooling, not code the
     project runs.
     """
     found: list[Path] = []
-    for path in sorted(root.rglob("*.py")):
+    for path in sorted(p for p in root.rglob("*") if p.suffix in suffixes and p.is_file()):
         parts = path.relative_to(root).parts[:-1]
         if any(p in SKIP_DIRS for p in parts):
             continue
@@ -442,19 +445,76 @@ def _vague(kind: str) -> str:
     return KINDS[kind]["label"] + ", destination not in the source"
 
 
+# ------------------------------------------------------------------- readers
+#
+# Everything that depends on the language a file is written in sits behind a
+# reader. A reader turns a file into its name, the imports it makes, the
+# names it takes from other files and the connections it makes outside. The
+# rest of codegraph works on files, names and wires, whatever the language.
+
+@dataclass(frozen=True)
+class Link:
+    """One import: the file in the codebase it lands on, or failing that the
+    third-party package it reaches instead."""
+    target: str | None     # a file's name in the index
+    package: str | None    # a third-party package, when target is None
+    nested: bool           # written inside a function
+
+
+class PythonReader:
+    lang = "python"
+    suffixes = (".py",)
+    stdlib = getattr(sys, "stdlib_module_names", frozenset())
+
+    def file_of(self, path: Path, root: Path) -> File:
+        return file_of(path, root)
+
+    def links(self, f: File, index: dict) -> list:
+        out: list = []
+        for imp in read_imports(f.path):
+            target = absolute(imp, f.package)
+            hits = resolve(target, imp.names, index, f.package)
+            if hits:
+                out += [Link(h, None, imp.nested) for h in hits]
+                continue
+            top = target.split(".")[0]
+            if top and top not in self.stdlib and top != "__future__":
+                out.append(Link(None, top, imp.nested))
+        return out
+
+    def uses(self, f: File, index: dict) -> list:
+        return read_uses(f.path, f.package, index)
+
+    def outside(self, f: File) -> list:
+        return read_outside(f.path)
+
+
+READERS = [PythonReader()]
+
+
+def reader_of(f: File):
+    return next(r for r in READERS if r.lang == f.lang)
+
+
+def files_in(root: Path, hidden: bool = False) -> list:
+    """Every source file under root that some reader knows how to read."""
+    by_suffix = {s: r for r in READERS for s in r.suffixes}
+    paths = discover(root, hidden, tuple(by_suffix))
+    return [by_suffix[p.suffix].file_of(p, root) for p in paths]
+
+
 # --------------------------------------------------------------------- build
 
 def build(root: Path, externals: bool = False, hidden: bool = False,
           outside: bool = True, layout: str = "file",
           keep_empty: bool = False, decl: dict | None = None,
           source: str = "declared") -> dict:
-    files = [file_of(p, root) for p in discover(root, hidden)]
+    files = files_in(root, hidden)
     index = {m.name: m for m in files}
 
     edges: dict = {}
     ext_hits: dict = defaultdict(int)
     endpoints: dict = {}
-    stdlib = getattr(sys, "stdlib_module_names", frozenset())
 
     def add(src: str, dst: str, kind: str) -> None:
         if src == dst:
@@ -474,23 +534,18 @@ def build(root: Path, externals: bool = False, hidden: bool = False,
             }
 
     for f in files:
-        for imp in read_imports(f.path):
-            target = absolute(imp, f.package)
-            kind = "lazy" if imp.nested else "import"
-            hits = resolve(target, imp.names, index, f.package)
-            if hits:
-                for hit in hits:
-                    add(f.name, hit, kind)
+        reader = reader_of(f)
+        for link in reader.links(f, index):
+            kind = "lazy" if link.nested else "import"
+            if link.target:
+                add(f.name, link.target, kind)
                 continue
-            top = target.split(".")[0]
-            if not top or top in stdlib or top == "__future__":
-                continue
-            ext_hits[top] += 1
+            ext_hits[link.package] += 1
             if externals:
-                add(f.name, "ext:" + top, kind)
+                add(f.name, "ext:" + link.package, kind)
 
         if outside:
-            for conn in read_outside(f.path):
+            for conn in reader.outside(f):
                 note_endpoint(conn)
                 add(f.name, conn.target, conn.kind)
 
@@ -996,7 +1051,7 @@ def read_against(root: Path, decl: dict, hidden: bool = False) -> Reading:
     test_pats, inside = tests.get("files", []), tests.get("inside", {})
     door = {n: set(m.get("front_door", [])) for n, m in mods.items()}
 
-    files = [file_of(p, root) for p in discover(root, hidden)]
+    files = files_in(root, hidden)
     index = {f.name: f for f in files}
     mismatches: list = []
     unknown: list = []
@@ -1027,7 +1082,7 @@ def read_against(root: Path, decl: dict, hidden: bool = False) -> Reading:
 
     for f in files:
         here = owner.get(f.name)
-        for u in read_uses(f.path, f.package, index):
+        for u in reader_of(f).uses(f, index):
             if u.target in is_test and f.name not in is_test:
                 mismatches.append(Finding(f.rel, u.line, "imports a test, "
                                           + index[u.target].rel))
@@ -1167,7 +1222,7 @@ def draft(root: Path, hidden: bool = False) -> dict:
     found by their names and left outside every module, so any test that
     reaches past a front door shows up straight away.
     """
-    files = [file_of(p, root) for p in discover(root, hidden)]
+    files = files_in(root, hidden)
     index = {f.name: f for f in files}
 
     tests, program = [], []
@@ -1188,7 +1243,7 @@ def draft(root: Path, hidden: bool = False) -> dict:
     owner = {f.name: name_of(f.group) for f in program}
     door: dict = defaultdict(set)
     for f in program:
-        for u in read_uses(f.path, f.package, index):
+        for u in reader_of(f).uses(f, index):
             there = owner.get(u.target)
             if there and there != owner[f.name] and u.name:
                 door[there].add(u.name)
