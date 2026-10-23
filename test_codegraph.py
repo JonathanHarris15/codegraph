@@ -624,6 +624,15 @@ class ModuleViews(unittest.TestCase):
         self.assertEqual(e["names"], ["Book", "_fill"])
         self.assertEqual(e["bad"], ["_fill"])
 
+    def test_a_wire_knows_which_files_it_comes_from(self):
+        # the arrow lands on the importer, so these are the files to point at
+        self.assertEqual(self.edge("modules", "mod:app", "mod:engine")["via"], ["app.main"])
+        self.assertEqual(self.edge("modules", "mod:app", "svc:sqlite")["via"], ["app.main"])
+        self.assertEqual(self.edge("mod:engine", "mod:app", "engine.book")["via"], ["app.main"])
+
+    def test_a_wire_from_a_file_needs_no_via(self):
+        self.assertEqual(self.edge("mod:engine", "engine.gate", "engine.book")["via"], [])
+
     def test_a_clean_wire_has_nothing_bad(self):
         self.assertEqual(self.edge("modules", "mod:(tests)", "mod:engine")["bad"], [])
 

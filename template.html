@@ -152,6 +152,20 @@ path.wire.hot{stroke-width:2.2;opacity:1}
 .seg button:first-child{border-radius:6px 0 0 6px;margin-left:0}
 .seg button:last-child{border-radius:0 6px 6px 0}
 .card.mod{border-left-width:5px}
+.card .hd{display:flex;align-items:flex-start;gap:6px}
+.card .hd .nm{flex:1 1 auto;min-width:0}
+.card .fold{flex:0 0 auto;padding:0 5px;font-size:10px;line-height:15px;border-radius:4px;
+  background:none;border:1px solid transparent;color:var(--muted)}
+.card .fold:hover{border-color:var(--hair);color:var(--ink)}
+.card .fold{transition:transform .24s ease}
+.card .fold[aria-expanded="false"]{transform:rotate(-90deg)}
+.card ul.flist{list-style:none;margin:6px 0 0;padding:5px 0 0;border-top:1px solid var(--hair-soft);
+  display:flex;flex-direction:column;gap:1px}
+.card ul.flist li{font-family:var(--font-mono);font-size:10.5px;padding:1px 4px;border-radius:3px;
+  cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card ul.flist li:hover{background:var(--surface-2);color:var(--accent)}
+.card ul.flist li span{color:var(--muted)}
+.card.folded ul.flist{display:none}
 .card.mod.opens .nm::after{content:" ›";color:var(--muted)}
 path.wire.breach{stroke-width:2}
 #panel .names{font-family:var(--font-mono);font-size:9.5px;color:var(--muted);
@@ -216,7 +230,7 @@ var GRAPH = /*__GRAPH__*/null;
 "use strict";
 if(!GRAPH){document.getElementById("panel").textContent="No graph data.";return;}
 
-var CW=170, CH=62, COLGAP=112, ROWGAP=78, HEADY=26;
+var CW=170, CH=62, COLGAP=112, HEADY=26;
 
 /* ------------------------------------------------------------------- views
    The file graph is always one view. A declaration (or a draft of one) adds
@@ -225,6 +239,8 @@ var CW=170, CH=62, COLGAP=112, ROWGAP=78, HEADY=26;
 var MODS=GRAPH.modules||null;
 var VIEWS={files:{title:"Files",unit:"files",nodes:GRAPH.nodes,edges:GRAPH.edges,
                   columns:GRAPH.columns,groups:GRAPH.groups}};
+var FILES={};
+GRAPH.nodes.forEach(function(n){ FILES[n.id]=n; });
 if(MODS) Object.keys(MODS.views).forEach(function(k){ VIEWS[k]=MODS.views[k]; });
 
 /* every folder and module gets one hue, golden angle apart, the same in every view */
@@ -325,10 +341,102 @@ var gWires=document.createElementNS(NS,"g"); svg.appendChild(gWires);
 
 /* ------------------------------------------------------------- open a view */
 var cur=null, trail=[], V=null, nodes={}, order=[], edges=[], out={}, inn={},
-    base={}, colX={}, pos={}, cardEls={}, wireEls={};
+    base={}, colX={}, pos={}, cardEls={}, wireEls={}, threadEls={}, rowY={};
 
-function posKey(){ return cur==="files"?"pos":"pos:"+cur; }
-function resetPos(){ order.forEach(function(n){ pos[n.id]={x:base[n.id].x,y:base[n.id].y}; }); }
+/* where each file sits in a card's list, measured while the list is drawn */
+function measureRows(id){
+  rowY[id]={};
+  Array.prototype.forEach.call(cardEls[id].querySelectorAll("[data-file]"),function(li){
+    rowY[id][li.getAttribute("data-file")]=li.offsetTop+li.offsetHeight/2;
+  });
+}
+
+/* only the cards someone dragged keep a place of their own; the rest follow
+   the layout, so a card growing or folding moves its neighbours */
+var hgt={}, moved={}, GAP=16;
+var folded=load("folded")||{};
+function posKey(){ return "at:"+cur; }
+
+/* turn the generator's columns and rows into pixels: each column stacked by
+   the cards' real heights, and centred against the tallest */
+function layout(){
+  var cols={}, total={}, tallest=0;
+  base={}; colX={};
+  order.forEach(function(n){ (cols[n.col]=cols[n.col]||[]).push(n); });
+  Object.keys(cols).forEach(function(c){
+    cols[c].sort(function(a,b){ return a.row-b.row; });
+    total[c]=cols[c].reduce(function(s,n){ return s+hgt[n.id]; },0)+GAP*(cols[c].length-1);
+    tallest=Math.max(tallest,total[c]);
+  });
+  Object.keys(cols).forEach(function(c){
+    var x=Number(c)*(CW+COLGAP), y=HEADY+(tallest-total[c])/2;
+    colX[c]=x;
+    cols[c].forEach(function(n){ base[n.id]={x:x,y:y}; y+=hgt[n.id]+GAP; });
+  });
+  pos={};
+  order.forEach(function(n){
+    var m=moved[n.id];
+    pos[n.id]=m&&typeof m.x==="number"?{x:m.x,y:m.y}:{x:base[n.id].x,y:base[n.id].y};
+  });
+}
+
+/* a module card lists its files, folded or not; the choice is per module and
+   kept in this browser */
+function fileList(el,hd,n){
+  var fold=document.createElement("button");
+  fold.className="fold"; fold.setAttribute("aria-label","Show or hide the files");
+  fold.setAttribute("aria-expanded",String(!folded[n.id]));
+  fold.textContent="▾";
+  hd.appendChild(fold);
+  var seen={};
+  n.files.forEach(function(fid){ var f=FILES[fid]; if(f) seen[f.label]=(seen[f.label]||0)+1; });
+  var ul=document.createElement("ul"); ul.className="flist";
+  n.files.forEach(function(fid){
+    var f=FILES[fid]||{label:fid,dir:""}, li=document.createElement("li");
+    li.setAttribute("data-file",fid); li.title=fid;
+    if(seen[f.label]>1){
+      var s=document.createElement("span"); s.textContent=f.dir.split("/").pop()+"/";
+      li.appendChild(s);
+    }
+    li.appendChild(document.createTextNode(f.label));
+    ul.appendChild(li);
+  });
+  el.appendChild(ul);
+}
+/* Folding eases the card's height from one size to the other while the list
+   inside is clipped. Every frame the columns re-stack and the wires redraw,
+   so the neighbours and the wires travel with the card instead of jumping. */
+var FOLD_MS=matchMedia("(prefers-reduced-motion: reduce)").matches?0:240, folding={};
+function toggleFold(id){
+  folded[id]=!folded[id]; save("folded",folded);
+  var el=cardEls[id], b=el.querySelector(".fold");
+  b.setAttribute("aria-expanded",String(!folded[id]));
+  if(folding[id]) cancelAnimationFrame(folding[id]);
+
+  var from=el.offsetHeight;                 // where it is now, even mid-fold
+  var o0=openness[id]===undefined?(folded[id]?1:0):openness[id], o1=folded[id]?0:1;
+  el.style.height=""; el.classList.toggle("folded",!!folded[id]);
+  var to=el.offsetHeight;
+  el.classList.remove("folded");            // keep the list drawn while it clips
+  measureRows(id);
+  el.style.overflow="hidden"; el.style.height=from+"px";
+
+  var start=performance.now();
+  function step(now){
+    var t=FOLD_MS?Math.min(1,(now-start)/FOLD_MS):1;
+    var k=t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;      // ease in and out
+    hgt[id]=from+(to-from)*k;
+    openness[id]=o0+(o1-o0)*k;
+    el.style.height=hgt[id]+"px";
+    layout(); render();
+    if(t<1){ folding[id]=requestAnimationFrame(step); return; }
+    folding[id]=0;
+    el.style.height=""; el.style.overflow="";
+    el.classList.toggle("folded",!!folded[id]);
+    hgt[id]=el.offsetHeight; layout(); render();
+  }
+  folding[id]=requestAnimationFrame(step);
+}
 
 function show(key){
   V=VIEWS[key]; cur=key; selected=null; query=""; qbox.value="";
@@ -336,30 +444,40 @@ function show(key){
   order.forEach(function(n){ nodes[n.id]=n; });
   edges=V.edges.filter(function(e){ return nodes[e.from]&&nodes[e.to]; })
     .map(function(e,i){ return {i:i,from:e.from,to:e.to,kind:e.kind,
-                                names:e.names||[],bad:e.bad||[]}; });
+                                names:e.names||[],bad:e.bad||[],via:e.via||[]}; });
   out={}; inn={};
   order.forEach(function(n){ out[n.id]=[]; inn[n.id]=[]; });
   edges.forEach(function(e){ out[e.from].push(e); inn[e.to].push(e); });
-
-  /* turn the generator's columns and rows into pixels, each column centred */
-  base={}; colX={};
-  var count={}, tallest=1;
-  order.forEach(function(n){ count[n.col]=(count[n.col]||0)+1; });
-  Object.keys(count).forEach(function(c){ tallest=Math.max(tallest,count[c]); });
-  order.forEach(function(n){
-    if(colX[n.col]===undefined) colX[n.col]=n.col*(CW+COLGAP);
-    base[n.id]={x:colX[n.col], y:HEADY+((tallest-count[n.col])/2+n.row)*ROWGAP};
-  });
-  pos={}; resetPos();
-  var p=load(posKey());
-  if(p) Object.keys(p).forEach(function(id){
-    if(pos[id]&&p[id]&&typeof p[id].x==="number") pos[id]={x:p[id].x,y:p[id].y};
-  });
 
   Array.prototype.slice.call(canvas.children).forEach(function(c){
     if(c!==svg) canvas.removeChild(c);
   });
   while(gWires.firstChild) gWires.removeChild(gWires.firstChild);
+
+  cardEls={}; hgt={};
+  order.forEach(function(n){
+    var el=document.createElement("div");
+    el.className="card"+(n.kind==="file"?"":n.kind==="module"?" mod":" ext")+
+      (VIEWS[n.id]&&n.id!==cur?" opens":"")+(folded[n.id]?" folded":"");
+    el.style.setProperty("--gc",gcolor(n.group));
+    el.tabIndex=0; el.setAttribute("role","button");
+    var hd=document.createElement("div"); hd.className="hd";
+    var nm=document.createElement("div"); nm.className="nm"; nm.textContent=n.label;
+    hd.appendChild(nm);
+    var dir=document.createElement("div"); dir.className="dir"; dir.textContent=n.dir;
+    var foot=document.createElement("div"); foot.className="foot";
+    foot.textContent=(n.lines?n.lines+" lines  ":"")+"↱"+inn[n.id].length+" ↳"+out[n.id].length;
+    el.appendChild(hd); el.appendChild(dir); el.appendChild(foot);
+    if(n.files&&n.files.length) fileList(el,hd,n);
+    canvas.appendChild(el); cardEls[n.id]=el;
+    hgt[n.id]=el.offsetHeight;
+    if(n.files&&!folded[n.id]) measureRows(n.id);
+    openness[n.id]=folded[n.id]?0:1;
+    drag(el,n);
+  });
+
+  moved=load(posKey())||{};
+  layout();
 
   (V.columns||[]).forEach(function(c,i){
     if(!c.label||colX[i]===undefined) return;
@@ -370,34 +488,25 @@ function show(key){
     canvas.appendChild(d);
   });
 
-  cardEls={};
-  order.forEach(function(n){
-    var el=document.createElement("div");
-    el.className="card"+(n.kind==="file"?"":n.kind==="module"?" mod":" ext")+
-      (VIEWS[n.id]&&n.id!==cur?" opens":"");
-    el.style.setProperty("--gc",gcolor(n.group));
-    el.tabIndex=0; el.setAttribute("role","button");
-    var nm=document.createElement("div"); nm.className="nm"; nm.textContent=n.label;
-    var dir=document.createElement("div"); dir.className="dir"; dir.textContent=n.dir;
-    var foot=document.createElement("div"); foot.className="foot";
-    foot.textContent=(n.lines?n.lines+" lines  ":"")+"↱"+inn[n.id].length+" ↳"+out[n.id].length;
-    el.appendChild(nm); el.appendChild(dir); el.appendChild(foot);
-    canvas.appendChild(el); cardEls[n.id]=el;
-    drag(el,n);
-  });
-
-  wireEls={};
+  wireEls={}; threadEls={};
   edges.forEach(function(e){
     var d=KINDS[e.kind]||KINDS["import"], bad=e.bad.length>0;
-    var p=document.createElementNS(NS,"path");
-    p.setAttribute("class","wire"+(bad?" breach":""));
-    p.setAttribute("stroke",bad?"var(--breach)":kcolor(e.kind));
-    p.setAttribute("stroke-width",String(d.width));
-    if(d.dash) p.setAttribute("stroke-dasharray",d.dash);
-    // the arrowhead sits on the importer: what is imported flows into it
-    p.setAttribute("marker-start","url(#ar-"+(bad?"breach":e.kind)+")");
-    p.setAttribute("opacity",bad?"0.95":isWiring(e.kind)?"0.6":"0.9");
-    gWires.appendChild(p); wireEls[e.i]=p;
+    function strand(){
+      var p=document.createElementNS(NS,"path");
+      p.setAttribute("class","wire"+(bad?" breach":""));
+      p.setAttribute("stroke",bad?"var(--breach)":kcolor(e.kind));
+      p.setAttribute("stroke-width",String(d.width));
+      if(d.dash) p.setAttribute("stroke-dasharray",d.dash);
+      p.setAttribute("opacity",bad?"0.95":isWiring(e.kind)?"0.6":"0.9");
+      gWires.appendChild(p);
+      return p;
+    }
+    e.head="url(#ar-"+(bad?"breach":e.kind)+")";
+    wireEls[e.i]=strand();
+    // one thread per file on the importing card that pulls this wire in
+    if(nodes[e.from].files) threadEls[e.i]=e.via.map(function(fid){
+      return {fid:fid, el:strand()};
+    });
   });
 
   drawKey(); drawCrumbs(); save("trail",trail);
@@ -440,15 +549,93 @@ function drawCrumbs(){
 }
 
 /* ------------------------------------------------------------------ render */
-function anchors(a,b){
-  var ax=pos[a].x, ay=pos[a].y+CH/2, bx=pos[b].x, by=pos[b].y+CH/2;
-  if(bx>=ax) return [{x:ax+CW,y:ay,d:1},{x:bx,y:by,d:-1}];
-  return [{x:ax,y:ay,d:-1},{x:bx+CW,y:by,d:1}];
+/* Each wire gets its own point on the side of a card, not one shared centre,
+   so a pair running both ways reads as two wires. A side's wires are spread
+   in order of how high the card at the other end sits, which keeps them from
+   crossing as they leave. They spread over the card's head, not down a file
+   list that would suggest a wire belongs to one file. */
+var ports={};
+function placePorts(vis){
+  var sides={};
+  function add(id,side,e,end,other){
+    (sides[id+"|"+side]=sides[id+"|"+side]||{id:id,side:side,list:[]})
+      .list.push({e:e,end:end,other:other});
+  }
+  ports={};
+  vis.forEach(function(e){
+    var fwd=pos[e.to].x>=pos[e.from].x;
+    // every wire keeps its place on the side, open or folded, so folding a
+    // card moves only the wires that go to its rows
+    add(e.from,fwd?"r":"l",e,0,e.to);
+    add(e.to,fwd?"l":"r",e,1,e.from);
+  });
+  Object.keys(sides).forEach(function(k){
+    var s=sides[k], top=pos[s.id].y;
+    var span=Math.min(hgt[s.id],Math.max(CH,12*(s.list.length+1)));
+    s.list.sort(function(a,b){
+      var ay=pos[a.other].y+Math.min(hgt[a.other],CH)/2,
+          by=pos[b.other].y+Math.min(hgt[b.other],CH)/2;
+      return ay-by||pos[a.other].x-pos[b.other].x||a.e.i-b.e.i;
+    });
+    s.list.forEach(function(p,i){
+      (ports[p.e.i]=ports[p.e.i]||[])[p.end]={
+        x:s.side==="r"?pos[s.id].x+CW:pos[s.id].x,
+        y:top+span*(i+1)/(s.list.length+1),
+        d:s.side==="r"?1:-1};
+    });
+  });
 }
-function pathOf(e){
-  var ab=anchors(e.from,e.to), s=ab[0], t=ab[1];
+function curve(s,t){
   var bend=Math.max(34,Math.min(150,Math.abs(t.x-s.x)*0.46));
   return "M"+s.x+" "+s.y+" C"+(s.x+s.d*bend)+" "+s.y+" "+(t.x+t.d*bend)+" "+t.y+" "+t.x+" "+t.y;
+}
+
+/* With a card's file list open, a wire lands on the files that pull it in.
+   One file: the wire runs straight to its row. Several: one trunk to a split
+   just outside the card, then a thread to each row. Folded, it is one wire to
+   the card's side again. */
+var SPLIT=30;
+/* how open each card's list is, 0 to 1; it eases with the fold, and every
+   arrow on that card slides between its place on the side and its row */
+var openness={};
+function threaded(e){
+  return !!(threadEls[e.i]&&threadEls[e.i].length&&openness[e.from]>0&&rowY[e.from]);
+}
+function lerp(a,b,k){ return {x:a.x+(b.x-a.x)*k, y:a.y+(b.y-a.y)*k, d:b.d}; }
+function drawWire(e,show){
+  var main=wireEls[e.i], threads=threadEls[e.i]||[];
+  threads.forEach(function(t){ t.el.style.display="none"; });
+  main.style.display=show?"":"none";
+  if(!show) return [];
+  var side=ports[e.i][0], t=ports[e.i][1];
+  if(!threaded(e)){
+    main.setAttribute("marker-start",e.head);
+    main.setAttribute("d",curve(side,t));
+    return [main];
+  }
+  var c=e.from, o=openness[c], d=side.d, x=side.x, sum=0;
+  var rows=threads.map(function(th){
+    var y=rowY[c][th.fid];
+    y=pos[c].y+(y===undefined?Math.min(hgt[c],CH)/2:Math.min(y,hgt[c]-6));
+    var at=lerp(side,{x:x,y:y,d:d},o);
+    sum+=at.y; return {th:th, at:at};
+  });
+  if(rows.length===1){
+    main.setAttribute("marker-start",e.head);
+    main.setAttribute("d",curve(rows[0].at,t));
+    return [main];
+  }
+  // the split starts on the side and steps out as the list opens
+  var j=lerp(side,{x:x+d*SPLIT, y:sum/rows.length, d:d},o);
+  main.removeAttribute("marker-start");
+  main.setAttribute("d",curve(j,t));
+  rows.forEach(function(r){
+    var s=r.at, h=SPLIT*0.55;
+    r.th.el.style.display="";
+    r.th.el.setAttribute("marker-start",e.head);
+    r.th.el.setAttribute("d","M"+s.x+" "+s.y+" C"+(s.x+d*h)+" "+s.y+" "+(j.x-d*h)+" "+j.y+" "+j.x+" "+j.y);
+  });
+  return [main].concat(rows.map(function(r){ return r.th.el; }));
 }
 function near(id){
   var set={}; set[id]=true;
@@ -458,7 +645,7 @@ function near(id){
 }
 function extent(){
   var w=0,h=0;
-  order.forEach(function(n){ w=Math.max(w,pos[n.id].x+CW); h=Math.max(h,pos[n.id].y+CH); });
+  order.forEach(function(n){ w=Math.max(w,pos[n.id].x+CW); h=Math.max(h,pos[n.id].y+hgt[n.id]); });
   return {w:w,h:h};
 }
 function hits(n){
@@ -468,6 +655,7 @@ function hits(n){
 function render(){
   var ring=selected?near(selected):null;
   var ev=0, bad=0;
+  placePorts(edges.filter(edgeVisible));
   order.forEach(function(n){
     var el=cardEls[n.id];
     el.style.transform="translate("+pos[n.id].x+"px,"+pos[n.id].y+"px)";
@@ -477,14 +665,15 @@ function render(){
     el.classList.toggle("hit",!!query&&!selected&&hits(n));
   });
   edges.forEach(function(e){
-    var p=wireEls[e.i], vis=edgeVisible(e);
-    // SVG ignores the hidden property, so it has to be display
-    p.style.display=vis?"":"none"; if(!vis) return;
+    // SVG ignores the hidden property, so drawWire sets display instead
+    var vis=edgeVisible(e), strands=drawWire(e,vis);
+    if(!vis) return;
     ev++; if(e.bad.length) bad++;
-    p.setAttribute("d",pathOf(e));
     var hot=!!selected&&(e.from===selected||e.to===selected);
-    p.classList.toggle("hot",hot);
-    p.classList.toggle("dim",!!selected&&!hot);
+    strands.forEach(function(p){
+      p.classList.toggle("hot",hot);
+      p.classList.toggle("dim",!!selected&&!hot);
+    });
   });
   var b=extent();
   svg.setAttribute("width",b.w+40); svg.setAttribute("height",b.h+40);
@@ -575,29 +764,38 @@ function select(id){ selected=id; render(); drawPanel(); }
 function focus(id){
   var r=stage.getBoundingClientRect();
   panX=r.width/2-(pos[id].x+CW/2)*scale;
-  panY=r.height/2-(pos[id].y+CH/2)*scale;
+  panY=r.height/2-(pos[id].y+Math.min(hgt[id],r.height/scale/2)/2)*scale;
   stopZoom(); applyView();
 }
 
 /* ------------------------------------------------------------ interactions */
 function drag(el,n){
-  var id=null,sx,sy,ox,oy,moved=false;
+  var id=null,sx,sy,ox,oy,went=false,hit=null;
   el.addEventListener("pointerdown",function(ev){
     if(ev.button!==0&&ev.pointerType==="mouse") return;
-    ev.stopPropagation(); id=ev.pointerId; moved=false;
+    ev.stopPropagation(); id=ev.pointerId; went=false; hit=ev.target;
     sx=ev.clientX; sy=ev.clientY; ox=pos[n.id].x; oy=pos[n.id].y;
     el.setPointerCapture(id);
   });
   el.addEventListener("pointermove",function(ev){
     if(id===null||ev.pointerId!==id) return;
     var dx=(ev.clientX-sx)/scale, dy=(ev.clientY-sy)/scale;
-    if(!moved&&Math.abs(dx)+Math.abs(dy)<3) return;
-    moved=true; pos[n.id]={x:Math.round(ox+dx),y:Math.round(oy+dy)}; render();
+    if(!went&&Math.abs(dx)+Math.abs(dy)<3) return;
+    went=true; pos[n.id]={x:Math.round(ox+dx),y:Math.round(oy+dy)}; render();
   });
   el.addEventListener("pointerup",function(ev){
     if(id===null||ev.pointerId!==id) return;
     id=null;
-    if(moved) save(posKey(),pos); else select(selected===n.id?null:n.id);
+    if(went){ moved[n.id]=pos[n.id]; save(posKey(),moved); return; }
+    // a click lands on the fold toggle, a file in the list, or the card itself
+    var file=hit&&hit.closest("[data-file]");
+    if(hit&&hit.closest(".fold")) toggleFold(n.id);
+    else if(file){
+      var fid=file.getAttribute("data-file");
+      if(VIEWS[n.id]&&n.id!==cur) open(n.id);
+      if(nodes[fid]){ select(fid); focus(fid); }
+    }
+    else select(selected===n.id?null:n.id);
   });
   el.addEventListener("pointercancel",function(){ id=null; });
   // a double click goes into a module
@@ -683,7 +881,7 @@ document.getElementById("v-files").addEventListener("click",function(){
 });
 document.getElementById("b-fit").addEventListener("click",fit);
 document.getElementById("b-reset").addEventListener("click",function(){
-  resetPos(); save(posKey(),pos); openView(); render();
+  moved={}; save(posKey(),moved); layout(); openView(); render();
 });
 qbox.addEventListener("input",function(ev){
   query=ev.target.value.trim().toLowerCase();

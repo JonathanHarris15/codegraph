@@ -1064,16 +1064,20 @@ def module_views(root: Path, graph: dict, decl: dict, hidden: bool = False,
                 continue
             wiring = e["kind"] in ("import", "lazy")
             key = (a, b, "import" if wiring else e["kind"])
-            if wiring and wires.get(key, {}).get("kind") == "import":
-                continue
-            wires[key] = {"from": a, "to": b, "kind": e["kind"], "names": set(), "bad": set()}
+            w = wires.setdefault(key, {"from": a, "to": b, "kind": e["kind"],
+                                       "names": set(), "bad": set(), "via": set()})
+            if w["kind"] == "lazy" and e["kind"] == "import":
+                w["kind"] = "import"      # a real import beats one in a function
+            if a != e["from"]:
+                w["via"].add(e["from"])   # the files on a card this wire comes from
         for c in r.crossings:
             w = wires.get((mapping(c.src), mapping(c.dst), "import"))
             if w:
                 w["names"].add(c.name)
                 if not c.ok:
                     w["bad"].add(c.name)
-        edges = [dict(w, names=sorted(w["names"]), bad=sorted(w["bad"]))
+        edges = [dict(w, names=sorted(w["names"]), bad=sorted(w["bad"]),
+                      via=sorted(w["via"]))
                  for _, w in sorted(wires.items())]
 
         ids = list(dict.fromkeys(own + [x for w in edges for x in (w["from"], w["to"])]))

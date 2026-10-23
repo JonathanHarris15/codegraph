@@ -110,6 +110,13 @@ door and the names that cross each wire; a red wire, and a red name, is one
 that is not on the front door. Double-click a module, or press **Open**, to go
 inside it: its own files, with the modules and connections they touch on
 either side. Escape climbs back out. **Files** is the full file-by-file graph.
+A module card lists its files; the small arrow folds the list away, and a
+click on a file goes inside the module with that file picked out. With the
+list open, an arrow lands on the file that pulls the wire in, and when
+several files do, the wire splits just outside the card into a thread for
+each. Folded, the wires meet the card's side again. Each wire meets a card at
+a point of its own, so two wires running opposite ways between the same pair
+show as two.
 The modules come from `codegraph.json` if the codebase has one, and otherwise
 from a draft, one module per folder, which the header says.
 
