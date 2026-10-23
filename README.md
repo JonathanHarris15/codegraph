@@ -13,7 +13,8 @@ open codegraph.html
 ```
 
 ```
-39 files, 125 wires (16 of them imports inside a function), 12 folders -> codegraph.html
+36 files, 125 wires (16 of them imports inside a function), 12 folders -> codegraph.html
+8 columns deep
 reaches outside: 4 feed, 3 HTTP call, 2 serves HTTP, 1 market data / orders, 1 environment, 1 database
     127.0.0.1:8787             http /
     alpaca                     market data / orders
@@ -33,6 +34,8 @@ reaches outside: 4 feed, 3 HTTP call, 2 serves HTTP, 1 market data / orders, 1 e
 | `--externals` | give third-party packages their own cards |
 | `--hidden` | read dotted folders too (`.claude`, `.github`) |
 | `--no-outside` | imports only; skip the hunt for connections |
+| `--layout folder` | one column per folder, the older arrangement |
+| `--keep-empty` | keep empty `__init__.py` files that nothing imports |
 
 ## On the page
 
@@ -91,18 +94,29 @@ from a flag is one card, not two.
 
 ## How the columns are chosen
 
-Folders are sorted so that whoever imports sits left of whoever is imported —
-a topological sort of the folder graph, cycles broken by taking the folder
-with the fewest unmet dependents. Inside a folder, files sit in path order.
-Outside connections go in a column of their own at the right. Folder colours
-come from the folder's place in that order, a golden angle apart, so any
-codebase gets a usable palette without anyone picking one.
+Each **file** gets a column: one past the furthest thing that imports it. A
+file nothing imports starts at column 0, so entry points line up on the left
+and the things everything depends on end up on the right. Outside connections
+take a column of their own at the far end.
 
-This is the weakest part and the most interesting one to replace. A folder is
-a blunt unit: `atp/` holds both the command line that imports everything and
-the model file that imports nothing, so they land in the same column. Sorting
-by file rather than by folder, or running a proper force-directed pass, would
-both do better.
+That rule has a useful consequence. Since a file always sits at least one
+column past anything that imports it, **every import wire points rightward**.
+A wire going backwards would mean a cycle, and there are none to draw because
+cycles are broken first: one depth-first walk marks the edges that close a
+loop, and the layering ignores them.
+
+Rows inside a column are then shuffled to cut down crossings — the barycentre
+heuristic, which puts a card level with the average of the cards it is wired
+to, sweeping back and forth a few times.
+
+Folder is no longer the unit, but it is still the colour: cards are tinted by
+which folder they came from, a golden angle apart in hue, and the key in the
+corner names them. `--layout folder` brings the old one-column-per-folder
+arrangement back if you want to compare.
+
+All of the placement happens in `place_by_file`, which hands the page a
+column and a row per card. The page only turns those into pixels, so a new
+layout is a Python function and nothing else.
 
 ## Tests
 
@@ -110,6 +124,6 @@ both do better.
 python -m unittest -v
 ```
 
-48 of them, over the parts that can be quietly wrong: turning a path and an
-import statement into the name of another file, and deciding that a call
-reaches outside the process.
+65 of them, over the parts that can be quietly wrong: turning a path and an
+import statement into the name of another file, deciding that a call reaches
+outside the process, and laying the result out so no wire points backwards.

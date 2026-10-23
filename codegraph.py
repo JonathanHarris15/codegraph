@@ -27,7 +27,7 @@ import ast
 import json
 import re
 import sys
-from collections import defaultdict
+from collections import defaultdict, deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -442,7 +442,8 @@ def _vague(kind: str) -> str:
 # --------------------------------------------------------------------- build
 
 def build(root: Path, externals: bool = False, hidden: bool = False,
-          outside: bool = True) -> dict:
+          outside: bool = True, layout: str = "file",
+          keep_empty: bool = False) -> dict:
     modules = [module_of(p, root) for p in discover(root, hidden)]
     index = {m.name: m for m in modules}
 
@@ -489,6 +490,14 @@ def build(root: Path, externals: bool = False, hidden: bool = False,
                 note_endpoint(conn)
                 add(mod.name, conn.target, conn.kind)
 
+    if not keep_empty:
+        # An empty __init__.py that nothing imports is a folder marker, not a
+        # file. Left in, it crowds the entry-point column with cards that
+        # have no wires at all.
+        wired = {s for s, _ in edges} | {d for _, d in edges}
+        modules = [m for m in modules
+                   if m.lines or m.path.name != "__init__.py" or m.name in wired]
+
     tail = ([EXTERNAL] if externals else []) + ([OUTSIDE] if endpoints else [])
     groups = order_groups(modules, edges, tail)
     rank = {g: i for i, g in enumerate(groups)}
@@ -521,10 +530,20 @@ def build(root: Path, externals: bool = False, hidden: bool = False,
     wires = [{"from": s, "to": d, "kind": k} for (s, d), k in sorted(edges.items())]
     used = sorted({w["kind"] for w in wires}, key=list(KINDS).index)
 
+    pairs = [(w["from"], w["to"]) for w in wires]
+    if layout == "folder":
+        col, row, columns = place_by_folder(nodes, groups)
+    else:
+        col, row, columns = place_by_file(nodes, pairs, tail)
+    for n in nodes:
+        n["col"], n["row"] = col[n["id"]], row[n["id"]]
+
     return {
         "root": root.resolve().name,
         "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "layout": layout,
         "groups": groups,
+        "columns": columns,
         "kinds": {k: KINDS[k] for k in used},
         "nodes": nodes,
         "edges": wires,
@@ -570,6 +589,159 @@ def order_groups(modules: list, edges: dict, tail: list) -> list[str]:
     return order + list(tail)
 
 
+# -------------------------------------------------------------------- layout
+
+MAXROWS = 12          # before a folder column splits in two (folder layout only)
+
+
+def back_edges(ids: list, pairs: list) -> set:
+    """The edges that close a loop, found by one depth-first walk.
+
+    Dropping them leaves a graph with no cycles, which is all the layering
+    needs. Iterative, so a deep codebase cannot blow the stack.
+    """
+    adj: dict = defaultdict(list)
+    for src, dst in pairs:
+        adj[src].append(dst)
+
+    WHITE, GREY, BLACK = 0, 1, 2
+    colour = {i: WHITE for i in ids}
+    back: set = set()
+
+    for root in ids:
+        if colour[root] != WHITE:
+            continue
+        colour[root] = GREY
+        stack = [(root, iter(adj[root]))]
+        while stack:
+            node, rest = stack[-1]
+            went_deeper = False
+            for nxt in rest:
+                if nxt not in colour:
+                    continue
+                if colour[nxt] == GREY:
+                    back.add((node, nxt))        # points back at an open node
+                elif colour[nxt] == WHITE:
+                    colour[nxt] = GREY
+                    stack.append((nxt, iter(adj[nxt])))
+                    went_deeper = True
+                    break
+            if not went_deeper:
+                colour[node] = BLACK
+                stack.pop()
+    return back
+
+
+def layer(ids: list, pairs: list) -> dict:
+    """Give every file a column: one past the furthest thing that imports it.
+
+    A file nothing imports starts at 0, so entry points line up on the left
+    and every import wire then points rightward.
+    """
+    loops = back_edges(ids, pairs)
+    alive = [(s, d) for s, d in pairs
+             if (s, d) not in loops and s in set(ids) and d in set(ids)]
+
+    nxt: dict = defaultdict(list)
+    indeg = {i: 0 for i in ids}
+    for src, dst in alive:
+        nxt[src].append(dst)
+        indeg[dst] += 1
+
+    col = {i: 0 for i in ids}
+    queue = deque(i for i in ids if indeg[i] == 0)
+    while queue:
+        node = queue.popleft()
+        for dst in nxt[node]:
+            col[dst] = max(col[dst], col[node] + 1)
+            indeg[dst] -= 1
+            if indeg[dst] == 0:
+                queue.append(dst)
+    return col
+
+
+def order_rows(columns: dict, pairs: list, sweeps: int = 4) -> dict:
+    """Shuffle each column so the wires between them cross less.
+
+    The usual barycentre heuristic: put a card level with the average of the
+    cards it is wired to, one column at a time, back and forth.
+    """
+    before: dict = defaultdict(list)
+    after: dict = defaultdict(list)
+    for src, dst in pairs:
+        after[src].append(dst)
+        before[dst].append(src)
+
+    tallest = max((len(v) for v in columns.values()), default=1)
+    place: dict = {}
+
+    def restack() -> None:
+        for col, names in columns.items():
+            pad = (tallest - len(names)) / 2.0      # columns sit centred
+            for row, name in enumerate(names):
+                place[name] = pad + row
+
+    restack()
+    keys = sorted(columns)
+    for sweep in range(sweeps):
+        run = keys[1:] if sweep % 2 == 0 else list(reversed(keys[:-1]))
+        side = before if sweep % 2 == 0 else after
+        for col in run:
+            columns[col].sort(key=lambda n: (
+                sum(place[m] for m in side[n] if m in place) / len(
+                    [m for m in side[n] if m in place])
+                if any(m in place for m in side[n]) else place[n]
+            ))
+            restack()
+
+    return {n: row for col in columns for row, n in enumerate(columns[col])}
+
+
+def place_by_file(nodes: list, pairs: list, pinned: list) -> tuple:
+    """Lay out one card per file, by how deep in the import chain it sits."""
+    loose = [n["id"] for n in nodes if n["group"] not in pinned]
+    inner = [(s, d) for s, d in pairs if s in set(loose) and d in set(loose)]
+
+    col = layer(loose, inner)
+    depth = max(col.values(), default=0)
+
+    # the cards that are not files go in columns of their own, at the end
+    labels = {0: "entry points"}
+    for extra, group in enumerate(pinned, start=1):
+        for n in nodes:
+            if n["group"] == group:
+                col[n["id"]] = depth + extra
+        labels[depth + extra] = group.strip("()")
+
+    columns: dict = defaultdict(list)
+    for n in nodes:
+        columns[col[n["id"]]].append(n["id"])
+    for c in columns:                       # a steady start for the sweeps
+        order = {n["id"]: (n["group"], n["label"]) for n in nodes}
+        columns[c].sort(key=lambda n: order[n])
+
+    row = order_rows(columns, pairs)
+    return col, row, [{"label": labels.get(c, "")} for c in sorted(columns)]
+
+
+def place_by_folder(nodes: list, groups: list) -> tuple:
+    """The older layout: one column per folder, split when a folder is tall."""
+    col, row, labels = {}, {}, []
+    index = 0
+    for group in groups:
+        members = [n for n in nodes if n["group"] == group]
+        if not members:
+            continue
+        for start in range(0, len(members), MAXROWS):
+            chunk = members[start:start + MAXROWS]
+            for i, n in enumerate(chunk):
+                col[n["id"]] = index
+                row[n["id"]] = i
+            labels.append({"label": group if start == 0 else ""})
+            index += 1
+    return col, row, labels
+
+
 # -------------------------------------------------------------------- render
 
 def render(graph: dict) -> str:
@@ -577,6 +749,10 @@ def render(graph: dict) -> str:
     if "/*__GRAPH__*/null" not in html:
         raise SystemExit(str(TEMPLATE) + " has no /*__GRAPH__*/null placeholder")
     return html.replace("/*__GRAPH__*/null", json.dumps(graph, indent=1))
+
+
+def nodes_by_id(graph: dict) -> dict:
+    return {n["id"]: n for n in graph["nodes"]}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -594,6 +770,10 @@ def main(argv: list[str] | None = None) -> int:
                     help="read dotted folders too (.claude, .github ...)")
     ap.add_argument("--no-outside", dest="outside", action="store_false",
                     help="imports only; skip the hunt for outside connections")
+    ap.add_argument("--layout", choices=("file", "folder"), default="file",
+                    help="columns by import depth (default) or one per folder")
+    ap.add_argument("--keep-empty", action="store_true",
+                    help="keep empty __init__.py files that nothing imports")
     args = ap.parse_args(argv)
 
     root = args.root.resolve()
@@ -601,7 +781,8 @@ def main(argv: list[str] | None = None) -> int:
         ap.error(str(root) + " is not a folder")
 
     graph = build(root, externals=args.externals, hidden=args.hidden,
-                  outside=args.outside)
+                  outside=args.outside, layout=args.layout,
+                  keep_empty=args.keep_empty)
 
     if args.json:
         print(json.dumps(graph, indent=2))
@@ -617,6 +798,16 @@ def main(argv: list[str] | None = None) -> int:
             mods, len(graph["edges"]), lazy, len(graph["groups"]), args.out
         )
     )
+    if args.layout == "file":
+        deep = max((n["col"] for n in graph["nodes"] if n["kind"] == "module"),
+                   default=0)
+        back = sum(1 for e in graph["edges"]
+                   if e["kind"] in ("import", "lazy")
+                   and nodes_by_id(graph)[e["to"]]["col"]
+                   <= nodes_by_id(graph)[e["from"]]["col"])
+        print("{} columns deep{}".format(
+            deep + 1,
+            "" if not back else "; {} wires point back (a loop)".format(back)))
 
     outs = [n for n in graph["nodes"] if n["kind"] == "outside"]
     if outs:

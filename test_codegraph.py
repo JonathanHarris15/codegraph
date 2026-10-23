@@ -8,6 +8,7 @@ from __future__ import annotations
 import ast
 import tempfile
 import unittest
+from collections import defaultdict
 from pathlib import Path
 
 import codegraph as cg
@@ -302,6 +303,119 @@ class OutsideInTheGraph(unittest.TestCase):
         g = cg.build(self.root, outside=False)
         self.assertEqual([n for n in g["nodes"] if n["kind"] == "outside"], [])
         self.assertNotIn(cg.OUTSIDE, g["groups"])
+
+
+class Layering(unittest.TestCase):
+    """Columns by import depth: one past the furthest thing that imports you."""
+
+    def test_a_chain_spreads_across_columns(self):
+        col = cg.layer(["a", "b", "c"], [("a", "b"), ("b", "c")])
+        self.assertEqual([col["a"], col["b"], col["c"]], [0, 1, 2])
+
+    def test_the_longest_path_wins(self):
+        # a -> b -> c and a -> c: c sits past b, not beside it
+        col = cg.layer(["a", "b", "c"], [("a", "b"), ("b", "c"), ("a", "c")])
+        self.assertEqual(col["c"], 2)
+
+    def test_entry_points_share_the_first_column(self):
+        col = cg.layer(["cli", "app", "models"],
+                       [("cli", "models"), ("app", "models")])
+        self.assertEqual(col["cli"], 0)
+        self.assertEqual(col["app"], 0)
+
+    def test_an_entry_point_and_a_leaf_no_longer_collide(self):
+        col = cg.layer(["cli", "models"], [("cli", "models")])
+        self.assertNotEqual(col["cli"], col["models"])
+
+    def test_a_loop_is_broken_not_fatal(self):
+        col = cg.layer(["a", "b"], [("a", "b"), ("b", "a")])
+        self.assertEqual(sorted(col), ["a", "b"])
+
+    def test_back_edges_are_the_ones_closing_a_loop(self):
+        self.assertEqual(cg.back_edges(["a", "b"], [("a", "b"), ("b", "a")]),
+                         {("b", "a")})
+
+    def test_a_diamond_has_no_back_edge(self):
+        pairs = [("a", "b"), ("a", "c"), ("b", "d"), ("c", "d")]
+        self.assertEqual(cg.back_edges(list("abcd"), pairs), set())
+
+
+class RowOrder(unittest.TestCase):
+    def test_rows_are_a_full_run_per_column(self):
+        cols = {0: ["a", "b"], 1: ["c", "d", "e"]}
+        rows = cg.order_rows(cols, [("a", "c"), ("b", "d")])
+        self.assertEqual(sorted(rows[n] for n in cols[0]), [0, 1])
+        self.assertEqual(sorted(rows[n] for n in cols[1]), [0, 1, 2])
+
+    def test_a_card_moves_level_with_what_it_is_wired_to(self):
+        # x is wired to the last card of column 0, so it should not stay first
+        cols = {0: ["a", "b", "c"], 1: ["x", "y"]}
+        rows = cg.order_rows(cols, [("c", "x"), ("a", "y")])
+        self.assertGreater(rows["x"], rows["y"])
+
+
+class Placement(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.addCleanup(self.tmp.cleanup)
+        tree(self.root, {
+            "app/__init__.py": "",
+            "app/cli.py": "from core.models import Bar\nfrom app.work import go\n",
+            "app/work.py": "from core.models import Bar\n",
+            "core/__init__.py": "",
+            "core/models.py": "import sqlite3\nc = sqlite3.connect('a.db')\n",
+        })
+
+    def test_every_card_is_placed(self):
+        g = cg.build(self.root)
+        for n in g["nodes"]:
+            self.assertIsInstance(n["col"], int)
+            self.assertIsInstance(n["row"], int)
+
+    def test_no_import_wire_points_backwards(self):
+        g = cg.build(self.root)
+        col = {n["id"]: n["col"] for n in g["nodes"]}
+        for e in g["edges"]:
+            if e["kind"] in ("import", "lazy"):
+                self.assertLess(col[e["from"]], col[e["to"]],
+                                "%s -> %s" % (e["from"], e["to"]))
+
+    def test_the_entry_point_is_left_of_the_leaf(self):
+        g = cg.build(self.root)
+        col = {n["id"]: n["col"] for n in g["nodes"]}
+        self.assertLess(col["app.cli"], col["app.work"])
+        self.assertLess(col["app.work"], col["core.models"])
+
+    def test_outside_cards_get_the_last_column(self):
+        g = cg.build(self.root)
+        col = {n["id"]: n["col"] for n in g["nodes"]}
+        self.assertEqual(col["svc:sqlite"], max(col.values()))
+        self.assertEqual(g["columns"][-1]["label"], "outside")
+
+    def test_the_first_column_is_named(self):
+        self.assertEqual(cg.build(self.root)["columns"][0]["label"], "entry points")
+
+    def test_rows_within_a_column_are_distinct(self):
+        g = cg.build(self.root)
+        per = defaultdict(list)
+        for n in g["nodes"]:
+            per[n["col"]].append(n["row"])
+        for col, rows in per.items():
+            self.assertEqual(sorted(rows), list(range(len(rows))))
+
+    def test_empty_init_files_are_dropped(self):
+        ids = {n["id"] for n in cg.build(self.root)["nodes"]}
+        self.assertNotIn("app", ids)
+        self.assertIn("app", {n["id"] for n in
+                              cg.build(self.root, keep_empty=True)["nodes"]})
+
+    def test_folder_layout_still_works(self):
+        g = cg.build(self.root, layout="folder")
+        self.assertEqual(g["layout"], "folder")
+        cols = {n["id"]: n["col"] for n in g["nodes"]}
+        self.assertEqual(cols["app.cli"], cols["app.work"])   # same folder
+        self.assertNotEqual(cols["app.cli"], cols["core.models"])
 
 
 class GroupOrder(unittest.TestCase):

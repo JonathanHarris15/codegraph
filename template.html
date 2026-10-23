@@ -124,6 +124,13 @@ path.wire.hot{stroke-width:2.2;opacity:1}
 #legend .row{display:flex;align-items:center;gap:6px;color:var(--ink);margin-bottom:3px}
 #legend .gen{margin-top:7px;padding-top:6px;border-top:1px solid var(--hair-soft);
   font-family:var(--font-mono);font-size:9.5px}
+#legend .key{margin-top:7px;padding-top:6px;border-top:1px solid var(--hair-soft);
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 12px;
+  max-height:142px;overflow:auto}
+#legend .key span{display:flex;align-items:center;gap:5px;font-family:var(--font-mono);
+  font-size:9.5px;color:var(--ink);min-width:0}
+#legend .key i{width:7px;height:7px;border-radius:2px;flex:0 0 auto}
+#legend .key b{font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 @media (max-width:860px){
   #panel{left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));
@@ -153,7 +160,8 @@ path.wire.hot{stroke-width:2.2;opacity:1}
     <aside id="panel"></aside>
     <div id="legend">
       <div id="legend-rows"></div>
-      <div>drag a card &middot; drag the background to pan &middot; scroll to zoom</div>
+      <div class="key" id="folder-key"></div>
+      <div class="gen">drag a card &middot; drag the background to pan &middot; scroll to zoom</div>
       <div class="gen" id="gen"></div>
     </div>
   </div>
@@ -166,7 +174,7 @@ var GRAPH = /*__GRAPH__*/null;
 "use strict";
 if(!GRAPH){document.getElementById("panel").textContent="No graph data.";return;}
 
-var CW=170, CH=62, COLGAP=112, SUBGAP=24, ROWGAP=78, MAXROWS=12, HEADY=26;
+var CW=170, CH=62, COLGAP=112, ROWGAP=78, HEADY=26;
 
 var nodes={}, order=GRAPH.nodes.slice();
 order.forEach(function(n){ nodes[n.id]=n; });
@@ -199,19 +207,18 @@ function kcolor(k){
 }
 function isWiring(k){ return k==="import"||k==="lazy"; }
 
-/* ------------------------------------------------------------------ layout */
-var base={}, cols={};
+/* ------------------------------------------------------------------ layout
+   The generator decides which column and row each card belongs in; all this
+   does is turn that into pixels, and centre each column. */
+var base={}, colX={}, tallest=1;
 (function(){
-  var x=0;
-  GRAPH.groups.forEach(function(g){
-    var list=order.filter(function(n){ return n.group===g; });
-    if(!list.length) return;
-    var subs=Math.ceil(list.length/MAXROWS);
-    cols[g]={x:x,subs:subs};
-    list.forEach(function(n,i){
-      base[n.id]={x:x+Math.floor(i/MAXROWS)*(CW+SUBGAP), y:HEADY+(i%MAXROWS)*ROWGAP};
-    });
-    x+=subs*CW+(subs-1)*SUBGAP+COLGAP;
+  var count={};
+  order.forEach(function(n){ count[n.col]=(count[n.col]||0)+1; });
+  Object.keys(count).forEach(function(c){ tallest=Math.max(tallest,count[c]); });
+  order.forEach(function(n){
+    if(colX[n.col]===undefined) colX[n.col]=n.col*(CW+COLGAP);
+    var pad=(tallest-count[n.col])/2;
+    base[n.id]={x:colX[n.col], y:HEADY+(pad+n.row)*ROWGAP};
   });
 })();
 
@@ -263,6 +270,20 @@ Object.keys(KINDS).forEach(function(k){
 svg.appendChild(defs);
 
 (function(){
+  var key=document.getElementById("folder-key");
+  var seen={};
+  order.forEach(function(n){ seen[n.group]=(seen[n.group]||0)+1; });
+  GRAPH.groups.forEach(function(g){
+    if(!seen[g]) return;
+    var s=document.createElement("span");
+    s.innerHTML='<i style="background:'+gcolor(g)+'"></i><b>'+
+      g.replace(/[<>&]/g,"")+'</b>';
+    s.title=g+" · "+seen[g]+" files";
+    key.appendChild(s);
+  });
+})();
+
+(function(){
   var rows=document.getElementById("legend-rows");
   Object.keys(KINDS).forEach(function(k){
     var d=KINDS[k], r=document.createElement("div");
@@ -276,15 +297,13 @@ svg.appendChild(defs);
 })();
 var gWires=document.createElementNS(NS,"g"); svg.appendChild(gWires);
 
-var headEls={};
-GRAPH.groups.forEach(function(g){
-  var c=cols[g]; if(!c) return;
+(GRAPH.columns||[]).forEach(function(c,i){
+  if(!c.label||colX[i]===undefined) return;
   var d=document.createElement("div");
-  d.className="colhead"; d.textContent=g;
-  d.style.setProperty("--gc",gcolor(g));
-  d.style.left=c.x+"px"; d.style.top="0px";
-  d.style.width=(c.subs*CW+(c.subs-1)*SUBGAP)+"px";
-  canvas.appendChild(d); headEls[g]=d;
+  d.className="colhead"; d.textContent=c.label;
+  d.style.setProperty("--gc","var(--muted)");
+  d.style.left=colX[i]+"px"; d.style.top="0px"; d.style.width=CW+"px";
+  canvas.appendChild(d);
 });
 
 var cardEls={};
