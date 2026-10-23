@@ -42,7 +42,9 @@ reaches outside: 4 feed, 3 HTTP call, 2 serves HTTP, 1 market data / orders, 1 e
 Click a card and everything unrelated dims, so you can see what it imports,
 what imports it, and what it reaches outside. Turn **Imports** off to leave
 only the outside wires. Drag cards about; the layout is kept in that browser.
-The search box jumps to a file. Scroll to zoom, drag the background to pan.
+The search box jumps to a file. Scroll to zoom, drag the background to pan;
+neither has a limit, so you can wander off the graph and **Fit** brings it
+back. The legend folds away from its header.
 
 Grey wires are imports — dotted means the import is written inside a function,
 the trick a CLI uses so that starting it loads nothing heavy. Every other

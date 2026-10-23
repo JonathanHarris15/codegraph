@@ -67,7 +67,8 @@ button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);
   touch-action:none;background-image:radial-gradient(var(--grid) 1px,transparent 1px);
   background-size:24px 24px}
 #stage.panning{cursor:grabbing}
-#canvas{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform}
+#canvas{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform;
+  user-select:none;-webkit-user-select:none}
 #wires{position:absolute;top:0;left:0;overflow:visible;pointer-events:none}
 
 .colhead{position:absolute;font-family:var(--font-mono);font-size:10px;font-weight:700;
@@ -119,6 +120,14 @@ path.wire.hot{stroke-width:2.2;opacity:1}
   left:max(12px,env(safe-area-inset-left,0px));background:var(--surface);
   border:1px solid var(--hair);border-radius:9px;padding:9px 11px 10px;z-index:3;
   box-shadow:0 4px 14px rgba(10,20,40,.1);font-size:10.5px;color:var(--muted)}
+#legend-toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  width:100%;margin:0 0 6px;padding:0;border:0;background:none;font-size:10px;font-weight:700;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+#legend-toggle:hover{color:var(--ink)}
+#legend-toggle .chev{font-size:11px;transition:transform .14s}
+#legend.closed #legend-toggle{margin:0}
+#legend.closed #legend-toggle .chev{transform:rotate(180deg)}
+#legend.closed #legend-body{display:none}
 #legend .row{display:flex;align-items:center;gap:6px;color:var(--ink);margin-bottom:3px}
 #legend .gen{margin-top:7px;padding-top:6px;border-top:1px solid var(--hair-soft);
   font-family:var(--font-mono);font-size:9.5px}
@@ -157,10 +166,14 @@ path.wire.hot{stroke-width:2.2;opacity:1}
     <div id="canvas"><svg id="wires"></svg></div>
     <aside id="panel"></aside>
     <div id="legend">
-      <div id="legend-rows"></div>
-      <div class="key" id="folder-key"></div>
-      <div class="gen">drag a card &middot; drag the background to pan &middot; scroll to zoom</div>
-      <div class="gen" id="gen"></div>
+      <button id="legend-toggle" aria-expanded="true" aria-controls="legend-body">
+        <span>Legend</span><span class="chev" aria-hidden="true">▾</span></button>
+      <div id="legend-body">
+        <div id="legend-rows"></div>
+        <div class="key" id="folder-key"></div>
+        <div class="gen">drag a card &middot; drag the background to pan &middot; scroll to zoom</div>
+        <div class="gen" id="gen"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -293,6 +306,17 @@ svg.appendChild(defs);
     rows.appendChild(r);
   });
 })();
+(function(){
+  var legend=document.getElementById("legend"), btn=document.getElementById("legend-toggle");
+  function set(open){
+    legend.classList.toggle("closed",!open);
+    btn.setAttribute("aria-expanded",String(open));
+  }
+  set(load("legend")!==false);
+  btn.addEventListener("click",function(){
+    var open=legend.classList.contains("closed"); set(open); save("legend",open);
+  });
+})();
 var gWires=document.createElementNS(NS,"g"); svg.appendChild(gWires);
 
 (GRAPH.columns||[]).forEach(function(c,i){
@@ -378,8 +402,16 @@ function render(){
   var b=extent();
   svg.setAttribute("width",b.w+40); svg.setAttribute("height",b.h+40);
   canvas.style.width=(b.w+40)+"px"; canvas.style.height=(b.h+40)+"px";
-  canvas.style.transform="translate("+panX+"px,"+panY+"px) scale("+scale+")";
+  applyView();
   counts.textContent=order.length+" files · "+ev+" wires · "+GRAPH.groups.length+" folders";
+}
+/* panning and zooming only move the canvas, so they skip redrawing the wires;
+   the dot grid moves with it so the background reads as the same surface */
+function applyView(){
+  canvas.style.transform="translate("+panX+"px,"+panY+"px) scale("+scale+")";
+  var g=24*scale;
+  stage.style.backgroundSize=g+"px "+g+"px";
+  stage.style.backgroundPosition=panX+"px "+panY+"px";
 }
 
 /* --------------------------------------------------------------- inspector */
@@ -430,7 +462,7 @@ function focus(id){
   var r=stage.getBoundingClientRect();
   panX=r.width/2-(pos[id].x+CW/2)*scale;
   panY=r.height/2-(pos[id].y+CH/2)*scale;
-  clamp(); render();
+  stopZoom(); applyView();
 }
 
 /* ------------------------------------------------------------ interactions */
@@ -463,42 +495,51 @@ function drag(el,n){
   var id=null,sx,sy,px,py;
   stage.addEventListener("pointerdown",function(ev){
     if(ev.target.closest(".card")||ev.target.closest("#panel")||ev.target.closest("#legend")) return;
+    stopZoom();
     id=ev.pointerId; sx=ev.clientX; sy=ev.clientY; px=panX; py=panY;
     stage.classList.add("panning"); stage.setPointerCapture(id);
   });
   stage.addEventListener("pointermove",function(ev){
     if(id===null||ev.pointerId!==id) return;
-    panX=px+(ev.clientX-sx); panY=py+(ev.clientY-sy); clamp(); render();
+    panX=px+(ev.clientX-sx); panY=py+(ev.clientY-sy); applyView();
   });
   stage.addEventListener("pointerup",function(){ id=null; stage.classList.remove("panning"); });
   stage.addEventListener("pointercancel",function(){ id=null; stage.classList.remove("panning"); });
 })();
 
+/* The wheel sets a target zoom and each frame closes part of the gap, so a
+   notchy mouse wheel glides instead of jumping. The point under the cursor
+   stays put the whole way. Panning has no edges. */
+var MINZ=0.05, MAXZ=8, zoomTo=1, zx=0, zy=0, wx=0, wy=0, zoomFrame=0;
+function stopZoom(){ if(zoomFrame) cancelAnimationFrame(zoomFrame); zoomFrame=0; zoomTo=scale; }
+function zoomStep(){
+  scale+=(zoomTo-scale)*0.22;
+  if(Math.abs(zoomTo-scale)<zoomTo*0.002) scale=zoomTo;
+  panX=zx-wx*scale; panY=zy-wy*scale; applyView();
+  zoomFrame=scale===zoomTo?0:requestAnimationFrame(zoomStep);
+}
 stage.addEventListener("wheel",function(ev){
+  if(ev.target.closest("#panel")||ev.target.closest("#legend")) return;
   ev.preventDefault();
-  var r=stage.getBoundingClientRect(), mx=ev.clientX-r.left, my=ev.clientY-r.top;
-  var ns=Math.max(0.25,Math.min(2,scale*Math.exp(-ev.deltaY*0.0014)));
-  panX=mx-(mx-panX)*(ns/scale); panY=my-(my-panY)*(ns/scale);
-  scale=ns; clamp(); render();
+  var r=stage.getBoundingClientRect();
+  zx=ev.clientX-r.left; zy=ev.clientY-r.top;
+  wx=(zx-panX)/scale; wy=(zy-panY)/scale;
+  var dy=ev.deltaMode===1?ev.deltaY*33:ev.deltaY;   // Firefox reports lines
+  zoomTo=Math.max(MINZ,Math.min(MAXZ,zoomTo*Math.exp(-dy*0.0016)));
+  if(!zoomFrame) zoomFrame=requestAnimationFrame(zoomStep);
 },{passive:false});
 
-function clamp(){
-  var r=stage.getBoundingClientRect(), b=extent();
-  var w=(b.w+40)*scale, h=(b.h+40)*scale, m=120;
-  panX=Math.min(m,Math.max(r.width-w-m,panX));
-  panY=Math.min(80,Math.max(r.height-h-80,panY));
-  if(w<r.width) panX=(r.width-w)/2;
-  if(h<r.height) panY=(r.height-h)/2;
-}
 function fit(){
   var r=stage.getBoundingClientRect(), b=extent();
-  scale=Math.max(0.25,Math.min(1.4,Math.min((r.width-48)/(b.w+40),(r.height-48)/(b.h+40))));
-  panX=(r.width-(b.w+40)*scale)/2; panY=(r.height-(b.h+40)*scale)/2; render();
+  stopZoom();
+  scale=zoomTo=Math.max(MINZ,Math.min(1.4,Math.min((r.width-48)/(b.w+40),(r.height-48)/(b.h+40))));
+  panX=(r.width-(b.w+40)*scale)/2; panY=(r.height-(b.h+40)*scale)/2; applyView();
 }
 function openView(){
   var r=stage.getBoundingClientRect(), b=extent();
-  scale=Math.max(0.4,Math.min(1,(r.height-56)/(b.h+40)));
-  panX=22; panY=18; clamp(); render();
+  stopZoom();
+  scale=zoomTo=Math.max(0.4,Math.min(1,(r.height-56)/(b.h+40)));
+  panX=22; panY=18; applyView();
 }
 
 var impBtn=document.getElementById("t-imports"), lazyBtn=document.getElementById("t-lazy");
@@ -526,7 +567,6 @@ document.getElementById("q").addEventListener("input",function(ev){
   }
   render();
 });
-window.addEventListener("resize",function(){ clamp(); render(); });
 document.addEventListener("keydown",function(ev){ if(ev.key==="Escape") select(null); });
 
 render(); drawPanel(); openView();
