@@ -25,11 +25,13 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import re
 import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlsplit
 
 SKIP_DIRS = {
     ".git", ".hg", ".svn", ".venv", "venv", "env", "__pycache__", "node_modules",
@@ -38,6 +40,99 @@ SKIP_DIRS = {
 }
 
 TEMPLATE = Path(__file__).with_name("template.html")
+
+# How each wire is drawn. A hue of None means the neutral grey the page uses
+# for imports; everything else picks up the page's own saturation and
+# lightness, so one table serves both the light and the dark theme.
+KINDS = {
+    "import":   {"label": "import", "hue": None, "dash": "", "width": 1.1},
+    "lazy":     {"label": "import inside a function", "hue": None, "dash": "1 4", "width": 1.5},
+    "http":     {"label": "HTTP call", "hue": 265, "dash": "7 4", "width": 1.5},
+    "serves":   {"label": "serves HTTP", "hue": 205, "dash": "7 4", "width": 1.6},
+    "database": {"label": "database", "hue": 170, "dash": "3 3", "width": 1.6},
+    "market":   {"label": "market data / orders", "hue": 35, "dash": "7 4", "width": 1.6},
+    "feed":     {"label": "feed", "hue": 320, "dash": "7 4", "width": 1.5},
+    "queue":    {"label": "queue", "hue": 55, "dash": "7 4", "width": 1.5},
+    "cloud":    {"label": "cloud service", "hue": 240, "dash": "7 4", "width": 1.5},
+    "process":  {"label": "starts a process", "hue": 15, "dash": "10 5", "width": 1.6},
+    "env":      {"label": "environment", "hue": 95, "dash": "3 3", "width": 1.4},
+}
+
+OUTSIDE = "(outside)"
+EXTERNAL = "(external)"
+
+# What a call has to look like for us to believe it leaves the process.
+# The pattern is matched, fnmatch style, against the call's dotted name after
+# the file's own imports have been followed: `from httpx import Client` then
+# `Client(...)` is matched as `httpx.Client`.
+#
+# service=None means the library alone does not say where it is going. The
+# destination then comes from a URL in the same file, and failing that the
+# library itself becomes the card.
+PROBES = (
+    ("sqlite3.connect",             "database", "sqlite"),
+    ("sqlalchemy.create_engine",    "database", None),
+    ("psycopg*.connect",            "database", "postgres"),
+    ("asyncpg.*connect*",           "database", "postgres"),
+    ("pymysql.connect",             "database", "mysql"),
+    ("MySQLdb.connect",             "database", "mysql"),
+    ("pymongo.MongoClient",         "database", "mongodb"),
+    ("redis.*Redis",                "database", "redis"),
+    ("*.duckdb.connect",            "database", "duckdb"),
+    ("duckdb.connect",              "database", "duckdb"),
+
+    ("httpx.Client",                "http", None),
+    ("httpx.AsyncClient",           "http", None),
+    ("httpx.get", "http", None), ("httpx.post", "http", None),
+    ("requests.*",                  "http", None),
+    ("aiohttp.ClientSession",       "http", None),
+    ("urllib.request.urlopen",      "http", None),
+    ("urllib.request.Request",      "http", None),
+    ("http.client.*Connection",     "http", None),
+    ("openai.*",                    "http", "openai"),
+    ("anthropic.*",                 "http", "anthropic"),
+
+    ("feedparser.parse",            "feed", None),
+
+    ("alpaca.*Client",              "market", "alpaca"),
+    ("ccxt.*",                      "market", "ccxt"),
+    ("yfinance.*",                  "market", "yahoo finance"),
+    ("ib_insync.*",                 "market", "interactive brokers"),
+
+    ("boto3.client",                "cloud", "aws"),
+    ("boto3.resource",              "cloud", "aws"),
+    ("google.cloud.*",              "cloud", "google cloud"),
+    ("azure.*",                     "cloud", "azure"),
+
+    ("fastapi.FastAPI",             "serves", None),
+    ("flask.Flask",                 "serves", None),
+    ("uvicorn.run",                 "serves", None),
+    ("socket.socket",               "serves", None),
+
+    ("celery.Celery",               "queue", "celery"),
+    ("kafka.*",                     "queue", "kafka"),
+    ("pika.*Connection",            "queue", "rabbitmq"),
+
+    ("subprocess.run",              "process", None),
+    ("subprocess.Popen",            "process", None),
+    ("subprocess.check_*",          "process", None),
+    ("os.system",                   "process", None),
+
+    ("os.getenv",                   "env", "environment"),
+    ("os.environ.get",              "env", "environment"),
+    ("dotenv.load_dotenv",          "env", "environment"),
+)
+
+URL_RE = re.compile(r"""\b[a-z][a-z0-9+.\-]{1,12}://[^\s"'`<>\\{}|^]+""", re.I)
+
+SCHEME_KIND = {
+    "http": "http", "https": "http", "ws": "http", "wss": "http",
+    "postgres": "database", "postgresql": "database", "mysql": "database",
+    "mongodb": "database", "mongodb+srv": "database", "redis": "database",
+    "sqlite": "database", "clickhouse": "database",
+    "amqp": "queue", "amqps": "queue", "kafka": "queue",
+    "s3": "cloud", "gs": "cloud", "file": None,
+}
 
 
 # --------------------------------------------------------------------- model
@@ -188,14 +283,172 @@ def resolve(target: str, names: tuple[str, ...], index: dict,
     return hits
 
 
+# ------------------------------------------------------- outside connections
+
+@dataclass(frozen=True)
+class Conn:
+    """One connection a file appears to make to something outside itself."""
+    kind: str          # http | database | market | feed | serves | ...
+    target: str        # node id: net:api.example.com, svc:sqlite, env:environment
+    label: str         # what the card says
+    detail: str        # the line under it
+
+
+ENVIRONMENT = Conn("env", "env:environment", "environment", ".env + os.environ")
+
+
+def symbol_table(tree: ast.AST) -> dict:
+    """What each imported name in this file really refers to.
+
+    `from httpx import Client` makes `Client(...)` mean `httpx.Client`, and
+    `import numpy as np` makes `np.array` mean `numpy.array`. Without this a
+    probe table only ever matches code written one particular way.
+    """
+    syms: dict = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.asname:
+                    syms[alias.asname] = alias.name
+                else:
+                    root = alias.name.split(".")[0]
+                    syms[root] = root
+        elif isinstance(node, ast.ImportFrom) and not node.level and node.module:
+            for alias in node.names:
+                syms[alias.asname or alias.name] = node.module + "." + alias.name
+    return syms
+
+
+def dotted_name(node: ast.AST) -> str:
+    """`a.b.c(...)` -> "a.b.c". Anything built at runtime -> ""."""
+    parts: list[str] = []
+    while isinstance(node, ast.Attribute):
+        parts.append(node.attr)
+        node = node.value
+    if isinstance(node, ast.Name):
+        parts.append(node.id)
+        return ".".join(reversed(parts))
+    return ""
+
+
+def through_imports(name: str, syms: dict) -> str:
+    """Rewrite a dotted name through this file's imports."""
+    if not name:
+        return ""
+    head, _, tail = name.partition(".")
+    origin = syms.get(head)
+    if not origin:
+        return name
+    return origin + ("." + tail if tail else "")
+
+
+def match_probe(name: str):
+    from fnmatch import fnmatchcase
+    for pattern, kind, service in PROBES:
+        if fnmatchcase(name, pattern):
+            return kind, service
+    return None
+
+
+def urls_in(tree: ast.AST) -> list:
+    """Every URL written as a string literal, scheme and host pulled apart."""
+    found = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            for raw in URL_RE.findall(node.value):
+                bits = urlsplit(raw.rstrip(".,);"))
+                host = bits.netloc.split("@")[-1]
+                if not host:
+                    continue
+                found.append((bits.scheme.lower(), host, bits.path or "/"))
+    return found
+
+
+def read_outside(path: Path) -> list:
+    """What this one file appears to reach outside the process.
+
+    Two kinds of evidence, both syntactic: a call that matches the probe
+    table, and a URL written as a string. Neither is run.
+    """
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"), str(path))
+    except (OSError, SyntaxError, ValueError):
+        return []
+
+    syms = symbol_table(tree)
+    conns: dict = {}
+
+    def keep(conn: Conn) -> None:
+        conns.setdefault(conn.target, conn)
+
+    # Calls first. A library says what sort of connection this is, which is
+    # worth more than the scheme on a URL: feedparser.parse("https://...") is
+    # a feed, not a plain HTTP call.
+    loose: list = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        name = through_imports(dotted_name(node.func), syms)
+        hit = match_probe(name)
+        if not hit:
+            continue
+        kind, service = hit
+        if kind == "env":
+            keep(ENVIRONMENT)             # however it was reached, it is one card
+        elif service:
+            keep(Conn(kind, "svc:" + service, service, KINDS[kind]["label"]))
+        else:
+            loose.append((kind, name))
+
+    # os.environ["KEY"] is a subscript, not a call
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Subscript) and \
+                through_imports(dotted_name(node.value), syms) == "os.environ":
+            keep(ENVIRONMENT)
+
+    # Does one library in this file say what its URLs are for?
+    speaks = {k for k, _ in loose if k in ("feed", "market", "database", "queue", "cloud")}
+    house = speaks.pop() if len(speaks) == 1 else None
+
+    hosts: set = set()
+    for scheme, host, route in urls_in(tree):
+        kind = SCHEME_KIND.get(scheme, "http")
+        if kind is None:
+            continue
+        if house and kind == "http":
+            kind = house
+        hosts.add(kind)
+        keep(Conn(kind, "net:" + host, host, scheme + " " + route))
+
+    # A client with no URL beside it: name the library, not a destination.
+    for kind, name in loose:
+        if kind in hosts:
+            continue                      # a URL in this file already says where
+        lib = name.split(".")[0]
+        keep(Conn(kind, "svc:" + lib, lib, _vague(kind)))
+
+    return list(conns.values())
+
+
+def _vague(kind: str) -> str:
+    """What to write on a card when the library is all we know."""
+    if kind == "serves":
+        return "serves HTTP from this process"
+    if kind == "process":
+        return "runs other programs"
+    return KINDS[kind]["label"] + ", destination not in the source"
+
+
 # --------------------------------------------------------------------- build
 
-def build(root: Path, externals: bool = False, hidden: bool = False) -> dict:
+def build(root: Path, externals: bool = False, hidden: bool = False,
+          outside: bool = True) -> dict:
     modules = [module_of(p, root) for p in discover(root, hidden)]
     index = {m.name: m for m in modules}
 
     edges: dict = {}
     ext_hits: dict = defaultdict(int)
+    endpoints: dict = {}
     stdlib = getattr(sys, "stdlib_module_names", frozenset())
 
     def add(src: str, dst: str, kind: str) -> None:
@@ -206,6 +459,14 @@ def build(root: Path, externals: bool = False, hidden: bool = False) -> dict:
         if edges.get(key) == "import":
             return
         edges[key] = kind
+
+    def note_endpoint(conn: Conn) -> None:
+        was = endpoints.get(conn.target)
+        if was is None or (was["dir"].endswith("not in the source") and conn.detail):
+            endpoints[conn.target] = {
+                "id": conn.target, "label": conn.label, "dir": conn.detail,
+                "group": OUTSIDE, "lines": 0, "kind": "outside",
+            }
 
     for mod in modules:
         for imp in read_imports(mod.path):
@@ -223,7 +484,13 @@ def build(root: Path, externals: bool = False, hidden: bool = False) -> dict:
             if externals:
                 add(mod.name, "ext:" + top, kind)
 
-    groups = order_groups(modules, edges, externals)
+        if outside:
+            for conn in read_outside(mod.path):
+                note_endpoint(conn)
+                add(mod.name, conn.target, conn.kind)
+
+    tail = ([EXTERNAL] if externals else []) + ([OUTSIDE] if endpoints else [])
+    groups = order_groups(modules, edges, tail)
     rank = {g: i for i, g in enumerate(groups)}
 
     nodes = [
@@ -243,27 +510,29 @@ def build(root: Path, externals: bool = False, hidden: bool = False) -> dict:
                 "id": "ext:" + name,
                 "label": name,
                 "dir": "third party",
-                "group": "(external)",
+                "group": EXTERNAL,
                 "lines": 0,
                 "kind": "external",
             }
             for name in sorted(ext_hits)
         ]
+    nodes += [endpoints[k] for k in sorted(endpoints)]
+
+    wires = [{"from": s, "to": d, "kind": k} for (s, d), k in sorted(edges.items())]
+    used = sorted({w["kind"] for w in wires}, key=list(KINDS).index)
 
     return {
         "root": root.resolve().name,
         "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "groups": groups,
+        "kinds": {k: KINDS[k] for k in used},
         "nodes": nodes,
-        "edges": [
-            {"from": s, "to": d, "kind": k}
-            for (s, d), k in sorted(edges.items())
-        ],
+        "edges": wires,
         "externals_seen": dict(sorted(ext_hits.items(), key=lambda kv: (-kv[1], kv[0]))),
     }
 
 
-def order_groups(modules: list, edges: dict, externals: bool) -> list[str]:
+def order_groups(modules: list, edges: dict, tail: list) -> list[str]:
     """Left to right: whoever imports comes before whoever is imported.
 
     A topological sort of the folders. Cycles get broken by taking the folder
@@ -298,9 +567,7 @@ def order_groups(modules: list, edges: dict, externals: bool) -> list[str]:
                 if d in left:
                     indeg[d] -= 1
 
-    if externals:
-        order.append("(external)")
-    return order
+    return order + list(tail)
 
 
 # -------------------------------------------------------------------- render
@@ -325,19 +592,23 @@ def main(argv: list[str] | None = None) -> int:
                     help="give third-party packages their own cards")
     ap.add_argument("--hidden", action="store_true",
                     help="read dotted folders too (.claude, .github ...)")
+    ap.add_argument("--no-outside", dest="outside", action="store_false",
+                    help="imports only; skip the hunt for outside connections")
     args = ap.parse_args(argv)
 
     root = args.root.resolve()
     if not root.is_dir():
         ap.error(str(root) + " is not a folder")
 
-    graph = build(root, externals=args.externals, hidden=args.hidden)
+    graph = build(root, externals=args.externals, hidden=args.hidden,
+                  outside=args.outside)
 
     if args.json:
         print(json.dumps(graph, indent=2))
         return 0
 
     args.out.write_text(render(graph), encoding="utf-8")
+
     mods = sum(1 for n in graph["nodes"] if n["kind"] == "module")
     lazy = sum(1 for e in graph["edges"] if e["kind"] == "lazy")
     print(
@@ -346,10 +617,24 @@ def main(argv: list[str] | None = None) -> int:
             mods, len(graph["edges"]), lazy, len(graph["groups"]), args.out
         )
     )
+
+    outs = [n for n in graph["nodes"] if n["kind"] == "outside"]
+    if outs:
+        by_kind: dict = defaultdict(set)
+        for e in graph["edges"]:
+            if e["kind"] in KINDS and e["kind"] not in ("import", "lazy"):
+                by_kind[e["kind"]].add(e["to"])
+        print("reaches outside: " + ", ".join(
+            "{} {}".format(len(v), KINDS[k]["label"]) for k, v in
+            sorted(by_kind.items(), key=lambda kv: -len(kv[1]))
+        ))
+        for n in sorted(outs, key=lambda n: n["label"]):
+            print("    {:<26} {}".format(n["label"], n["dir"]))
+
     seen = list(graph["externals_seen"])[:6]
     if seen:
-        tail = "" if args.externals else "   (--externals draws these too)"
-        print("third party seen: " + ", ".join(seen) + tail)
+        more = "" if args.externals else "   (--externals draws these too)"
+        print("third party seen: " + ", ".join(seen) + more)
     return 0
 
 

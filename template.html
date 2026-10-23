@@ -142,7 +142,8 @@ path.wire.hot{stroke-width:2.2;opacity:1}
     <span class="spacer"></span>
     <div class="toolbar">
       <input type="search" id="q" placeholder="find a file" aria-label="Find a file">
-      <button id="t-lazy" aria-pressed="true">Lazy imports</button>
+      <button id="t-imports" aria-pressed="true">Imports</button>
+      <button id="t-lazy" aria-pressed="true">Lazy</button>
       <button id="b-fit">Fit</button>
       <button id="b-reset">Reset layout</button>
     </div>
@@ -151,8 +152,7 @@ path.wire.hot{stroke-width:2.2;opacity:1}
     <div id="canvas"><svg id="wires"></svg></div>
     <aside id="panel"></aside>
     <div id="legend">
-      <div class="row"><svg width="26" height="8" aria-hidden="true"><line x1="1" y1="4" x2="25" y2="4" stroke="var(--w-import)" stroke-width="1.4" stroke-linecap="round"/></svg><span>import</span></div>
-      <div class="row"><svg width="26" height="8" aria-hidden="true"><line x1="1" y1="4" x2="25" y2="4" stroke="var(--w-lazy)" stroke-width="1.6" stroke-dasharray="1 4" stroke-linecap="round"/></svg><span>import inside a function</span></div>
+      <div id="legend-rows"></div>
       <div>drag a card &middot; drag the background to pan &middot; scroll to zoom</div>
       <div class="gen" id="gen"></div>
     </div>
@@ -182,9 +182,22 @@ edges.forEach(function(e){ out[e.from].push(e); inn[e.to].push(e); });
 var hue={};
 GRAPH.groups.forEach(function(g,i){ hue[g]=Math.round((i*137.508)%360); });
 function gcolor(g){
-  if(g==="(external)") return "var(--muted)";
+  if(g==="(external)"||g==="(outside)") return "var(--muted)";
   return "hsl("+(hue[g]||0)+" var(--sat) var(--lig))";
 }
+
+/* wire kinds come from the data, so a new kind needs no change here */
+var KINDS=GRAPH.kinds||{
+  "import":{label:"import",hue:null,dash:"",width:1.1},
+  "lazy":{label:"import inside a function",hue:null,dash:"1 4",width:1.5}
+};
+function kcolor(k){
+  var d=KINDS[k];
+  if(!d) return "var(--w-import)";
+  if(d.hue===null||d.hue===undefined) return k==="lazy"?"var(--w-lazy)":"var(--w-import)";
+  return "hsl("+d.hue+" var(--sat) var(--lig))";
+}
+function isWiring(k){ return k==="import"||k==="lazy"; }
 
 /* ------------------------------------------------------------------ layout */
 var base={}, cols={};
@@ -210,16 +223,22 @@ var KEY="codegraph."+(GRAPH.root||"x");
 function save(k,v){ try{ localStorage.setItem(KEY+"."+k,JSON.stringify(v)); }catch(e){} }
 function load(k){ try{ var s=localStorage.getItem(KEY+"."+k); return s?JSON.parse(s):null; }catch(e){ return null; } }
 
-var showLazy=true, selected=null, query="", scale=1, panX=0, panY=0;
+var showLazy=true, showImports=true, selected=null, query="", scale=1, panX=0, panY=0;
 (function(){
-  var s=load("show"); if(s&&typeof s.lazy==="boolean") showLazy=s.lazy;
+  var s=load("show")||{};
+  if(typeof s.lazy==="boolean") showLazy=s.lazy;
+  if(typeof s.imports==="boolean") showImports=s.imports;
   var p=load("pos");
   if(p) Object.keys(p).forEach(function(id){
     if(pos[id]&&p[id]&&typeof p[id].x==="number") pos[id]={x:p[id].x,y:p[id].y};
   });
 })();
 
-function edgeVisible(e){ return showLazy || e.kind!=="lazy"; }
+function edgeVisible(e){
+  if(e.kind==="lazy") return showImports&&showLazy;
+  if(e.kind==="import") return showImports;
+  return true;                       // a connection out of the process
+}
 
 /* --------------------------------------------------------------------- DOM */
 var stage=document.getElementById("stage"), canvas=document.getElementById("canvas"),
@@ -231,17 +250,30 @@ document.title="codegraph "+(GRAPH.root||"");
 
 var NS="http://www.w3.org/2000/svg";
 var defs=document.createElementNS(NS,"defs");
-[["import","--w-import"],["lazy","--w-lazy"]].forEach(function(k){
+Object.keys(KINDS).forEach(function(k){
   var m=document.createElementNS(NS,"marker");
-  m.setAttribute("id","ar-"+k[0]); m.setAttribute("viewBox","0 0 8 8");
+  m.setAttribute("id","ar-"+k); m.setAttribute("viewBox","0 0 8 8");
   m.setAttribute("refX","7"); m.setAttribute("refY","4");
   m.setAttribute("markerWidth","6"); m.setAttribute("markerHeight","6");
   m.setAttribute("orient","auto-start-reverse");
   var p=document.createElementNS(NS,"path");
-  p.setAttribute("d","M0 0.8 L7.4 4 L0 7.2 Z"); p.setAttribute("fill","var("+k[1]+")");
+  p.setAttribute("d","M0 0.8 L7.4 4 L0 7.2 Z"); p.setAttribute("fill",kcolor(k));
   m.appendChild(p); defs.appendChild(m);
 });
 svg.appendChild(defs);
+
+(function(){
+  var rows=document.getElementById("legend-rows");
+  Object.keys(KINDS).forEach(function(k){
+    var d=KINDS[k], r=document.createElement("div");
+    r.className="row";
+    r.innerHTML='<svg width="26" height="8" aria-hidden="true"><line x1="1" y1="4" x2="25" y2="4" '+
+      'stroke="'+kcolor(k)+'" stroke-width="'+(d.width+0.3)+'"'+
+      (d.dash?' stroke-dasharray="'+d.dash+'"':'')+' stroke-linecap="round"/></svg>'+
+      '<span>'+d.label+'</span>';
+    rows.appendChild(r);
+  });
+})();
 var gWires=document.createElementNS(NS,"g"); svg.appendChild(gWires);
 
 var headEls={};
@@ -258,7 +290,7 @@ GRAPH.groups.forEach(function(g){
 var cardEls={};
 order.forEach(function(n){
   var el=document.createElement("div");
-  el.className="card"+(n.kind==="external"?" ext":"");
+  el.className="card"+(n.kind==="module"?"":" ext");
   el.style.setProperty("--gc",gcolor(n.group));
   el.tabIndex=0; el.setAttribute("role","button");
   var nm=document.createElement("div"); nm.className="nm"; nm.textContent=n.label;
@@ -272,13 +304,14 @@ order.forEach(function(n){
 
 var wireEls={};
 edges.forEach(function(e){
+  var d=KINDS[e.kind]||KINDS["import"];
   var p=document.createElementNS(NS,"path");
   p.setAttribute("class","wire");
-  p.setAttribute("stroke", e.kind==="lazy"?"var(--w-lazy)":"var(--w-import)");
-  p.setAttribute("stroke-width", e.kind==="lazy"?"1.5":"1.1");
-  if(e.kind==="lazy") p.setAttribute("stroke-dasharray","1 4");
+  p.setAttribute("stroke",kcolor(e.kind));
+  p.setAttribute("stroke-width",String(d.width));
+  if(d.dash) p.setAttribute("stroke-dasharray",d.dash);
   p.setAttribute("marker-end","url(#ar-"+e.kind+")");
-  p.setAttribute("opacity","0.6");
+  p.setAttribute("opacity",isWiring(e.kind)?"0.6":"0.9");
   gWires.appendChild(p); wireEls[e.i]=p;
 });
 
@@ -337,9 +370,11 @@ function drawPanel(){
   if(!selected){
     panel.innerHTML='<h2 style="font-family:var(--font-ui);font-size:13px">Pick a card</h2>'+
       '<p class="hint">One card per <code>.py</code> file, one wire per import that lands '+
-      'back inside this codebase. Columns run left to right: whoever imports sits left of '+
-      'whoever is imported.<br><br>Click a card to trace it. Drag cards to rearrange — '+
-      'the layout is kept in this browser.</p>';
+      'back inside this codebase. The dashed cards on the right are what the code reaches '+
+      'outside itself — hosts, databases, the environment — read out of its calls '+
+      'and the URLs it has written down.<br><br>Turn <b>Imports</b> off to leave only those. '+
+      'Click a card to trace it; drag cards to rearrange, and the layout is kept in this '+
+      'browser.</p>';
     return;
   }
   var n=nodes[selected], c=gcolor(n.group);
@@ -350,22 +385,26 @@ function drawPanel(){
   if(n.lines) h+='<span>'+n.lines+' lines</span>';
   h+='<span>'+inn[n.id].length+' in</span><span>'+out[n.id].length+' out</span></div>';
 
-  function list(title,arr,key){
-    var vis=arr.filter(edgeVisible);
+  function list(title,arr,key,want){
+    var vis=arr.filter(function(e){ return edgeVisible(e)&&want(e.kind); });
     if(!vis.length) return "";
     var s='<h3>'+title+' ('+vis.length+')</h3><ul>';
     vis.sort(function(a,b){ return a[key]<b[key]?-1:1; }).forEach(function(e){
       var o=nodes[e[key]];
+      var tag = e.kind==="lazy" ? "lazy"
+              : isWiring(e.kind) ? "" : (KINDS[e.kind]||{}).label||e.kind;
       s+='<li><button data-go="'+esc(o.id)+'">'+
-         '<span class="dot" style="background:'+gcolor(o.group)+'"></span>'+
+         '<span class="dot" style="background:'+
+           (isWiring(e.kind)?gcolor(o.group):kcolor(e.kind))+'"></span>'+
          '<span>'+esc(o.label)+'</span>'+
-         '<span style="color:var(--muted);margin-left:auto">'+
-         (e.kind==="lazy"?"lazy":"")+'</span></button></li>';
+         '<span style="color:var(--muted);margin-left:auto">'+esc(tag)+
+         '</span></button></li>';
     });
     return s+'</ul>';
   }
-  h+=list("Imports",out[n.id],"to");
-  h+=list("Imported by",inn[n.id],"from");
+  h+=list("Reaches outside",out[n.id],"to",function(k){ return !isWiring(k); });
+  h+=list("Imports",out[n.id],"to",isWiring);
+  h+=list("Used by",inn[n.id],"from",function(){ return true; });
   panel.innerHTML=h;
 
   document.getElementById("p-close").addEventListener("click",function(){ select(null); });
@@ -453,12 +492,18 @@ function openView(){
   panX=22; panY=18; clamp(); render();
 }
 
-var lazyBtn=document.getElementById("t-lazy");
-lazyBtn.setAttribute("aria-pressed",String(showLazy));
-lazyBtn.addEventListener("click",function(){
-  showLazy=!showLazy; lazyBtn.setAttribute("aria-pressed",String(showLazy));
-  save("show",{lazy:showLazy}); render(); drawPanel();
-});
+var impBtn=document.getElementById("t-imports"), lazyBtn=document.getElementById("t-lazy");
+function syncToggles(){
+  impBtn.setAttribute("aria-pressed",String(showImports));
+  lazyBtn.setAttribute("aria-pressed",String(showImports&&showLazy));
+  lazyBtn.disabled=!showImports;
+  lazyBtn.style.opacity=showImports?"":"0.45";
+  save("show",{lazy:showLazy,imports:showImports});
+  render(); drawPanel();
+}
+impBtn.addEventListener("click",function(){ showImports=!showImports; syncToggles(); });
+lazyBtn.addEventListener("click",function(){ showLazy=!showLazy; syncToggles(); });
+syncToggles();
 document.getElementById("b-fit").addEventListener("click",fit);
 document.getElementById("b-reset").addEventListener("click",function(){
   resetPos(); save("pos",pos); openView();
