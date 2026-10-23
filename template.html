@@ -332,7 +332,7 @@ var gWires=document.createElementNS(NS,"g"); svg.appendChild(gWires);
 var cardEls={};
 order.forEach(function(n){
   var el=document.createElement("div");
-  el.className="card"+(n.kind==="module"?"":" ext");
+  el.className="card"+(n.kind==="file"?"":" ext");
   el.style.setProperty("--gc",gcolor(n.group));
   el.tabIndex=0; el.setAttribute("role","button");
   var nm=document.createElement("div"); nm.className="nm"; nm.textContent=n.label;

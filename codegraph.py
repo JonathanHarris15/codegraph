@@ -138,7 +138,7 @@ SCHEME_KIND = {
 # --------------------------------------------------------------------- model
 
 @dataclass(frozen=True)
-class Module:
+class File:
     """One .py file, and the dotted name other files would import it by."""
     name: str          # atp.engine.tick
     path: Path
@@ -172,7 +172,7 @@ def discover(root: Path, hidden: bool = False) -> list[Path]:
     return found
 
 
-def module_of(path: Path, root: Path) -> Module:
+def file_of(path: Path, root: Path) -> File:
     """Work out the dotted name, folder group and package for one file."""
     rel = path.relative_to(root)
     parts = list(rel.parts)
@@ -184,7 +184,7 @@ def module_of(path: Path, root: Path) -> Module:
     else:
         name_parts = folder + [stem]
 
-    return Module(
+    return File(
         name=".".join(name_parts) or stem,
         path=path,
         rel=rel.as_posix(),
@@ -256,9 +256,9 @@ def absolute(imp: RawImport, package: str) -> str:
 
 def resolve(target: str, names: tuple[str, ...], index: dict,
             package: str = "") -> list[str]:
-    """Which modules in the index does this import actually reach?
+    """Which files in the index does this import actually reach?
 
-    `from atp.engine import book, gate` reaches two modules; `from atp.models
+    `from atp.engine import book, gate` reaches two files; `from atp.models
     import Bar` reaches one. Importing a package reaches its __init__.
 
     A folder of loose scripts has no package name, so `import helpers` there
@@ -444,8 +444,8 @@ def _vague(kind: str) -> str:
 def build(root: Path, externals: bool = False, hidden: bool = False,
           outside: bool = True, layout: str = "file",
           keep_empty: bool = False) -> dict:
-    modules = [module_of(p, root) for p in discover(root, hidden)]
-    index = {m.name: m for m in modules}
+    files = [file_of(p, root) for p in discover(root, hidden)]
+    index = {m.name: m for m in files}
 
     edges: dict = {}
     ext_hits: dict = defaultdict(int)
@@ -469,37 +469,37 @@ def build(root: Path, externals: bool = False, hidden: bool = False,
                 "group": OUTSIDE, "lines": 0, "kind": "outside",
             }
 
-    for mod in modules:
-        for imp in read_imports(mod.path):
-            target = absolute(imp, mod.package)
+    for f in files:
+        for imp in read_imports(f.path):
+            target = absolute(imp, f.package)
             kind = "lazy" if imp.nested else "import"
-            hits = resolve(target, imp.names, index, mod.package)
+            hits = resolve(target, imp.names, index, f.package)
             if hits:
                 for hit in hits:
-                    add(mod.name, hit, kind)
+                    add(f.name, hit, kind)
                 continue
             top = target.split(".")[0]
             if not top or top in stdlib or top == "__future__":
                 continue
             ext_hits[top] += 1
             if externals:
-                add(mod.name, "ext:" + top, kind)
+                add(f.name, "ext:" + top, kind)
 
         if outside:
-            for conn in read_outside(mod.path):
+            for conn in read_outside(f.path):
                 note_endpoint(conn)
-                add(mod.name, conn.target, conn.kind)
+                add(f.name, conn.target, conn.kind)
 
     if not keep_empty:
         # An empty __init__.py that nothing imports is a folder marker, not a
         # file. Left in, it crowds the entry-point column with cards that
         # have no wires at all.
         wired = {s for s, _ in edges} | {d for _, d in edges}
-        modules = [m for m in modules
+        files = [m for m in files
                    if m.lines or m.path.name != "__init__.py" or m.name in wired]
 
     tail = ([EXTERNAL] if externals else []) + ([OUTSIDE] if endpoints else [])
-    groups = order_groups(modules, edges, tail)
+    groups = order_groups(files, edges, tail)
     rank = {g: i for i, g in enumerate(groups)}
 
     nodes = [
@@ -509,9 +509,9 @@ def build(root: Path, externals: bool = False, hidden: bool = False,
             "dir": m.group,
             "group": m.group,
             "lines": m.lines,
-            "kind": "module",
+            "kind": "file",
         }
-        for m in sorted(modules, key=lambda m: (rank.get(m.group, 0), m.rel))
+        for m in sorted(files, key=lambda m: (rank.get(m.group, 0), m.rel))
     ]
     if externals:
         nodes += [
@@ -551,14 +551,14 @@ def build(root: Path, externals: bool = False, hidden: bool = False,
     }
 
 
-def order_groups(modules: list, edges: dict, tail: list) -> list[str]:
+def order_groups(files: list, edges: dict, tail: list) -> list[str]:
     """Left to right: whoever imports comes before whoever is imported.
 
     A topological sort of the folders. Cycles get broken by taking the folder
     with the fewest unmet dependents, then by name, so the result is stable.
     """
-    group_of = {m.name: m.group for m in modules}
-    groups = sorted({m.group for m in modules})
+    group_of = {m.name: m.group for m in files}
+    groups = sorted({m.group for m in files})
 
     deps: dict = {g: set() for g in groups}          # g imports these folders
     for (src, dst) in edges:
@@ -790,16 +790,16 @@ def main(argv: list[str] | None = None) -> int:
 
     args.out.write_text(render(graph), encoding="utf-8")
 
-    mods = sum(1 for n in graph["nodes"] if n["kind"] == "module")
+    nfiles = sum(1 for n in graph["nodes"] if n["kind"] == "file")
     lazy = sum(1 for e in graph["edges"] if e["kind"] == "lazy")
     print(
         "{} files, {} wires ({} of them imports inside a function), "
         "{} folders -> {}".format(
-            mods, len(graph["edges"]), lazy, len(graph["groups"]), args.out
+            nfiles, len(graph["edges"]), lazy, len(graph["groups"]), args.out
         )
     )
     if args.layout == "file":
-        deep = max((n["col"] for n in graph["nodes"] if n["kind"] == "module"),
+        deep = max((n["col"] for n in graph["nodes"] if n["kind"] == "file"),
                    default=0)
         back = sum(1 for e in graph["edges"]
                    if e["kind"] in ("import", "lazy")

@@ -22,15 +22,15 @@ def tree(root: Path, files: dict) -> None:
         path.write_text(text, encoding="utf-8")
 
 
-class ModuleNames(unittest.TestCase):
+class FileNames(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
         self.addCleanup(self.tmp.cleanup)
 
-    def name_of(self, rel: str) -> cg.Module:
+    def name_of(self, rel: str) -> cg.File:
         tree(self.root, {rel: ""})
-        return cg.module_of(self.root / rel, self.root)
+        return cg.file_of(self.root / rel, self.root)
 
     def test_nested_file(self):
         m = self.name_of("pkg/sub/thing.py")
@@ -51,7 +51,7 @@ class ModuleNames(unittest.TestCase):
 
     def test_lines_are_counted(self):
         tree(self.root, {"a.py": "x = 1\ny = 2\n"})
-        self.assertEqual(cg.module_of(self.root / "a.py", self.root).lines, 2)
+        self.assertEqual(cg.file_of(self.root / "a.py", self.root).lines, 2)
 
 
 class RelativeImports(unittest.TestCase):
