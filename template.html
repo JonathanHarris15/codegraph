@@ -67,8 +67,9 @@ button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);
   touch-action:none;background-image:radial-gradient(var(--grid) 1px,transparent 1px);
   background-size:24px 24px}
 #stage.panning{cursor:grabbing}
-#canvas{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform;
+#canvas{position:absolute;top:0;left:0;transform-origin:0 0;
   user-select:none;-webkit-user-select:none}
+#canvas.moving{will-change:transform}
 #wires{position:absolute;top:0;left:0;overflow:visible;pointer-events:none}
 
 .colhead{position:absolute;font-family:var(--font-mono);font-size:10px;font-weight:700;
@@ -406,8 +407,14 @@ function render(){
   counts.textContent=order.length+" files · "+ev+" wires · "+GRAPH.groups.length+" folders";
 }
 /* panning and zooming only move the canvas, so they skip redrawing the wires;
-   the dot grid moves with it so the background reads as the same surface */
+   the dot grid moves with it so the background reads as the same surface.
+   While it moves the canvas is one cached picture, which keeps motion smooth
+   but stretches it soft; once it settles the browser redraws it sharp. */
+var settle=0;
 function applyView(){
+  canvas.classList.add("moving");
+  clearTimeout(settle);
+  settle=setTimeout(function(){ canvas.classList.remove("moving"); },160);
   canvas.style.transform="translate("+panX+"px,"+panY+"px) scale("+scale+")";
   var g=24*scale;
   stage.style.backgroundSize=g+"px "+g+"px";
