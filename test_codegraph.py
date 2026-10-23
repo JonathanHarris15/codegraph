@@ -442,5 +442,174 @@ class GroupOrder(unittest.TestCase):
         self.assertEqual(sorted(groups), ["a", "b"])
 
 
+class FrontDoors(unittest.TestCase):
+    """The check: a declaration says which names may cross a module's front
+    door, and the code is read back against it."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.addCleanup(self.tmp.cleanup)
+        tree(self.root, {
+            "engine/__init__.py": "",
+            "engine/book.py": "class Book: pass\ndef _fill(): pass\n",
+            "app/__init__.py": "",
+        })
+        self.decl = {"modules": {
+            "engine": {"files": ["engine/*"], "front_door": ["Book"]},
+            "app": {"files": ["app/*"], "front_door": []},
+        }}
+
+    def check(self, files: dict, decl: dict | None = None):
+        tree(self.root, files)
+        return cg.check(self.root, decl or self.decl)
+
+    def texts(self, found) -> list:
+        return [m.text for m in found]
+
+    def test_a_front_door_name_passes(self):
+        r = self.check({"app/main.py": "from engine.book import Book\n"})
+        self.assertEqual(r.mismatches, [])
+
+    def test_a_name_behind_the_door_is_a_mismatch(self):
+        r = self.check({"app/main.py": "from engine.book import _fill\n"})
+        self.assertEqual(len(r.mismatches), 1)
+        m = r.mismatches[0]
+        self.assertEqual((m.rel, m.line), ("app/main.py", 1))
+        self.assertIn("_fill", m.text)
+        self.assertIn("engine", m.text)
+
+    def test_the_path_an_import_takes_does_not_matter(self):
+        r = self.check({
+            "engine/__init__.py": "from .book import Book\n",
+            "app/main.py": "from engine import Book\n",
+        })
+        self.assertEqual(r.mismatches, [])
+
+    def test_a_name_reached_through_an_alias(self):
+        r = self.check({"app/main.py": "import engine.book as b\nb._fill()\n"})
+        self.assertEqual([(m.line, "_fill" in m.text) for m in r.mismatches], [(2, True)])
+
+    def test_a_name_reached_through_the_full_dotted_path(self):
+        r = self.check({"app/main.py": "import engine.book\nengine.book._fill()\n"})
+        self.assertEqual(len(r.mismatches), 1)
+
+    def test_a_file_imported_by_name_then_used(self):
+        r = self.check({"app/main.py": "from engine import book\nbook._fill()\nbook.Book()\n"})
+        self.assertEqual([m.line for m in r.mismatches], [2])
+
+    def test_inside_a_module_anything_goes(self):
+        r = self.check({"engine/other.py": "from engine.book import _fill\n"})
+        self.assertEqual(r.mismatches, [])
+
+    def test_import_star_is_unknown_not_guessed(self):
+        r = self.check({"app/main.py": "from engine.book import *\n"})
+        self.assertEqual(r.mismatches, [])
+        self.assertEqual(len(r.unknown), 1)
+
+    def test_a_module_passed_around_whole_is_unknown(self):
+        r = self.check({"app/main.py": "import engine.book as b\nrun(b)\n"})
+        self.assertEqual(r.mismatches, [])
+        self.assertEqual([u.line for u in r.unknown], [2])
+
+    def test_third_party_and_stdlib_are_not_checked(self):
+        r = self.check({"app/main.py": "import os\nfrom httpx import Client\n"})
+        self.assertEqual((r.mismatches, r.unknown), ([], []))
+
+    def test_a_file_in_no_module(self):
+        r = self.check({"loose.py": ""})
+        self.assertEqual([m.rel for m in r.mismatches], ["loose.py"])
+        self.assertIn("no module", r.mismatches[0].text)
+
+    def test_a_file_in_two_modules(self):
+        decl = {"modules": {
+            "engine": {"files": ["engine/*"], "front_door": ["Book"]},
+            "app": {"files": ["app/*", "engine/book.py"], "front_door": []},
+        }}
+        r = self.check({}, decl)
+        self.assertEqual([m.rel for m in r.mismatches], ["engine/book.py"])
+        self.assertIn("more than one module", r.mismatches[0].text)
+
+    def test_a_pattern_that_matches_nothing(self):
+        decl = {"modules": {
+            "engine": {"files": ["engine/*"], "front_door": ["Book"]},
+            "app": {"files": ["app/*"], "front_door": []},
+            "ghost": {"files": ["ghost/*"], "front_door": []},
+        }}
+        r = self.check({}, decl)
+        self.assertTrue(any("ghost" in t and "no files" in t for t in self.texts(r.mismatches)))
+
+    def test_a_star_stays_in_its_folder(self):
+        self.assertTrue(cg.path_match("atp/book.py", "atp/*"))
+        self.assertFalse(cg.path_match("atp/engine/book.py", "atp/*"))
+        self.assertTrue(cg.path_match("atp/engine/book.py", "atp/**"))
+        self.assertTrue(cg.path_match("main.py", "*.py"))
+        self.assertFalse(cg.path_match("atp/main.py", "*.py"))
+
+    def test_a_test_is_an_outside_caller(self):
+        decl = dict(self.decl, tests={"files": ["tests/*"]})
+        r = self.check({"tests/test_book.py": "from engine.book import _fill\n"}, decl)
+        self.assertEqual([m.rel for m in r.mismatches], ["tests/test_book.py"])
+
+    def test_a_test_declared_inside_a_module_may_reach_in(self):
+        decl = dict(self.decl, tests={"files": ["tests/*"],
+                                      "inside": {"tests/test_book.py": "engine"}})
+        r = self.check({"tests/test_book.py": "from engine.book import _fill\n"}, decl)
+        self.assertEqual(r.mismatches, [])
+
+    def test_a_test_needs_no_module_of_its_own(self):
+        decl = dict(self.decl, tests={"files": ["tests/*"]})
+        r = self.check({"tests/test_book.py": "from engine.book import Book\n"}, decl)
+        self.assertEqual(r.mismatches, [])
+
+    def test_the_program_never_imports_a_test(self):
+        decl = dict(self.decl, tests={"files": ["tests/*"]})
+        r = self.check({
+            "tests/__init__.py": "",
+            "tests/helpers.py": "def make(): pass\n",
+            "app/main.py": "from tests.helpers import make\n",
+        }, decl)
+        self.assertTrue(any(m.rel == "app/main.py" and "test" in m.text
+                            for m in r.mismatches))
+
+    def test_a_malformed_declaration_says_what_is_wrong(self):
+        with self.assertRaises(cg.DeclarationError) as e:
+            cg.check(self.root, {"modules": {"engine": {"front_door": []}}})
+        self.assertIn("engine", str(e.exception))
+
+
+class Drafting(unittest.TestCase):
+    """A first declaration, made from what the code does today."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.addCleanup(self.tmp.cleanup)
+        tree(self.root, {
+            "engine/__init__.py": "",
+            "engine/book.py": "class Book: pass\ndef _fill(): pass\n",
+            "engine/gate.py": "from engine.book import _fill\n",
+            "app/__init__.py": "",
+            "app/main.py": "from engine.book import Book\n",
+            "tests/test_book.py": "from engine.book import _fill\n",
+        })
+        self.decl = cg.draft(self.root)
+
+    def test_one_module_per_folder(self):
+        self.assertEqual(sorted(self.decl["modules"]), ["app", "engine"])
+        self.assertEqual(self.decl["modules"]["engine"]["files"], ["engine/*"])
+
+    def test_the_front_door_is_what_the_program_uses_today(self):
+        self.assertEqual(self.decl["modules"]["engine"]["front_door"], ["Book"])
+
+    def test_tests_are_found_by_their_names(self):
+        self.assertEqual(self.decl["tests"]["files"], ["tests/**"])
+        self.assertNotIn("tests", self.decl["modules"])
+
+    def test_the_draft_passes_except_where_tests_reach_in(self):
+        r = cg.check(self.root, self.decl)
+        self.assertEqual([m.rel for m in r.mismatches], ["tests/test_book.py"])
+
+
 if __name__ == "__main__":
     unittest.main()

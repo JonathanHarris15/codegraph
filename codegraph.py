@@ -9,6 +9,8 @@ you can open in a browser. No third-party packages, no model in the loop.
     python codegraph.py ../.. -o graph.html
     python codegraph.py ../.. --json           # the data, nothing else
     python codegraph.py ../.. --externals      # third-party packages as cards too
+    python codegraph.py ../.. --draft          # declare modules and front doors
+    python codegraph.py ../.. --check          # read the code against them
 
 What it knows how to see:
 
@@ -30,6 +32,7 @@ import sys
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from fnmatch import fnmatchcase
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -742,6 +745,283 @@ def place_by_folder(nodes: list, groups: list) -> tuple:
     return col, row, labels
 
 
+# ---------------------------------------------------------------- front doors
+#
+# A declaration names the modules (sets of files) and, for each, the names
+# outside code may use: its front door. The check reads every import back
+# against it. CONTEXT.md has the words; the file looks like
+#
+#   {"modules": {"engine": {"files": ["atp/engine/*"], "front_door": ["Book"]}},
+#    "tests":   {"files": ["tests/**"], "inside": {"tests/test_book.py": "engine"}}}
+
+DECLARATION = "codegraph.json"
+TEST_NAMES = ("test_*.py", "*_test.py", "conftest.py")
+TEST_DIRS = ("tests", "test")
+
+
+class DeclarationError(ValueError):
+    """The declaration is malformed, so there is nothing to check against."""
+
+
+@dataclass(frozen=True)
+class Use:
+    """One name a file takes from another file in the project."""
+    target: str          # dotted name of the file the name comes from
+    name: str | None     # None when it cannot be told which name
+    line: int
+    why: str = ""
+
+
+@dataclass(frozen=True, order=True)
+class Finding:
+    rel: str
+    line: int
+    text: str
+
+    def __str__(self) -> str:
+        return (self.rel + (":" + str(self.line) if self.line else "")
+                + "  " + self.text)
+
+
+@dataclass
+class Report:
+    mismatches: list
+    unknown: list
+
+
+def path_match(rel: str, pattern: str) -> bool:
+    """Match a path a folder at a time: `*` stays inside one folder, `**`
+    spans any number of them. `atp/*` is atp's own files, not atp/engine's."""
+    def walk(parts: list, pats: list) -> bool:
+        if not pats:
+            return not parts
+        if pats[0] == "**":
+            return any(walk(parts[i:], pats[1:]) for i in range(len(parts) + 1))
+        return bool(parts) and fnmatchcase(parts[0], pats[0]) and walk(parts[1:], pats[1:])
+    return walk(rel.split("/"), pattern.split("/"))
+
+
+def _any_match(rel: str, patterns: list) -> bool:
+    return any(path_match(rel, p) for p in patterns)
+
+
+def read_uses(path: Path, package: str, index: dict) -> list:
+    """Every name this file takes from another file in the index.
+
+    `from a.b import X` uses X. A file bound as a whole (`import a.b as m`,
+    `from a import b`) uses whatever is read off it: `m.X` uses X. A file
+    bound whole and then passed around, or `import *`, is a use that cannot
+    be told, and says so rather than guess.
+    """
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"), str(path))
+    except (OSError, SyntaxError, ValueError):
+        return []
+
+    uses: list = []
+    bound: dict = {}                     # local name -> dotted path it stands for
+
+    def longest(dotted: str):
+        parts = dotted.split(".")
+        for i in range(len(parts), 0, -1):
+            head = ".".join(parts[:i])
+            if head in index:
+                return head, parts[i:]
+        return None, parts
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.asname:
+                    bound[alias.asname] = alias.name
+                else:
+                    top = alias.name.split(".")[0]
+                    bound[top] = top
+        elif isinstance(node, ast.ImportFrom):
+            target = absolute(RawImport(node.module, (), node.level or 0, False), package)
+            if not target:
+                continue
+            # a folder of loose scripts: `from helpers import x` is next door
+            if package and not any(k == target or k.startswith(target + ".")
+                                   for k in index):
+                target = package + "." + target
+            for alias in node.names:
+                sub = target + "." + alias.name
+                if alias.name == "*":
+                    if target in index:
+                        uses.append(Use(target, None, node.lineno, "import *"))
+                elif sub in index:
+                    bound[alias.asname or alias.name] = sub
+                elif target in index:
+                    uses.append(Use(target, alias.name, node.lineno))
+
+    # names read off a file bound whole: take the outermost a.b.c of a chain
+    inner = {id(n.value) for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
+    for node in ast.walk(tree):
+        if id(node) in inner:
+            continue
+        if isinstance(node, ast.Attribute):
+            dotted = dotted_name(node)
+            head, _, rest = dotted.partition(".")
+            if head not in bound:
+                continue
+            found, tail = longest(bound[head] + "." + rest)
+            if found:
+                uses.append(Use(found, tail[0], node.lineno) if tail else
+                            Use(found, None, node.lineno, "a module passed whole"))
+        elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load) \
+                and bound.get(node.id) in index:
+            uses.append(Use(bound[node.id], None, node.lineno, "a module passed whole"))
+    return uses
+
+
+def _strs(value) -> bool:
+    return isinstance(value, list) and all(isinstance(v, str) for v in value)
+
+
+def validate(decl) -> None:
+    """Refuse a declaration that cannot mean anything, and say why."""
+    if not isinstance(decl, dict):
+        raise DeclarationError("the declaration must be a JSON object")
+    mods = decl.get("modules")
+    if not isinstance(mods, dict) or not mods:
+        raise DeclarationError('the declaration needs "modules", naming at least one')
+    for name, m in mods.items():
+        if not isinstance(m, dict) or not _strs(m.get("files")):
+            raise DeclarationError('module "{}" needs "files": a list of path patterns'
+                                   .format(name))
+        if not _strs(m.get("front_door", [])):
+            raise DeclarationError('module "{}": "front_door" must be a list of names'
+                                   .format(name))
+    tests = decl.get("tests", {})
+    if not isinstance(tests, dict) or not _strs(tests.get("files", [])):
+        raise DeclarationError('"tests" needs "files": a list of path patterns')
+    for rel, home in tests.get("inside", {}).items():
+        if home not in mods:
+            raise DeclarationError('test {} is declared inside "{}", which is not a module'
+                                   .format(rel, home))
+
+
+def _sorted(findings: list) -> list:
+    return sorted(set(findings))
+
+
+def check(root: Path, decl: dict, hidden: bool = False) -> Report:
+    """Read the code back against a declaration.
+
+    Every program file belongs to exactly one module. Every name one module
+    takes from another is on that module's front door. A test is an outside
+    caller, unless declared inside one module, and the program never imports
+    a test.
+    """
+    validate(decl)
+    mods = decl["modules"]
+    tests = decl.get("tests", {})
+    test_pats, inside = tests.get("files", []), tests.get("inside", {})
+    door = {n: set(m.get("front_door", [])) for n, m in mods.items()}
+
+    files = [file_of(p, root) for p in discover(root, hidden)]
+    index = {f.name: f for f in files}
+    mismatches: list = []
+    unknown: list = []
+
+    is_test = {f.name for f in files if _any_match(f.rel, test_pats)}
+    owner: dict = {}
+    claimed: dict = defaultdict(int)
+    for f in files:
+        if f.name in is_test:
+            continue
+        homes = [n for n, m in mods.items() if _any_match(f.rel, m["files"])]
+        for n in homes:
+            claimed[n] += 1
+        if len(homes) == 1:
+            owner[f.name] = homes[0]
+        elif not homes:
+            mismatches.append(Finding(f.rel, 0, "is in no module"))
+        else:
+            mismatches.append(Finding(f.rel, 0, "is in more than one module: "
+                                      + ", ".join(homes)))
+    for n in mods:
+        if not claimed[n]:
+            mismatches.append(Finding(DECLARATION, 0,
+                                      'module "{}" matches no files'.format(n)))
+
+    for f in files:
+        here = inside.get(f.rel) if f.name in is_test else owner.get(f.name)
+        for u in read_uses(f.path, f.package, index):
+            if u.target in is_test and f.name not in is_test:
+                mismatches.append(Finding(f.rel, u.line, "imports a test, "
+                                          + index[u.target].rel))
+                continue
+            there = owner.get(u.target)
+            if there is None or there == here:
+                continue
+            if u.name is None:
+                unknown.append(Finding(f.rel, u.line, "uses {} in a way that cannot be "
+                                       "read ({})".format(there, u.why)))
+            elif u.name not in door[there]:
+                mismatches.append(Finding(f.rel, u.line, "uses {} from {}, which is not "
+                                          "on its front door".format(u.name, there)))
+
+    return Report(_sorted(mismatches), _sorted(unknown))
+
+
+def looks_like_test(rel: str) -> bool:
+    parts = rel.split("/")
+    return any(p in TEST_DIRS for p in parts[:-1]) or \
+        any(fnmatchcase(parts[-1], p) for p in TEST_NAMES)
+
+
+def draft(root: Path, hidden: bool = False) -> dict:
+    """A first declaration, made from what the code does today.
+
+    One module per folder. Each front door holds the names the program
+    already takes from that folder, so the program passes at once. Tests are
+    found by their names and left outside every module, so any test that
+    reaches past a front door shows up straight away.
+    """
+    files = [file_of(p, root) for p in discover(root, hidden)]
+    index = {f.name: f for f in files}
+
+    tests, program = [], []
+    for f in files:
+        (tests if looks_like_test(f.rel) else program).append(f)
+
+    groups = sorted({f.group for f in program})
+    lasts = defaultdict(int)
+    for g in groups:
+        lasts[g.split("/")[-1]] += 1
+
+    def name_of(group: str) -> str:
+        if group == ".":
+            return root.resolve().name
+        last = group.split("/")[-1]
+        return last if lasts[last] == 1 else group.replace("/", ".")
+
+    owner = {f.name: name_of(f.group) for f in program}
+    door: dict = defaultdict(set)
+    for f in program:
+        for u in read_uses(f.path, f.package, index):
+            there = owner.get(u.target)
+            if there and there != owner[f.name] and u.name:
+                door[there].add(u.name)
+
+    modules = {}
+    for g in groups:
+        n = name_of(g)
+        modules[n] = {"files": ["*.py" if g == "." else g + "/*"],
+                      "front_door": sorted(door[n])}
+
+    test_pats = set()
+    for f in tests:
+        parts = f.rel.split("/")
+        cut = next((i for i, p in enumerate(parts[:-1]) if p in TEST_DIRS), None)
+        test_pats.add("/".join(parts[:cut + 1]) + "/**" if cut is not None else f.rel)
+
+    return {"modules": dict(sorted(modules.items())),
+            "tests": {"files": sorted(test_pats)}}
+
+
 # -------------------------------------------------------------------- render
 
 def render(graph: dict) -> str:
@@ -774,11 +1054,49 @@ def main(argv: list[str] | None = None) -> int:
                     help="columns by import depth (default) or one per folder")
     ap.add_argument("--keep-empty", action="store_true",
                     help="keep empty __init__.py files that nothing imports")
+    ap.add_argument("--check", action="store_true",
+                    help="read the code against the declaration; exit 1 on a mismatch")
+    ap.add_argument("--draft", action="store_true",
+                    help="write a first declaration from what the code does today")
+    ap.add_argument("--declaration", type=Path, metavar="FILE",
+                    help="the declaration to use (default: ROOT/" + DECLARATION + ")")
     args = ap.parse_args(argv)
 
     root = args.root.resolve()
     if not root.is_dir():
         ap.error(str(root) + " is not a folder")
+
+    decl_path = args.declaration or root / DECLARATION
+    if args.draft:
+        if decl_path.exists():
+            ap.error(str(decl_path) + " already exists; move it aside to draft afresh")
+        decl = draft(root, hidden=args.hidden)
+        decl_path.write_text(json.dumps(decl, indent=2) + "\n", encoding="utf-8")
+        names = sum(len(m["front_door"]) for m in decl["modules"].values())
+        print("{} modules, {} names on their front doors -> {}".format(
+            len(decl["modules"]), names, decl_path))
+        print("Every front door holds what crosses today. Narrow them to what "
+              "should cross, then run --check.")
+        return 0
+    if args.check:
+        try:
+            decl = json.loads(decl_path.read_text(encoding="utf-8"))
+            report = check(root, decl, hidden=args.hidden)
+        except FileNotFoundError:
+            ap.error("no declaration at {}; make one with --draft".format(decl_path))
+        except json.JSONDecodeError as e:
+            ap.error("{} is not valid JSON: {}".format(decl_path, e))
+        except DeclarationError as e:
+            ap.error("{}: {}".format(decl_path, e))
+        for m in report.mismatches:
+            print(m)
+        if report.unknown:
+            print("cannot tell:")
+            for u in report.unknown:
+                print("    " + str(u))
+        print("{} mismatches, {} cannot tell".format(
+            len(report.mismatches), len(report.unknown)))
+        return 1 if report.mismatches else 0
 
     graph = build(root, externals=args.externals, hidden=args.hidden,
                   outside=args.outside, layout=args.layout,

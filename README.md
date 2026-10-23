@@ -36,6 +36,64 @@ reaches outside: 4 feed, 3 HTTP call, 2 serves HTTP, 1 market data / orders, 1 e
 | `--no-outside` | imports only; skip the hunt for connections |
 | `--layout folder` | one column per folder, the older arrangement |
 | `--keep-empty` | keep empty `__init__.py` files that nothing imports |
+| `--draft` | write a first declaration of modules and front doors |
+| `--check` | read the code against the declaration; exit 1 on a mismatch |
+| `--declaration FILE` | the declaration to use (default `ROOT/codegraph.json`) |
+
+## Declaring modules
+
+A file is too small to think in. A **module** is a named set of files that
+does one job, and its **front door** is the list of names code outside it may
+use. You write these down in `codegraph.json` at the root of the codebase;
+codegraph reads the code back and reports every place the two disagree.
+`CONTEXT.md` defines the words.
+
+```json
+{
+  "modules": {
+    "engine": {"files": ["atp/engine/*"], "front_door": ["Book", "tick"]},
+    "data":   {"files": ["atp/data/*"],   "front_door": ["AlpacaBars"]}
+  },
+  "tests": {
+    "files": ["tests/**"],
+    "inside": {"tests/test_book_and_gate.py": "engine"}
+  }
+}
+```
+
+```
+python codegraph.py ../atp --draft     # one module per folder, doors as they are today
+python codegraph.py ../atp --check
+```
+
+```
+tests/test_book_and_gate.py:4  uses gate from engine, which is not on its front door
+tests/test_hub.py:14  uses create_app from hub, which is not on its front door
+11 mismatches, 0 cannot tell
+```
+
+The rules it checks:
+
+- every program file is in exactly one module, and every module's patterns
+  match at least one file
+- every name one module takes from another is on that module's front door,
+  whichever path the import is written through: `from atp.data import
+  AlpacaBars` and `from atp.data.bars import AlpacaBars` are the same use
+- a test goes through front doors like any other caller, unless it is listed
+  under `inside`, which lets it reach into that one module
+- the program never imports a test
+
+In a pattern, `*` stays inside one folder and `**` spans any depth, so
+`atp/*` is atp's own files and not atp/engine's.
+
+A name is followed however it is reached: `from a.b import X`, `import a.b as
+m` then `m.X`, `from a import b` then `b.X`. Two uses cannot be told and are
+listed apart, not guessed: `import *`, and a module bound whole and then
+handed to something else.
+
+A draft's front doors hold exactly what the program takes across today, so
+the program passes at once and only tests that reach in are flagged. That is
+a record of now, not a design: narrow each door to what *should* cross.
 
 ## On the page
 
@@ -126,6 +184,7 @@ layout is a Python function and nothing else.
 python -m unittest -v
 ```
 
-65 of them, over the parts that can be quietly wrong: turning a path and an
+88 of them, over the parts that can be quietly wrong: turning a path and an
 import statement into the name of another file, deciding that a call reaches
-outside the process, and laying the result out so no wire points backwards.
+outside the process, laying the result out so no wire points backwards, and
+deciding whether a name crossed a front door.
