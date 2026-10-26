@@ -7,3 +7,6 @@ codegraph.html
 atp*.html
 atp*.json
 gw*.html
+
+# the map the mod draws
+.codegraph/

@@ -54,4 +54,4 @@ Setup writes the first tags (ADR 0004); after that, whoever writes the file
 keeps its tag true, which the context file tells agents to do.
 
 `--draft` writes tags into files instead of a JSON file, and `--check` reads
-tags. Until that is built, the code and the README still use `codegraph.json`.
+tags. An old `codegraph.json` seeds the first draft and can then be deleted.

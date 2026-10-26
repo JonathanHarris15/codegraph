@@ -1,142 +1,155 @@
 # codegraph
 
-Point it at a codebase. It reads the imports and writes a page where every
-module and file is a card and every import is a wire you can trace. It also
-hunts for what the code reaches outside itself — hosts, databases, feeds, the
-environment — and draws those as cards too.
+A way to build a codebase in three layers, and a tool that keeps it honest.
 
-No model in the loop. Python 3.10 or newer to run it. It reads Python on its
-own; for TypeScript and JavaScript it needs tree-sitter (docs/adr/0001):
+- **Modules** do the real work behind a small front door, and are the only
+  code that touches a database or anything outside the program.
+- **Features** are what a person, a schedule or an event asks the app to do.
+  Each is thin and gets its power from the modules it names.
+- **UI** is how a person reaches features: pages, components, and the design
+  system they are drawn with.
+
+Codegraph is set up *in* a repo, not pointed at it. Every source file says
+in a tag which of these it belongs to, and the code is the architecture:
+there is no separate document to keep up to date (docs/adr/0002). Codegraph
+reads what the code really does, checks it against the tags, and draws the
+result as a map where every broken rule shows red. `CONTEXT.md` has the
+words.
+
+## Install
+
+The repo is a Claude Code plugin. Installing it gives you three things:
+
+- a **pane** beside the chat with the map: systems and their features,
+  modules and their front doors, pages, stores and their shapes, and the
+  mismatches. Click a feature, module or page and the chat box fills with a
+  prompt about it; the buttons start a new feature, module or page, or fix
+  the next mismatch. `/codegraph` opens it.
+- two **tools** the agent calls: `check`, run after every change, and `map`,
+  read before deciding where work goes.
+- two **skills**: `/codegraph:setup` brings a repo under codegraph, and
+  `/codegraph:fix` fixes one mismatch at a time, test first.
+
+To try it from a working copy, start Claude Code with this folder as a plugin:
+
+```
+claude --plugin-dir "path/to/codegraph"
+```
+
+Python 3.10 or newer runs the program. It reads Python on its own; for
+TypeScript and JavaScript it needs tree-sitter (docs/adr/0001):
 
 ```
 pip install tree-sitter tree-sitter-typescript tree-sitter-javascript
 ```
 
-Without it, Python is still read and TypeScript and JavaScript files are left
-out. A codebase can mix languages; each file is read by the reader for its
-language.
+## Setting a repo up
+
+`/codegraph:setup` works on a fresh repo or an old one, on a branch. It
+tags every file with a first guess, corrects each guess by reading the code,
+writes the rules into the repo's `CLAUDE.md` so every agent there builds in
+the three layers and test first, and hands back the mismatches, worst first.
+Setup changes no behaviour; fixing is `/codegraph:fix`, one small change at a
+time (docs/adr/0004).
+
+## Tags
+
+One comment line each, in a file's first 30 lines. `#` or `//` both work.
+
+```python
+# codegraph: module members
+# codegraph: front door find_members, add_member     once per module
+# codegraph: store members as Member                 on the schema it owns
+# codegraph: reads services                          another module's store
+```
+
+```ts
+// codegraph: feature plan-service in calendar
+// codegraph: uses services, members
+// codegraph: schedule every Thursday at 08:00       or: event paid as PaidEvent
+
+// codegraph: start page home at /                   or: page members
+// codegraph: component people-picker
+// codegraph: design system
+
+// codegraph: test module members                    or: test feature X, test ui home, members
+// codegraph: tooling
+```
+
+A module of five files is five files with the same tag. A page's route comes
+from its framework where it can (Next.js `app/` and `pages/`), else from `at`.
+
+## The rules the check reads
 
 ```
-python codegraph.py ~/Personal\ Projects/Agent\ Trading\ Portal
-open codegraph.html
+python codegraph.py path/to/repo --check
 ```
 
-```
-36 files, 125 wires (16 of them imports inside a function), 12 folders -> codegraph.html
-8 columns deep
-reaches outside: 4 feed, 3 HTTP call, 2 serves HTTP, 1 market data / orders, 1 environment, 1 database
-    127.0.0.1:8787             http /
-    alpaca                     market data / orders
-    api.typesafe.ai            https /v1/systemone
-    environment                environment variables
-    sqlite                     database
-    www.coindesk.com           https /arc/outboundfeeds/rss/
-    ...
-```
+- every source file has a tag, and every module one front door line
+- every name taken from a module is on its front door, whichever path the
+  import is written through
+- a module never calls a feature or the UI; a feature never calls another
+  feature or reaches into the UI; a page never imports a page; a component
+  never contains a page; the design system imports nothing that has wires;
+  the program never imports a test or tooling
+- a feature names its system and the modules it uses, uses only those, and
+  has a trigger: a page that acts on it, a schedule or an event
+- only a module reaches an outside connection (a server is how requests
+  arrive, so serving is allowed anywhere) or a store; a store has one owner,
+  the only module that writes it, and other modules say they read it
+- every store has a schema codegraph can read: pydantic, dataclasses,
+  TypedDict, SQLAlchemy, SQL `CREATE TABLE`, TypeScript types, zod, Prisma
+  (docs/adr/0003)
+- there is a start page, every page can be reached from it by its links, and
+  a UI test walks every page
+- a test fakes only what is outside the program, never the repo's own code
+
+What it cannot tell, it lists apart rather than guess: `import *`, a module
+handed around whole, a link built while the program runs, an event with no
+schema named.
 
 ## Options
 
 | flag | what it does |
 |---|---|
 | `-o FILE` | where to write the page (default `codegraph.html`) |
-| `--json` | print the data instead, so you can draw it yourself |
+| `--check` | read the code against its tags; exit 1 on a mismatch |
+| `--draft` | write a first tag into every file that has none |
+| `--summary` | print what the pane shows, as JSON |
+| `--json` | print all the data instead of the page |
 | `--externals` | give third-party packages their own cards |
 | `--hidden` | read dotted folders too (`.claude`, `.github`) |
 | `--no-outside` | imports only; skip the hunt for connections |
-| `--layout folder` | one column per folder, the older arrangement |
+| `--layout folder` | the file view in one column per folder |
 | `--keep-empty` | keep empty `__init__.py` files that nothing imports |
-| `--draft` | write a first declaration of modules and front doors |
-| `--check` | read the code against the declaration; exit 1 on a mismatch |
-| `--declaration FILE` | the declaration to use (default `ROOT/codegraph.json`) |
 
-## Declaring modules
-
-A file is too small to think in. A **module** is a named set of files that
-does one job, and its **front door** is the list of names code outside it may
-use. You write these down in `codegraph.json` at the root of the codebase;
-codegraph reads the code back and reports every place the two disagree.
-`CONTEXT.md` defines the words.
-
-```json
-{
-  "modules": {
-    "engine": {"files": ["atp/engine/*"], "front_door": ["Book", "tick"]},
-    "data":   {"files": ["atp/data/*"],   "front_door": ["AlpacaBars"]}
-  },
-  "tests": {
-    "files": ["tests/**"],
-    "inside": {"tests/test_book_and_gate.py": "engine"}
-  }
-}
-```
-
-```
-python codegraph.py ../atp --draft     # one module per folder, doors as they are today
-python codegraph.py ../atp --check
-```
-
-```
-tests/test_book_and_gate.py:4  uses gate from engine, which is not on its front door
-tests/test_hub.py:14  uses create_app from hub, which is not on its front door
-11 mismatches, 0 cannot tell
-```
-
-The rules it checks:
-
-- every program file is in exactly one module, and every module's patterns
-  match at least one file
-- every name one module takes from another is on that module's front door,
-  whichever path the import is written through: `from atp.data import
-  AlpacaBars` and `from atp.data.bars import AlpacaBars` are the same use
-- a test goes through front doors like any other caller, unless it is listed
-  under `inside`, which lets it reach into that one module
-- the program never imports a test
-
-In a pattern, `*` stays inside one folder and `**` spans any depth, so
-`atp/*` is atp's own files and not atp/engine's.
-
-A name is followed however it is reached: `from a.b import X`, `import a.b as
-m` then `m.X`, `from a import b` then `b.X`. Two uses cannot be told and are
-listed apart, not guessed: `import *`, and a module bound whole and then
-handed to something else.
-
-A draft's front doors hold exactly what the program takes across today, so
-the program passes at once and only tests that reach in are flagged. That is
-a record of now, not a design: narrow each door to what *should* cross.
+A repo nobody has tagged is drawn from a draft held in memory, and the page
+says so.
 
 ## On the page
 
-Click a card and everything unrelated dims, so you can see what it imports,
-what imports it, and what it reaches outside. Drag cards about; the layout is
-kept in that browser. Hold shift and drag across empty space to pick several
-cards, or shift-click to add or drop one; dragging any picked card moves them
-all. The search box jumps to a card. Scroll to zoom, drag the
-background to pan; neither has a limit, so you can wander off the graph and
-**Fit**, in the corner, brings it back. The legend folds away from its header.
+The page opens on the **map**, in bands as data flows to a person: outside
+connections, stores (each listing its shape), modules, features (coloured by
+system), schedules and events, then components and pages. Each wire says
+what it is: a feature *uses* a module, a page *acts on* a feature and is
+*informed by* a module, a module *writes* and *reads* its stores, a schedule
+*starts* a feature. The arrowhead sits where information arrives. A red wire
+breaks a rule, and the panel says which.
 
-The page opens on the codebase's modules: one card per module, wires between
-them, and the outside connections each module makes. Click a module to see
-its front door and the names that cross each wire; a red wire, and a red
-name, is one that is not on the front door. Double-click a module, or press
-**Open**, to go inside it: its own files sit in a thin box, the modules it
-uses and its outside connections to the left, the modules that use it to the
-right, so every wire crossing the box is another module coming in or going
-out. The trail at the top says where you are, and a
-step in it, or Escape, climbs back out. A codebase with no modules at all
-falls back to one card per file.
-A module card lists its files; the small arrow folds the list away, and a
-click on a file goes inside the module with that file picked out. With the
-list open, an arrow lands on the file that pulls the wire in, and when
-several files do, the wire splits just outside the card into a thread for
-each. Folded, the wires meet the card's side again. Each wire meets a card at
-a point of its own, so two wires running opposite ways between the same pair
-show as two.
-The modules come from `codegraph.json` if the codebase has one, and otherwise
-from a draft, one module per folder, which the header says.
+**Pages** is the map of where a person can go: every page, from the start
+page on the left, with the links that lead between them. **Files** is every
+file and every import.
 
-Grey wires are imports — dotted means the import is written inside a function,
-the trick a CLI uses so that starting it loads nothing heavy. Every other
-colour is a connection that leaves the process, and the legend names each one.
+Click a card and everything unrelated dims; the panel lists its front door,
+system, route or shape, and its wires. Double-click a card, or press
+**Open**, to go inside it: its own files sit in a thin box, with what they
+touch around them. The count in the header opens the list of mismatches.
+Drag cards about; the layout is kept in that browser. Shift-drag picks
+several. Scroll to zoom, drag the background to pan, and **Fit** brings
+everything back.
+
+Grey wires are imports; dotted means the import is written inside a
+function. Every other colour is a wire the legend names.
 
 ## What it sees
 
@@ -233,8 +246,8 @@ which folder they came from, a golden angle apart in hue, and the key in the
 corner names them. `--layout folder` brings the old one-column-per-folder
 arrangement back if you want to compare.
 
-All of the placement happens in `place_by_file`, which hands the page a
-column and a row per card. The page only turns those into pixels, so a new
+The file view's placement happens in `place_by_file`, the map's in
+`place_map`; each hands the page a column and a row per card. The page only turns those into pixels, so a new
 layout is a Python function and nothing else.
 
 ## Tests
@@ -243,8 +256,14 @@ layout is a Python function and nothing else.
 python -m unittest -v
 ```
 
-128 of them, over the parts that can be quietly wrong: turning a path and an
-import statement into the name of another file, in each language, deciding
-that a call reaches outside the process, laying the result out so no wire
-points backwards, and deciding whether a name crossed a front door. The
+Over the parts that can be quietly wrong: turning a path and an import
+statement into the name of another file, in each language, deciding that a
+call reaches outside the process, laying the result out so no wire points
+backwards, reading tags and schemas, and every rule the check reads. The
 TypeScript ones skip themselves where tree-sitter is not installed.
+
+The mod's own tests draw the pane on each surface and press its buttons:
+
+```
+claude plugin test .
+```

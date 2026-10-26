@@ -2744,6 +2744,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(graph, indent=2))
         return 0
 
+    args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(render(graph), encoding="utf-8")
 
     nfiles = sum(1 for n in graph["nodes"] if n["kind"] == "file")
