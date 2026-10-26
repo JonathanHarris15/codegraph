@@ -141,6 +141,10 @@ path.wire.hot{stroke-width:2.2;opacity:1}
 .s-file{width:11px;height:13px;background:var(--muted);
   clip-path:polygon(0 0,62% 0,100% 32%,100% 100%,0 100%)}
 .s-ext{width:17px;height:12px;border:1px dashed var(--muted);border-radius:3px}
+.s-feat{width:19px;height:11px;border:1px solid var(--muted);border-radius:6px}
+.s-page{width:17px;height:12px;border:1px solid var(--muted);border-top-width:4px;border-radius:2px}
+.s-comp{width:15px;height:11px;border:1px dashed var(--muted);border-radius:2px}
+.s-store{width:14px;height:13px;border:1px solid var(--muted);border-radius:50% 50% 3px 3px/5px 5px 3px 3px}
 #legend .row{display:flex;align-items:center;gap:6px;color:var(--ink);margin-bottom:3px}
 #legend .gen{margin-top:7px;padding-top:6px;border-top:1px solid var(--hair-soft);
   font-family:var(--font-mono);font-size:9.5px}
@@ -198,6 +202,41 @@ path.wire.hot{stroke-width:2.2;opacity:1}
 .card.folded ul.flist{display:none}
 .card.mod.opens .nm::after{content:" ›";color:var(--muted)}
 path.wire.breach{stroke-width:2}
+/* The map's other cards. A feature is a pill in its system's colour; a page
+   wears a browser's bar; a component is drawn dashed, being a piece of one;
+   the design system is a swatch; a store is a drum with its shape listed;
+   a trigger is a small tab with a mark for a clock or an event. */
+.card.feat{border:1px solid color-mix(in srgb,var(--gc) 60%,var(--hair));border-radius:18px;
+  background:color-mix(in srgb,var(--gc) 10%,var(--surface));padding:8px 12px}
+.card.feat .nm{font-family:var(--font-ui);font-weight:700;color:color-mix(in srgb,var(--gc) 70%,var(--ink))}
+.card.page{border-top:7px solid color-mix(in srgb,var(--gc) 45%,var(--hair));border-radius:7px}
+.card.page.start{border-top-color:var(--accent)}
+.card.page .nm::before{content:"\25AD  ";color:var(--muted)}
+.card.page.start .nm::after{content:"  start";font-size:9px;color:var(--accent);font-weight:700}
+.card.comp{border:1px dashed color-mix(in srgb,var(--gc) 70%,var(--hair));border-radius:7px}
+.card.comp .nm::before{content:"\25C7  ";color:var(--muted)}
+.card.design{border:1px solid var(--hair);border-radius:7px;
+  background:linear-gradient(90deg,hsl(10 70% 60%/.25),hsl(130 60% 55%/.25),hsl(220 70% 60%/.25)) top/100% 5px no-repeat,var(--surface)}
+.card.store{border:1px solid var(--hair);border-radius:50% 50% 8px 8px/14px 14px 8px 8px;
+  padding-top:12px;background:var(--surface-2)}
+.card.trig{border:1px solid var(--hair);border-left:4px solid hsl(45 80% 50%);border-radius:5px}
+.card.trig .nm::before{content:"\23F1  ";color:var(--muted)}
+.card.trig.event .nm::before{content:"\26A1  "}
+.card.loose{border:1px dashed var(--breach)}
+.card.loose .nm{color:var(--breach)}
+.card ul.fields{list-style:none;margin:6px 0 0;padding:5px 0 0;border-top:1px solid var(--hair-soft)}
+.card ul.fields li{font-family:var(--font-mono);font-size:10px;padding:0 2px;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
+.card ul.fields li.none{color:var(--breach)}
+#tabs{display:flex;gap:2px}
+#tabs button{font-family:var(--font-mono);font-size:11px;padding:3px 9px;border-radius:5px;
+  background:none;border:1px solid transparent;color:var(--muted)}
+#tabs button[aria-pressed="true"]{border-color:var(--hair);background:var(--surface);color:var(--ink)}
+#issues{cursor:pointer;background:none;border:0;padding:0}
+#issues:hover{text-decoration:underline}
+#panel .why{font-size:10px;color:var(--breach);padding:1px 6px 2px 19px;line-height:1.45}
+#panel ol.found{margin:0;padding:0 0 0 16px;font-family:var(--font-mono);font-size:10px;line-height:1.5}
+#panel ol.found li{margin-bottom:4px;word-break:break-word}
 #panel .names{font-family:var(--font-mono);font-size:9.5px;color:var(--muted);
   padding:1px 6px 2px 19px;line-height:1.45;word-break:break-word}
 #panel .names b{color:var(--breach);font-weight:600}
@@ -221,9 +260,10 @@ path.wire.breach{stroke-width:2}
 <div id="shell">
   <header>
     <h1>codegraph</h1>
+    <nav id="tabs" aria-label="Views"></nav>
     <nav id="crumbs" aria-label="Where you are in the codebase"></nav>
     <span class="counts" id="counts"></span>
-    <span class="counts issues" id="issues"></span>
+    <button class="counts issues" id="issues" hidden></button>
     <span class="spacer"></span>
     <div class="toolbar">
       <input type="search" id="q" placeholder="find a card" aria-label="Find a card">
@@ -261,10 +301,11 @@ if(!GRAPH){document.getElementById("panel").textContent="No graph data.";return;
 var CW=170, CH=62, COLGAP=112, HEADY=26;
 
 /* ------------------------------------------------------------------- views
-   The file graph is always one view. A declaration (or a draft of one) adds
-   the module view and one view inside each module. The generator places
+   The file graph is always one view. The tags (or a draft of them) add the
+   map, the page map, and one view inside each card. The generator places
    every card in every view; the page only draws whichever is open. */
-var MODS=GRAPH.modules||null;
+var MODS=GRAPH.map||null;
+var TOP=(MODS?MODS.top:[]).concat(["files"]);
 var VIEWS={files:{title:"Files",unit:"files",nodes:GRAPH.nodes,edges:GRAPH.edges,
                   columns:GRAPH.columns,groups:GRAPH.groups}};
 var FILES={};
@@ -279,7 +320,7 @@ Object.keys(VIEWS).forEach(function(k){
   });
 });
 function gcolor(g){
-  if(g==="(external)"||g==="(outside)") return "var(--muted)";
+  if(g==="(external)"||g==="(outside)"||g==="(stores)"||g==="(triggers)") return "var(--muted)";
   return "hsl("+(hue[g]||0)+" var(--sat) var(--lig))";
 }
 
@@ -295,6 +336,12 @@ function kcolor(k){
   return "hsl("+d.hue+" var(--sat) var(--lig))";
 }
 function isWiring(k){ return k==="import"||k==="lazy"; }
+/* the map's own wires, between what files belong to, not outside the program */
+var MAPWIRES={uses:1,informed:1,acts:1,contains:1,starts:1,writes:1,reads:1,leads:1};
+function isInside(k){ return isWiring(k)||!!MAPWIRES[k]; }
+function headOf(k){ return (KINDS[k]||{}).head||"from"; }
+var CARDCLASS={file:"file",module:"mod",feature:"feat",page:"page",component:"comp",
+  design:"design",store:"store",trigger:"trig",loose:"loose"};
 
 var KEY="codegraph."+(GRAPH.root||"x");
 function save(k,v){ try{ localStorage.setItem(KEY+"."+k,JSON.stringify(v)); }catch(e){} }
@@ -341,9 +388,11 @@ var gWires=document.createElementNS(NS,"g"); svg.appendChild(gWires);
   Object.keys(KINDS).forEach(function(k){
     var d=KINDS[k]; row(kcolor(k),d.width+0.3,d.dash,d.label);
   });
-  if(MODS) row("var(--breach)",2.3,"","uses a name not on the front door");
+  if(MODS) row("var(--breach)",2.3,"","breaks a rule");
   var shapes=document.createElement("div"); shapes.className="shapes";
-  shapes.innerHTML='<i class="s-mod"></i><span>module</span><i class="s-file"></i><span>file</span>'+
+  shapes.innerHTML='<i class="s-mod"></i><span>module</span><i class="s-feat"></i><span>feature</span>'+
+    '<i class="s-page"></i><span>page</span><i class="s-comp"></i><span>component</span>'+
+    '<i class="s-store"></i><span>store</span><i class="s-file"></i><span>file</span>'+
     '<i class="s-ext"></i><span>outside</span>';
   rows.insertBefore(shapes,rows.firstChild);
 })();
@@ -435,6 +484,17 @@ function fileList(el,hd,n){
   });
   el.appendChild(ul);
 }
+/* a store's shape, or what an event carries, read from its schema */
+function fieldList(el,n){
+  var ul=document.createElement("ul"); ul.className="fields";
+  var rows=n.fields.length?n.fields:(n.kind==="store"?["no schema read"]:[]);
+  rows.forEach(function(f){
+    var li=document.createElement("li"); li.textContent=f; li.title=f;
+    if(!n.fields.length) li.className="none";
+    ul.appendChild(li);
+  });
+  if(rows.length) el.appendChild(ul);
+}
 /* Folding eases the card's height from one size to the other while the list
    inside is clipped. Every frame the columns re-stack and the wires redraw,
    so the neighbours and the wires travel with the card instead of jumping. */
@@ -476,7 +536,8 @@ function show(key){
   order.forEach(function(n){ nodes[n.id]=n; });
   edges=V.edges.filter(function(e){ return nodes[e.from]&&nodes[e.to]; })
     .map(function(e,i){ return {i:i,from:e.from,to:e.to,kind:e.kind,
-                                names:e.names||[],bad:e.bad||[],via:e.via||[]}; });
+                                names:e.names||[],why:e.why||[],via:e.via||[],
+                                bad:(e.bad||[]).concat((e.why||[]).length&&!(e.bad||[]).length?["rule"]:[])}; });
   out={}; inn={};
   order.forEach(function(n){ out[n.id]=[]; inn[n.id]=[]; });
   edges.forEach(function(e){ out[e.from].push(e); inn[e.to].push(e); });
@@ -492,7 +553,7 @@ function show(key){
   if(order.some(function(n){ return n.own; })){
     frame=document.createElement("div");
     frame.className="frame";
-    frame.style.setProperty("--gc",gcolor(cur.slice(4)));
+    frame.style.setProperty("--gc",gcolor(V.group||cur));
     var tag=document.createElement("span"); tag.textContent=V.title;
     frame.appendChild(tag);
     canvas.insertBefore(frame,svg);          // behind the wires too
@@ -501,7 +562,8 @@ function show(key){
   cardEls={}; hgt={};
   order.forEach(function(n){
     var el=document.createElement("div");
-    el.className="card"+(n.kind==="file"?" file":n.kind==="module"?" mod":" ext")+
+    el.className="card "+(CARDCLASS[n.kind]||"ext")+(n.start?" start":"")+
+      (n.kind==="trigger"&&n.dir==="event"?" event":"")+
       (VIEWS[n.id]&&n.id!==cur?" opens":"")+(folded[n.id]?" folded":"");
     el.style.setProperty("--gc",gcolor(n.group));
     el.tabIndex=0; el.setAttribute("role","button");
@@ -518,6 +580,7 @@ function show(key){
       el.appendChild(band);
     } else { el.appendChild(hd); el.appendChild(dir); el.appendChild(foot); }
     if(n.files&&n.files.length) fileList(el,hd,n);
+    if(n.kind==="store"||n.kind==="trigger") fieldList(el,n);
     canvas.appendChild(el); cardEls[n.id]=el;
     hgt[n.id]=el.offsetHeight;
     if(n.files&&!folded[n.id]) measureRows(n.id);
@@ -551,6 +614,7 @@ function show(key){
       return p;
     }
     e.head="url(#ar-"+(bad?"breach":e.kind)+")";
+    e.at=headOf(e.kind);
     wireEls[e.i]=strand();
     // one thread per file on the importing card that pulls this wire in
     if(nodes[e.from].files) threadEls[e.i]=e.via.map(function(fid){
@@ -558,15 +622,27 @@ function show(key){
     });
   });
 
-  drawKey(); drawCrumbs(); save("trail",trail);
+  drawKey(); drawCrumbs(); drawTabs(); save("trail",trail);
   render(); drawPanel(); openView();
 }
 
-/* from the top: Modules, then the module you went into. Files stands alone. */
+/* from the top: the map, then the card you went into. Pages and Files
+   stand alone. */
 function open(key){
   if(!VIEWS[key]) return;
-  trail = key==="files"||key==="modules" ? [key] : ["modules",key];
+  trail = TOP.indexOf(key)>=0 ? [key] : ["map",key];
   show(key);
+}
+function drawTabs(){
+  var tabs=document.getElementById("tabs");
+  tabs.innerHTML="";
+  if(!MODS) return;
+  TOP.forEach(function(k){
+    var b=document.createElement("button"); b.textContent=VIEWS[k].title;
+    b.setAttribute("aria-pressed",String(trail[0]===k));
+    b.addEventListener("click",function(){ open(k); });
+    tabs.appendChild(b);
+  });
 }
 
 function drawKey(){
@@ -662,8 +738,10 @@ function drawWire(e,show){
   main.style.display=show?"":"none";
   if(!show) return [];
   var side=ports[e.i][0], t=ports[e.i][1];
+  var atFrom=e.at!=="to", atTo=e.at!=="from";
+  if(atTo) main.setAttribute("marker-end",e.head); else main.removeAttribute("marker-end");
   if(!threaded(e)){
-    main.setAttribute("marker-start",e.head);
+    if(atFrom) main.setAttribute("marker-start",e.head); else main.removeAttribute("marker-start");
     main.setAttribute("d",curve(side,t));
     return [main];
   }
@@ -675,7 +753,7 @@ function drawWire(e,show){
     sum+=at.y; return {th:th, at:at};
   });
   if(rows.length===1){
-    main.setAttribute("marker-start",e.head);
+    if(atFrom) main.setAttribute("marker-start",e.head); else main.removeAttribute("marker-start");
     main.setAttribute("d",curve(rows[0].at,t));
     return [main];
   }
@@ -686,7 +764,7 @@ function drawWire(e,show){
   rows.forEach(function(r){
     var s=r.at, h=SPLIT*0.55;
     r.th.el.style.display="";
-    r.th.el.setAttribute("marker-start",e.head);
+    if(atFrom) r.th.el.setAttribute("marker-start",e.head); else r.th.el.removeAttribute("marker-start");
     r.th.el.setAttribute("d","M"+s.x+" "+s.y+" C"+(s.x+d*h)+" "+s.y+" "+(j.x-d*h)+" "+j.y+" "+j.x+" "+j.y);
   });
   return [main].concat(rows.map(function(r){ return r.th.el; }));
@@ -733,12 +811,13 @@ function render(){
   svg.setAttribute("width",b.w+40); svg.setAttribute("height",b.h+40);
   canvas.style.width=(b.w+40)+"px"; canvas.style.height=(b.h+40)+"px";
   applyView();
-  var mine=order.filter(function(n){ return n.kind===(cur==="modules"?"module":"file"); }).length;
-  var unit=cur==="modules"?"modules":"files";
-  counts.textContent=mine+" "+unit+" · "+ev+" wires"+
+  var unit=V.unit==="units"?"cards":V.unit;
+  counts.textContent=order.length+" "+unit+" · "+ev+" wires"+
     (cur==="files"?" · "+GRAPH.groups.length+" folders":
-     MODS&&MODS.source==="draft"?" · drafted from folders":"");
-  issues.textContent=cur!=="files"&&bad?bad+(bad===1?" wire":" wires")+" off a front door":"";
+     MODS&&MODS.source==="draft"?" · drafted, nothing tagged yet":"");
+  var found=MODS?MODS.mismatches.length:0;
+  issues.hidden=!found;
+  issues.textContent=found+(found===1?" mismatch":" mismatches")+(bad?" · "+bad+" red wires":"");
 }
 /* panning and zooming only move the canvas, so they skip redrawing the wires;
    the dot grid moves with it so the background reads as the same surface.
@@ -756,24 +835,55 @@ function applyView(){
 }
 
 /* --------------------------------------------------------------- inspector */
+var listing=false;
+function drawFindings(){
+  var h='<button class="close" id="p-close" aria-label="Close">\u00d7</button>';
+  h+='<h2>Mismatches ('+MODS.mismatches.length+')</h2>';
+  h+='<p class="note">Where the code breaks a rule or disagrees with its tags.</p>';
+  h+='<ol class="found">'+MODS.mismatches.map(function(m){ return '<li>'+esc(m)+'</li>'; }).join("")+'</ol>';
+  if(MODS.unknown.length){
+    h+='<h3>Cannot tell ('+MODS.unknown.length+')</h3>';
+    h+='<ol class="found">'+MODS.unknown.map(function(m){ return '<li>'+esc(m)+'</li>'; }).join("")+'</ol>';
+  }
+  panel.innerHTML=h; panel.hidden=false;
+  document.getElementById("p-close").addEventListener("click",function(){ listing=false; panel.hidden=true; });
+}
+issues.addEventListener("click",function(){ listing=true; selected=null; render(); drawFindings(); });
 function drawPanel(){
+  if(listing&&!selected){ drawFindings(); return; }
+  listing=false;
   panel.hidden=!selected;
   if(!selected) return;
   var n=nodes[selected], c=gcolor(n.group);
   var h='<button class="close" id="p-close" aria-label="Clear selection">×</button>';
   h+='<h2 style="--gc:'+c+'">'+esc(n.label)+'</h2>';
-  h+='<div class="ppath">'+esc(n.kind==="module"?"module":n.id)+'</div>';
+  h+='<div class="ppath">'+esc(n.kind==="file"?n.id:n.kind==="design"?"design system":n.kind)+'</div>';
   h+='<div class="meta"><span>'+esc(n.dir)+'</span>';
   if(n.lines) h+='<span>'+n.lines+' lines</span>';
   h+='<span>'+inn[n.id].length+' in</span><span>'+out[n.id].length+' out</span></div>';
   if(VIEWS[n.id]&&n.id!==cur)
     h+='<button class="open" data-open="'+esc(n.id)+'">Open '+esc(n.label)+' ›</button>';
 
+  function chips(title,arr,none){
+    if(!arr) return "";
+    return '<h3>'+title+' ('+arr.length+')</h3>'+(arr.length
+      ? '<div class="chips">'+arr.map(function(d){ return '<span>'+esc(d)+'</span>'; }).join("")+'</div>'
+      : '<p class="note">'+none+'</p>');
+  }
   if(n.kind==="module"){
-    h+='<h3>Front door ('+n.door.length+')</h3>';
-    h+=n.door.length
-      ? '<div class="chips">'+n.door.map(function(d){ return '<span>'+esc(d)+'</span>'; }).join("")+'</div>'
-      : '<p class="note">Nothing declared. Every name taken from here is off the door.</p>';
+    h+=chips("Front door",n.door,"Nothing declared. Every name taken from here is off the door.");
+    if(n.stores&&n.stores.length) h+=chips("Owns",n.stores,"");
+    if(n.reads&&n.reads.length) h+=chips("Reads",n.reads,"");
+  }
+  if(n.kind==="feature"){
+    h+='<p class="note">In system <b>'+esc(n.system||"none")+'</b></p>';
+    h+=chips("Says it uses",n.uses,"No modules named.");
+  }
+  if(n.kind==="page") h+='<p class="note">'+(n.start?"Start page at ":"At ")+'<b>'+esc(n.route||"no route")+'</b></p>';
+  if(n.kind==="store"||n.kind==="trigger"){
+    h+=chips(n.kind==="store"?"Shape":"Carries",n.fields,n.kind==="store"?
+      "No schema read: add one the owner checks its data against.":"No schema named.");
+    if(n.schema) h+='<p class="note">from '+esc(n.schema)+'</p>';
   }
 
   function list(title,arr,key,want){
@@ -783,7 +893,7 @@ function drawPanel(){
     vis.sort(function(a,b){ return a[key]<b[key]?-1:1; }).forEach(function(e){
       var o=nodes[e[key]];
       var tag = e.kind==="lazy" ? "lazy"
-              : isWiring(e.kind) ? "" : (KINDS[e.kind]||{}).label||e.kind;
+              : e.kind==="import" ? "" : (KINDS[e.kind]||{}).label||e.kind;
       s+='<li><button data-go="'+esc(o.id)+'">'+
          '<span class="dot" style="background:'+
            (e.bad.length?"var(--breach)":isWiring(e.kind)?gcolor(o.group):kcolor(e.kind))+'"></span>'+
@@ -793,13 +903,14 @@ function drawPanel(){
       if(e.names.length) s+='<div class="names">'+e.names.map(function(nm){
         return e.bad.indexOf(nm)>=0?'<b>'+esc(nm)+'</b>':esc(nm);
       }).join(", ")+'</div>';
+      e.why.forEach(function(w){ s+='<div class="why">'+esc(w)+'</div>'; });
       s+='</li>';
     });
     return s+'</ul>';
   }
-  h+=list("Reaches outside",out[n.id],"to",function(k){ return !isWiring(k); });
-  h+=list(n.kind==="module"?"Uses":"Imports",out[n.id],"to",isWiring);
-  h+=list("Used by",inn[n.id],"from",isWiring);
+  h+=list("Reaches outside",out[n.id],"to",function(k){ return !isInside(k); });
+  h+=list(n.kind==="file"?"Imports":"Out",out[n.id],"to",isInside);
+  h+=list(n.kind==="file"?"Used by":"In",inn[n.id],"from",isInside);
   panel.innerHTML=h;
 
   document.getElementById("p-close").addEventListener("click",function(){ select(null); });
@@ -978,17 +1089,17 @@ document.addEventListener("keydown",function(ev){
   if(ev.key!=="Escape"||ev.target===qbox) return;
   if(pickedIds().length){ picked={}; render(); }
   else if(selected) select(null);
-  else if(trail.length>1) open(trail[0]);       // Escape climbs back out of a module
+  else if(trail.length>1) open(trail[0]);       // Escape climbs back out of a card
 });
 
 /* start where this browser left off, else at the top */
 (function(){
   var t=load("trail");
   // the file graph is only the fallback now, for a codebase with no modules
-  if(t&&t.length&&VIEWS[t[t.length-1]]&&!(MODS&&t[0]==="files")){
+  if(t&&t.length&&VIEWS[t[0]]&&VIEWS[t[t.length-1]]&&!(MODS&&t[0]==="files")){
     trail=t; show(t[t.length-1]);
   }
-  else open(MODS?"modules":"files");
+  else open(MODS?"map":"files");
 })();
 })();
 </script>

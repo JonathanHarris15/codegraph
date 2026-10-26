@@ -6,12 +6,16 @@ Standard library only:  python -m unittest -v
 from __future__ import annotations
 
 import ast
+import json
 import tempfile
 import unittest
 from collections import defaultdict
 from pathlib import Path
 
 import codegraph as cg
+import shapes
+
+HAS_SCRIPT = any(r.lang == "script" for r in cg.READERS)
 
 
 def tree(root: Path, files: dict) -> None:
@@ -447,171 +451,490 @@ class GroupOrder(unittest.TestCase):
         self.assertEqual(sorted(groups), ["a", "b"])
 
 
-class FrontDoors(unittest.TestCase):
-    """The check: a declaration says which names may cross a module's front
-    door, and the code is read back against it."""
+def mod(name: str, door: str | None = None) -> str:
+    """The tag lines for a file of module `name`, with its front door if given."""
+    return "# codegraph: module {}\n".format(name) + (
+        "# codegraph: front door {}\n".format(door) if door is not None else "")
+
+
+class Project(unittest.TestCase):
+    """A fresh folder to write a small codebase into."""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
         self.addCleanup(self.tmp.cleanup)
-        tree(self.root, {
-            "engine/__init__.py": "",
-            "engine/book.py": "class Book: pass\ndef _fill(): pass\n",
-            "app/__init__.py": "",
-        })
-        self.decl = {"modules": {
-            "engine": {"files": ["engine/*"], "front_door": ["Book"]},
-            "app": {"files": ["app/*"], "front_door": []},
-        }}
 
-    def check(self, files: dict, decl: dict | None = None):
+    def check(self, files: dict):
         tree(self.root, files)
-        return cg.check(self.root, decl or self.decl)
+        return cg.check(self.root)
 
-    def texts(self, found) -> list:
-        return [m.text for m in found]
+    def has(self, found, *words) -> bool:
+        return any(all(w in m.text for w in words) for m in found)
+
+
+class Tags(unittest.TestCase):
+    """Reading what a file says it belongs to."""
+
+    def test_a_module_and_its_front_door(self):
+        t = cg.read_tags("# codegraph: module engine\n# codegraph: front door Book, tick\n")
+        self.assertEqual((t.kind, t.name, t.door, t.unit),
+                         ("module", "engine", ["Book", "tick"], "module:engine"))
+
+    def test_an_empty_front_door(self):
+        self.assertEqual(cg.read_tags("# codegraph: module a\n# codegraph: front door\n").door, [])
+        self.assertEqual(cg.read_tags("# codegraph: module a\n# codegraph: front door none\n").door, [])
+
+    def test_a_feature_with_its_system_uses_and_triggers(self):
+        t = cg.read_tags("// codegraph: feature plan-service in calendar\n"
+                         "// codegraph: uses services, members\n"
+                         "// codegraph: schedule every day at 08:00\n"
+                         "// codegraph: event stripe-paid as PaidEvent\n")
+        self.assertEqual((t.kind, t.name, t.system), ("feature", "plan-service", "calendar"))
+        self.assertEqual(t.uses, ["services", "members"])
+        self.assertEqual(t.schedules, ["every day at 08:00"])
+        self.assertEqual(t.events, [("stripe-paid", "PaidEvent")])
+
+    def test_pages_components_and_the_rest(self):
+        t = cg.read_tags("// codegraph: start page home at /\n")
+        self.assertEqual((t.kind, t.name, t.route, t.start), ("page", "home", "/", True))
+        self.assertEqual(cg.read_tags("/* codegraph: component people-picker */").unit,
+                         "component:people-picker")
+        self.assertEqual(cg.read_tags("// codegraph: design system").unit, "design")
+        self.assertEqual(cg.read_tags("# codegraph: tooling").unit, "tooling")
+
+    def test_tests_say_what_they_test(self):
+        t = cg.read_tags("# codegraph: test module engine")
+        self.assertEqual((t.kind, t.of, t.name), ("test", "module", "engine"))
+        t = cg.read_tags("// codegraph: test ui home, members")
+        self.assertEqual((t.of, t.walks), ("ui", ["home", "members"]))
+
+    def test_a_store_and_what_a_module_reads(self):
+        t = cg.read_tags("# codegraph: module m\n# codegraph: store members as Member\n"
+                         "# codegraph: reads services\n")
+        self.assertEqual((t.stores, t.reads), ([("members", "Member", 2)], ["services"]))
+
+    def test_no_tags_is_none(self):
+        self.assertIsNone(cg.read_tags("import os\n# a codegraph comment, not a tag\n"))
+
+    def test_a_tag_must_sit_near_the_top(self):
+        self.assertIsNone(cg.read_tags("\n" * 40 + "# codegraph: module late\n"))
+
+    def test_a_tag_that_cannot_be_read(self):
+        t = cg.read_tags("# codegraph: modul engine\n")
+        self.assertTrue(any("cannot read" in e for _, e in t.errors))
+
+    def test_two_kinds_in_one_file(self):
+        t = cg.read_tags("# codegraph: module a\n# codegraph: tooling\n")
+        self.assertTrue(any("two tags" in e for _, e in t.errors))
+
+    def test_a_statement_the_kind_cannot_make(self):
+        t = cg.read_tags("// codegraph: page home\n// codegraph: front door X\n")
+        self.assertTrue(any("only a module" in e for _, e in t.errors))
+
+
+class FrontDoors(Project):
+    """The check: a module's front door says which names may cross into it."""
+
+    def setUp(self):
+        super().setUp()
+        tree(self.root, {
+            "engine/__init__.py": mod("engine", "Book"),
+            "engine/book.py": mod("engine") + "class Book: pass\ndef _fill(): pass\n",
+            "app/__init__.py": mod("app", ""),
+        })
+
+    def app(self, source: str):
+        return self.check({"app/main.py": mod("app") + source})
 
     def test_a_front_door_name_passes(self):
-        r = self.check({"app/main.py": "from engine.book import Book\n"})
-        self.assertEqual(r.mismatches, [])
+        self.assertEqual(self.app("from engine.book import Book\n").mismatches, [])
 
     def test_a_name_behind_the_door_is_a_mismatch(self):
-        r = self.check({"app/main.py": "from engine.book import _fill\n"})
+        r = self.app("from engine.book import _fill\n")
         self.assertEqual(len(r.mismatches), 1)
         m = r.mismatches[0]
-        self.assertEqual((m.rel, m.line), ("app/main.py", 1))
+        self.assertEqual((m.rel, m.line), ("app/main.py", 2))
         self.assertIn("_fill", m.text)
         self.assertIn("engine", m.text)
 
     def test_the_path_an_import_takes_does_not_matter(self):
         r = self.check({
-            "engine/__init__.py": "from .book import Book\n",
-            "app/main.py": "from engine import Book\n",
+            "engine/__init__.py": mod("engine", "Book") + "from .book import Book\n",
+            "app/main.py": mod("app") + "from engine import Book\n",
         })
         self.assertEqual(r.mismatches, [])
 
     def test_a_name_reached_through_an_alias(self):
-        r = self.check({"app/main.py": "import engine.book as b\nb._fill()\n"})
-        self.assertEqual([(m.line, "_fill" in m.text) for m in r.mismatches], [(2, True)])
+        r = self.app("import engine.book as b\nb._fill()\n")
+        self.assertEqual([(m.line, "_fill" in m.text) for m in r.mismatches], [(3, True)])
 
     def test_a_name_reached_through_the_full_dotted_path(self):
-        r = self.check({"app/main.py": "import engine.book\nengine.book._fill()\n"})
-        self.assertEqual(len(r.mismatches), 1)
+        self.assertEqual(len(self.app("import engine.book\nengine.book._fill()\n").mismatches), 1)
 
     def test_a_file_imported_by_name_then_used(self):
-        r = self.check({"app/main.py": "from engine import book\nbook._fill()\nbook.Book()\n"})
-        self.assertEqual([m.line for m in r.mismatches], [2])
+        r = self.app("from engine import book\nbook._fill()\nbook.Book()\n")
+        self.assertEqual([m.line for m in r.mismatches], [3])
 
     def test_inside_a_module_anything_goes(self):
-        r = self.check({"engine/other.py": "from engine.book import _fill\n"})
+        r = self.check({"engine/other.py": mod("engine") + "from engine.book import _fill\n"})
         self.assertEqual(r.mismatches, [])
 
     def test_import_star_is_unknown_not_guessed(self):
-        r = self.check({"app/main.py": "from engine.book import *\n"})
-        self.assertEqual(r.mismatches, [])
-        self.assertEqual(len(r.unknown), 1)
+        r = self.app("from engine.book import *\n")
+        self.assertEqual((r.mismatches, len(r.unknown)), ([], 1))
 
     def test_a_module_passed_around_whole_is_unknown(self):
-        r = self.check({"app/main.py": "import engine.book as b\nrun(b)\n"})
-        self.assertEqual(r.mismatches, [])
-        self.assertEqual([u.line for u in r.unknown], [2])
+        r = self.app("import engine.book as b\nrun(b)\n")
+        self.assertEqual((r.mismatches, [u.line for u in r.unknown]), ([], [3]))
 
     def test_third_party_and_stdlib_are_not_checked(self):
-        r = self.check({"app/main.py": "import os\nfrom httpx import Client\n"})
+        r = self.app("import os\nfrom httpx import Client\n")
         self.assertEqual((r.mismatches, r.unknown), ([], []))
 
-    def test_a_file_in_no_module(self):
+    def test_a_file_with_no_tag(self):
         r = self.check({"loose.py": ""})
         self.assertEqual([m.rel for m in r.mismatches], ["loose.py"])
-        self.assertIn("no module", r.mismatches[0].text)
+        self.assertIn("no codegraph tag", r.mismatches[0].text)
 
-    def test_a_file_in_two_modules(self):
-        decl = {"modules": {
-            "engine": {"files": ["engine/*"], "front_door": ["Book"]},
-            "app": {"files": ["app/*", "engine/book.py"], "front_door": []},
-        }}
-        r = self.check({}, decl)
-        self.assertEqual([m.rel for m in r.mismatches], ["engine/book.py"])
-        self.assertIn("more than one module", r.mismatches[0].text)
+    def test_a_module_with_no_front_door(self):
+        r = self.check({"util/a.py": mod("util")})
+        self.assertTrue(self.has(r.mismatches, "module util", "no front door"))
 
-    def test_a_pattern_that_matches_nothing(self):
-        decl = {"modules": {
-            "engine": {"files": ["engine/*"], "front_door": ["Book"]},
-            "app": {"files": ["app/*"], "front_door": []},
-            "ghost": {"files": ["ghost/*"], "front_door": []},
-        }}
-        r = self.check({}, decl)
-        self.assertTrue(any("ghost" in t and "no files" in t for t in self.texts(r.mismatches)))
+    def test_a_front_door_written_twice(self):
+        r = self.check({"util/a.py": mod("util", "x"), "util/b.py": mod("util", "y")})
+        self.assertTrue(self.has(r.mismatches, "more than one file"))
 
     def test_a_star_stays_in_its_folder(self):
         self.assertTrue(cg.path_match("atp/book.py", "atp/*"))
         self.assertFalse(cg.path_match("atp/engine/book.py", "atp/*"))
         self.assertTrue(cg.path_match("atp/engine/book.py", "atp/**"))
-        self.assertTrue(cg.path_match("main.py", "*.py"))
-        self.assertFalse(cg.path_match("atp/main.py", "*.py"))
 
-    def test_a_test_is_an_outside_caller(self):
-        decl = dict(self.decl, tests={"files": ["tests/*"]})
-        r = self.check({"tests/test_book.py": "from engine.book import _fill\n"}, decl)
+    def test_a_module_test_goes_through_the_front_door_too(self):
+        r = self.check({"tests/test_book.py": "# codegraph: test module engine\n"
+                                              "from engine.book import _fill\n"})
         self.assertEqual([m.rel for m in r.mismatches], ["tests/test_book.py"])
 
-    def test_a_test_declared_inside_a_module_may_reach_in(self):
-        decl = dict(self.decl, tests={"files": ["tests/*"],
-                                      "inside": {"tests/test_book.py": "engine"}})
-        r = self.check({"tests/test_book.py": "from engine.book import _fill\n"}, decl)
+    def test_a_test_through_the_front_door_passes(self):
+        r = self.check({"tests/test_book.py": "# codegraph: test module engine\n"
+                                              "from engine.book import Book\n"})
         self.assertEqual(r.mismatches, [])
 
-    def test_a_test_needs_no_module_of_its_own(self):
-        decl = dict(self.decl, tests={"files": ["tests/*"]})
-        r = self.check({"tests/test_book.py": "from engine.book import Book\n"}, decl)
-        self.assertEqual(r.mismatches, [])
+    def test_a_test_of_something_that_is_not_there(self):
+        r = self.check({"tests/test_x.py": "# codegraph: test module ghost\n"})
+        self.assertTrue(self.has(r.mismatches, "ghost", "not a module"))
 
     def test_the_program_never_imports_a_test(self):
-        decl = dict(self.decl, tests={"files": ["tests/*"]})
         r = self.check({
-            "tests/__init__.py": "",
-            "tests/helpers.py": "def make(): pass\n",
-            "app/main.py": "from tests.helpers import make\n",
-        }, decl)
-        self.assertTrue(any(m.rel == "app/main.py" and "test" in m.text
+            "tests/helpers.py": "# codegraph: test module engine\ndef make(): pass\n",
+            "app/main.py": mod("app") + "from tests.helpers import make\n",
+        })
+        self.assertTrue(any(m.rel == "app/main.py" and "never imports a test" in m.text
                             for m in r.mismatches))
 
-    def test_a_malformed_declaration_says_what_is_wrong(self):
-        with self.assertRaises(cg.DeclarationError) as e:
-            cg.check(self.root, {"modules": {"engine": {"front_door": []}}})
-        self.assertIn("engine", str(e.exception))
 
-
-class ModuleViews(unittest.TestCase):
-    """The page's module view, and the view inside each module, built from
-    the same declaration the check reads."""
+class Layers(Project):
+    """Modules, features and the UI, and which way each may reach."""
 
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.root = Path(self.tmp.name)
-        self.addCleanup(self.tmp.cleanup)
+        super().setUp()
         tree(self.root, {
-            "engine/book.py": "class Book: pass\ndef _fill(): pass\n",
-            "engine/gate.py": "from engine.book import _fill\nfrom util.helpers import h\n",
-            "util/helpers.py": "def h(): pass\n",
-            "app/main.py": (
-                "import sqlite3\n"
-                "from engine.book import Book, _fill\n"
-                "sqlite3.connect('x.db')\n"
-            ),
-            "tests/test_book.py": "from engine.book import Book\n",
+            "members/__init__.py": mod("members", "find, add"),
+            "members/store.py": mod("members") + "def find(): pass\ndef add(): pass\n",
+            "features/join.py": ("# codegraph: feature join in people\n"
+                                 "# codegraph: uses members\n"
+                                 "# codegraph: event signed-up\n"
+                                 "from members.store import add\n"),
         })
-        self.decl = {
-            "modules": {
-                "engine": {"files": ["engine/*"], "front_door": ["Book"]},
-                "app": {"files": ["app/*"], "front_door": []},
-                "util": {"files": ["util/*"], "front_door": ["h"]},
-            },
-            "tests": {"files": ["tests/**"]},
-        }
-        self.g = cg.build(self.root, decl=self.decl, source="declared")
-        self.views = self.g["modules"]["views"]
+
+    def test_a_feature_through_a_declared_module_passes(self):
+        r = self.check({})
+        self.assertEqual(r.mismatches, [])
+
+    def test_a_module_never_calls_a_feature(self):
+        r = self.check({"members/hook.py": mod("members") + "from features.join import x\n"})
+        self.assertTrue(self.has(r.mismatches, "never calls a feature"))
+
+    def test_a_feature_must_say_which_modules_it_uses(self):
+        r = self.check({
+            "billing/__init__.py": mod("billing", "charge") + "def charge(): pass\n",
+            "features/pay.py": ("# codegraph: feature pay in money\n# codegraph: event paid\n"
+                                "from billing import charge\n"),
+        })
+        self.assertTrue(self.has(r.mismatches, "feature pay", "without saying so"))
+
+    def test_a_feature_that_says_it_uses_a_module_it_does_not(self):
+        r = self.check({"features/idle.py": ("# codegraph: feature idle in people\n"
+                                             "# codegraph: uses members\n"
+                                             "# codegraph: event x\n")})
+        self.assertTrue(self.has(r.mismatches, "feature idle", "never does"))
+
+    def test_a_feature_never_calls_another(self):
+        r = self.check({"features/leave.py": ("# codegraph: feature leave in people\n"
+                                              "# codegraph: event left\n"
+                                              "from features.join import x\n")})
+        self.assertTrue(self.has(r.mismatches, "never calls another feature"))
+
+    def test_a_feature_names_its_system(self):
+        r = self.check({"features/x.py": "# codegraph: feature x\n# codegraph: event e\n"})
+        self.assertTrue(self.has(r.mismatches, "feature x", "names no system"))
+
+    def test_a_feature_with_no_trigger(self):
+        r = self.check({"features/x.py": "# codegraph: feature x in people\n"})
+        self.assertTrue(self.has(r.mismatches, "feature x", "no trigger"))
+
+    def test_a_page_that_acts_on_a_feature_is_its_trigger(self):
+        r = self.check({
+            "features/x.py": "# codegraph: feature x in people\n",
+            "ui/home.py": "# codegraph: start page home\nfrom features.x import go\n",
+            "tests/test_ui.py": "# codegraph: test ui home\n",
+        })
+        self.assertEqual(r.mismatches, [])
+
+    def test_a_page_may_show_a_module_through_its_door(self):
+        r = self.check({"ui/home.py": "# codegraph: start page home\nfrom members.store import find\n",
+                        "tests/test_ui.py": "# codegraph: test ui home\n"})
+        self.assertEqual(r.mismatches, [])
+
+    def test_a_page_reaching_past_a_door(self):
+        tree(self.root, {"members/store.py": mod("members") + "def find(): pass\ndef _raw(): pass\n"})
+        r = self.check({"ui/home.py": "# codegraph: start page home\nfrom members.store import _raw\n",
+                        "tests/test_ui.py": "# codegraph: test ui home\n"})
+        self.assertTrue(self.has(r.mismatches, "_raw", "front door"))
+
+    def test_a_page_never_imports_a_page(self):
+        r = self.check({"ui/a.py": "# codegraph: start page a\nfrom ui.b import x\n",
+                        "ui/b.py": "# codegraph: page b\n"})
+        self.assertTrue(self.has(r.mismatches, "never imports another page"))
+
+    def test_a_component_never_contains_a_page(self):
+        r = self.check({"ui/c.py": "# codegraph: component c\nfrom ui.b import x\n",
+                        "ui/b.py": "# codegraph: start page b\n"})
+        self.assertTrue(self.has(r.mismatches, "never contains a page"))
+
+    def test_the_design_system_has_no_wires(self):
+        r = self.check({"ui/button.py": "# codegraph: design system\nfrom members.store import find\n"})
+        self.assertTrue(self.has(r.mismatches, "design system has no wires"))
+
+    def test_the_program_never_imports_tooling(self):
+        r = self.check({"build.py": "# codegraph: tooling\n",
+                        "members/x.py": mod("members") + "import build\n"})
+        self.assertTrue(self.has(r.mismatches, "never imports tooling"))
+
+    def test_only_a_module_reaches_outside(self):
+        r = self.check({"features/join.py": ("# codegraph: feature join in people\n"
+                                             "# codegraph: uses members\n# codegraph: event e\n"
+                                             "import httpx\nfrom members.store import add\n"
+                                             "httpx.get('https://api.example.com/x')\n")})
+        self.assertTrue(self.has(r.mismatches, "api.example.com", "only a module"))
+
+    def test_tooling_and_a_server_may_reach_outside(self):
+        r = self.check({"deploy.py": "# codegraph: tooling\nimport httpx\nhttpx.get('https://x.io')\n",
+                        "features/api.py": ("# codegraph: feature api in people\n"
+                                            "# codegraph: event request\n"
+                                            "from fastapi import FastAPI\napp = FastAPI()\n")})
+        self.assertEqual(r.mismatches, [])
+
+
+class Stores(Project):
+    """A store has one owning module, its shape read from a schema."""
+
+    def setUp(self):
+        super().setUp()
+        tree(self.root, {
+            "members/__init__.py": mod("members", "add"),
+            "members/model.py": (mod("members") + "# codegraph: store members\n"
+                                 "from pydantic import BaseModel\n"
+                                 "class Member(BaseModel):\n    name: str\n    age: int\n"),
+            "members/db.py": mod("members") + "def add(c): c.execute('INSERT INTO members VALUES (?)')\n",
+        })
+
+    def test_the_owner_writes_its_store(self):
+        r = cg.read_map(self.root)
+        self.assertEqual(r.mismatches, [])
+        self.assertEqual(r.stores["members"]["schema"].lines(), ["name: str", "age: int"])
+        self.assertIn(("module:members", "store:members", "writes"), r.wires)
+
+    def test_a_store_with_no_schema(self):
+        r = self.check({"jobs/__init__.py": mod("jobs", "") + "# codegraph: store jobs\n"})
+        self.assertTrue(self.has(r.mismatches, "store jobs", "no schema"))
+
+    def test_a_store_named_after_a_schema_it_cannot_find(self):
+        r = self.check({"jobs/__init__.py": mod("jobs", "") + "# codegraph: store jobs as Job\n"})
+        self.assertTrue(self.has(r.mismatches, "store jobs", "Job"))
+
+    def test_a_store_owned_twice(self):
+        r = self.check({"other/__init__.py": mod("other", "") + "# codegraph: store members\n"})
+        self.assertTrue(self.has(r.mismatches, "store members", "one owning module"))
+
+    def test_another_module_never_writes_it(self):
+        r = self.check({"other/__init__.py": mod("other", "") +
+                        "def x(c): c.execute('UPDATE members SET name = 1')\n"})
+        self.assertTrue(self.has(r.mismatches, "writes store members", "only its owner"))
+
+    def test_a_declared_reader_may_read_it(self):
+        r = self.check({"report/__init__.py": mod("report", "") + "# codegraph: reads members\n"
+                        "def x(c): c.execute('SELECT name FROM members')\n"})
+        self.assertEqual(r.mismatches, [])
+
+    def test_an_undeclared_reader(self):
+        r = self.check({"report/__init__.py": mod("report", "") +
+                        "def x(c): c.execute('SELECT name FROM members')\n"})
+        self.assertTrue(self.has(r.mismatches, "reads store members", "without saying so"))
+
+    def test_a_feature_never_reaches_a_store(self):
+        r = self.check({"features/x.py": ("# codegraph: feature x in people\n# codegraph: event e\n"
+                                          "def go(db): db.collection('members').add({})\n")})
+        self.assertTrue(self.has(r.mismatches, "store members directly"))
+
+    def test_a_collection_that_is_no_store(self):
+        r = self.check({"other/__init__.py": mod("other", "") +
+                        "def x(db): db.collection('ghosts').get()\n"})
+        self.assertTrue(self.has(r.mismatches, "ghosts", "not a declared store"))
+
+
+class Shapes(unittest.TestCase):
+    """Reading a schema's fields, whatever wrote it."""
+
+    def fields(self, rel: str, text: str, name: str | None = None) -> list:
+        found = shapes.schemas_in(rel, text)
+        return next(s for s in found if name is None or s.name == name).fields
+
+    def test_a_dataclass_and_a_typed_dict(self):
+        self.assertEqual(self.fields("a.py", "@dataclass\nclass A:\n    x: int\n    y: str = ''\n"),
+                         [("x", "int"), ("y", "str")])
+        self.assertEqual(self.fields("a.py", "class A(TypedDict):\n    x: list[int]\n"),
+                         [("x", "list[int]")])
+
+    def test_sqlalchemy_columns_and_the_table_they_map(self):
+        found = shapes.schemas_in("m.py", (
+            "class Member(Base):\n    __tablename__ = 'members'\n"
+            "    id = Column(Integer, primary_key=True)\n    name: Mapped[str] = mapped_column()\n"))
+        self.assertEqual((found[0].table, found[0].fields),
+                         ("members", [("id", "Integer"), ("name", "str")]))
+
+    def test_sql_create_table(self):
+        self.assertEqual(self.fields("s.sql", "CREATE TABLE IF NOT EXISTS members (\n"
+                                     "  id INTEGER PRIMARY KEY,\n  name TEXT NOT NULL,\n"
+                                     "  PRIMARY KEY (id)\n);"),
+                         [("id", "INTEGER"), ("name", "TEXT")])
+
+    def test_typescript_interfaces_types_and_zod(self):
+        src = ("export interface Member { id: number; name?: string; onJoin: () => void }\n"
+               "type Service = {\n  date: Date,\n  hymns: string[]\n}\n"
+               "const Paid = z.object({ amount: z.number(), note: z.string().optional() })\n")
+        self.assertEqual(self.fields("t.ts", src, "Member"),
+                         [("id", "number"), ("name", "string"), ("onJoin", "() => void")])
+        self.assertEqual(self.fields("t.ts", src, "Service"), [("date", "Date"), ("hymns", "string[]")])
+        self.assertEqual(self.fields("t.ts", src, "Paid"), [("amount", "number"), ("note", "string")])
+
+    def test_prisma(self):
+        found = shapes.schemas_in("schema.prisma", 'model Member {\n  id Int @id\n  name String\n'
+                                  '  @@map("members")\n}\n')
+        self.assertEqual((found[0].table, found[0].fields),
+                         ("members", [("id", "Int"), ("name", "String")]))
+
+    def test_a_store_finds_its_schema_singular_or_plural(self):
+        found = shapes.schemas_in("a.py", "class Member(BaseModel):\n    x: int\n")
+        self.assertEqual(shapes.find(found, "members").name, "Member")
+        self.assertIsNone(shapes.find(found, "services"))
+        self.assertIsNone(shapes.find(found, "member", exact=True))
+
+
+class PageMap(Project):
+    """Where a person can go: pages, their links, and the start page."""
+
+    def pages(self, files: dict):
+        tree(self.root, dict({"tests/walk.py": "# codegraph: test ui home, members, member\n"}, **files))
+        return cg.read_map(self.root)
+
+    def test_a_link_leads_to_the_page_at_its_route(self):
+        r = self.pages({"web/app/page.tsx": "// codegraph: start page home\n<a href=\"/members\">",
+                        "web/app/members/page.tsx": "// codegraph: page members\n"})
+        self.assertIn(("page:home", "page:members", "leads"), r.wires)
+        self.assertEqual(r.units["page:members"].route, "/members")
+        self.assertFalse(self.has(r.mismatches, "cannot be reached"))
+
+    def test_a_link_with_a_value_filled_in_matches_a_route_with_a_slot(self):
+        r = self.pages({"web/app/page.tsx": "// codegraph: start page home\n"
+                                            "router.push(`/members/${id}`)\n",
+                        "web/app/members/[id]/page.tsx": "// codegraph: page member\n"})
+        self.assertIn(("page:home", "page:member", "leads"), r.wires)
+
+    def test_a_link_built_while_running_cannot_be_told(self):
+        r = self.pages({"web/home.tsx": "// codegraph: start page home at /\n<Link href={url}>"})
+        self.assertTrue(self.has(r.unknown, "builds a link"))
+
+    def test_a_page_nothing_leads_to(self):
+        r = self.pages({"web/home.tsx": "// codegraph: start page home at /\n",
+                        "web/members.tsx": "// codegraph: page members at /members\n"})
+        self.assertTrue(self.has(r.mismatches, "page members", "cannot be reached"))
+
+    def test_no_start_page(self):
+        r = self.pages({"web/home.tsx": "// codegraph: page home at /\n"})
+        self.assertTrue(self.has(r.mismatches, "no page is a start page"))
+
+    def test_a_components_links_belong_to_its_pages(self):
+        if not HAS_SCRIPT:
+            self.skipTest("tree-sitter is not installed")
+        r = self.pages({"web/home.tsx": ("// codegraph: start page home at /\n"
+                                         "import { Nav } from './nav';\n"),
+                        "web/nav.tsx": "// codegraph: component nav\n<a href='/members'>",
+                        "web/members.tsx": "// codegraph: page members at /members\n"})
+        self.assertIn(("page:home", "page:members", "leads"), r.wires)
+
+    def test_a_page_no_ui_test_walks(self):
+        r = self.pages({"web/home.tsx": "// codegraph: start page home at /\n",
+                        "web/about.tsx": "// codegraph: page about at /about\n"})
+        self.assertTrue(self.has(r.mismatches, "no UI test walks page about"))
+
+    def test_routes_from_the_framework(self):
+        self.assertEqual(cg.route_of("app/(shop)/cart/page.tsx"), "/cart")
+        self.assertEqual(cg.route_of("src/pages/index.tsx"), "/")
+        self.assertEqual(cg.route_of("src/pages/api/x.ts"), "")
+        self.assertTrue(cg.route_matches("/docs/a/b", "/docs/[...slug]"))
+        self.assertFalse(cg.route_matches("/members", "/members/[id]"))
+
+
+class Fakes(Project):
+    """A test fakes only what is outside the program, never its own code."""
+
+    def setUp(self):
+        super().setUp()
+        tree(self.root, {"bars/__init__.py": mod("bars", "fetch"),
+                         "bars/feed.py": mod("bars") + "import httpx\ndef fetch(): pass\n"})
+
+    def test_faking_the_repos_own_function(self):
+        r = self.check({"tests/test_feed.py": "# codegraph: test module bars\n"
+                                              "patch('bars.feed.fetch')\n"})
+        self.assertTrue(self.has(r.mismatches, "fakes bars.feed.fetch"))
+
+    def test_faking_what_a_file_takes_from_outside_is_fine(self):
+        r = self.check({"tests/test_feed.py": "# codegraph: test module bars\n"
+                                              "patch('bars.feed.httpx')\n"})
+        self.assertEqual(r.mismatches, [])
+
+
+class MapViews(Project):
+    """The page's map, its page map and the view inside each card, built
+    from the same reading the check makes."""
+
+    def setUp(self):
+        super().setUp()
+        tree(self.root, {
+            "members/__init__.py": mod("members", "find") + "# codegraph: store members\n"
+                                   "import sqlite3\nclass Member(TypedDict):\n    name: str\n"
+                                   "def find(): sqlite3.connect('x.db').execute('INSERT INTO members')\n",
+            "features/join.py": ("# codegraph: feature join in people\n# codegraph: uses members\n"
+                                 "# codegraph: schedule every day\nfrom members import find\n"),
+            "ui/home.py": "# codegraph: start page home at /\nfrom features.join import go\n"
+                          "redirect('/about')\n",
+            "ui/about.py": "# codegraph: page about at /about\nfrom ui.button import b\n",
+            "ui/button.py": "# codegraph: design system\n",
+            "tests/test_walk.py": "# codegraph: test ui home, about\n",
+        })
+        self.g = cg.build(self.root, reading=cg.read_map(self.root))
+        self.views = self.g["map"]["views"]
 
     def edge(self, view, src, dst):
         return next((e for e in self.views[view]["edges"]
@@ -620,67 +943,45 @@ class ModuleViews(unittest.TestCase):
     def ids(self, view):
         return {n["id"] for n in self.views[view]["nodes"]}
 
-    def test_one_card_per_module_plus_tests_and_outside(self):
-        self.assertEqual(self.ids("modules"),
-                         {"mod:engine", "mod:app", "mod:util", "mod:(tests)", "svc:sqlite"})
+    def test_one_card_per_unit_store_trigger_and_outside(self):
+        self.assertEqual(self.ids("map"), {
+            "module:members", "feature:join", "page:home", "page:about", "design",
+            "store:members", "trigger:feature:join:0", "svc:sqlite"})
 
-    def test_a_wire_between_modules_carries_the_names_that_cross(self):
-        e = self.edge("modules", "mod:app", "mod:engine")
-        self.assertEqual(e["names"], ["Book", "_fill"])
-        self.assertEqual(e["bad"], ["_fill"])
+    def test_the_wires_say_what_kind_they_are(self):
+        self.assertEqual(self.edge("map", "feature:join", "module:members")["kind"], "uses")
+        self.assertEqual(self.edge("map", "page:home", "feature:join")["kind"], "acts")
+        self.assertEqual(self.edge("map", "module:members", "store:members")["kind"], "writes")
+        self.assertEqual(self.edge("map", "trigger:feature:join:0", "feature:join")["kind"], "starts")
+        self.assertEqual(self.edge("map", "module:members", "svc:sqlite")["kind"], "database")
+        self.assertEqual(self.edge("map", "page:home", "page:about")["kind"], "leads")
 
-    def test_a_wire_knows_which_files_it_comes_from(self):
-        # the arrow lands on the importer, so these are the files to point at
-        self.assertEqual(self.edge("modules", "mod:app", "mod:engine")["via"], ["app.main"])
-        self.assertEqual(self.edge("modules", "mod:app", "svc:sqlite")["via"], ["app.main"])
-        self.assertEqual(self.edge("mod:engine", "mod:app", "engine.book")["via"], ["app.main"])
+    def test_styling_is_no_wire(self):
+        self.assertIsNone(self.edge("map", "page:about", "design"))
 
-    def test_a_wire_from_a_file_needs_no_via(self):
-        self.assertEqual(self.edge("mod:engine", "engine.gate", "engine.book")["via"], [])
+    def test_the_names_that_cross_ride_on_the_wire(self):
+        e = self.edge("map", "feature:join", "module:members")
+        self.assertEqual((e["names"], e["bad"], e["why"]), (["find"], [], []))
 
-    def test_a_clean_wire_has_nothing_bad(self):
-        self.assertEqual(self.edge("modules", "mod:(tests)", "mod:engine")["bad"], [])
+    def test_a_store_card_shows_its_shape(self):
+        card = next(n for n in self.views["map"]["nodes"] if n["id"] == "store:members")
+        self.assertEqual(card["fields"], ["name: str"])
 
-    def test_outside_connections_rise_to_the_module(self):
-        self.assertEqual(self.edge("modules", "mod:app", "svc:sqlite")["kind"], "database")
+    def test_the_page_map_starts_on_the_left(self):
+        col = {n["id"]: n["col"] for n in self.views["pages"]["nodes"]}
+        self.assertLess(col["page:home"], col["page:about"])
+        self.assertEqual(self.g["map"]["top"], ["map", "pages"])
 
-    def test_wires_inside_a_module_do_not_show_at_module_level(self):
-        self.assertIsNone(self.edge("modules", "mod:engine", "mod:engine"))
+    def test_inside_a_feature_its_files_and_its_neighbours(self):
+        self.assertEqual(self.ids("feature:join"), {"features.join", "module:members",
+                                                    "page:home", "trigger:feature:join:0"})
 
-    def test_inside_a_module_its_files_and_its_neighbours(self):
-        self.assertEqual(self.ids("mod:engine"),
-                         {"engine.book", "engine.gate", "mod:app", "mod:util", "mod:(tests)"})
-
-    def cols(self, view):
-        return {n["id"]: n["col"] for n in self.views[view]["nodes"]}
-
-    def own_cols(self, view):
-        return [n["col"] for n in self.views[view]["nodes"] if n.get("own")]
-
-    def test_inside_a_module_its_own_files_are_marked(self):
-        own = {n["id"] for n in self.views["mod:engine"]["nodes"] if n.get("own")}
-        self.assertEqual(own, {"engine.book", "engine.gate"})
-
-    def test_modules_it_uses_sit_left_of_its_files(self):
-        col = self.cols("mod:engine")
-        self.assertLess(col["mod:util"], min(self.own_cols("mod:engine")))
-        self.assertEqual(self.views["mod:engine"]["columns"][col["mod:util"]]["label"], "uses")
-
-    def test_modules_that_use_it_sit_right_of_its_files(self):
-        col = self.cols("mod:engine")
-        for m in ("mod:app", "mod:(tests)"):
-            self.assertGreater(col[m], max(self.own_cols("mod:engine")), m)
-        self.assertEqual(self.views["mod:engine"]["columns"][col["mod:app"]]["label"], "used by")
-
-    def test_outside_connections_sit_furthest_left(self):
-        col = self.cols("mod:app")
-        self.assertEqual(col["svc:sqlite"], 0)
-        self.assertLess(col["svc:sqlite"], col["mod:engine"])
-        self.assertLess(col["mod:engine"], min(self.own_cols("mod:app")))
-
-    def test_inside_a_module_the_bad_wire_lands_on_the_file(self):
-        self.assertEqual(self.edge("mod:engine", "mod:app", "engine.book")["bad"], ["_fill"])
-        self.assertEqual(self.edge("mod:engine", "engine.gate", "engine.book")["bad"], [])
+    def test_a_broken_rule_turns_the_wire_red(self):
+        tree(self.root, {"members/hook.py": mod("members") + "from features.join import go\n"})
+        g = cg.build(self.root, reading=cg.read_map(self.root))
+        e = next(e for e in g["map"]["views"]["map"]["edges"]
+                 if (e["from"], e["to"]) == ("module:members", "feature:join"))
+        self.assertTrue(e["why"])
 
     def test_every_view_is_placed_and_closed(self):
         for name, view in self.views.items():
@@ -691,64 +992,98 @@ class ModuleViews(unittest.TestCase):
                 self.assertIn(e["from"], ids, name)
                 self.assertIn(e["to"], ids, name)
 
-    def test_the_card_says_what_the_module_is(self):
-        card = next(n for n in self.views["modules"]["nodes"] if n["id"] == "mod:engine")
-        self.assertEqual(card["files"], ["engine.book", "engine.gate"])
-        self.assertEqual(card["door"], ["Book"])
+    def test_the_findings_travel_with_the_page(self):
+        self.assertEqual((self.g["map"]["source"], self.g["map"]["mismatches"]), ("tags", []))
 
-    def test_the_mismatches_travel_with_the_page(self):
-        self.assertEqual(self.g["modules"]["source"], "declared")
-        self.assertEqual(len(self.g["modules"]["mismatches"]), 1)
+    def test_the_summary_for_the_mod(self):
+        s = cg.summary(self.g)
+        self.assertEqual(s["systems"][0]["name"], "people")
+        self.assertEqual(s["systems"][0]["features"][0]["triggers"], ["schedule every day"])
+        self.assertEqual(s["stores"][0]["fields"], ["name: str"])
+        self.assertTrue(s["svg"].startswith("<svg"))
 
-    def test_no_declaration_no_module_views(self):
-        self.assertNotIn("modules", cg.build(self.root))
+    def test_no_reading_no_map(self):
+        self.assertNotIn("map", cg.build(self.root))
 
 
-class Drafting(unittest.TestCase):
-    """A first declaration, made from what the code does today."""
+class Drafting(Project):
+    """A first set of tags, made from what the code does today."""
 
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.root = Path(self.tmp.name)
-        self.addCleanup(self.tmp.cleanup)
+        super().setUp()
         tree(self.root, {
             "engine/__init__.py": "",
             "engine/book.py": "class Book: pass\ndef _fill(): pass\n",
             "engine/gate.py": "from engine.book import _fill\n",
             "app/__init__.py": "",
-            "app/main.py": "from engine.book import Book\n",
+            "app/main.py": "#!/usr/bin/env python\nfrom engine.book import Book\n",
             "tests/test_book.py": "from engine.book import _fill\n",
+            "setup.py": "",
         })
-        self.decl = cg.draft(self.root)
+        self.drafts = cg.draft_tags(self.root)
 
-    def test_one_module_per_folder(self):
-        self.assertEqual(sorted(self.decl["modules"]), ["app", "engine"])
-        self.assertEqual(self.decl["modules"]["engine"]["files"], ["engine/*"])
+    def test_one_module_per_folder_with_its_door_on_the_folders_own_file(self):
+        self.assertEqual(self.drafts["engine/book.py"], ["module engine"])
+        self.assertEqual(self.drafts["engine/__init__.py"], ["module engine", "front door Book"])
 
-    def test_the_front_door_is_what_the_program_uses_today(self):
-        self.assertEqual(self.decl["modules"]["engine"]["front_door"], ["Book"])
+    def test_tests_and_tooling_are_found_by_their_names(self):
+        self.assertEqual(self.drafts["tests/test_book.py"], ["test module engine"])
+        self.assertEqual(self.drafts["setup.py"], ["tooling"])
 
     def test_a_generic_folder_name_gives_way_to_its_parent(self):
-        tree(self.root, {
-            "packages/core/src/index.py": "", "packages/web/src/main.py": "",
-            "packages/web/build.py": "",
-        })
-        names = {n: m["files"] for n, m in cg.draft(self.root)["modules"].items()}
-        self.assertEqual(names["core"], ["packages/core/src/*"])
+        tree(self.root, {"packages/core/src/index.py": "", "packages/web/src/main.py": "",
+                         "packages/web/build.py": ""})
+        d = cg.draft_tags(self.root)
+        self.assertEqual(d["packages/core/src/index.py"][0], "module core")
         # two folders that would both be "web" keep their paths apart
-        self.assertEqual(names["packages/web/src"], ["packages/web/src/*"])
-        self.assertEqual(names["packages/web"], ["packages/web/*"])
+        self.assertEqual(d["packages/web/src/main.py"][0], "module packages/web/src")
 
-    def test_tests_are_found_by_their_names(self):
-        self.assertEqual(self.decl["tests"]["files"], ["tests/**"])
-        self.assertNotIn("tests", self.decl["modules"])
+    def test_written_into_the_files_the_draft_passes_except_where_tests_reach_in(self):
+        cg.write_drafts(self.root, self.drafts)
+        self.assertTrue((self.root / "app/main.py").read_text().startswith(
+            "#!/usr/bin/env python\n# codegraph: module app\n"))
+        r = cg.check(self.root)
+        self.assertEqual(sorted({m.rel for m in r.mismatches}), ["tests/test_book.py"])
+        self.assertEqual(cg.draft_tags(self.root), {})          # nothing left to tag
 
-    def test_the_draft_passes_except_where_tests_reach_in(self):
-        r = cg.check(self.root, self.decl)
-        self.assertEqual([m.rel for m in r.mismatches], ["tests/test_book.py"])
+    def test_a_feature_folder_and_the_ui(self):
+        if not HAS_SCRIPT:
+            self.skipTest("tree-sitter is not installed")
+        tree(self.root, {
+            "src/features/calendar/plan.ts": 'import { Book } from "../../../engine/book";\n',
+            "src/app/page.tsx": 'import { plan } from "../features/calendar/plan";\n',
+            "src/app/members/page.tsx": "",
+            "src/components/PeoplePicker.tsx": "",
+            "src/components/ui/button.tsx": "",
+            "e2e/walk.spec.ts": 'import { test } from "@playwright/test";\n',
+        })
+        d = cg.draft_tags(self.root)
+        self.assertEqual(d["src/features/calendar/plan.ts"][0], "feature plan in calendar")
+        self.assertEqual(d["src/app/page.tsx"], ["start page home"])
+        self.assertEqual(d["src/app/members/page.tsx"], ["page members"])
+        self.assertEqual(d["src/components/PeoplePicker.tsx"], ["component people-picker"])
+        self.assertEqual(d["src/components/ui/button.tsx"], ["design system"])
+        self.assertEqual(d["e2e/walk.spec.ts"], ["test ui"])
+
+    def test_an_old_declaration_seeds_the_modules(self):
+        (self.root / "codegraph.json").write_text(json.dumps({"modules": {
+            "core": {"files": ["engine/*", "app/*"], "front_door": ["Book", "_fill"]}}}))
+        d = cg.draft_tags(self.root)
+        self.assertEqual(d["app/main.py"], ["module core"])
+        self.assertIn("front door Book, _fill", sum(d.values(), []))
+
+    def test_stores_the_modules_reach(self):
+        tree(self.root, {"engine/db.py": "def save(c): c.execute('INSERT INTO books VALUES (1)')\n",
+                         "app/report.py": "def r(c): c.execute('SELECT * FROM books')\n"})
+        d = cg.draft_tags(self.root)
+        self.assertIn("store books", d["engine/db.py"])
+        self.assertIn("reads books", d["app/report.py"])
+
+    def test_tags_go_after_use_client(self):
+        self.assertEqual(cg.insert_tags('"use client";\nexport {}\n', ["component x"], "//"),
+                         '"use client";\n// codegraph: component x\nexport {}\n')
 
 
-HAS_SCRIPT = any(r.lang == "script" for r in cg.READERS)
 
 
 @unittest.skipUnless(HAS_SCRIPT, "tree-sitter is not installed")
@@ -841,30 +1176,27 @@ class ScriptUses(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
         self.addCleanup(self.tmp.cleanup)
-        tree(self.root, {"core/book.ts": "export class Book {}\nexport function fill() {}\n"})
-        self.decl = {"modules": {
-            "core": {"files": ["core/*"], "front_door": ["Book"]},
-            "app": {"files": ["app/*"], "front_door": []},
-        }}
+        tree(self.root, {"core/book.ts": ("// codegraph: module core\n// codegraph: front door Book\n"
+                                          "export class Book {}\nexport function fill() {}\n")})
 
     def check(self, source: str):
-        tree(self.root, {"app/main.ts": source})
-        return cg.check(self.root, self.decl)
+        tree(self.root, {"app/main.ts": "// codegraph: module app\n// codegraph: front door\n" + source})
+        return cg.check(self.root)
 
     def test_a_named_import_on_the_door_passes(self):
         self.assertEqual(self.check('import { Book } from "../core/book";\n').mismatches, [])
 
     def test_a_named_import_off_the_door_is_a_mismatch(self):
         r = self.check('import { Book, fill as f } from "../core/book";\n')
-        self.assertEqual([("fill" in m.text, m.line) for m in r.mismatches], [(True, 1)])
+        self.assertEqual([("fill" in m.text, m.line) for m in r.mismatches], [(True, 3)])
 
     def test_a_namespace_import_is_read_by_what_it_touches(self):
         r = self.check('import * as book from "../core/book";\nnew book.Book();\nbook.fill();\n')
-        self.assertEqual([m.line for m in r.mismatches], [3])
+        self.assertEqual([m.line for m in r.mismatches], [5])
 
     def test_a_namespace_handed_around_whole_cannot_be_told(self):
         r = self.check('import * as book from "../core/book";\nkeep(book);\n')
-        self.assertEqual((r.mismatches, [u.line for u in r.unknown]), ([], [2]))
+        self.assertEqual((r.mismatches, [u.line for u in r.unknown]), ([], [4]))
 
     def test_a_default_import_uses_default(self):
         r = self.check('import Book from "../core/book";\n')
@@ -874,6 +1206,10 @@ class ScriptUses(unittest.TestCase):
         self.assertTrue(cg.looks_like_test("src/book.test.ts"))
         self.assertTrue(cg.looks_like_test("src/book.spec.tsx"))
         self.assertFalse(cg.looks_like_test("src/book.ts"))
+
+    def test_faking_the_repos_own_file(self):
+        tree(self.root, {"core/book.test.ts": "// codegraph: test module core\nvi.mock('./book');\n"})
+        self.assertTrue(any("fakes ./book" in m.text for m in cg.check(self.root).mismatches))
 
 
 @unittest.skipUnless(HAS_SCRIPT, "tree-sitter is not installed")

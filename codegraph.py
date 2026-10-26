@@ -30,11 +30,13 @@ import json
 import re
 import sys
 from collections import defaultdict, deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from fnmatch import fnmatchcase
 from pathlib import Path
 from urllib.parse import urlsplit
+
+import shapes
 
 SKIP_DIRS = {
     ".git", ".hg", ".svn", ".venv", "venv", "env", "__pycache__", "node_modules",
@@ -59,6 +61,16 @@ KINDS = {
     "cloud":    {"label": "cloud service", "hue": 240, "dash": "7 4", "width": 1.5},
     "process":  {"label": "starts a process", "hue": 15, "dash": "10 5", "width": 1.6},
     "env":      {"label": "environment", "hue": 95, "dash": "3 3", "width": 1.4},
+    # the map's own wires, between what files belong to (CONTEXT.md, Wires).
+    # head says where the arrowhead sits: where information arrives.
+    "uses":     {"label": "uses", "hue": 150, "dash": "", "width": 1.6, "head": "both"},
+    "informed": {"label": "informed by", "hue": 200, "dash": "", "width": 1.3, "head": "from"},
+    "acts":     {"label": "acts on", "hue": 285, "dash": "", "width": 1.6, "head": "both"},
+    "contains": {"label": "contains", "hue": 305, "dash": "2 3", "width": 1.2, "head": "to"},
+    "starts":   {"label": "starts", "hue": 45, "dash": "", "width": 1.6, "head": "to"},
+    "writes":   {"label": "writes", "hue": 180, "dash": "", "width": 1.8, "head": "to"},
+    "reads":    {"label": "reads", "hue": 180, "dash": "4 3", "width": 1.4, "head": "from"},
+    "leads":    {"label": "leads to", "hue": 330, "dash": "", "width": 1.5, "head": "to"},
 }
 
 OUTSIDE = "(outside)"
@@ -898,8 +910,8 @@ def files_in(root: Path, hidden: bool = False) -> list:
 
 def build(root: Path, externals: bool = False, hidden: bool = False,
           outside: bool = True, layout: str = "file",
-          keep_empty: bool = False, decl: dict | None = None,
-          source: str = "declared") -> dict:
+          keep_empty: bool = False, reading: "Reading | None" = None,
+          source: str = "tags") -> dict:
     files = files_in(root, hidden)
     index = {m.name: m for m in files}
 
@@ -999,8 +1011,11 @@ def build(root: Path, externals: bool = False, hidden: bool = False,
         "edges": wires,
         "externals_seen": dict(sorted(ext_hits.items(), key=lambda kv: (-kv[1], kv[0]))),
     }
-    if decl is not None:
-        graph["modules"] = module_views(root, graph, decl, hidden, source)
+    if reading is not None:
+        graph["map"] = map_views(root, graph, reading, source)
+        seen = set(used) | {e["kind"] for v in graph["map"]["views"].values()
+                            for e in v["edges"]}
+        graph["kinds"] = {k: KINDS[k] for k in KINDS if k in seen}
     return graph
 
 
@@ -1234,6 +1249,47 @@ def place_inside(nodes: list, pairs: list, own: set, pinned: list) -> tuple:
     return col, order_rows(columns, pairs), [{"label": l} for l in labels]
 
 
+MAP_BANDS = (("outside", "outside"), ("store", "stores"), ("module", "modules"),
+             ("feature", "features"), ("trigger", "triggers"), ("component", "UI"),
+             ("page", "pages"))
+
+
+def place_map(nodes: list, pairs: list) -> tuple:
+    """Lay out the map in bands, left to right as data flows to a person:
+    outside connections, stores, modules, features, triggers, the pieces of
+    UI, then pages. Modules that use other modules sit right of them."""
+    band_of = {"external": "outside", "design": "component", "loose": "page"}
+    kinds = {n["id"]: band_of.get(n["kind"], n["kind"]) for n in nodes}
+    mods = [i for i, k in kinds.items() if k == "module"]
+    depth = layer(mods, [(s, d) for s, d in pairs if s in set(mods) and d in set(mods)])
+    deepest = max(depth.values(), default=0)
+
+    col: dict = {}
+    labels: list = []
+    for kind, label in MAP_BANDS:
+        ids = [i for i, k in kinds.items() if k == kind]
+        if not ids:
+            continue
+        if kind == "module":
+            for i in ids:
+                col[i] = len(labels) + deepest - depth[i]      # used on the left
+            labels += [label] + [""] * deepest
+        else:
+            col.update({i: len(labels) for i in ids})
+            labels.append(label)
+    for i in kinds:                                  # anything else, at the end
+        if i not in col:
+            col[i] = len(labels) - 1 if labels else 0
+
+    columns: dict = defaultdict(list)
+    order = {n["id"]: (n["group"], n["label"]) for n in nodes}
+    for i in kinds:
+        columns[col[i]].append(i)
+    for c in columns:
+        columns[c].sort(key=lambda i: order[i])
+    return col, order_rows(columns, pairs), [{"label": l} for l in labels]
+
+
 def place_by_folder(nodes: list, groups: list) -> tuple:
     """The older layout: one column per folder, split when a folder is tall."""
     col, row, labels = {}, {}, []
@@ -1252,23 +1308,153 @@ def place_by_folder(nodes: list, groups: list) -> tuple:
     return mirror(col, row, labels)
 
 
-# ---------------------------------------------------------------- front doors
+# ---------------------------------------------------------------------- tags
 #
-# A declaration names the modules (sets of files) and, for each, the names
-# outside code may use: its front door. The check reads every import back
-# against it. CONTEXT.md has the words; the file looks like
+# Every source file says in a tag what it belongs to (docs/adr/0002): one
+# comment line near its top that starts `codegraph:`. The tags, read
+# together, are the declaration; what the code really does is read back
+# against them. CONTEXT.md has the words.
 #
-#   {"modules": {"engine": {"files": ["atp/engine/*"], "front_door": ["Book"]}},
-#    "tests":   {"files": ["tests/**"], "inside": {"tests/test_book.py": "engine"}}}
+#   # codegraph: module engine                 a file of the engine module
+#   # codegraph: front door Book, tick         once per module
+#   # codegraph: store members as Member       the module owns this store
+#   # codegraph: reads services                and may read this one
+#   // codegraph: feature plan-service in calendar
+#   // codegraph: uses services, members
+#   // codegraph: schedule every day at 08:00
+#   // codegraph: event stripe-paid as PaidEvent
+#   // codegraph: page members at /members     or: start page home at /
+#   // codegraph: component people-picker
+#   // codegraph: design system
+#   # codegraph: test module engine            or: test feature X, test ui home, members
+#   # codegraph: tooling
 
-DECLARATION = "codegraph.json"
+DECLARATION = "codegraph.json"     # the old declaration, read once to seed a draft
+TAG_LINES = 30                     # a tag sits in a file's first lines
 TEST_NAMES = ("test_*.py", "*_test.py", "conftest.py", "*.test.*", "*.spec.*")
-TEST_DIRS = ("tests", "test", "__tests__")
+TEST_DIRS = ("tests", "test", "__tests__", "e2e", "playwright", "cypress")
 GENERIC_FOLDERS = ("src", "lib", "source")
+TOOLING_NAMES = ("*.config.*", "setup.py", "noxfile.py", "tasks.py", "manage.py",
+                 "fabfile.py", "gulpfile.*", "Gruntfile.*", "webpack.*", "rollup.*")
+TOOLING_DIRS = ("scripts", "tools", "bin", "migrations", "alembic")
+
+TAG_RE = re.compile(r"^\s*(?:#|//|/\*+|\*|--|<!--)\s*codegraph:\s*(.*?)\s*(?:\*/|-->)?\s*$")
+NAME = r"([\w.\-/@]+)"
+KINDS_OF_FILE = ("module", "feature", "page", "component", "design", "test", "tooling")
+STATEMENTS = (
+    # (pattern, what it says, the kinds of file that may say it)
+    (re.compile(r"module " + NAME + r"$"), "module", None),
+    (re.compile(r"feature " + NAME + r"(?: in " + NAME + r")?$"), "feature", None),
+    (re.compile(r"(start )?page " + NAME + r"(?: at (\S+))?$"), "page", None),
+    (re.compile(r"component " + NAME + r"$"), "component", None),
+    (re.compile(r"design system$"), "design", None),
+    (re.compile(r"test (module|feature) " + NAME + r"$"), "test", None),
+    (re.compile(r"test (ui)(?: (.+))?$"), "test", None),
+    (re.compile(r"tooling$"), "tooling", None),
+    (re.compile(r"front door\s*(.*)$"), "door", "module"),
+    (re.compile(r"store " + NAME + r"(?: as " + NAME + r")?$"), "store", "module"),
+    (re.compile(r"reads (.+)$"), "reads", "module"),
+    (re.compile(r"uses (.+)$"), "uses", "feature"),
+    (re.compile(r"schedule (.+)$"), "schedule", "feature"),
+    (re.compile(r"event " + NAME + r"(?: as " + NAME + r")?$"), "event", "feature"),
+)
 
 
-class DeclarationError(ValueError):
-    """The declaration is malformed, so there is nothing to check against."""
+def _names(text: str) -> list:
+    return [n.strip() for n in text.split(",") if n.strip() and n.strip() != "none"]
+
+
+@dataclass
+class Tag:
+    """What one file's tags say."""
+    kind: str = ""
+    name: str = ""
+    line: int = 0
+    system: str = ""
+    door: list | None = None          # a module's front door, on one of its files
+    stores: list = field(default_factory=list)     # [(store, schema or "", line)]
+    reads: list = field(default_factory=list)
+    uses: list = field(default_factory=list)
+    schedules: list = field(default_factory=list)
+    events: list = field(default_factory=list)     # [(event, schema or "")]
+    route: str = ""
+    start: bool = False
+    of: str = ""                      # a test's kind: module, feature or ui
+    walks: list = field(default_factory=list)      # the pages a UI test walks
+    errors: list = field(default_factory=list)     # [(line, text)]
+
+    @property
+    def unit(self) -> str:
+        if self.kind in ("module", "feature", "page", "component"):
+            return self.kind + ":" + self.name
+        return self.kind
+
+
+def read_tags(text: str) -> Tag | None:
+    """The tags in a file's first lines, or None when it has none."""
+    tag, seen, said = Tag(), False, []
+    for no, line in enumerate(text.splitlines()[:TAG_LINES], start=1):
+        m = TAG_RE.match(line)
+        if not m:
+            continue
+        seen, stmt = True, m.group(1)
+        for pattern, what, only in STATEMENTS:
+            hit = pattern.match(stmt)
+            if hit:
+                break
+        else:
+            tag.errors.append((no, "cannot read the tag `codegraph: {}`".format(stmt)))
+            continue
+        if only is None:                                   # says what the file is
+            if tag.kind:
+                tag.errors.append((no, "has two tags saying what it is: {} and {}"
+                                   .format(tag.kind, what)))
+                continue
+            tag.kind, tag.line = what, no
+            g = hit.groups()
+            if what == "feature":
+                tag.name, tag.system = g[0], g[1] or ""
+            elif what == "page":
+                tag.start, tag.name, tag.route = bool(g[0]), g[1], g[2] or ""
+            elif what == "test":
+                tag.of = g[0]
+                tag.name = g[1] if g[0] != "ui" else ""
+                tag.walks = _names(g[1] or "") if g[0] == "ui" else []
+            elif what in ("module", "component"):
+                tag.name = g[0]
+            continue
+        g = hit.groups()
+        if what == "door":
+            tag.door = (tag.door or []) + _names(g[0])
+        elif what == "store":
+            tag.stores.append((g[0], g[1] or "", no))
+        elif what == "reads":
+            tag.reads += _names(g[0])
+        elif what == "uses":
+            tag.uses += _names(g[0])
+        elif what == "schedule":
+            tag.schedules.append(g[0])
+        elif what == "event":
+            tag.events.append((g[0], g[1] or ""))
+        said.append((no, what, only))
+    if not seen:
+        return None
+    for no, what, only in said:
+        if tag.kind != only:
+            tag.errors.append((no, "a {} tag cannot say `{}`; only a {} can".format(
+                tag.kind or "file with no kind", what.replace("door", "front door"), only)))
+    if not tag.kind and not tag.errors:
+        tag.errors.append((1, "has tags but none says what the file is"))
+    return tag
+
+
+def file_tags(f: File) -> Tag | None:
+    try:
+        with open(f.path, encoding="utf-8", errors="replace") as fh:
+            head = "".join(next(fh, "") for _ in range(TAG_LINES))
+    except OSError:
+        return None
+    return read_tags(head)
 
 
 @dataclass(frozen=True)
@@ -1383,35 +1569,72 @@ def read_uses(path: Path, package: str, index: dict) -> list:
     return uses
 
 
-def _strs(value) -> bool:
-    return isinstance(value, list) and all(isinstance(v, str) for v in value)
+# ---------------------------------------------------------------- the rules
+#
+# What an import from one kind of file into another is. A pair that is not
+# here breaks a rule, and WRONG says which.
+
+RELATIONS = {
+    ("module", "module"): "import",
+    ("feature", "module"): "uses",
+    ("page", "module"): "informed", ("component", "module"): "informed",
+    ("page", "feature"): "acts", ("component", "feature"): "acts",
+    ("page", "component"): "contains", ("component", "component"): "contains",
+    ("page", "design"): None, ("component", "design"): None, ("design", "design"): None,
+}
+UI_KINDS = ("page", "component", "design")
 
 
-def validate(decl) -> None:
-    """Refuse a declaration that cannot mean anything, and say why."""
-    if not isinstance(decl, dict):
-        raise DeclarationError("the declaration must be a JSON object")
-    mods = decl.get("modules")
-    if not isinstance(mods, dict) or not mods:
-        raise DeclarationError('the declaration needs "modules", naming at least one')
-    for name, m in mods.items():
-        if not isinstance(m, dict) or not _strs(m.get("files")):
-            raise DeclarationError('module "{}" needs "files": a list of path patterns'
-                                   .format(name))
-        if not _strs(m.get("front_door", [])):
-            raise DeclarationError('module "{}": "front_door" must be a list of names'
-                                   .format(name))
-    tests = decl.get("tests", {})
-    if not isinstance(tests, dict) or not _strs(tests.get("files", [])):
-        raise DeclarationError('"tests" needs "files": a list of path patterns')
-    for rel, home in tests.get("inside", {}).items():
-        if home not in mods:
-            raise DeclarationError('test {} is declared inside "{}", which is not a module'
-                                   .format(rel, home))
+def relation(a: str, b: str) -> tuple:
+    """(wire kind, rule broken) for an import from a file of kind a into one
+    of kind b. Tests and tooling stand outside the program, so nothing they
+    import is a wire, and nothing in the program may import them."""
+    if a in ("test", "tooling"):
+        return None, None
+    if b == "test":
+        return None, "the program never imports a test"
+    if b == "tooling":
+        return None, "the program never imports tooling"
+    if (a, b) in RELATIONS:
+        return RELATIONS[(a, b)], None
+    if a == "module":
+        return None, "a module never calls a feature or the UI"
+    if a == "feature":
+        return None, ("a feature never calls another feature; share the work "
+                      "through a module" if b == "feature" else
+                      "a feature never reaches into the UI")
+    if a == "design":
+        return None, ("the design system has no wires; a piece that needs data or "
+                      "starts a feature is a component")
+    if b == "page":
+        return None, ("a page never imports another page; share the piece as a "
+                      "component, or link to the page" if a == "page" else
+                      "a component never contains a page")
+    return None, "{} to {} is not a wire codegraph knows".format(a, b)
 
 
-def _sorted(findings: list) -> list:
-    return sorted(set(findings))
+@dataclass
+class Unit:
+    """A module, feature, page or component, or the design system: the files
+    whose tags name it, and what those tags say about it."""
+    id: str
+    kind: str
+    name: str
+    files: list = field(default_factory=list)
+    door: set | None = None
+    door_at: list = field(default_factory=list)
+    system: str = ""
+    uses: set = field(default_factory=set)
+    reads: set = field(default_factory=set)
+    schedules: list = field(default_factory=list)
+    events: list = field(default_factory=list)
+    route: str = ""
+    start: bool = False
+
+    @property
+    def label(self) -> str:
+        return "the design system" if self.kind == "design" else \
+            "{} {}".format(self.kind, self.name)
 
 
 @dataclass(frozen=True)
@@ -1419,185 +1642,659 @@ class Crossing:
     """One name one module takes from another."""
     src: str             # dotted name of the file that uses it
     dst: str             # dotted name of the file it comes from
-    there: str           # the module it comes from
+    there: str           # the unit it comes from
     name: str
     ok: bool             # on that module's front door
 
 
 @dataclass
 class Reading:
-    """The code, read against a declaration. The check and the page's module
-    views both start here, so they cannot disagree."""
+    """The code, read against its tags. The check and the page's map views
+    both start here, so they cannot disagree."""
     files: list
-    owner: dict          # file -> module; a test declared inside one counts
+    tags: dict           # file -> Tag
+    owner: dict          # file -> unit id
+    units: dict          # unit id -> Unit
     tests: set
     mismatches: list
     unknown: list
     crossings: list
+    bad: dict            # (unit, unit) -> the rules an import between them breaks
+    wires: list          # (from, to, kind): writes, reads, starts and leads
+    stores: dict         # store -> {"owner", "readers", "schema", "rel"}
+    triggers: list       # schedules and events, each a card of its own
 
 
-def read_against(root: Path, decl: dict, hidden: bool = False) -> Reading:
-    validate(decl)
-    mods = decl["modules"]
-    tests = decl.get("tests", {})
-    test_pats, inside = tests.get("files", []), tests.get("inside", {})
-    door = {n: set(m.get("front_door", [])) for n, m in mods.items()}
+def _sorted(findings: list) -> list:
+    return sorted(set(findings))
 
+
+# Data calls that name a store. How: writes, reads, or touches when a call
+# could do either.
+STORE_CALLS = (
+    (re.compile(r"\bINSERT\s+(?:OR\s+\w+\s+)?INTO\s+[`\"\[]?(\w+)", re.I), "writes"),
+    (re.compile(r"\bREPLACE\s+INTO\s+[`\"\[]?(\w+)", re.I), "writes"),
+    (re.compile(r"\bUPDATE\s+[`\"\[]?(\w+)[`\"\]]?\s+SET\b", re.I), "writes"),
+    (re.compile(r"\bDELETE\s+FROM\s+[`\"\[]?(\w+)", re.I), "writes"),
+    (re.compile(r"\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`\"\[]?(\w+)", re.I), "writes"),
+    (re.compile(r"\bSELECT\b[^;'\"`]{0,400}?\bFROM\s+[`\"\[]?(\w+)", re.I), "reads"),
+    (re.compile(r"\bJOIN\s+[`\"\[]?(\w+)"), "reads"),
+    (re.compile(r"\.\s*(?:collection|get_collection|getCollection|table)\(\s*['\"`]([\w\-]+)['\"`]"),
+     "touches"),
+    (re.compile(r"\bsupabase\w*\s*\.\s*from\(\s*['\"`]([\w\-]+)['\"`]"), "touches"),
+)
+NOT_STORES = {"sqlite_master", "sqlite_schema", "information_schema", "dual", "pg_catalog"}
+
+
+def store_calls(text: str) -> list:
+    """(store, how, line) for every data call naming a store, first per store."""
+    out, seen = [], set()
+    for regex, how in STORE_CALLS:
+        for m in regex.finditer(text):
+            name = m.group(1)
+            if name.lower() in NOT_STORES or (name, how) in seen:
+                continue
+            seen.add((name, how))
+            out.append((name, how, text.count("\n", 0, m.start()) + 1))
+    return out
+
+
+# Links a page or component follows, as written in its code.
+LINK_RES = (
+    re.compile(r"""\b(?:href|to)\s*=\s*\{?\s*(["'`])(.*?)\1"""),
+    re.compile(r"""\b(?:navigate|navigateTo|push|replace|redirect|goto)\(\s*(["'`])(.*?)\1"""),
+)
+BUILT_LINK_RES = (
+    re.compile(r"""\b(?:href|to)\s*=\s*\{\s*(?![\s"'`])"""),
+    re.compile(r"""\b(?:router\.push|router\.replace|navigate|redirect)\(\s*(?![\s"'`)])"""),
+)
+
+
+def page_links(text: str) -> list:
+    """(link, line) for each link written out, and (None, line) for each one
+    built while the program runs, which cannot be followed."""
+    out = []
+    for regex in LINK_RES:
+        for m in regex.finditer(text):
+            link = m.group(2)
+            if link.startswith("/") and not link.startswith("//"):
+                out.append((link, text.count("\n", 0, m.start()) + 1))
+    for regex in BUILT_LINK_RES:
+        for m in regex.finditer(text):
+            out.append((None, text.count("\n", 0, m.start()) + 1))
+    return out
+
+
+def route_of(rel: str) -> str:
+    """The route a framework gives a page file: Next.js app/ and pages/."""
+    parts = rel.split("/")
+    stem = parts[-1].rsplit(".", 1)[0]
+    folders = parts[:-1]
+    if "app" in folders and stem == "page":
+        i = len(folders) - 1 - folders[::-1].index("app")
+        segs = [p for p in folders[i + 1:] if not (p.startswith("(") and p.endswith(")"))
+                and not p.startswith("@")]
+        return "/" + "/".join(segs)
+    if "pages" in folders:
+        i = len(folders) - 1 - folders[::-1].index("pages")
+        segs = folders[i + 1:] + ([] if stem == "index" else [stem])
+        if stem.startswith("_") or (segs and segs[0] == "api"):
+            return ""
+        return "/" + "/".join(segs)
+    return ""
+
+
+def _segs(path: str) -> list:
+    path = re.split(r"[?#]", path)[0].strip("/")
+    return path.split("/") if path else []
+
+
+def route_matches(link: str, route: str) -> bool:
+    """Does a written link land on a page's route? `[id]` and `:id` take any
+    one part, `[...rest]` the rest, and `${...}` in the link stands for any."""
+    a, b = _segs(link), _segs(route)
+    for i, r in enumerate(b):
+        if r.startswith("[...") or r.startswith("[[..."):
+            return len(a) >= i
+        if i >= len(a):
+            return False
+        if not (r.startswith("[") or r.startswith(":") or "${" in a[i] or a[i] == r):
+            return False
+    return len(a) == len(b)
+
+
+FAKE_PY = re.compile(r"""\b(?:patch|setattr)\(\s*["']([A-Za-z_][\w.]*)["']""")
+FAKE_JS = re.compile(r"""\b(?:jest|vi)\s*\.\s*(?:mock|doMock|unstable_mockModule)\(\s*["']([^"']+)["']""")
+
+
+def _defined(path: Path) -> set:
+    """The names a Python file defines at its top level."""
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, SyntaxError, ValueError):
+        return set()
+    out = set()
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            out.add(node.name)
+        elif isinstance(node, ast.Assign):
+            out |= {t.id for t in node.targets if isinstance(t, ast.Name)}
+    return out
+
+
+def fakes(f: File, text: str, index: dict) -> list:
+    """(what, line) for each piece of the repo's own code a test fakes. Faking
+    what a file imports from outside, `patch("app.bars.httpx")`, is fine."""
+    out = []
+    if f.lang == "python":
+        for m in FAKE_PY.finditer(text):
+            parts = m.group(1).split(".")
+            for i in range(len(parts), 0, -1):
+                head = ".".join(parts[:i])
+                if head in index:
+                    rest = parts[i:]
+                    if not rest or rest[0] in _defined(index[head].path):
+                        out.append((m.group(1), text.count("\n", 0, m.start()) + 1))
+                    break
+    else:
+        reader = reader_of(f)
+        for m in FAKE_JS.finditer(text):
+            hit = reader.land(m.group(1), f, index)
+            if hit and hit[0] == "file":
+                out.append((m.group(1), text.count("\n", 0, m.start()) + 1))
+    return out
+
+
+def _text(f: File) -> str:
+    try:
+        return f.path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+
+
+def read_map(root: Path, hidden: bool = False, drafted: dict | None = None) -> Reading:
+    """Read the code against its tags, every rule in CONTEXT.md at once.
+
+    `drafted` stands in for the tags of files that have none, by path: how
+    the page draws a codebase nobody has tagged yet.
+    """
     files = files_in(root, hidden)
     index = {f.name: f for f in files}
-    mismatches: list = []
-    unknown: list = []
-    crossings: list = []
-
-    is_test = {f.name for f in files if _any_match(f.rel, test_pats)}
+    mis: list = []
+    unk: list = []
+    tags: dict = {}
     owner: dict = {}
-    claimed: dict = defaultdict(int)
-    for f in files:
-        if f.name in is_test:
-            if f.rel in inside:
-                owner[f.name] = inside[f.rel]
-            continue
-        homes = [n for n, m in mods.items() if _any_match(f.rel, m["files"])]
-        for n in homes:
-            claimed[n] += 1
-        if len(homes) == 1:
-            owner[f.name] = homes[0]
-        elif not homes:
-            mismatches.append(Finding(f.rel, 0, "is in no module"))
-        else:
-            mismatches.append(Finding(f.rel, 0, "is in more than one module: "
-                                      + ", ".join(homes)))
-    for n in mods:
-        if not claimed[n]:
-            mismatches.append(Finding(DECLARATION, 0,
-                                      'module "{}" matches no files'.format(n)))
+    units: dict = {}
+    store_tags: list = []
 
+    # ---- what each file says it is
+    for f in files:
+        t = file_tags(f)
+        if t is None and drafted:
+            t = drafted.get(f.rel)
+        if t is None:
+            mis.append(Finding(f.rel, 0, "has no codegraph tag saying what it belongs to"))
+            continue
+        mis += [Finding(f.rel, line, text) for line, text in t.errors]
+        if not t.kind:
+            continue
+        tags[f.name] = t
+        u = units.setdefault(t.unit, Unit(t.unit, t.kind, t.name))
+        u.files.append(f.name)
+        owner[f.name] = u.id
+        if t.door is not None:
+            u.door = (u.door or set()) | set(t.door)
+            u.door_at.append(f.rel)
+        if t.system:
+            if u.system and u.system != t.system:
+                mis.append(Finding(f.rel, t.line, "puts {} in system {}, but another of its "
+                                   "files says {}".format(u.label, t.system, u.system)))
+            u.system = u.system or t.system
+        if t.route:
+            u.route = u.route or t.route
+        u.uses |= set(t.uses)
+        u.reads |= set(t.reads)
+        u.schedules += t.schedules
+        u.events += t.events
+        u.start |= t.start
+        store_tags += [(s, schema, f, line, u.id) for s, schema, line in t.stores]
+
+    tests = {n for n, t in tags.items() if t.kind == "test"}
+
+    def first(u: Unit) -> str:
+        return index[u.files[0]].rel
+
+    # ---- what each unit says about itself
+    for u in units.values():
+        if u.kind == "module":
+            if not u.door_at:
+                mis.append(Finding(first(u), 0, "{} has no front door: add `codegraph: front "
+                                   "door <names>` to one of its files".format(u.label)))
+            for rel in u.door_at[1:]:
+                mis.append(Finding(rel, 0, "{} has its front door written in more than one "
+                                   "file; keep it on one".format(u.label)))
+        if u.kind == "feature":
+            if not u.system:
+                mis.append(Finding(first(u), 0, "{} names no system: write `feature {} in "
+                                   "<system>`".format(u.label, u.name)))
+            for m in sorted(u.uses):
+                if "module:" + m not in units:
+                    mis.append(Finding(first(u), 0, "{} uses {}, which is not a module"
+                                       .format(u.label, m)))
+
+    # ---- stores, and the shapes their schemas give them
+    schemas: list = []
+    for f in files:
+        schemas += shapes.schemas_in(f.rel, _text(f))
+    for p in shapes.schema_files(root, SKIP_DIRS):
+        rel = p.relative_to(root).as_posix()
+        schemas += shapes.schemas_in(rel, p.read_text(encoding="utf-8", errors="replace"))
+
+    stores: dict = {}
+    for s, schema, f, line, uid in store_tags:
+        if s in stores:
+            mis.append(Finding(f.rel, line, "store {} is owned by {} and {}; a store has one "
+                               "owning module".format(s, units[stores[s]["owner"]].label,
+                                                      units[uid].label)))
+            continue
+        found = shapes.find(schemas, schema or s, near=f.rel, exact=bool(schema))
+        if not found:
+            mis.append(Finding(f.rel, line, "store {} {}".format(s, (
+                "names the schema {}, which codegraph cannot find".format(schema) if schema
+                else "has no schema codegraph can read; add one the module checks its "
+                     "data against"))))
+        stores[s] = {"owner": uid, "readers": set(), "schema": found, "rel": f.rel}
+    for u in units.values():
+        for r in sorted(u.reads):
+            if r in stores:
+                stores[r]["readers"].add(u.id)
+            else:
+                mis.append(Finding(first(u), 0, "{} reads store {}, which no module owns"
+                                   .format(u.label, r)))
+    lower = {s.lower(): s for s in stores}
+
+    # ---- the code itself, file by file
+    crossings: list = []
+    bad: dict = defaultdict(list)
+    acted: set = set()
+    contains: dict = defaultdict(set)
+    used: dict = defaultdict(set)
+    links: dict = defaultdict(set)
+    built_links = False
     for f in files:
         here = owner.get(f.name)
-        for u in reader_of(f).uses(f, index):
-            if u.target in is_test and f.name not in is_test:
-                mismatches.append(Finding(f.rel, u.line, "imports a test, "
-                                          + index[u.target].rel))
+        if here is None:
+            continue
+        me, kind, text = units[here], units[here].kind, _text(f)
+        reader = reader_of(f)
+        uses = reader.uses(f, index)
+        line_of: dict = {}
+        for u in uses:
+            line_of.setdefault(u.target, u.line)
+        targets = dict.fromkeys(l.target for l in reader.links(f, index) if l.target)
+
+        for tgt in targets:
+            there = owner.get(tgt)
+            if there is None or there == here:
                 continue
+            them = units[there]
+            wire, wrong = relation(kind, them.kind)
+            line = line_of.get(tgt, 0)
+            if wrong:
+                mis.append(Finding(f.rel, line, "imports {} from {}: {}".format(
+                    index[tgt].rel, them.label, wrong)))
+                bad[(here, there)].append(wrong)
+            if wire == "acts":
+                acted.add(there)
+            elif wire == "contains":
+                contains[here].add(there)
+            elif wire == "uses":
+                used[here].add(them.name)
+                if them.name not in me.uses:
+                    wrong = "uses {} without saying so; add it to `uses`".format(them.label)
+                    mis.append(Finding(f.rel, line, "{} {}".format(me.label, wrong)))
+                    bad[(here, there)].append(wrong)
+
+        for u in uses:
             there = owner.get(u.target)
-            if there is None or there == here or u.target in is_test:
+            if there is None or there == here or kind == "tooling" or \
+                    units[there].kind != "module":
                 continue
             if u.name is None:
-                unknown.append(Finding(f.rel, u.line, "uses {} in a way that cannot be "
-                                       "read ({})".format(there, u.why)))
+                unk.append(Finding(f.rel, u.line, "uses {} in a way that cannot be read ({})"
+                                   .format(units[there].label, u.why)))
                 continue
-            ok = u.name in door[there]
+            ok = u.name in (units[there].door or set())
             crossings.append(Crossing(f.name, u.target, there, u.name, ok))
             if not ok:
-                mismatches.append(Finding(f.rel, u.line, "uses {} from {}, which is not "
-                                          "on its front door".format(u.name, there)))
+                mis.append(Finding(f.rel, u.line, "uses {} from {}, which is not on its front "
+                                   "door".format(u.name, units[there].label)))
 
-    return Reading(files, owner, is_test, _sorted(mismatches), _sorted(unknown),
-                   crossings)
+        if kind in ("test", "tooling"):
+            if kind == "test":
+                for what, line in fakes(f, text, index):
+                    mis.append(Finding(f.rel, line, "fakes {}, code in the repo; a test fakes "
+                                       "only outside connections".format(what)))
+            continue
+
+        if kind != "module":
+            for conn in reader.outside(f):
+                if conn.kind != "serves":
+                    mis.append(Finding(f.rel, 0, "reaches {} ({}); only a module reaches an "
+                                       "outside connection".format(conn.label,
+                                                                   KINDS[conn.kind]["label"])))
+
+        for name, how, line in store_calls(text):
+            s = lower.get(name.lower())
+            if s is None:
+                mis.append(Finding(f.rel, line, "reaches {}, which is not a declared store; tag "
+                                   "its schema in the module that owns it with `codegraph: "
+                                   "store {}`".format(name, name)))
+            elif kind != "module":
+                mis.append(Finding(f.rel, line, "reaches store {} directly; only a module reaches "
+                                   "a store, so go through {}".format(
+                                       s, units[stores[s]["owner"]].label)))
+            elif here == stores[s]["owner"]:
+                continue
+            elif how == "writes":
+                mis.append(Finding(f.rel, line, "writes store {}, which {} owns; only its owner "
+                                   "writes".format(s, units[stores[s]["owner"]].label)))
+            elif here not in stores[s]["readers"]:
+                mis.append(Finding(f.rel, line, "reads store {} without saying so; add `codegraph: "
+                                   "reads {}`, or go through {}".format(
+                                       s, s, units[stores[s]["owner"]].label)))
+
+        if kind in ("page", "component"):
+            for link, line in page_links(text):
+                if link is None:
+                    built_links = True
+                    unk.append(Finding(f.rel, line, "builds a link while it runs; where it "
+                                       "leads cannot be told"))
+                else:
+                    links[here].add((link, f.rel, line))
+
+    # ---- features: what they said they use, and what starts them
+    triggers: list = []
+    for u in units.values():
+        if u.kind != "feature":
+            continue
+        for m in sorted(u.uses - used[u.id]):
+            if "module:" + m in units:
+                mis.append(Finding(first(u), 0, "{} says it uses module {} but never does"
+                                   .format(u.label, m)))
+        if not (u.schedules or u.events or u.id in acted):
+            mis.append(Finding(first(u), 0, "{} has no trigger: no page acts on it, and it "
+                               "has no schedule or event".format(u.label)))
+        for i, timing in enumerate(u.schedules):
+            triggers.append({"id": "trigger:{}:{}".format(u.id, i), "kind": "schedule",
+                             "label": timing, "feature": u.id, "fields": []})
+        for i, (event, schema) in enumerate(u.events, start=len(u.schedules)):
+            found = shapes.find(schemas, schema, near=first(u), exact=True) if schema else None
+            if not schema:
+                unk.append(Finding(first(u), 0, "event {} names no schema (`as <Type>`), so what "
+                                   "it carries cannot be shown".format(event)))
+            elif not found:
+                mis.append(Finding(first(u), 0, "event {} names the schema {}, which codegraph "
+                                   "cannot find".format(event, schema)))
+            triggers.append({"id": "trigger:{}:{}".format(u.id, i), "kind": "event",
+                             "label": event, "feature": u.id,
+                             "fields": found.lines() if found else []})
+
+    # ---- tests: what each says it tests
+    walked: set = set()
+    for n in sorted(tests):
+        t, f = tags[n], index[n]
+        if t.of in ("module", "feature"):
+            target = units.get(t.of + ":" + t.name)
+            if target is None:
+                mis.append(Finding(f.rel, t.line, "tests {} {}, which is not a {}".format(
+                    t.of, t.name, t.of)))
+            elif t.of == "feature" and not {l.target for l in reader_of(f).links(f, index)} \
+                    & set(target.files):
+                mis.append(Finding(f.rel, t.line, "is a test of {} but never starts it".format(
+                    target.label)))
+        for p in t.walks:
+            if "page:" + p in units:
+                walked.add("page:" + p)
+            else:
+                mis.append(Finding(f.rel, t.line, "walks page {}, which is not a page".format(p)))
+
+    # ---- pages: where each is, where its links lead, and who walks it
+    pages = {k: u for k, u in units.items() if u.kind == "page"}
+    for u in pages.values():
+        u.route = u.route or next((r for r in (route_of(index[n].rel) for n in u.files) if r), "")
+    leads: dict = defaultdict(set)
+    for p in pages:
+        seen, stack = {p}, [p]
+        while stack:                       # a component's links belong to its pages
+            for c in contains.get(stack.pop(), ()):
+                if c not in seen:
+                    seen.add(c); stack.append(c)
+        for holder in seen:
+            for link, rel, line in links.get(holder, ()):
+                hits = [q for q, v in pages.items() if v.route and route_matches(link, v.route)]
+                if not hits:
+                    unk.append(Finding(rel, line, "links to {}, which no page is at".format(link)))
+                leads[p] |= {q for q in hits if q != p}
+    if pages:
+        starts = [p for p, u in pages.items() if u.start]
+        if not starts:
+            mis.append(Finding(first(min(pages.values(), key=lambda u: u.id)), 0,
+                               "no page is a start page: mark one `codegraph: start page <name>`"))
+        reach, stack = set(starts), list(starts)
+        while stack:
+            for q in leads.get(stack.pop(), ()):
+                if q not in reach:
+                    reach.add(q); stack.append(q)
+        for p in sorted(set(pages) - reach):
+            if starts:
+                (unk if built_links else mis).append(Finding(
+                    first(pages[p]), 0, "{} cannot be reached from a start page by following "
+                    "its links".format(pages[p].label)))
+        for p in sorted(set(pages) - walked):
+            mis.append(Finding(first(pages[p]), 0, "no UI test walks {}; name it in a test's "
+                               "`codegraph: test ui` tag".format(pages[p].label)))
+
+    wires = [(stores[s]["owner"], "store:" + s, "writes") for s in sorted(stores)]
+    wires += [(r, "store:" + s, "reads") for s in sorted(stores)
+              for r in sorted(stores[s]["readers"])]
+    wires += [(t["id"], t["feature"], "starts") for t in triggers]
+    wires += [(p, q, "leads") for p in sorted(leads) for q in sorted(leads[p])]
+
+    return Reading(files, tags, owner, units, tests, _sorted(mis), _sorted(unk), crossings,
+                   dict(bad), wires, stores, triggers)
 
 
-def check(root: Path, decl: dict, hidden: bool = False) -> Report:
-    """Read the code back against a declaration.
-
-    Every program file belongs to exactly one module. Every name one module
-    takes from another is on that module's front door. A test is an outside
-    caller, unless declared inside one module, and the program never imports
-    a test.
-    """
-    r = read_against(root, decl, hidden)
+def check(root: Path, hidden: bool = False) -> Report:
+    """Read the code back against its tags: every file tagged, every name that
+    crosses into a module on its front door, every import one the layers
+    allow, every store reached only by its modules, every page reachable."""
+    r = read_map(root, hidden)
     return Report(r.mismatches, r.unknown)
 
 
-# ------------------------------------------------------------- module views
+# ----------------------------------------------------------------- map views
 #
-# The page's second level: one card per module, wires between them carrying
-# the names that cross, and for each module a view of its own files beside the
-# modules and outside connections they touch.
+# The page's levels. The map: every module, feature, page and component as a
+# card, with the stores, triggers and outside connections they touch, and the
+# wires between them. The pages: where a person can go. Inside each card, its
+# own files beside the cards they touch.
 
-TESTS_CARD, LOOSE_CARD = "(tests)", "(no module)"
+STORES, TRIGGERS, UI_GROUP = "(stores)", "(triggers)", "(ui)"
+NAMED_WIRES = ("import", "lazy", "uses", "informed", "acts", "contains")
+TESTS_CARD, TOOLING_CARD, LOOSE_CARD = "test", "tooling", "(untagged)"
 
 
-def module_views(root: Path, graph: dict, decl: dict, hidden: bool = False,
-                 source: str = "declared") -> dict:
-    r = read_against(root, decl, hidden)
-    mods = decl["modules"]
+def _group(u: Unit) -> str:
+    if u.kind == "feature":
+        return "system:" + (u.system or "?")
+    if u.kind in UI_KINDS:
+        return UI_GROUP
+    return u.id
+
+
+def _about(u: Unit, n: int) -> str:
+    files = "1 file" if n == 1 else "{} files".format(n)
+    if u.kind == "feature":
+        return "{} · {}".format(u.system or "no system", files)
+    if u.kind == "page":
+        return "{}{} · {}".format("start · " if u.start else "", u.route or "page", files)
+    if u.kind in ("component", "design"):
+        return "{} · {}".format("design system" if u.kind == "design" else "component", files)
+    return files
+
+
+def map_views(root: Path, graph: dict, r: Reading, source: str = "tags") -> dict:
     shown = {n["id"]: n for n in graph["nodes"]}
     is_file = {f.name for f in r.files}
+    units = r.units
 
     def card(fid: str) -> str:
         if fid not in is_file:
             return fid                                  # outside or third party
-        if fid in r.owner:
-            return "mod:" + r.owner[fid]
-        return "mod:" + (TESTS_CARD if fid in r.tests else LOOSE_CARD)
+        return r.owner.get(fid, LOOSE_CARD)
 
-    members: dict = defaultdict(list)
-    for n in graph["nodes"]:
-        if n["kind"] == "file":
-            members[card(n["id"])].append(n["id"])
-
-    cards = {}
-    for cid, ids in members.items():
-        name = cid[4:]
-        cards[cid] = {
-            "id": cid, "label": name.strip("()"),
-            "dir": "1 file" if len(ids) == 1 else "{} files".format(len(ids)),
-            "group": name, "lines": sum(shown[i]["lines"] for i in ids),
-            "kind": "module", "files": sorted(ids),
-            "door": sorted(mods.get(name, {}).get("front_door", [])),
+    cards: dict = {}
+    for uid, u in units.items():
+        ids = sorted(n for n in u.files if n in shown)
+        cards[uid] = {
+            "id": uid, "label": u.name or ("design system" if u.kind == "design" else u.kind),
+            "kind": u.kind, "dir": _about(u, len(ids)), "group": _group(u),
+            "lines": sum(shown[i]["lines"] for i in ids), "files": ids,
+            "door": sorted(u.door or ()), "system": u.system, "uses": sorted(u.uses),
+            "route": u.route, "start": u.start,
+            "stores": sorted(s for s, v in r.stores.items() if v["owner"] == uid),
+            "reads": sorted(u.reads),
         }
+    loose = sorted(n["id"] for n in graph["nodes"] if n["kind"] == "file" and card(n["id"]) == LOOSE_CARD)
+    if loose:
+        cards[LOOSE_CARD] = {"id": LOOSE_CARD, "label": "untagged", "kind": "loose",
+                             "dir": "{} files with no tag".format(len(loose)), "group": LOOSE_CARD,
+                             "lines": sum(shown[i]["lines"] for i in loose), "files": loose}
+    for s, v in r.stores.items():
+        schema = v["schema"]
+        cards["store:" + s] = {
+            "id": "store:" + s, "label": s, "kind": "store", "group": STORES, "lines": 0,
+            "dir": "owned by " + units[v["owner"]].name, "files": [],
+            "fields": schema.lines() if schema else [],
+            "schema": "{}:{}".format(schema.rel, schema.line) if schema else "",
+            "owner": v["owner"], "readers": sorted(v["readers"]),
+        }
+    for t in r.triggers:
+        cards[t["id"]] = {"id": t["id"], "label": t["label"], "kind": "trigger",
+                          "group": TRIGGERS, "lines": 0, "dir": t["kind"], "files": [],
+                          "fields": t["fields"], "feature": t["feature"]}
 
-    def view(title: str, unit: str, own: list, mapping) -> dict:
+    def kind_of(e: dict):
+        """The wire an import between two files is, by what the files belong to,
+        and the rules it breaks. None when it is no wire on the map."""
+        k = e["kind"]
+        ua, ub = r.owner.get(e["from"]), r.owner.get(e["to"])
+        if k not in ("import", "lazy") or not ua or not ub or ua == ub:
+            return k, []
+        wire, wrong = relation(units[ua].kind, units[ub].kind)
+        why = r.bad.get((ua, ub), [])
+        if wrong:
+            return "import", why or [wrong]
+        if wire is None:
+            return None, []
+        return (k if wire == "import" else wire), why
+
+    def view(title: str, unit: str, own: list, mapping, keep, group: str = "",
+             inside: str = "") -> dict:
         """Lift the file graph through `mapping`, keep the wires that touch
-        `own`, and lay out what is left."""
+        `own` between cards that `keep` allows, and lay out what is left.
+        Inside a card, its stores and triggers wire to the file that holds
+        the store's tag, else to its first file."""
+        def anchor(other: str) -> str:
+            s = r.stores.get(other[6:]) if other.startswith("store:") else None
+            held = next((f.name for f in r.files if s and f.rel == s["rel"]), None)
+            return held if held in own else own[0]
         wires: dict = {}
         for e in graph["edges"]:
             a, b = mapping(e["from"]), mapping(e["to"])
-            if a == b or not (a in own or b in own):
+            if a == b or not (a in own or b in own) or not (keep(a) and keep(b)):
                 continue
-            wiring = e["kind"] in ("import", "lazy")
-            key = (a, b, "import" if wiring else e["kind"])
-            w = wires.setdefault(key, {"from": a, "to": b, "kind": e["kind"],
-                                       "names": set(), "bad": set(), "via": set()})
-            if w["kind"] == "lazy" and e["kind"] == "import":
+            k, why = kind_of(e)
+            if k is None:
+                continue
+            key = (a, b, "import" if k in ("import", "lazy") else k)
+            w = wires.setdefault(key, {"from": a, "to": b, "kind": k, "names": set(),
+                                       "bad": set(), "via": set(), "why": set()})
+            if w["kind"] == "lazy" and k == "import":
                 w["kind"] = "import"      # a real import beats one in a function
             if a != e["from"]:
                 w["via"].add(e["from"])   # the files on a card this wire comes from
+            w["why"] |= set(why)
+        named: dict = defaultdict(list)
+        for w in wires.values():
+            if w["kind"] in NAMED_WIRES:
+                named[(w["from"], w["to"])].append(w)
         for c in r.crossings:
-            w = wires.get((mapping(c.src), mapping(c.dst), "import"))
-            if w:
+            for w in named.get((mapping(c.src), mapping(c.dst)), ()):
                 w["names"].add(c.name)
                 if not c.ok:
                     w["bad"].add(c.name)
-        edges = [dict(w, names=sorted(w["names"]), bad=sorted(w["bad"]),
-                      via=sorted(w["via"]))
+        for a, b, k in r.wires:
+            if inside:                       # the card's own end lands on one of its files
+                a, b = (anchor(b) if a == inside else a), (anchor(a) if b == inside else b)
+            if (a in own or b in own) and (a in cards or a in own) and                     (b in cards or b in own) and keep(a) and keep(b):
+                wires.setdefault((a, b, k), {"from": a, "to": b, "kind": k, "names": set(),
+                                             "bad": set(), "via": set(), "why": set()})
+        edges = [dict(w, names=sorted(w["names"]), bad=sorted(w["bad"]), via=sorted(w["via"]),
+                      why=sorted(w["why"]))
                  for _, w in sorted(wires.items())]
 
         ids = list(dict.fromkeys(own + [x for w in edges for x in (w["from"], w["to"])]))
         nodes = [dict(cards.get(i) or shown[i]) for i in ids]
-        tail = [g for g in (EXTERNAL, OUTSIDE) if any(n["group"] == g for n in nodes)]
-        pairs = [(w["from"], w["to"]) for w in edges]
+        tail = [g for g in (EXTERNAL, STORES, OUTSIDE) if any(n["group"] == g for n in nodes)]
+        pairs = [(w["from"], w["to"]) for w in edges if w["kind"] != "leads"]
         if unit == "files":
             for n in nodes:
                 n["own"] = n["id"] in own
             col, row, columns = place_inside(nodes, pairs, set(own), tail)
+        elif unit == "pages":
+            col, row, columns = place_by_file(nodes, [(b, a) for a, b in
+                                                      ((w["from"], w["to"]) for w in edges)], [])
         else:
-            col, row, columns = place_by_file(nodes, pairs, tail)
+            col, row, columns = place_map(nodes, pairs)
         for n in nodes:
             n["col"], n["row"] = col[n["id"]], row[n["id"]]
         groups = list(dict.fromkeys(n["group"] for n in nodes if n["group"] not in tail))
         return {"title": title, "unit": unit, "nodes": nodes, "edges": edges,
-                "columns": columns, "groups": groups + tail}
+                "columns": columns, "groups": groups + tail, "group": group}
 
-    views = {"modules": view("Modules", "modules", sorted(cards), card)}
-    for cid, c in cards.items():
-        own = c["files"]
-        views[cid] = view(c["label"], "files", own,
-                          lambda fid, own=set(own): fid if fid in own else card(fid))
+    on_map = [c for c, v in cards.items() if v["kind"] not in ("test", "tooling")]
+    views = {"map": view("Map", "units", sorted(on_map), card,
+                         lambda c: c not in (TESTS_CARD, TOOLING_CARD))}
+    top = ["map"]
+    pages = sorted(c for c, v in cards.items() if v["kind"] == "page")
+    if pages:
+        views["pages"] = view("Pages", "pages", pages, card, lambda c: c in pages)
+        top.append("pages")
+    for cid in on_map:
+        own = cards[cid]["files"]
+        if own:
+            views[cid] = view(cards[cid]["label"], "files", own,
+                              lambda fid, own=set(own): fid if fid in own else card(fid),
+                              lambda c: c not in (TESTS_CARD, TOOLING_CARD),
+                              cards[cid]["group"], cid)
 
-    return {"source": source, "views": views,
+    return {"source": source, "top": top, "views": views,
             "mismatches": [str(m) for m in r.mismatches],
             "unknown": [str(u) for u in r.unknown]}
+
+
+# ------------------------------------------------------------------ drafting
+#
+# A first set of tags, made from what the code does today. Setup writes it
+# into the files, then the agent running setup corrects it by judgment: the
+# draft knows folders and imports, not what the program is for.
+
+DESIGN_DIRS = ("ui", "design-system", "design", "theme", "tokens", "styles", "primitives")
+COMPONENT_DIRS = ("components", "component", "widgets")
+PAGE_DIRS = ("pages", "views", "screens", "routes")
+UI_TEST_HINTS = ("@playwright/test", "cypress", "playwright", "selenium", "puppeteer")
 
 
 def looks_like_test(rel: str) -> bool:
@@ -1606,60 +2303,358 @@ def looks_like_test(rel: str) -> bool:
         any(fnmatchcase(parts[-1], p) for p in TEST_NAMES)
 
 
-def draft(root: Path, hidden: bool = False) -> dict:
-    """A first declaration, made from what the code does today.
+def looks_like_tooling(rel: str) -> bool:
+    parts = rel.split("/")
+    return any(p in TOOLING_DIRS for p in parts[:-1]) or \
+        any(fnmatchcase(parts[-1], p) for p in TOOLING_NAMES)
 
-    One module per folder. Each front door holds the names the program
-    already takes from that folder, so the program passes at once. Tests are
-    found by their names and left outside every module, so any test that
-    reaches past a front door shows up straight away.
+
+def _slug(s: str) -> str:
+    s = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "-", s)
+    return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-") or "x"
+
+
+def _ui_kind(f: File) -> tuple | None:
+    """(kind, name) for a file that draws UI, else None."""
+    parts = f.rel.split("/")
+    folders, stem = parts[:-1], parts[-1].rsplit(".", 1)[0]
+    if stem == "page" and "app" in folders or "pages" in folders and route_of(f.rel):
+        route = route_of(f.rel)
+        name = "home" if route == "/" else _slug(route.replace("[", "").replace("]", ""))
+        return "page", name
+    if f.lang != "script" or not f.rel.endswith((".tsx", ".jsx")):
+        return None
+    name = _slug(folders[-1] if stem == "index" and folders else stem)
+    if any(p in DESIGN_DIRS for p in folders):
+        return "design", ""
+    if any(p in PAGE_DIRS for p in folders):
+        return "page", name
+    if stem in ("App", "app") and not any(p in COMPONENT_DIRS for p in folders):
+        return "page", "app"
+    return "component", name
+
+
+def draft_tags(root: Path, hidden: bool = False) -> dict:
+    """{path: [statements]} for every file that has no tag yet.
+
+    Tests and tooling are found by their names. UI is found by where
+    frameworks put it. A folder named features holds features. The rest is
+    one module per folder, its front door what the program takes across
+    today, so the program passes at once and only what reaches in shows red.
+    An old codegraph.json, if there is one, says the modules instead.
     """
     files = files_in(root, hidden)
     index = {f.name: f for f in files}
+    have = {f.name: file_tags(f) for f in files}
+    todo = [f for f in files if have[f.name] is None]
 
-    tests, program = [], []
-    for f in files:
-        (tests if looks_like_test(f.rel) else program).append(f)
+    seed: dict = {}
+    old = root / DECLARATION
+    if old.exists():
+        try:
+            seed = json.loads(old.read_text(encoding="utf-8")).get("modules", {}) or {}
+        except (ValueError, AttributeError):
+            seed = {}
 
-    groups = sorted({f.group for f in program})
+    groups = sorted({f.group for f in files})
     def short(group: str) -> str:
         # packages/core/src is "core": src and lib say nothing about the job
         parts = group.split("/")
         while len(parts) > 1 and parts[-1] in GENERIC_FOLDERS:
             parts.pop()
         return parts[-1]
-
     lasts = defaultdict(int)
     for g in groups:
         lasts[short(g)] += 1
-
     def name_of(group: str) -> str:
         if group == ".":
-            return root.resolve().name
+            return _slug(root.resolve().name)
         return short(group) if lasts[short(group)] == 1 else group
 
-    owner = {f.name: name_of(f.group) for f in program}
-    door: dict = defaultdict(set)
-    for f in program:
-        for u in reader_of(f).uses(f, index):
-            there = owner.get(u.target)
-            if there and there != owner[f.name] and u.name:
-                door[there].add(u.name)
-
-    modules = {}
-    for g in groups:
-        n = name_of(g)
-        modules[n] = {"files": ["*" if g == "." else g + "/*"],
-                      "front_door": sorted(door[n])}
-
-    test_pats = set()
-    for f in tests:
+    # what every file is, as tags already say or as the draft guesses
+    kind: dict = {}
+    for f in files:
+        t = have[f.name]
+        if t is not None:
+            kind[f.name] = (t.kind, t.name, t.system)
+            continue
+        homes = [n for n, m in seed.items() if _any_match(f.rel, m.get("files", []))]
         parts = f.rel.split("/")
-        cut = next((i for i, p in enumerate(parts[:-1]) if p in TEST_DIRS), None)
-        test_pats.add("/".join(parts[:cut + 1]) + "/**" if cut is not None else f.rel)
+        if looks_like_test(f.rel):
+            kind[f.name] = ("test", "", "")
+        elif looks_like_tooling(f.rel):
+            kind[f.name] = ("tooling", "", "")
+        elif homes:
+            kind[f.name] = ("module", homes[0], "")
+        elif "features" in parts[:-1]:
+            rest = parts[parts.index("features") + 1:]
+            stem = rest[-1].rsplit(".", 1)[0]
+            system = rest[0] if len(rest) > 1 else "main"
+            name = rest[1] if len(rest) > 2 else (stem if stem != "index" or len(rest) < 2
+                                                  else rest[-2])
+            kind[f.name] = ("feature", _slug(name), _slug(system))
+        elif _ui_kind(f):
+            k, n = _ui_kind(f)
+            kind[f.name] = (k, n, "")
+        else:
+            kind[f.name] = ("module", name_of(f.group), "")
 
-    return {"modules": dict(sorted(modules.items())),
-            "tests": {"files": sorted(test_pats)}}
+    def unit(name: str) -> str:
+        k, n, _ = kind[name]
+        return k + ":" + n if k in ("module", "feature", "page", "component") else k
+
+    out: dict = {f.rel: [] for f in todo}
+    mine = {f.rel for f in todo}
+    members: dict = defaultdict(list)
+    for f in files:
+        members[unit(f.name)].append(f)
+
+    # what crosses between units today: front doors, uses, what tests touch
+    door: dict = defaultdict(set)
+    door_from: dict = defaultdict(lambda: defaultdict(int))
+    uses: dict = defaultdict(set)
+    touched: dict = defaultdict(lambda: defaultdict(int))
+    for f in files:
+        here = unit(f.name)
+        for u in reader_of(f).uses(f, index):
+            there = unit(u.target) if u.target in kind else None
+            if not there or there == here:
+                continue
+            touched[f.name][there] += 1
+            if there.startswith("module:"):
+                if here.startswith("feature:"):
+                    uses[here].add(there[7:])
+                if u.name and not here.startswith(("test", "tooling")):
+                    door[there].add(u.name)
+                    door_from[there][u.target] += 1
+        for l in reader_of(f).links(f, index):
+            if l.target and l.target in kind and unit(l.target) != here:
+                there = unit(l.target)
+                touched[f.name].setdefault(there, 0)
+                if here.startswith("feature:") and there.startswith("module:"):
+                    uses[here].add(there[7:])
+
+    has_door = {unit(f.name) for f in files if have[f.name] and have[f.name].door is not None}
+    for uid, fs in sorted(members.items()):
+        k = uid.split(":")[0]
+        new = [f for f in fs if f.rel in mine]
+        if not new:
+            continue
+        name = uid.split(":", 1)[1] if ":" in uid else ""
+        for f in new:
+            if k == "feature":
+                out[f.rel].append("feature {} in {}".format(name, kind[f.name][2]))
+            elif k == "page":
+                out[f.rel].append("page " + name)
+            elif k == "design":
+                out[f.rel].append("design system")
+            elif k in ("module", "component", "tooling"):
+                out[f.rel].append(k + (" " + name if name else ""))
+        if k == "module" and uid not in has_door:
+            names = set(seed.get(name, {}).get("front_door", [])) or door[uid]
+            # the door goes on the folder's own index file, else where most names come from
+            heads = [f for f in new if f.path.stem in ("__init__", "index")]
+            best = heads[0] if heads else max(new, key=lambda f: (door_from[uid][f.name], -len(f.rel)))
+            out[best.rel].append("front door " + (", ".join(sorted(names)) or "none"))
+        if k == "feature":
+            first = new[0]
+            if uses[uid]:
+                out[first.rel].append("uses " + ", ".join(sorted(uses[uid])))
+
+    # tests: of a feature, of the UI, or of the module they touch most
+    for f in todo:
+        if kind[f.name][0] != "test":
+            continue
+        text = _text(f)
+        hit = touched[f.name]
+        feats = [u for u in hit if u.startswith("feature:")]
+        mods = sorted((u for u in hit if u.startswith("module:")), key=lambda u: -hit[u])
+        if any(h in text for h in UI_TEST_HINTS) or any(
+                p in ("e2e", "playwright", "cypress") for p in f.rel.split("/")):
+            out[f.rel].append("test ui")
+        elif feats:
+            out[f.rel].append("test feature " + sorted(feats)[0][8:])
+        elif mods:
+            out[f.rel].append("test module " + mods[0][7:])
+        else:
+            out[f.rel].append("test ui")
+
+    # stores: each table or collection the modules reach, owned by the one
+    # that writes it most, its tag on the schema where the owner holds one
+    calls: dict = defaultdict(lambda: defaultdict(lambda: [0, None]))
+    declared = {s for f in files if have[f.name] for s, _, _ in have[f.name].stores}
+    for f in files:
+        uid = unit(f.name)
+        if not uid.startswith("module:"):
+            continue
+        for name, how, line in store_calls(_text(f)):
+            c = calls[name][uid]
+            c[0] += 2 if how == "writes" else 1
+            c[1] = c[1] or f
+    schemas: list = []
+    for f in files:
+        schemas += shapes.schemas_in(f.rel, _text(f))
+    for name in sorted(calls):
+        if name in declared:
+            continue
+        by = calls[name]
+        owner_uid = max(by, key=lambda u: (by[u][0], u))
+        found = shapes.find(schemas, name)
+        place = next((f for f in members[owner_uid] if found and f.rel == found.rel), by[owner_uid][1])
+        if place.rel in out:
+            out[place.rel].append("store " + name)
+        for reader_uid in sorted(set(by) - {owner_uid}):
+            f = by[reader_uid][1]
+            if f.rel in out:
+                out[f.rel].append("reads " + name)
+
+    # the start page: the one at /, else one called home, app or index
+    page_rels = {rel: lines for rel, lines in out.items() if lines and lines[0].startswith("page ")}
+    if page_rels and not any(have[f.name] and have[f.name].start for f in files):
+        start = next((r for r in sorted(page_rels) if route_of(r) == "/"), None) or \
+            next((r for r in sorted(page_rels) if page_rels[r][0].split()[1] in
+                  ("home", "app", "index")), None)
+        if start:
+            out[start][0] = "start " + out[start][0]
+    return {rel: lines for rel, lines in out.items() if lines}
+
+
+def as_tags(drafts: dict) -> dict:
+    """The draft read back as tags, for drawing a codebase nobody has tagged."""
+    return {rel: read_tags("\n".join("# codegraph: " + l for l in lines))
+            for rel, lines in drafts.items()}
+
+
+def insert_tags(text: str, lines: list, comment: str) -> str:
+    """Put tag lines at the top of a file's text: after a #! line, a Python
+    coding line, or the "use client" a framework needs first."""
+    nl = "\r\n" if "\r\n" in text else "\n"
+    rows = text.splitlines(keepends=True)
+    i = 1 if rows and rows[0].startswith("#!") else 0
+    if comment == "#" and i < len(rows) and re.match(r"#.*coding[:=]", rows[i]):
+        i += 1
+    while comment == "//" and i < len(rows) and \
+            re.match(r"""\s*(["'])use (client|server|strict)\1;?\s*$""", rows[i]):
+        i += 1
+    block = "".join("{} codegraph: {}{}".format(comment, l, nl) for l in lines)
+    return "".join(rows[:i]) + block + "".join(rows[i:])
+
+
+def write_drafts(root: Path, drafts: dict) -> None:
+    for rel, lines in drafts.items():
+        path = root / rel
+        text = path.read_text(encoding="utf-8")
+        comment = "#" if rel.endswith(".py") else "//"
+        path.write_text(insert_tags(text, lines, comment), encoding="utf-8", newline="")
+
+
+def tagged_at_all(root: Path, hidden: bool = False) -> bool:
+    return any(file_tags(f) is not None for f in files_in(root, hidden))
+
+
+# ------------------------------------------------------------- for the mod
+#
+# The mod beside the chat reads a summary, not the page: the systems and
+# their features, the modules, pages and stores, the mismatches, and a small
+# picture of the map.
+
+def summary(graph: dict) -> dict:
+    m = graph.get("map") or {}
+    nodes = (m.get("views") or {}).get("map", {}).get("nodes", [])
+    by_kind: dict = defaultdict(list)
+    for n in nodes:
+        by_kind[n["kind"]].append(n)
+    systems: dict = defaultdict(list)
+    triggers = defaultdict(list)
+    for t in by_kind["trigger"]:
+        triggers[t["feature"]].append("{} {}".format(t["dir"], t["label"]))
+    for n in sorted(by_kind["feature"], key=lambda n: n["label"]):
+        systems[n["system"] or "no system"].append({
+            "id": n["id"], "name": n["label"], "uses": n["uses"],
+            "triggers": triggers[n["id"]], "files": [_rel_of(graph, i) for i in n["files"]]})
+    def brief(n: dict, *keys) -> dict:
+        return dict({"id": n["id"], "name": n["label"],
+                     "files": [_rel_of(graph, i) for i in n.get("files", [])]},
+                    **{k: n.get(k) for k in keys})
+    return {
+        "root": graph["root"], "source": m.get("source", "none"),
+        "systems": [{"name": s, "features": f} for s, f in sorted(systems.items())],
+        "modules": [brief(n, "door", "stores", "reads") for n in
+                    sorted(by_kind["module"], key=lambda n: n["label"])],
+        "pages": [brief(n, "route", "start") for n in sorted(by_kind["page"], key=lambda n: n["label"])],
+        "components": [brief(n) for n in sorted(by_kind["component"], key=lambda n: n["label"])],
+        "stores": [{"id": n["id"], "name": n["label"], "owner": n["owner"], "fields": n["fields"]}
+                   for n in sorted(by_kind["store"], key=lambda n: n["label"])],
+        "mismatches": m.get("mismatches", []), "unknown": m.get("unknown", []),
+        "svg": map_svg(m["views"]["map"]) if m else "",
+    }
+
+
+def _rel_of(graph: dict, fid: str) -> str:
+    n = next((n for n in graph["nodes"] if n["id"] == fid), None)
+    return (n["dir"] + "/" + n["label"] if n and n["dir"] != "." else n["label"]) if n else fid
+
+
+SVG_HUES = {"module": 210, "feature": 150, "page": 280, "component": 300, "design": 30,
+            "store": 175, "trigger": 45, "outside": 0, "loose": 0}
+
+
+def map_svg(view: dict, limit: int = 120000) -> str:
+    """The map as one plain SVG picture: cards in their columns, wires as
+    curves, red where a rule is broken. Empty if it would be too big to send."""
+    W, H, GX, GY = 150, 34, 70, 12
+    cols: dict = defaultdict(list)
+    for n in view["nodes"]:
+        cols[n["col"]].append(n)
+    tallest = max((len(v) for v in cols.values()), default=1)
+    at = {}
+    for c, ns in cols.items():
+        ns.sort(key=lambda n: n["row"])
+        top = (tallest - len(ns)) * (H + GY) / 2
+        for i, n in enumerate(ns):
+            at[n["id"]] = (c * (W + GX) + 10, top + i * (H + GY) + 10)
+    width = (max(cols, default=0) + 1) * (W + GX) + 20
+    height = tallest * (H + GY) + 20
+    out = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {} {}" font-family="system-ui,'
+           'sans-serif" font-size="11">'.format(int(width), int(height))]
+    for e in view["edges"]:
+        if e["from"] not in at or e["to"] not in at:
+            continue
+        (x1, y1), (x2, y2) = at[e["from"]], at[e["to"]]
+        if x1 < x2:
+            a, b = (x1 + W, y1 + H / 2), (x2, y2 + H / 2)
+        elif x1 > x2:
+            a, b = (x1, y1 + H / 2), (x2 + W, y2 + H / 2)
+        else:                                   # one column: loop out to the right
+            a, b = (x1 + W, y1 + H / 2), (x2 + W, y2 + H / 2)
+        bad = e.get("bad") or e.get("why")
+        hue = KINDS.get(e["kind"], {}).get("hue")
+        colour = "#d33" if bad else ("hsl({},55%,55%)".format(hue) if hue is not None else "#999")
+        bend = max(30, abs(b[0] - a[0]) * 0.45)
+        da, db = (1, -1) if x1 < x2 else (-1, 1) if x1 > x2 else (1, 1)
+        out.append('<path d="M{:.0f} {:.0f} C{:.0f} {:.0f} {:.0f} {:.0f} {:.0f} {:.0f}" fill="none" '
+                   'stroke="{}" stroke-width="{}" opacity="0.8"/>'.format(
+                       a[0], a[1], a[0] + da * bend, a[1], b[0] + db * bend, b[1], b[0], b[1],
+                       colour, 2 if bad else 1.2))
+    for n in view["nodes"]:
+        x, y = at[n["id"]]
+        hue = SVG_HUES.get(n["kind"], 0)
+        sat = "0%" if n["kind"] in ("outside", "loose", "file", "external") else "55%"
+        label = n["label"] if len(n["label"]) <= 22 else n["label"][:21] + "…"
+        out.append('<rect x="{:.0f}" y="{:.0f}" width="{}" height="{}" rx="{}" fill="hsl({},{},55%)" '
+                   'fill-opacity="0.18" stroke="hsl({},{},50%)"/>'.format(
+                       x, y, W, H, 12 if n["kind"] == "feature" else 5, hue, sat, hue, sat))
+        out.append('<text x="{:.0f}" y="{:.0f}" fill="hsl({},{},45%)" font-weight="600">{}</text>'
+                   .format(x + 8, y + 15, hue, sat, _xml(label)))
+        out.append('<text x="{:.0f}" y="{:.0f}" fill="#888" font-size="9">{}</text>'.format(
+            x + 8, y + 27, _xml(n["kind"] if n["kind"] != "outside" else "outside")))
+    out.append("</svg>")
+    svg = "".join(out)
+    return svg if len(svg) <= limit else ""
+
+
+def _xml(s: str) -> str:
+    return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 # -------------------------------------------------------------------- render
@@ -1678,7 +2673,7 @@ def nodes_by_id(graph: dict) -> dict:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         prog="codegraph",
-        description="Draw a Python codebase as cards and wires, from its imports.",
+        description="Draw a codebase as modules, features and UI, and check it against its tags.",
     )
     ap.add_argument("root", type=Path, help="folder to read")
     ap.add_argument("-o", "--out", type=Path, default=Path("codegraph.html"),
@@ -1695,39 +2690,32 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--keep-empty", action="store_true",
                     help="keep empty __init__.py files that nothing imports")
     ap.add_argument("--check", action="store_true",
-                    help="read the code against the declaration; exit 1 on a mismatch")
+                    help="read the code against its tags; exit 1 on a mismatch")
     ap.add_argument("--draft", action="store_true",
-                    help="write a first declaration from what the code does today")
-    ap.add_argument("--declaration", type=Path, metavar="FILE",
-                    help="the declaration to use (default: ROOT/" + DECLARATION + ")")
+                    help="write a first tag into every file that has none")
+    ap.add_argument("--summary", action="store_true",
+                    help="print what the mod beside the chat shows, as JSON")
     args = ap.parse_args(argv)
 
     root = args.root.resolve()
     if not root.is_dir():
         ap.error(str(root) + " is not a folder")
 
-    decl_path = args.declaration or root / DECLARATION
     if args.draft:
-        if decl_path.exists():
-            ap.error(str(decl_path) + " already exists; move it aside to draft afresh")
-        decl = draft(root, hidden=args.hidden)
-        decl_path.write_text(json.dumps(decl, indent=2) + "\n", encoding="utf-8")
-        names = sum(len(m["front_door"]) for m in decl["modules"].values())
-        print("{} modules, {} names on their front doors -> {}".format(
-            len(decl["modules"]), names, decl_path))
-        print("Every front door holds what crosses today. Narrow them to what "
-              "should cross, then run --check.")
+        drafts = draft_tags(root, hidden=args.hidden)
+        write_drafts(root, drafts)
+        counts: dict = defaultdict(int)
+        for lines in drafts.values():
+            counts[lines[0].split()[0] if not lines[0].startswith("start") else "page"] += 1
+        print("tagged {} files: {}".format(len(drafts), ", ".join(
+            "{} {}".format(n, k) for k, n in sorted(counts.items(), key=lambda kv: -kv[1]))))
+        print("Every front door holds what crosses today. Narrow each to what should "
+              "cross, correct any guess, then run --check.")
+        if (root / DECLARATION).exists():
+            print("{} seeded the modules; the tags replace it, so it can go.".format(DECLARATION))
         return 0
     if args.check:
-        try:
-            decl = json.loads(decl_path.read_text(encoding="utf-8"))
-            report = check(root, decl, hidden=args.hidden)
-        except FileNotFoundError:
-            ap.error("no declaration at {}; make one with --draft".format(decl_path))
-        except json.JSONDecodeError as e:
-            ap.error("{} is not valid JSON: {}".format(decl_path, e))
-        except DeclarationError as e:
-            ap.error("{}: {}".format(decl_path, e))
+        report = check(root, hidden=args.hidden)
         for m in report.mismatches:
             print(m)
         if report.unknown:
@@ -1738,22 +2726,20 @@ def main(argv: list[str] | None = None) -> int:
             len(report.mismatches), len(report.unknown)))
         return 1 if report.mismatches else 0
 
-    # The page's module views come from the declaration, or failing that from
-    # a draft, which the page labels as a draft.
-    source = "declared"
-    try:
-        decl = json.loads(decl_path.read_text(encoding="utf-8"))
-        validate(decl)
-    except FileNotFoundError:
-        decl, source = draft(root, hidden=args.hidden), "draft"
-    except (json.JSONDecodeError, DeclarationError) as e:
-        print("{}: {}; module views left out".format(decl_path, e))
-        decl = None
+    # The map comes from the tags, or failing that from a draft of them,
+    # which the page labels as a draft.
+    drafted, source = None, "tags"
+    if not tagged_at_all(root, args.hidden):
+        drafted, source = as_tags(draft_tags(root, args.hidden)), "draft"
+    reading = read_map(root, args.hidden, drafted)
 
     graph = build(root, externals=args.externals, hidden=args.hidden,
                   outside=args.outside, layout=args.layout,
-                  keep_empty=args.keep_empty, decl=decl, source=source)
+                  keep_empty=args.keep_empty, reading=reading, source=source)
 
+    if args.summary:
+        print(json.dumps(summary(graph)))
+        return 0
     if args.json:
         print(json.dumps(graph, indent=2))
         return 0
@@ -1792,12 +2778,15 @@ def main(argv: list[str] | None = None) -> int:
         for n in sorted(outs, key=lambda n: n["label"]):
             print("    {:<26} {}".format(n["label"], n["dir"]))
 
-    mv = graph.get("modules")
-    if mv:
-        print("{} modules ({}), {} off a front door".format(
-            sum(1 for n in mv["views"]["modules"]["nodes"] if n["kind"] == "module"),
-            "from " + decl_path.name if source == "declared" else "drafted from folders",
-            len(mv["mismatches"])))
+    mv = graph["map"]
+    kinds = defaultdict(int)
+    for n in mv["views"]["map"]["nodes"]:
+        kinds[n["kind"]] += 1
+    print("{} ({}): {} mismatches, {} cannot tell".format(
+        ", ".join("{} {}".format(kinds[k], k) for k in
+                  ("module", "feature", "page", "component", "store") if kinds[k]) or "nothing",
+        "read from tags" if source == "tags" else "drafted, nothing tagged yet",
+        len(mv["mismatches"]), len(mv["unknown"])))
 
     seen = list(graph["externals_seen"])[:6]
     if seen:
