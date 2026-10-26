@@ -1,9 +1,10 @@
 # codegraph
 
 A map of a codebase drawn at the level people think in (systems, features,
-modules, stores, pages), not files. People declare the shape they intend; codegraph
-reads the code and says where the two disagree. The same map is how a person
-tells an agent what to build.
+modules, stores, pages), not files. Every file says in a tag what it is meant
+to be; codegraph reads what the code really does and says where the two
+disagree. There is no documentation apart from the code. The same map is how a
+person tells an agent what to build.
 
 ## Features
 
@@ -46,13 +47,16 @@ _Avoid_: hook, signal, message
 
 **File**:
 One source file, the smallest thing on the map.
-_Rule_: a file belongs to exactly one module.
+_Rule_: a file carries exactly one tag, which says what it belongs to: a
+module, a feature, a page, a component, the design system, a test, or
+tooling. A file with no tag is a mismatch.
 _Avoid_: script, source
 
 **Module**:
 A named set of files that does one job behind a front door of names.
 _Rule_: code outside the module reaches it only through its front door; a
-module never calls a feature or the UI.
+module never calls a feature or the UI; only modules reach outside
+connections and stores.
 _Avoid_: package, folder, component, service
 
 **Front door**:
@@ -66,14 +70,34 @@ _Avoid_: interface, public API, entry point, exports
 
 **Test**:
 A file that checks other code and is never used by the program itself. It is
-an outside caller like any other, unless it is declared inside one module.
-_Rule_: a test uses only front-door names, except in the one module it is
-declared inside, if any; non-test code never imports a test.
+a module test, a feature test or a UI test.
+_Rule_: non-test code never imports a test; a test fakes only outside
+connections, never code in the repo.
 _Avoid_: spec, check, suite
+
+**Module test**:
+A test of one module, run through its front door.
+_Rule_: uses only front-door names, the same as any other outside caller;
+uses real stores where that is cheap, such as an in-memory database.
+_Avoid_: unit test
+
+**Feature test**:
+A test that starts a feature the way its trigger would and runs the real
+modules it uses.
+_Rule_: checks the result the trigger gets back, not how the modules got it.
+_Avoid_: integration test, end-to-end test
+
+**UI test**:
+A click-through that runs in a browser: open a page, act on it, follow its
+leads-to wires and check what shows. Its written steps describe it; they do
+not stand in for it.
+_Rule_: every path from a start page is walked by at least one UI test.
+_Avoid_: manual test, QA script
 
 **Outside connection**:
 Something the code reaches beyond its own process: a host, a database, a
 broker, a feed, the environment.
+_Rule_: only a module reaches one.
 _Avoid_: external, integration, dependency
 
 ## Data
@@ -83,14 +107,25 @@ One named place data is kept: a table or a collection inside a database, such
 as members, services or reminders. The database is the outside connection;
 its stores sit inside it.
 _Rule_: each store has exactly one owning module, the only one that writes to
-it; anything else that reads it is declared as a reader.
+it; any other module that reads it is declared as a reader; its tag sits on
+the schema that defines its shape.
 _Avoid_: table, collection, model, entity, database
+
+**Shape**:
+What a store holds, or what an event or a request carries in: its fields and
+what kind each is.
+_Rule_: read only from a schema the program itself uses, such as a database
+model, a migration, a validator or a type; never from a comment; a schema
+codegraph cannot read is shown as an unknown shape, not guessed.
+_Avoid_: schema, model, type, structure
 
 ## UI
 
 **Page**:
 A place a person can land in the program, such as a screen, a route or a view.
-_Rule_: every declared page points at the code that draws it.
+_Rule_: tagged on the code that draws it; its leads-to wires are read from
+the framework's router, and a link built while the program runs is reported
+as unknown, not guessed.
 _Avoid_: screen, view, route
 
 **Start page**:
@@ -101,10 +136,18 @@ _Avoid_: home, landing page
 
 **Component**:
 A piece of UI that can appear on more than one page and behaves the same on
-each.
+each, such as a people picker. It may take settings, such as showing only
+members, and may have wires.
 _Rule_: a component's informed-by and acts-on wires belong to the component,
 so every page that contains it shares them.
 _Avoid_: widget, element, partial
+
+**Design system**:
+The look every page and component is built from: colours, type, spacing, and
+plain pieces such as buttons and inputs.
+_Rule_: has no wires; a piece that needs data or starts a feature is a
+component.
+_Avoid_: theme, style guide, UI kit
 
 ## Wires
 
@@ -149,9 +192,9 @@ _Rule_: one-way, into the store; only the store's owning module writes.
 _Avoid_: saves, stores, updates
 
 **Reads**:
-A wire from a store into a module, or a page, that uses what it holds.
-_Rule_: one-way, out of the store; comes from the owning module or a declared
-reader.
+A wire from a store into a module that uses what it holds.
+_Rule_: one-way, out of the store; lands on the owning module or a declared
+reader; a page sees a store only through informed-by from a module.
 _Avoid_: loads, fetches, queries
 
 **Leads to**:
@@ -167,12 +210,33 @@ _Avoid_: renders, includes
 
 ## Checking
 
+**Tag**:
+A comment line near the top of a file, starting `codegraph:`, that says what
+the file belongs to, such as `# codegraph: module engine`. A module of five
+files is five files with the same tag. One of them also lists the module's
+front door; a feature's tag names its system and the modules it uses.
+_Rule_: whoever changes a file keeps its tag true.
+_Avoid_: annotation, marker, label, header
+
 **Declaration**:
-The file in a repo where people state the systems, features, triggers,
-modules, stores, pages and wires they intend.
-_Rule_: the declaration is the single source of truth; the code is checked
-against it, never the other way round.
+All the tags in a repo, read together: what the code says it is meant to be.
+_Rule_: lives only in the code; there is no separate file; what the code
+really does is checked against it.
 _Avoid_: config, manifest, spec
+
+**Tooling**:
+A source file that builds, configures or runs the program but is not part of
+it, such as a build script. Files that are not source at all, such as
+settings and ignore lists, are not on the map.
+_Rule_: tagged, and kept off the map.
+_Avoid_: config, scripts, infra
+
+**Setup**:
+The one-time skill that brings a repo under codegraph: tags every source
+file, installs the mod, writes the context file agents read, and lists the
+mismatches to fix one at a time.
+_Rule_: changes no behaviour of the program.
+_Avoid_: init, install, onboarding
 
 **Mismatch**:
 One place where the code breaks a rule or disagrees with the declaration.
