@@ -43,12 +43,12 @@ class Drafting(Folder):
         # two folders that would both be "web" keep their paths apart
         self.assertEqual(d["packages/web/src/main.py"][0], "module packages/web/src")
 
-    def test_written_into_the_files_the_draft_passes_except_where_tests_reach_in(self):
+    def test_written_into_the_files_the_draft_passes(self):
         write_drafts(self.root, self.drafts)
         self.assertTrue((self.root / "app/main.py").read_text().startswith(
             "#!/usr/bin/env python\n# codegraph: module app\n"))
-        r = check(self.root)
-        self.assertEqual(sorted({m.rel for m in r.mismatches}), ["tests/test_book.py"])
+        r = check(self.root)          # the test reaching _fill is engine's own, an insider
+        self.assertEqual(r.mismatches, [])
         self.assertEqual(draft_tags(self.root), {})          # nothing left to tag
 
     def test_a_feature_folder_and_the_ui(self):

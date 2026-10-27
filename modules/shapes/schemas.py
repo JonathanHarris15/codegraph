@@ -12,8 +12,9 @@ something the program runs or checks its data against:
     const Member = z.object({ ... })          zod
     model Member { id Int @id }               Prisma
 
-The front door is `schemas_in`, which reads one file, and `find`, which picks
-the schema a store or an event names.
+The front door is `schemas_in`, which reads one file, `find`, which picks
+the schema a store or an event names, and `defines`, which says whether a
+file defines a schema whose fields cannot be read.
 """
 from __future__ import annotations
 
@@ -257,6 +258,17 @@ def _prisma(rel: str, text: str) -> list:
                 s.fields.append((words[0], words[1]))
         out.append(s)
     return out
+
+
+def defines(rel: str, text: str, name: str) -> bool:
+    """Does this file define `name` at all, whether or not its fields can be
+    read? A schema built while the program runs, such as a zod object made
+    from a catalogue of columns, is still a schema; its shape is unknown."""
+    n = re.escape(name)
+    if rel.endswith(".py"):
+        return bool(re.search(r"(?m)^(?:class\s+{0}\b|def\s+{0}\b|{0}\s*[:=])".format(n), text))
+    return bool(re.search(r"\b(?:const|let|var|class|function|interface|type|enum)\s+{}\b"
+                          .format(n), text))
 
 
 def schema_files(root: Path, skip: set) -> list:

@@ -10,7 +10,7 @@ from modules.tags import file_tags
 from .fakes import fakes
 from .layers import relation
 from .pages import page_links, route_matches, route_of
-from .stores import store_calls
+from .stores import constants_in, store_calls
 
 
 @dataclass(frozen=True, order=True)
@@ -45,13 +45,17 @@ class Unit:
     reads: set = field(default_factory=set)
     schedules: list = field(default_factory=list)
     events: list = field(default_factory=list)
+    commands: list = field(default_factory=list)
     route: str = ""
     start: bool = False
 
     @property
     def label(self) -> str:
-        return "the design system" if self.kind == "design" else \
-            "{} {}".format(self.kind, self.name)
+        if self.kind == "design":
+            return "the design system"
+        if self.kind == "shell":
+            return "the shell"
+        return "{} {}".format(self.kind, self.name)
 
 
 @dataclass(frozen=True)
@@ -130,6 +134,7 @@ def read_map(root: Path, hidden: bool = False, drafted: dict | None = None) -> R
         u.reads |= set(t.reads)
         u.schedules += t.schedules
         u.events += t.events
+        u.commands += t.commands
         u.start |= t.start
         store_tags += [(s, schema, f, line, u.id) for s, schema, line in t.stores]
 
@@ -172,7 +177,11 @@ def read_map(root: Path, hidden: bool = False, drafted: dict | None = None) -> R
                                                       units[uid].label)))
             continue
         found = shapes.find(schemas, schema or s, near=f.rel, exact=bool(schema))
-        if not found:
+        if not found and schema and any(shapes.defines(index[n].rel, text_of(index[n]), schema)
+                                        for n in units[uid].files):
+            unk.append(Finding(f.rel, line, "store {} names the schema {}, whose fields cannot "
+                               "be read; its shape is shown as unknown".format(s, schema)))
+        elif not found:
             mis.append(Finding(f.rel, line, "store {} {}".format(s, (
                 "names the schema {}, which codegraph cannot find".format(schema) if schema
                 else "has no schema codegraph can read; add one the module checks its "
@@ -186,6 +195,11 @@ def read_map(root: Path, hidden: bool = False, drafted: dict | None = None) -> R
                 mis.append(Finding(first(u), 0, "{} reads store {}, which no module owns"
                                    .format(u.label, r)))
     lower = {s.lower(): s for s in stores}
+    named: dict = defaultdict(set)         # a constant's name -> the strings it holds
+    for f in files:
+        for k, v in constants_in(text_of(f), f.lang).items():
+            named[k].add(v)
+    shared = {k: next(iter(v)) for k, v in named.items() if len(v) == 1}
 
     # ---- the code itself, file by file
     crossings: list = []
@@ -194,7 +208,8 @@ def read_map(root: Path, hidden: bool = False, drafted: dict | None = None) -> R
     contains: dict = defaultdict(set)
     used: dict = defaultdict(set)
     links: dict = defaultdict(set)
-    built_links = False
+    built: set = set()                     # units holding a link built while it runs
+    reached_by: dict = defaultdict(set)    # file -> the kinds of file that import it
     for f in files:
         here = owner.get(f.name)
         if here is None:
@@ -208,6 +223,7 @@ def read_map(root: Path, hidden: bool = False, drafted: dict | None = None) -> R
         targets = dict.fromkeys(l.target for l in reader.links(f, index) if l.target)
 
         for tgt in targets:
+            reached_by[tgt].add(kind)
             there = owner.get(tgt)
             if there is None or there == here:
                 continue
@@ -229,11 +245,14 @@ def read_map(root: Path, hidden: bool = False, drafted: dict | None = None) -> R
                     mis.append(Finding(f.rel, line, "{} {}".format(me.label, wrong)))
                     bad[(here, there)].append(wrong)
 
+        mine = tags[f.name]
         for u in uses:
             there = owner.get(u.target)
             if there is None or there == here or kind == "tooling" or \
                     units[there].kind != "module":
                 continue
+            if kind == "test" and mine.of == "module" and there == "module:" + mine.name:
+                continue                   # a module's own tests are insiders
             if u.name is None:
                 unk.append(Finding(f.rel, u.line, "uses {} in a way that cannot be read ({})"
                                    .format(units[there].label, u.why)))
@@ -246,9 +265,17 @@ def read_map(root: Path, hidden: bool = False, drafted: dict | None = None) -> R
 
         if kind in ("test", "tooling"):
             if kind == "test":
+                said, made = {w for w, _ in mine.fakes}, set()
                 for what, line in fakes(f, text, index):
-                    mis.append(Finding(f.rel, line, "fakes {}, code in the repo; a test fakes "
-                                       "only outside connections".format(what)))
+                    made.add(what)
+                    if what not in said:
+                        mis.append(Finding(f.rel, line, "fakes {}, code in the repo; a test fakes "
+                                           "only outside connections, or says why with "
+                                           "`codegraph: fakes {} because ...`".format(what, what)))
+                for what, line in mine.fakes:
+                    if what not in made:
+                        mis.append(Finding(f.rel, line, "says it fakes {} but never does"
+                                           .format(what)))
             continue
 
         if kind != "module":
@@ -258,7 +285,7 @@ def read_map(root: Path, hidden: bool = False, drafted: dict | None = None) -> R
                                        "outside connection".format(conn.label,
                                                                    KINDS[conn.kind]["label"])))
 
-        for name, how, line in store_calls(text, f.lang):
+        for name, how, line in store_calls(text, f.lang, shared):
             s = lower.get(name.lower())
             if s is None:
                 mis.append(Finding(f.rel, line, "reaches {}, which is not a declared store; tag "
@@ -278,10 +305,10 @@ def read_map(root: Path, hidden: bool = False, drafted: dict | None = None) -> R
                                    "reads {}`, or go through {}".format(
                                        s, s, units[stores[s]["owner"]].label)))
 
-        if kind in ("page", "component"):
+        if kind in ("page", "component", "shell"):
             for link, line in page_links(text):
                 if link is None:
-                    built_links = True
+                    built.add(here)
                     unk.append(Finding(f.rel, line, "builds a link while it runs; where it "
                                        "leads cannot be told"))
                 else:
@@ -296,9 +323,9 @@ def read_map(root: Path, hidden: bool = False, drafted: dict | None = None) -> R
             if "module:" + m in units:
                 mis.append(Finding(first(u), 0, "{} says it uses module {} but never does"
                                    .format(u.label, m)))
-        if not (u.schedules or u.events or u.id in acted):
+        if not (u.schedules or u.events or u.commands or u.id in acted):
             mis.append(Finding(first(u), 0, "{} has no trigger: no page acts on it, and it "
-                               "has no schedule or event".format(u.label)))
+                               "has no schedule, event or command".format(u.label)))
         for i, timing in enumerate(u.schedules):
             triggers.append({"id": "trigger:{}:{}".format(u.id, i), "kind": "schedule",
                              "label": timing, "feature": u.id, "fields": []})
@@ -313,6 +340,9 @@ def read_map(root: Path, hidden: bool = False, drafted: dict | None = None) -> R
             triggers.append({"id": "trigger:{}:{}".format(u.id, i), "kind": "event",
                              "label": event, "feature": u.id,
                              "fields": found.lines() if found else []})
+        for i, command in enumerate(u.commands, start=len(u.schedules) + len(u.events)):
+            triggers.append({"id": "trigger:{}:{}".format(u.id, i), "kind": "command",
+                             "label": command, "feature": u.id, "fields": []})
 
     # ---- tests: what each says it tests
     walked: set = set()
@@ -338,12 +368,16 @@ def read_map(root: Path, hidden: bool = False, drafted: dict | None = None) -> R
     for u in pages.values():
         u.route = u.route or next((r for r in (route_of(index[n].rel) for n in u.files) if r), "")
     leads: dict = defaultdict(set)
+    holds: dict = {}
     for p in pages:
-        seen, stack = {p}, [p]
-        while stack:                       # a component's links belong to its pages
+        # a component's links belong to its pages, and the shell frames them all
+        seen = {p} | ({"shell"} if "shell" in units else set())
+        stack = list(seen)
+        while stack:
             for c in contains.get(stack.pop(), ()):
                 if c not in seen:
                     seen.add(c); stack.append(c)
+        holds[p] = seen
         for holder in seen:
             for link, rel, line in links.get(holder, ()):
                 hits = [q for q, v in pages.items() if v.route and route_matches(link, v.route)]
@@ -360,14 +394,25 @@ def read_map(root: Path, hidden: bool = False, drafted: dict | None = None) -> R
             for q in leads.get(stack.pop(), ()):
                 if q not in reach:
                     reach.add(q); stack.append(q)
+        # a link built while it runs might lead anywhere, but only from a page
+        # someone can get to
+        maybe = any(holds[p] & built for p in reach)
         for p in sorted(set(pages) - reach):
             if starts:
-                (unk if built_links else mis).append(Finding(
+                (unk if maybe else mis).append(Finding(
                     first(pages[p]), 0, "{} cannot be reached from a start page by following "
                     "its links".format(pages[p].label)))
         for p in sorted(set(pages) - walked):
             mis.append(Finding(first(pages[p]), 0, "no UI test walks {}; name it in a test's "
                                "`codegraph: test ui` tag".format(pages[p].label)))
+
+    # ---- test data that ships: a file of the program that only tests reach
+    for f in files:
+        u = units.get(owner.get(f.name, ""))
+        if u and u.kind in ("module", "component", "design") and reached_by[f.name] == {"test"} \
+                and f.rel not in u.door_at:
+            unk.append(Finding(f.rel, 0, "is reached only by tests, yet ships with the program; "
+                               "if it is test data, it belongs with the tests"))
 
     wires = [(stores[s]["owner"], "store:" + s, "writes") for s in sorted(stores)]
     wires += [(r, "store:" + s, "reads") for s in sorted(stores)

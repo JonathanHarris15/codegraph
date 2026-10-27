@@ -27,4 +27,8 @@ checks its data against; setup lists it as a mismatch (ADR 0004). That makes the
 Each kind of schema needs its own reader (an ORM model, a validator library,
 a SQL migration, a TypeScript type), the same way each language has one. A
 schema codegraph cannot read is shown as a store with an unknown shape, not a
-guessed one.
+guessed one. That includes a schema built while the program runs, such as a
+zod object made from a catalogue of columns: `store sales as SaleColumns`
+names it, codegraph finds it defined in the module, and lists the shape as
+unknown rather than red. Building it from the one list is the better design,
+and the check must not push toward writing a second.

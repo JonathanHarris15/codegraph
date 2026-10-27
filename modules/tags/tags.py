@@ -22,17 +22,21 @@ from modules.source import files_in
 #   // codegraph: uses services, members
 #   // codegraph: schedule every day at 08:00
 #   // codegraph: event stripe-paid as PaidEvent
+#   # codegraph: command import-sales          a person runs it at a terminal
 #   // codegraph: page members at /members     or: start page home at /
 #   // codegraph: component people-picker
 #   // codegraph: design system
+#   // codegraph: shell                        the frame every page is drawn in
 #   # codegraph: test module engine            or: test feature X, test ui home, members
+#   // codegraph: fakes ./render because jsdom has no canvas
 #   # codegraph: tooling
 
 TAG_LINES = 30                     # a tag sits in a file's first lines
 
 TAG_RE = re.compile(r"^\s*(?:#|//|/\*+|\*|--|<!--)\s*codegraph:\s*(.*?)\s*(?:\*/|-->)?\s*$")
 NAME = r"([\w.\-/@]+)"
-KINDS_OF_FILE = ("module", "feature", "page", "component", "design", "test", "tooling")
+KINDS_OF_FILE = ("module", "feature", "page", "component", "design", "shell", "test",
+                 "tooling")
 STATEMENTS = (
     # (pattern, what it says, the kinds of file that may say it)
     (re.compile(r"module " + NAME + r"$"), "module", None),
@@ -40,6 +44,7 @@ STATEMENTS = (
     (re.compile(r"(start )?page " + NAME + r"(?: at (\S+))?$"), "page", None),
     (re.compile(r"component " + NAME + r"$"), "component", None),
     (re.compile(r"design system$"), "design", None),
+    (re.compile(r"shell$"), "shell", None),
     (re.compile(r"test (module|feature) " + NAME + r"$"), "test", None),
     (re.compile(r"test (ui)(?: (.+))?$"), "test", None),
     (re.compile(r"tooling$"), "tooling", None),
@@ -49,6 +54,8 @@ STATEMENTS = (
     (re.compile(r"uses (.+)$"), "uses", "feature"),
     (re.compile(r"schedule (.+)$"), "schedule", "feature"),
     (re.compile(r"event " + NAME + r"(?: as " + NAME + r")?$"), "event", "feature"),
+    (re.compile(r"command " + NAME + r"$"), "command", "feature"),
+    (re.compile(r"fakes (.+?)(?: because (.+))?$"), "fakes", "test"),
 )
 
 
@@ -69,10 +76,12 @@ class Tag:
     uses: list = field(default_factory=list)
     schedules: list = field(default_factory=list)
     events: list = field(default_factory=list)     # [(event, schema or "")]
+    commands: list = field(default_factory=list)   # what a person types to start it
     route: str = ""
     start: bool = False
     of: str = ""                      # a test's kind: module, feature or ui
     walks: list = field(default_factory=list)      # the pages a UI test walks
+    fakes: list = field(default_factory=list)      # [(what, line)] it fakes, and has said why
     errors: list = field(default_factory=list)     # [(line, text)]
 
     @property
@@ -128,6 +137,13 @@ def read_tags(text: str) -> Tag | None:
             tag.schedules.append(g[0])
         elif what == "event":
             tag.events.append((g[0], g[1] or ""))
+        elif what == "command":
+            tag.commands.append(g[0])
+        elif what == "fakes":
+            if not g[1]:
+                tag.errors.append((no, "says it fakes {} but not why: write `fakes {} because "
+                                   "<what the test runtime lacks>`".format(g[0], g[0])))
+            tag.fakes += [(n, no) for n in _names(g[0])]
         said.append((no, what, only))
     if not seen:
         return None

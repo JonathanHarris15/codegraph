@@ -88,12 +88,15 @@ One comment line each, in a file's first 30 lines. `#` or `//` both work.
 // codegraph: feature plan-service in calendar
 // codegraph: uses services, members
 // codegraph: schedule every Thursday at 08:00       or: event paid as PaidEvent
+// codegraph: command import-sales                   a person runs it at a terminal
 
 // codegraph: start page home at /                   or: page members
 // codegraph: component people-picker
 // codegraph: design system
+// codegraph: shell                                  the nav and router every page sits in
 
 // codegraph: test module members                    or: test feature X, test ui home, members
+// codegraph: fakes ./render because jsdom has no canvas
 // codegraph: tooling
 ```
 
@@ -108,26 +111,30 @@ python codegraph.py path/to/repo --check
 
 - every source file has a tag, and every module one front door line
 - every name taken from a module is on its front door, whichever path the
-  import is written through
+  import is written through; a module's own tests are insiders and may use
+  any of its names (docs/adr/0005)
 - a module never calls a feature or the UI; a feature never calls another
   feature or reaches into the UI; a page never imports a page; a component
   never contains a page; the design system imports nothing that has wires;
   the program never imports a test or tooling
 - a feature names its system and the modules it uses, uses only those, and
-  has a trigger: a page that acts on it, a schedule or an event
+  has a trigger: a page that acts on it, a command, a schedule or an event
 - only a module reaches an outside connection (a server is how requests
   arrive, so serving is allowed anywhere) or a store; a store has one owner,
   the only module that writes it, and other modules say they read it
 - every store has a schema codegraph can read: pydantic, dataclasses,
   TypedDict, SQLAlchemy, SQL `CREATE TABLE`, TypeScript types, zod, Prisma
-  (docs/adr/0003)
-- there is a start page, every page can be reached from it by its links, and
-  a UI test walks every page
-- a test fakes only what is outside the program, never the repo's own code
+  (docs/adr/0003); stores are read from SQL, from `.collection("x")`, and
+  from Firebase's `collection(db, X)` with `X` a constant
+- there is a start page, every page can be reached from it by its links (the
+  shell's links lead from every page), and a UI test walks every page
+- a test fakes only what is outside the program, never the repo's own code,
+  unless it says why in a `fakes ... because ...` tag
 
 What it cannot tell, it lists apart rather than guess: `import *`, a module
 handed around whole, a link built while the program runs, an event with no
-schema named.
+schema named, a schema built while the program runs, and a file of the
+program that only tests reach.
 
 ## Options
 

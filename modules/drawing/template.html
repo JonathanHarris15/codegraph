@@ -205,7 +205,7 @@ path.wire.breach{stroke-width:2}
 /* The map's other cards. A feature is a pill in its system's colour; a page
    wears a browser's bar; a component is drawn dashed, being a piece of one;
    the design system is a swatch; a store is a drum with its shape listed;
-   a trigger is a small tab with a mark for a clock or an event. */
+   a trigger is a small tab with a mark for a clock, an event or a command. */
 .card.feat{border:1px solid color-mix(in srgb,var(--gc) 60%,var(--hair));border-radius:18px;
   background:color-mix(in srgb,var(--gc) 10%,var(--surface));padding:8px 12px}
 .card.feat .nm{font-family:var(--font-ui);font-weight:700;color:color-mix(in srgb,var(--gc) 70%,var(--ink))}
@@ -222,6 +222,7 @@ path.wire.breach{stroke-width:2}
 .card.trig{border:1px solid var(--hair);border-left:4px solid hsl(45 80% 50%);border-radius:5px}
 .card.trig .nm::before{content:"\23F1  ";color:var(--muted)}
 .card.trig.event .nm::before{content:"\26A1  "}
+.card.trig.command .nm::before{content:"$  "}
 .card.loose{border:1px dashed var(--breach)}
 .card.loose .nm{color:var(--breach)}
 .card ul.fields{list-style:none;margin:6px 0 0;padding:5px 0 0;border-top:1px solid var(--hair-soft)}
@@ -381,7 +382,7 @@ var MAPWIRES={uses:1,informed:1,acts:1,contains:1,starts:1,writes:1,reads:1,lead
 function isInside(k){ return isWiring(k)||!!MAPWIRES[k]; }
 function headOf(k){ return (KINDS[k]||{}).head||"from"; }
 var CARDCLASS={file:"file",module:"mod",feature:"feat",page:"page",component:"comp",
-  design:"design",store:"store",trigger:"trig",loose:"loose"};
+  design:"design",shell:"comp",store:"store",trigger:"trig",loose:"loose"};
 
 var KEY="codegraph."+(GRAPH.root||"x");
 function save(k,v){ try{ localStorage.setItem(KEY+"."+k,JSON.stringify(v)); }catch(e){} }
@@ -693,7 +694,7 @@ function show(key){
     el.style.width=wid[n.id]+"px"; el.style.minHeight=Math.round(CH*(n.size||1))+"px";
     el.style.setProperty("--s",n.size||1);
     el.className="card "+(CARDCLASS[n.kind]||"ext")+(n.start?" start":"")+
-      (n.kind==="trigger"&&n.dir==="event"?" event":"")+
+      (n.kind==="trigger"&&n.dir!=="schedule"?" "+n.dir:"")+
       (VIEWS[n.id]&&n.id!==cur?" opens":"")+(folded[n.id]?" folded":"")+(FLAG[n.id]?" flagged":"");
     el.style.setProperty("--gc",gcolor(n.group));
     el.tabIndex=0; el.setAttribute("role","button");

@@ -2,11 +2,13 @@
 """The check: every rule, run on small codebases."""
 from __future__ import annotations
 
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
 from features.check import check
+from features.map import draw_map
 from modules.rules import read_map, route_of
 from tests.helpers import Folder, HAS_SCRIPT, mod, tree
 
@@ -91,10 +93,25 @@ class FrontDoors(Project):
         r = self.check({"util/a.py": mod("util", "x"), "util/b.py": mod("util", "y")})
         self.assertTrue(self.has(r.mismatches, "more than one file"))
 
-    def test_a_module_test_goes_through_the_front_door_too(self):
+    def test_a_modules_own_test_may_reach_inside_it(self):
         r = self.check({"tests/test_book.py": "# codegraph: test module engine\n"
                                               "from engine.book import _fill\n"})
+        self.assertEqual(r.mismatches, [])
+
+    def test_a_test_reaching_inside_another_module_is_a_mismatch(self):
+        r = self.check({"billing/__init__.py": mod("billing", "charge"),
+                        "billing/card.py": mod("billing") + "def charge(): pass\ndef _raw(): pass\n",
+                        "tests/test_book.py": "# codegraph: test module engine\n"
+                                              "from billing.card import _raw\n"})
         self.assertEqual([m.rel for m in r.mismatches], ["tests/test_book.py"])
+        self.assertIn("_raw", r.mismatches[0].text)
+
+    def test_a_feature_test_is_no_insider(self):
+        r = self.check({"features/go.py": "# codegraph: feature go in x\n# codegraph: uses engine\n"
+                                          "# codegraph: command go\nfrom engine.book import Book\n",
+                        "tests/test_go.py": "# codegraph: test feature go\nimport features.go\n"
+                                            "from engine.book import _fill\n"})
+        self.assertEqual([m.rel for m in r.mismatches], ["tests/test_go.py"])
 
     def test_a_test_through_the_front_door_passes(self):
         r = self.check({"tests/test_book.py": "# codegraph: test module engine\n"
@@ -163,6 +180,17 @@ class Layers(Project):
     def test_a_feature_with_no_trigger(self):
         r = self.check({"features/x.py": "# codegraph: feature x in people\n"})
         self.assertTrue(self.has(r.mismatches, "feature x", "no trigger"))
+
+    def test_a_command_a_person_runs_is_a_trigger(self):
+        tree(self.root, {"features/load.py": "# codegraph: feature load in people\n"
+                                             "# codegraph: command load-members\n"})
+        r = read_map(self.root)
+        self.assertEqual(r.mismatches, [])
+        self.assertIn(("command", "load-members"), [(t["kind"], t["label"]) for t in r.triggers])
+
+    def test_only_a_feature_says_command(self):
+        r = self.check({"members/cli.py": mod("members") + "# codegraph: command x\n"})
+        self.assertTrue(self.has(r.mismatches, "only a feature"))
 
     def test_a_page_that_acts_on_a_feature_is_its_trigger(self):
         r = self.check({
@@ -244,6 +272,21 @@ class Stores(Project):
         r = self.check({"jobs/__init__.py": mod("jobs", "") + "# codegraph: store jobs as Job\n"})
         self.assertTrue(self.has(r.mismatches, "store jobs", "Job"))
 
+    def test_a_schema_built_while_the_program_runs_is_an_unknown_shape(self):
+        r = self.check({"jobs/__init__.py": mod("jobs", "") + "# codegraph: store jobs as Job\n"
+                        "Job = model_from(FIELDS)\n"})
+        self.assertFalse(self.has(r.mismatches, "store jobs"))
+        self.assertTrue(self.has(r.unknown, "store jobs", "Job", "cannot be read"))
+
+    @unittest.skipUnless(HAS_SCRIPT, "tree-sitter is not installed")
+    def test_a_zod_schema_built_from_a_catalogue_is_an_unknown_shape(self):
+        r = self.check({"sales/schema.js": "// codegraph: module sales\n// codegraph: front door\n"
+                        "// codegraph: store sales as SaleColumns\n"
+                        "export const SaleColumns = z.object(\n"
+                        "  Object.fromEntries(SALE_FIELDS.map((f) => [f.key, shapeFor(f)])),\n);\n"})
+        self.assertFalse(self.has(r.mismatches, "store sales"))
+        self.assertTrue(self.has(r.unknown, "store sales", "SaleColumns"))
+
     def test_a_store_owned_twice(self):
         r = self.check({"other/__init__.py": mod("other", "") + "# codegraph: store members\n"})
         self.assertTrue(self.has(r.mismatches, "store members", "one owning module"))
@@ -287,6 +330,38 @@ class Stores(Project):
         r = self.check({"other/__init__.py": mod("other", "") +
                         "def x(db): db.collection('ghosts').get()\n"})
         self.assertTrue(self.has(r.mismatches, "ghosts", "not a declared store"))
+
+    def test_a_collection_named_by_a_constant(self):
+        r = self.check({"other/__init__.py": mod("other", "") + "MEMBERS = 'members'\n"
+                        "def x(db): db.collection(MEMBERS).get()\n"})
+        self.assertTrue(self.has(r.mismatches, "reads store members", "without saying so"))
+
+    def test_a_collection_named_by_a_constant_from_another_file(self):
+        r = self.check({"names/__init__.py": mod("names", "MEMBERS") + "MEMBERS = 'members'\n",
+                        "other/__init__.py": mod("other", "") + "from names import MEMBERS\n"
+                        "def x(db): db.collection(MEMBERS).get()\n"})
+        self.assertTrue(self.has(r.mismatches, "reads store members", "without saying so"))
+
+    @unittest.skipUnless(HAS_SCRIPT, "tree-sitter is not installed")
+    def test_a_firebase_modular_call_names_its_store_by_a_constant(self):
+        r = self.check({"other/db.js": "// codegraph: module other\n// codegraph: front door\n"
+                        "import { collection, getDocs } from 'firebase/firestore';\n"
+                        "const MEMBERS = 'members';\n"
+                        "export const all = (db) => getDocs(collection(db, MEMBERS));\n"})
+        self.assertTrue(self.has(r.mismatches, "reads store members", "without saying so"))
+
+    def test_prose_that_reads_like_sql_is_not_a_call(self):
+        r = self.check({"other/__init__.py": mod("other", "") +
+                        "HELP = 'Select a CSV export (e.g. from MLS) saved as a .csv file.'\n"})
+        self.assertEqual(r.mismatches, [])
+
+    @unittest.skipUnless(HAS_SCRIPT, "tree-sitter is not installed")
+    def test_ui_copy_that_reads_like_sql_is_not_a_call(self):
+        r = self.check({"web/import.jsx": "// codegraph: start page import at /\n"
+                        "export default () => <FileInput\n"
+                        "  note=\"select a CSV export (e.g. from MLS) saved as a .csv file.\" />;\n",
+                        "tests/walk.py": "# codegraph: test ui import\n"})
+        self.assertEqual(r.mismatches, [])
 
 
 class PageMap(Project):
@@ -346,6 +421,39 @@ class PageMap(Project):
                         "web/members.tsx": "// codegraph: page members at /members\n"})
         self.assertIn(("page:home", "page:members", "leads"), r.wires)
 
+    def test_the_shells_links_lead_from_every_page(self):
+        if not HAS_SCRIPT:
+            self.skipTest("tree-sitter is not installed")
+        r = self.pages({"web/app.jsx": ("// codegraph: shell\n"
+                                        "import { Nav } from './nav';\n"
+                                        "import Home from './home';\nimport Members from './members';\n"),
+                        "web/nav.jsx": ("// codegraph: component nav\n"
+                                        "const tabs = [{ to: '/' }, { to: '/members' }];\n"
+                                        "export const Nav = () => tabs.map((t) => <NavTab to={t.to} />);\n"),
+                        "web/home.jsx": "// codegraph: start page home at /\n",
+                        "web/members.jsx": "// codegraph: page members at /members\n"})
+        self.assertIn(("page:home", "page:members", "leads"), r.wires)
+        self.assertIn(("page:members", "page:home", "leads"), r.wires)
+        self.assertFalse(self.has(r.mismatches, "cannot be reached"))
+        self.assertFalse(self.has(r.unknown, "cannot be reached"))
+
+    def test_nothing_in_the_ui_imports_the_shell(self):
+        r = self.pages({"web/shell.py": "# codegraph: shell\n",
+                        "web/home.py": "# codegraph: start page home at /\nimport web.shell\n"})
+        self.assertTrue(self.has(r.mismatches, "the shell"))
+
+    def test_a_built_link_on_a_page_nobody_reaches_hides_nothing(self):
+        r = self.pages({"web/home.tsx": "// codegraph: start page home at /\n",
+                        "web/members.tsx": "// codegraph: page members at /members\n"
+                                           "<Link href={url}>"})
+        self.assertTrue(self.has(r.mismatches, "page members", "cannot be reached"))
+
+    def test_a_built_link_on_a_reached_page_might_lead_anywhere(self):
+        r = self.pages({"web/home.tsx": "// codegraph: start page home at /\n<Link href={url}>",
+                        "web/members.tsx": "// codegraph: page members at /members\n"})
+        self.assertFalse(self.has(r.mismatches, "cannot be reached"))
+        self.assertTrue(self.has(r.unknown, "page members", "cannot be reached"))
+
     def test_a_page_no_ui_test_walks(self):
         r = self.pages({"web/home.tsx": "// codegraph: start page home at /\n",
                         "web/about.tsx": "// codegraph: page about at /about\n"})
@@ -385,6 +493,59 @@ class Fakes(Project):
         r = self.check({"tests/test_feed.py": "# codegraph: test module bars\n"
                                               "patch('bars.feed.httpx')\n"})
         self.assertEqual(r.mismatches, [])
+
+    def test_a_fake_for_what_the_test_runtime_lacks_is_said_out_loud(self):
+        r = self.check({"tests/test_feed.py": "# codegraph: test module bars\n"
+                                              "# codegraph: fakes bars.feed.fetch because the "
+                                              "runner has no network\n"
+                                              "patch('bars.feed.fetch')\n"})
+        self.assertEqual(r.mismatches, [])
+
+    def test_a_said_fake_needs_its_reason(self):
+        r = self.check({"tests/test_feed.py": "# codegraph: test module bars\n"
+                                              "# codegraph: fakes bars.feed.fetch\n"
+                                              "patch('bars.feed.fetch')\n"})
+        self.assertTrue(self.has(r.mismatches, "because"))
+
+    def test_a_said_fake_the_test_never_makes(self):
+        r = self.check({"tests/test_feed.py": "# codegraph: test module bars\n"
+                                              "# codegraph: fakes bars.feed.fetch because no network\n"})
+        self.assertTrue(self.has(r.mismatches, "bars.feed.fetch", "never does"))
+
+    def test_only_a_test_says_fakes(self):
+        r = self.check({"bars/x.py": mod("bars") + "# codegraph: fakes y because z\n"})
+        self.assertTrue(self.has(r.mismatches, "only a test"))
+
+
+class SameFiles(Project):
+    """The check and the map read the same files, so they cannot disagree
+    about which exist."""
+
+    def test_an_ignored_build_is_in_neither_and_an_untagged_file_in_both(self):
+        tree(self.root, {"app/__init__.py": mod("app", ""), "loose.py": "x = 1\n",
+                         "public/bundle.py": "# codegraph: module app\ny = 2\n"})
+        (self.root / ".gitignore").write_text("public/\n", encoding="utf-8")
+        for args in (["init", "-q"], ["add", "-A"]):
+            if subprocess.run(["git", "-C", str(self.root)] + args, capture_output=True).returncode:
+                self.skipTest("git is not available")
+        untagged = [m.rel for m in check(self.root).mismatches if "no codegraph tag" in m.text]
+        drawn = draw_map(self.root)
+        files = {n["id"] for n in drawn["nodes"] if n["kind"] == "file"}
+        self.assertEqual(untagged, ["loose.py"])
+        self.assertEqual(files, {"app", "loose"})
+
+
+class ShippedForTests(Project):
+    """Test data that ships with the program."""
+
+    def test_a_file_only_tests_reach_is_flagged(self):
+        r = self.check({"app/__init__.py": mod("app", "SAMPLE") + "from app.data import SAMPLE\n",
+                        "app/data.py": mod("app") + "SAMPLE = []\n",
+                        "app/fixture.py": mod("app") + "FAKE_SALES = []\n",
+                        "tests/test_app.py": "# codegraph: test module app\n"
+                                             "from app.fixture import FAKE_SALES\nimport app\n"})
+        self.assertEqual([u.rel for u in r.unknown if "only by tests" in u.text],
+                         ["app/fixture.py"])
 
 
 @unittest.skipUnless(HAS_SCRIPT, "tree-sitter is not installed")

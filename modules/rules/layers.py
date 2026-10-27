@@ -15,8 +15,11 @@ RELATIONS = {
     ("page", "feature"): "acts", ("component", "feature"): "acts",
     ("page", "component"): "contains", ("component", "component"): "contains",
     ("page", "design"): None, ("component", "design"): None, ("design", "design"): None,
+    # the shell draws every page, so it may import them to route to them
+    ("shell", "page"): None, ("shell", "component"): "contains", ("shell", "design"): None,
+    ("shell", "feature"): "acts", ("shell", "module"): "informed",
 }
-UI_KINDS = ("page", "component", "design")
+UI_KINDS = ("page", "component", "design", "shell")
 
 
 def relation(a: str, b: str) -> tuple:
@@ -29,6 +32,8 @@ def relation(a: str, b: str) -> tuple:
         return None, "the program never imports a test"
     if b == "tooling":
         return None, "the program never imports tooling"
+    if b == "shell" and a in UI_KINDS:
+        return None, "nothing in the UI imports the shell; the shell draws the pages"
     if (a, b) in RELATIONS:
         return RELATIONS[(a, b)], None
     if a == "module":

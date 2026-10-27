@@ -27,7 +27,8 @@ in the feature.
 _Avoid_: use case, capability, action, flow, job
 
 **Trigger**:
-What starts a feature: a person through a page, a schedule, or an event.
+What starts a feature: a person through a page, a person at a terminal
+through a command, a schedule, or an event.
 _Rule_: a feature with two triggers is still one feature, written once.
 _Avoid_: entry point, caller, hook
 
@@ -43,13 +44,19 @@ on a queue or a file landing in a folder.
 _Rule_: what it carries flows into the feature it starts.
 _Avoid_: hook, signal, message
 
+**Command**:
+A trigger a person types at a terminal, such as a migration they run on
+purpose.
+_Rule_: it is declared on the feature it starts, by the name a person types.
+_Avoid_: script, CLI, tool
+
 ## Code
 
 **File**:
 One source file, the smallest thing on the map.
 _Rule_: a file carries exactly one tag, which says what it belongs to: a
-module, a feature, a page, a component, the design system, a test, or
-tooling. A file with no tag is a mismatch.
+module, a feature, a page, a component, the design system, the shell, a
+test, or tooling. A file with no tag is a mismatch.
 _Avoid_: script, source
 
 **Module**:
@@ -72,13 +79,17 @@ _Avoid_: interface, public API, entry point, exports
 A file that checks other code and is never used by the program itself. It is
 a module test, a feature test or a UI test.
 _Rule_: non-test code never imports a test; a test fakes only outside
-connections, never code in the repo.
+connections, never code in the repo, unless the test runtime lacks what that
+code needs (jsdom has no canvas) and the test says so in a `fakes` tag; a
+file of the program that only tests reach is test data in the wrong place.
 _Avoid_: spec, check, suite
 
 **Module test**:
-A test of one module, run through its front door.
-_Rule_: uses only front-door names, the same as any other outside caller;
-uses real stores where that is cheap, such as an in-memory database.
+A test of one module, written from inside it.
+_Rule_: may use any name in its own module, as the module's own files do;
+anything it takes from another module goes through that module's front door;
+uses real stores where that is cheap, such as an in-memory database
+(docs/adr/0005).
 _Avoid_: unit test
 
 **Feature test**:
@@ -128,10 +139,18 @@ the framework's router, and a link built while the program runs is reported
 as unknown, not guessed.
 _Avoid_: screen, view, route
 
+**Shell**:
+The frame every page is drawn in, such as an app's nav bar and the router
+that picks the page.
+_Rule_: what it contains is on every page, so its links lead from every
+page; it may import pages to route to them, and nothing in the UI imports it.
+_Avoid_: layout, frame, chrome, app
+
 **Start page**:
 The page a person lands on first, where every path through the UI begins.
 _Rule_: every page can be reached from a start page by following leads-to
-wires.
+wires; a page is only possibly reached when a page someone can get to builds
+a link while it runs.
 _Avoid_: home, landing page
 
 **Component**:
