@@ -165,7 +165,7 @@ def draft_tags(root: Path, hidden: bool = False) -> dict:
         uid = unit(f.name)
         if not uid.startswith("module:"):
             continue
-        for name, how, line in store_calls(text_of(f)):
+        for name, how, line in store_calls(text_of(f), f.lang):
             c = calls[name][uid]
             c[0] += 2 if how == "writes" else 1
             c[1] = c[1] or f

@@ -258,7 +258,7 @@ def read_map(root: Path, hidden: bool = False, drafted: dict | None = None) -> R
                                        "outside connection".format(conn.label,
                                                                    KINDS[conn.kind]["label"])))
 
-        for name, how, line in store_calls(text):
+        for name, how, line in store_calls(text, f.lang):
             s = lower.get(name.lower())
             if s is None:
                 mis.append(Finding(f.rel, line, "reaches {}, which is not a declared store; tag "

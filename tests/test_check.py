@@ -260,6 +260,21 @@ class Stores(Project):
                         "def x(c): c.execute('UPDATE members SET name = 1')\n"})
         self.assertTrue(self.has(r.mismatches, "writes store members", "only its owner"))
 
+    def test_sql_in_a_comment_or_docstring_is_not_a_call(self):
+        r = self.check({"other/__init__.py": mod("other", "") +
+                        '"""Holds rows:\n\n    CREATE TABLE notes (id INTEGER)\n"""\n'
+                        "# DELETE FROM members, once\n"
+                        "def x():\n    '''UPDATE members SET name = 1'''\n"})
+        self.assertEqual(r.mismatches, [])
+
+    @unittest.skipUnless(HAS_SCRIPT, "tree-sitter is not installed")
+    def test_sql_in_a_script_comment_is_not_a_call(self):
+        r = self.check({"other/index.ts": mod("other", "").replace("#", "//") +
+                        "// DELETE FROM members\n/* UPDATE members SET name = 1 */\n"
+                        "export const q = 'SELECT name FROM notes';\n"})
+        self.assertTrue(self.has(r.mismatches, "reaches notes"))
+        self.assertFalse(self.has(r.mismatches, "members"))
+
     def test_a_declared_reader_may_read_it(self):
         r = self.check({"report/__init__.py": mod("report", "") + "# codegraph: reads members\n"
                         "def x(c): c.execute('SELECT name FROM members')\n"})
