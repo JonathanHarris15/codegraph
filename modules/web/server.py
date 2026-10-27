@@ -88,6 +88,10 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         route = self._route()
+        # read what was sent before answering, refusals too: a socket closed
+        # with data still unread is reset on Windows, and the answer is lost
+        size = int(self.headers.get("Content-Length") or 0)
+        body = self.rfile.read(min(size, MAX_BODY))
         if route not in ("ask", "refresh"):
             self._send(404, json.dumps({"error": "not here"}))
             return
@@ -97,9 +101,8 @@ class _Handler(BaseHTTPRequestHandler):
         if route == "refresh":
             self._send(200, json.dumps({"version": self.server.refresh()}))
             return
-        size = int(self.headers.get("Content-Length") or 0)
         try:
-            text = json.loads(self.rfile.read(min(size, MAX_BODY)) or b"{}").get("text", "")
+            text = json.loads(body or b"{}").get("text", "")
         except (ValueError, AttributeError):
             text = ""
         if not isinstance(text, str) or not text.strip():
