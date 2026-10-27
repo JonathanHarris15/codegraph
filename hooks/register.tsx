@@ -131,6 +131,20 @@ async function openTab($: any, url: string): Promise<boolean> {
   return false
 }
 
+// Serve the live map and open it; where it cannot start, the pane shows the
+// map instead. Says which happened.
+async function openLive($: any): Promise<string> {
+  const url = await startMap($)
+  if (!url) {
+    await $.ui.open({ id: PANE, title: 'Codegraph' })
+    void refresh($)
+    return 'The live map could not start (' + ((await read($, status)) || 'is Python 3.10+ on the PATH?') + '), so the pane shows it instead.'
+  }
+  return (await openTab($, url))
+    ? 'The map is open in a browser tab. Fix, Ask and + Feature there fill this chat box; it redraws after every turn.'
+    : `The map is open in your browser at ${url}. Fix, Ask and + Feature there fill this chat box.`
+}
+
 async function refresh($: any) {
   const ran = await run($, ['--summary'])
   if (ran.exitCode !== 0) {
@@ -290,25 +304,24 @@ export const register: Register = on => {
       inputSchema: { type: 'object', properties: {} },
       isDeferred: false,
     })
+    await $.tool.register({
+      name: 'open',
+      description:
+        'Open this repo\'s live codegraph map in a browser tab inside Claude Code. Call it when the ' +
+        'person asks to see or open the map.',
+      inputSchema: { type: 'object', properties: {} },
+      isDeferred: false,
+    })
     const started = await next(e)
     void refresh($)
     return started
   })
 
-  on('command.run', { command: 'codegraph' }, async $ => {
-    const url = await startMap($)
-    if (!url) {
-      await $.ui.open({ id: PANE, title: 'Codegraph' })
-      void refresh($)
-      return { text: 'The live map could not start (' + ((await read($, status)) || 'is Python 3.10+ on the PATH?') + '), so the pane shows it instead.' }
-    }
-    const inside = await openTab($, url)
-    return {
-      text: inside
-        ? 'The map is open in a browser tab. Fix, Ask and + Feature there fill this chat box; it redraws after every turn.'
-        : `The map is open in your browser at ${url}. Fix, Ask and + Feature there fill this chat box.`,
-    }
-  })
+  on('command.run', { command: 'codegraph' }, async $ => ({ text: await openLive($) }))
+
+  // The desktop app's slash menu lists skills, not the commands a mod
+  // registers, so /codegraph:open reaches the map through this tool.
+  on('tool.call', { tool: 'mcp__codegraph__open' as any }, async $ => ({ result: await openLive($) }))
 
   on('command.run', { command: 'codegraph-pane' }, async $ => {
     await $.ui.open({ id: PANE, title: 'Codegraph' })

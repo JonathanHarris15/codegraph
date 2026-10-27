@@ -1,6 +1,6 @@
 {
   "name": "codegraph",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Keep a codebase in modules, features and UI: a map of it beside the chat, a check agents run after every change, and skills to set a repo up and fix what the map shows red.",
   "types": "./types/index.d.ts",
   "author": {

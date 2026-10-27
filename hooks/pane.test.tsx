@@ -174,6 +174,28 @@ test('/codegraph serves the live map, opens it in a browser tab, and its presses
   expect(fills).toContain('/codegraph:fix all 2 mismatches, worst first, one commit each')
 })
 
+test('the open tool serves the live map and opens it, for the desktop menu that lists no mod commands', async ($, on) => {
+  engine(on, 'desktop', { filled: '', draft: '' })
+  const opened: any[] = []
+  const spawned: string[][] = []
+  on('process.spawn', async function* (_: any, e: any) {
+    spawned.push([...e.argv])
+    yield { stream: 'stdout', text: '{"ready": "http://127.0.0.1:7333/s3cret/"}\n' }
+    await new Promise(() => undefined) // serves until stopped
+  } as any)
+  on('mcp.call', (_: any, e: any) => {
+    opened.push(e)
+    return { value: { content: [], isError: false } }
+  })
+
+  await $.session.start({ cwd: '/repo', surface: 'desktop', isInteractive: true })
+  const ran: any = await $.tool.call({ tool: 'mcp__codegraph__open' } as any)
+
+  expect(spawned[0]).toContain('--serve')
+  expect(opened[0]).toMatchObject({ tool: 'preview_start', args: { url: 'http://127.0.0.1:7333/s3cret/' } })
+  expect(JSON.stringify(ran)).toContain('browser tab')
+})
+
 test('a session that starts in a spare folder reads the project it moves to', async ($, on) => {
   // The desktop app starts a session in a spare folder it then deletes, and
   // moves the session to the project.

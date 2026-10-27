@@ -21,18 +21,20 @@ words.
 The repo is a Claude Code plugin. Installing it gives you three things:
 
 - the **live map** in a browser tab inside Claude Code: `/codegraph` opens
-  it. It is the whole page below, served on this machine alone, and it talks
-  back: **Fix** on any mismatch, **Fix all**, **Ask about it** on any card, and
+  it, or `/codegraph:open` in the desktop app, whose slash menu lists only
+  skills. It is the whole page below, served on this machine alone, and it
+  talks back: **Fix** on any mismatch, **Fix all**, **Ask about it** on any card, and
   **+ Feature**, **+ Module**, **+ Page** each fill the chat box with the
   prompt, ready to send. **Show** finds a mismatch's card on the map, a red
   dot marks every card that has one, and the list folds away. After every
   turn the page reads the code again and redraws, keeping your place.
   Where no browser tab can open, `/codegraph-pane` shows a smaller map in a
   pane beside the chat.
-- two **tools** the agent calls: `check`, run after every change, and `map`,
-  read before deciding where work goes.
-- two **skills**: `/codegraph:setup` brings a repo under codegraph, and
-  `/codegraph:fix` fixes one mismatch at a time, test first.
+- three **tools** the agent calls: `check`, run after every change, `map`,
+  read before deciding where work goes, and `open`, which opens the live map.
+- three **skills**: `/codegraph:setup` brings a repo under codegraph,
+  `/codegraph:fix` fixes one mismatch at a time, test first, and
+  `/codegraph:open` opens the live map.
 
 To install it for every project, add this folder as a marketplace (the repo
 lists itself in `.claude-plugin/marketplace.json`), then install from it:
