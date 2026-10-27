@@ -7,9 +7,7 @@ import unittest
 from pathlib import Path
 
 from features.check import check
-from modules.drafting.guesses import looks_like_test, path_match
 from modules.rules import read_map, route_of
-from modules.rules.pages import route_matches
 from tests.helpers import Folder, HAS_SCRIPT, mod, tree
 
 
@@ -92,11 +90,6 @@ class FrontDoors(Project):
     def test_a_front_door_written_twice(self):
         r = self.check({"util/a.py": mod("util", "x"), "util/b.py": mod("util", "y")})
         self.assertTrue(self.has(r.mismatches, "more than one file"))
-
-    def test_a_star_stays_in_its_folder(self):
-        self.assertTrue(path_match("atp/book.py", "atp/*"))
-        self.assertFalse(path_match("atp/engine/book.py", "atp/*"))
-        self.assertTrue(path_match("atp/engine/book.py", "atp/**"))
 
     def test_a_module_test_goes_through_the_front_door_too(self):
         r = self.check({"tests/test_book.py": "# codegraph: test module engine\n"
@@ -347,8 +340,17 @@ class PageMap(Project):
         self.assertEqual(route_of("app/(shop)/cart/page.tsx"), "/cart")
         self.assertEqual(route_of("src/pages/index.tsx"), "/")
         self.assertEqual(route_of("src/pages/api/x.ts"), "")
-        self.assertTrue(route_matches("/docs/a/b", "/docs/[...slug]"))
-        self.assertFalse(route_matches("/members", "/members/[id]"))
+
+    def test_a_rest_slot_takes_the_rest_of_the_link(self):
+        r = self.pages({"web/home.tsx": "// codegraph: start page home at /\n<a href=\"/docs/a/b\">",
+                        "web/docs.tsx": "// codegraph: page docs at /docs/[...slug]\n"})
+        self.assertIn(("page:home", "page:docs", "leads"), r.wires)
+
+    def test_a_link_short_of_a_slot_lands_on_no_page(self):
+        r = self.pages({"web/home.tsx": "// codegraph: start page home at /\n<a href=\"/members\">",
+                        "web/member.tsx": "// codegraph: page member at /members/[id]\n"})
+        self.assertNotIn(("page:home", "page:member", "leads"), r.wires)
+        self.assertTrue(self.has(r.unknown, "links to /members", "no page"))
 
 
 class Fakes(Project):
@@ -403,11 +405,6 @@ class ScriptUses(unittest.TestCase):
     def test_a_default_import_uses_default(self):
         r = self.check('import Book from "../core/book";\n')
         self.assertTrue(any("default" in m.text for m in r.mismatches))
-
-    def test_test_files_are_found_by_their_names(self):
-        self.assertTrue(looks_like_test("src/book.test.ts"))
-        self.assertTrue(looks_like_test("src/book.spec.tsx"))
-        self.assertFalse(looks_like_test("src/book.ts"))
 
     def test_faking_the_repos_own_file(self):
         tree(self.root, {"core/book.test.ts": "// codegraph: test module core\nvi.mock('./book');\n"})

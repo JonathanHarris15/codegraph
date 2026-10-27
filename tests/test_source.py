@@ -1,9 +1,9 @@
 # codegraph: test module source
 """Turning a path and an import statement into the name of another file,
-and finding what a file reaches outside the program."""
+and finding what a file reaches outside the program. Every test writes a
+small repo and reads it through the front door: files_in and reader_of."""
 from __future__ import annotations
 
-import ast
 import json
 import tempfile
 import unittest
@@ -11,21 +11,35 @@ from pathlib import Path
 
 from modules.drawing import build
 from modules.source import files_in, reader_of
-from modules.source.files import File, file_of
-from modules.source.outside import match_probe, read_outside, symbol_table, through_imports
-from modules.source.python import RawImport, absolute, resolve
-from tests.helpers import HAS_SCRIPT, mod, tree
+from tests.helpers import Folder, HAS_SCRIPT, mod, tree
 
 
-class FileNames(unittest.TestCase):
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.root = Path(self.tmp.name)
-        self.addCleanup(self.tmp.cleanup)
+class Repo(Folder):
+    """A small repo, and what the source module reads from it."""
 
-    def name_of(self, rel: str) -> File:
+    def file(self, rel: str):
+        return next(f for f in files_in(self.root) if f.rel == rel)
+
+    def links(self, rel: str) -> list:
+        f = self.file(rel)
+        return reader_of(f).links(f, {g.name: g for g in files_in(self.root)})
+
+    def landed(self, rel: str) -> list:
+        return sorted(l.target for l in self.links(rel) if l.target)
+
+    def conns(self, src: str) -> dict:
+        tree(self.root, {"m.py": src})
+        f = self.file("m.py")
+        return {c.target: c for c in reader_of(f).outside(f)}
+
+    def kinds(self, src: str) -> set:
+        return {c.kind for c in self.conns(src).values()}
+
+
+class FileNames(Repo):
+    def name_of(self, rel: str):
         tree(self.root, {rel: ""})
-        return file_of(self.root / rel, self.root)
+        return self.file(rel)
 
     def test_nested_file(self):
         m = self.name_of("pkg/sub/thing.py")
@@ -46,117 +60,113 @@ class FileNames(unittest.TestCase):
 
     def test_lines_are_counted(self):
         tree(self.root, {"a.py": "x = 1\ny = 2\n"})
-        self.assertEqual(file_of(self.root / "a.py", self.root).lines, 2)
+        self.assertEqual(self.file("a.py").lines, 2)
 
 
-class RelativeImports(unittest.TestCase):
+class RelativeImports(Repo):
     """`from ..x import y` written inside pkg.sub.thing."""
 
-    def abs_of(self, module, level, package="pkg.sub"):
-        imp = RawImport(module, (), level, False)
-        return absolute(imp, package)
+    def setUp(self):
+        super().setUp()
+        tree(self.root, {"pkg/__init__.py": "", "pkg/other.py": "", "pkg/sub/__init__.py": "",
+                         "pkg/sub/near.py": "", "other/mod.py": ""})
+
+    def landed_from(self, line: str) -> list:
+        tree(self.root, {"pkg/sub/thing.py": line + "\n"})
+        return self.landed("pkg/sub/thing.py")
 
     def test_absolute_is_left_alone(self):
-        self.assertEqual(self.abs_of("other.mod", 0), "other.mod")
+        self.assertEqual(self.landed_from("import other.mod"), ["other.mod"])
 
     def test_one_dot_is_the_package(self):
-        self.assertEqual(self.abs_of("thing", 1), "pkg.sub.thing")
+        self.assertEqual(self.landed_from("from .near import y"), ["pkg.sub.near"])
 
     def test_bare_one_dot(self):
-        self.assertEqual(self.abs_of(None, 1), "pkg.sub")
+        self.assertEqual(self.landed_from("from . import y"), ["pkg.sub"])
 
     def test_two_dots_climb(self):
-        self.assertEqual(self.abs_of("other", 2), "pkg.other")
+        self.assertEqual(self.landed_from("from ..other import y"), ["pkg.other"])
 
     def test_climbing_past_the_root_does_not_crash(self):
-        self.assertEqual(self.abs_of("x", 9), "x")
+        self.assertEqual(self.landed_from("from .........x import y"), [])
 
 
-class Resolution(unittest.TestCase):
-    index = {"pkg": 1, "pkg.models": 1, "pkg.engine": 1, "pkg.engine.tick": 1,
-             "scripts.helpers": 1}
+class Resolution(Repo):
+    def setUp(self):
+        super().setUp()
+        tree(self.root, {"pkg/__init__.py": "", "pkg/models.py": "class Bar: pass\n",
+                         "pkg/engine/__init__.py": "", "pkg/engine/tick.py": "",
+                         "scripts/helpers.py": ""})
+
+    def landed_from(self, line: str, rel: str = "app.py") -> list:
+        tree(self.root, {rel: line + "\n"})
+        return self.landed(rel)
 
     def test_plain_module(self):
-        self.assertEqual(resolve("pkg.models", (), self.index), ["pkg.models"])
+        self.assertEqual(self.landed_from("import pkg.models"), ["pkg.models"])
 
     def test_names_that_are_modules_each_count(self):
-        hits = resolve("pkg.engine", ("tick", "Book"), self.index)
-        self.assertEqual(sorted(hits), ["pkg.engine", "pkg.engine.tick"])
+        self.assertEqual(self.landed_from("from pkg.engine import tick, Book"),
+                         ["pkg.engine", "pkg.engine.tick"])
 
     def test_a_name_that_is_a_class_does_not(self):
-        self.assertEqual(resolve("pkg.models", ("Bar",), self.index), ["pkg.models"])
+        self.assertEqual(self.landed_from("from pkg.models import Bar"), ["pkg.models"])
 
     def test_third_party_misses(self):
-        self.assertEqual(resolve("httpx", ("Client",), self.index), [])
+        self.assertEqual(self.landed_from("from httpx import Client"), [])
+        self.assertEqual([l.package for l in self.links("app.py")], ["httpx"])
 
     def test_sibling_script_resolves_through_its_folder(self):
         # scripts/run.py saying `import helpers` means the file next door
-        self.assertEqual(
-            resolve("helpers", (), self.index, package="scripts"),
-            ["scripts.helpers"],
-        )
+        self.assertEqual(self.landed_from("import helpers", "scripts/run.py"),
+                         ["scripts.helpers"])
 
 
-class Symbols(unittest.TestCase):
+class Symbols(Repo):
     """Following a file's own imports, so a probe matches however it was written."""
 
-    def syms(self, src):
-        return symbol_table(ast.parse(src))
-
     def test_plain_import(self):
-        self.assertEqual(self.syms("import httpx")["httpx"], "httpx")
+        self.assertEqual(self.kinds("import httpx\nhttpx.Client()\n"), {"http"})
 
     def test_dotted_import_binds_the_root(self):
-        self.assertEqual(self.syms("import a.b.c")["a"], "a")
+        self.assertEqual(self.kinds("import urllib.request\nurllib.request.urlopen(u)\n"),
+                         {"http"})
 
     def test_alias(self):
-        self.assertEqual(self.syms("import numpy as np")["np"], "numpy")
+        self.assertEqual(self.kinds("import requests as r\nr.post(u)\n"), {"http"})
 
     def test_from_import_keeps_the_whole_path(self):
-        syms = self.syms("from alpaca.trading.client import TradingClient")
-        self.assertEqual(syms["TradingClient"], "alpaca.trading.client.TradingClient")
+        self.assertEqual(self.kinds("from alpaca.trading.client import TradingClient\n"
+                                    "TradingClient()\n"), {"market"})
 
     def test_relative_import_is_not_a_library(self):
-        self.assertEqual(self.syms("from .models import Bar"), {})
+        self.assertEqual(self.conns("from .requests import post\npost()\n"), {})
 
     def test_the_same_call_written_two_ways(self):
-        a = through_imports("Client", self.syms("from httpx import Client"))
-        b = through_imports("httpx.Client", self.syms("import httpx"))
+        a = self.conns("from httpx import Client\nClient()\n")
+        b = self.conns("import httpx\nhttpx.Client()\n")
         self.assertEqual(a, b)
-        self.assertEqual(match_probe(a), match_probe(b))
+        self.assertTrue(a)
 
 
-class Probes(unittest.TestCase):
-    def kind(self, name):
-        hit = match_probe(name)
-        return hit[0] if hit else None
-
+class Probes(Repo):
     def test_sqlite(self):
-        self.assertEqual(self.kind("sqlite3.connect"), "database")
+        self.assertEqual(self.kinds("import sqlite3\nsqlite3.connect('a.db')\n"), {"database"})
 
     def test_http_clients(self):
-        self.assertEqual(self.kind("httpx.Client"), "http")
-        self.assertEqual(self.kind("requests.post"), "http")
+        self.assertEqual(self.kinds("import httpx\nhttpx.Client()\n"), {"http"})
+        self.assertEqual(self.kinds("import requests\nrequests.post(u)\n"), {"http"})
 
     def test_a_wildcard_matches_the_family(self):
-        self.assertEqual(self.kind("alpaca.data.historical.CryptoHistoricalDataClient"),
-                         "market")
+        self.assertEqual(self.kinds("from alpaca.data.historical import "
+                                    "CryptoHistoricalDataClient\nCryptoHistoricalDataClient()\n"),
+                         {"market"})
 
     def test_ordinary_calls_are_not_connections(self):
-        self.assertIsNone(self.kind("json.dumps"))
-        self.assertIsNone(self.kind("self.book.apply"))
+        self.assertEqual(self.conns("import json\njson.dumps(1)\nself.book.apply()\n"), {})
 
 
-class Outside(unittest.TestCase):
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.root = Path(self.tmp.name)
-        self.addCleanup(self.tmp.cleanup)
-
-    def conns(self, src):
-        path = self.root / "m.py"
-        path.write_text(src, encoding="utf-8")
-        return {c.target: c for c in read_outside(path)}
+class Outside(Repo):
 
     def test_a_url_becomes_its_host(self):
         c = self.conns('URL = "https://api.example.com/v1/go"')["net:api.example.com"]

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import unittest
 
 from features.check import check
 from modules.drafting import draft_tags, write_drafts
@@ -86,3 +87,35 @@ class Drafting(Folder):
     def test_tags_go_after_use_client(self):
         self.assertEqual(insert_tags('"use client";\nexport {}\n', ["component x"], "//"),
                          '"use client";\n// codegraph: component x\nexport {}\n')
+
+
+class Seeding(Folder):
+    """An old codegraph.json says which files make each module."""
+
+    def seeded(self, pattern: str) -> dict:
+        tree(self.root, {"atp/book.py": "", "atp/engine/tick.py": ""})
+        (self.root / "codegraph.json").write_text(json.dumps({"modules": {
+            "core": {"files": [pattern], "front_door": []}}}))
+        return draft_tags(self.root)
+
+    def test_a_star_stays_in_its_folder(self):
+        d = self.seeded("atp/*")
+        self.assertEqual(d["atp/book.py"][0], "module core")
+        self.assertNotEqual(d["atp/engine/tick.py"][0], "module core")
+
+    def test_two_stars_take_every_folder_below(self):
+        d = self.seeded("atp/**")
+        self.assertEqual(d["atp/book.py"][0], "module core")
+        self.assertEqual(d["atp/engine/tick.py"][0], "module core")
+
+
+@unittest.skipUnless(HAS_SCRIPT, "tree-sitter is not installed")
+class ScriptTests(Folder):
+    def test_test_files_are_found_by_their_names(self):
+        tree(self.root, {"src/book.ts": "export class Book {}\n",
+                         "src/book.test.ts": "import { Book } from './book';\n",
+                         "src/book.spec.tsx": "import { Book } from './book';\n"})
+        d = draft_tags(self.root)
+        self.assertTrue(d["src/book.test.ts"][0].startswith("test "))
+        self.assertTrue(d["src/book.spec.tsx"][0].startswith("test "))
+        self.assertFalse(d["src/book.ts"][0].startswith("test "))
