@@ -4,9 +4,26 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import datetime, timezone
 
+from modules.drafting import as_tags, draft_tags
 from modules.layout import order_groups, place_by_file, place_by_folder
+from modules.rules import read_map
 from modules.source import EXTERNAL, KINDS, OUTSIDE, files_in, reader_of
+from modules.tags import tagged_at_all
+from .pane import ISSUE_GROUPS, issues_of
 from .views import map_views
+
+
+def map_of(root: Path, externals: bool = False, hidden: bool = False, outside: bool = True,
+           layout: str = "file", keep_empty: bool = False) -> dict:
+    """The map of a repo: every file and wire, and the views the page and
+    the pane draw. It comes from the tags, or failing that from a draft of
+    them, which the map labels as a draft."""
+    drafted, source = None, "tags"
+    if not tagged_at_all(root, hidden):
+        drafted, source = as_tags(draft_tags(root, hidden)), "draft"
+    reading = read_map(root, hidden, drafted)
+    return build(root, externals=externals, hidden=hidden, outside=outside, layout=layout,
+                 keep_empty=keep_empty, reading=reading, source=source)
 
 
 # --------------------------------------------------------------------- build
@@ -116,6 +133,8 @@ def build(root: Path, externals: bool = False, hidden: bool = False,
     }
     if reading is not None:
         graph["map"] = map_views(root, graph, reading, source)
+        graph["map"]["issues"] = issues_of(graph)
+        graph["map"]["groups"] = [{"id": g, "label": label} for g, label, _ in ISSUE_GROUPS]
         seen = set(used) | {e["kind"] for v in graph["map"]["views"].values()
                             for e in v["edges"]}
         graph["kinds"] = {k: KINDS[k] for k in KINDS if k in seen}

@@ -30,6 +30,7 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
+from features.browse import browse
 from features.check import check
 from features.draft import draft
 from features.map import draw_map
@@ -62,12 +63,24 @@ def main(argv: list[str] | None = None) -> int:
                     help="write a first tag into every file that has none")
     ap.add_argument("--summary", action="store_true",
                     help="print what the mod beside the chat shows, as JSON")
+    ap.add_argument("--serve", action="store_true",
+                    help="serve the map as a live page on this machine; print what it asks")
+    ap.add_argument("--port", type=int, default=0,
+                    help="the port to serve on (default: any free one)")
     args = ap.parse_args(argv)
 
     root = args.root.resolve()
     if not root.is_dir():
         ap.error(str(root) + " is not a folder")
 
+    if args.serve:
+        server = browse(root, port=args.port, hidden=args.hidden,
+                        say=lambda line: print(line, flush=True))
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            pass
+        return 0
     if args.draft:
         drafts, seeded = draft(root, hidden=args.hidden)
         counts: dict = defaultdict(int)

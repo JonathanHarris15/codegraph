@@ -1,7 +1,8 @@
 // codegraph: start page pane
-// The codegraph mod: the map of this repo in a pane beside the chat, to pan,
-// zoom and go into card by card; the mismatches beside it, each one a press
-// away from a fix in the chat; and a check the model runs after every change.
+// The codegraph mod: the full map of this repo, live in a browser tab inside
+// Claude Code, where each Fix, Ask or + Feature fills the chat box; a smaller
+// map in a pane beside the chat where no browser tab can open; and a check
+// the model runs after every change.
 import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 
@@ -23,27 +24,95 @@ const KIND_NAMES: Record<string, string> = {
   store: 'Stores', trigger: 'Triggers', outside: 'Outside', file: 'Files', external: 'Third party',
 }
 
+// The built-in browser's MCP server, by both spellings the engine accepts.
+const BROWSERS = ['Claude_Browser', 'Claude Browser']
+
 let cwd = ''
 let python = ''
+let mapUrl = '' // where the live map is served, while its server runs
 
-async function run($: any, args: string[], timeoutMs = 120000) {
-  if (!python) {
-    for (const p of PYTHONS) {
-      try {
-        const v = await $.process.run([p, '--version'], { timeoutMs: 10000 })
-        if (v.exitCode === 0) {
-          python = p
-          break
-        }
-      } catch {
-        // not on this machine; try the next name
+async function findPython($: any): Promise<boolean> {
+  for (const p of python ? [] : PYTHONS) {
+    try {
+      const v = await $.process.run([p, '--version'], { timeoutMs: 10000 })
+      if (v.exitCode === 0) {
+        python = p
+        break
       }
+    } catch {
+      // not on this machine; try the next name
     }
   }
-  if (!python) {
+  return !!python
+}
+
+async function run($: any, args: string[], timeoutMs = 120000) {
+  if (!(await findPython($))) {
     return { exitCode: 127, stdout: '', stderr: 'codegraph needs Python 3.10 or newer on the PATH' }
   }
   return $.process.run([python, `${$.plugin.root}/codegraph.py`, cwd, ...args], { timeoutMs })
+}
+
+// ---- the live map: a page codegraph serves, which talks back through it
+
+// Start the map's server once, and hear it for the session's life: its first
+// line says where the page is, and each line after is something the person
+// asked from the page, which goes in the chat box. Resolves with the address,
+// or '' when the server could not start.
+async function startMap($: any): Promise<string> {
+  if (mapUrl) return mapUrl
+  if (!(await findPython($))) return ''
+  return new Promise<string>(resolve => {
+    void (async () => {
+      let rest = ''
+      try {
+        const child = $.process.spawn({ argv: [python, `${$.plugin.root}/codegraph.py`, cwd, '--serve'] })
+        for await (const piece of child) {
+          if (piece.stream !== 'stdout' || typeof piece.text !== 'string') continue
+          rest += piece.text
+          for (let nl = rest.indexOf('\n'); nl >= 0; nl = rest.indexOf('\n')) {
+            const line = rest.slice(0, nl).trim()
+            rest = rest.slice(nl + 1)
+            await heard($, line, resolve)
+          }
+        }
+      } catch {
+        // it could not start, or it stopped: the next /codegraph starts it again
+      }
+      mapUrl = ''
+      resolve('')
+    })()
+  })
+}
+
+async function heard($: any, line: string, ready: (url: string) => void) {
+  let said: any
+  try {
+    said = JSON.parse(line)
+  } catch {
+    return
+  }
+  if (typeof said?.ready === 'string') {
+    mapUrl = said.ready
+    ready(mapUrl)
+  } else if (typeof said?.ask === 'string' && said.ask.trim()) {
+    await ask($, said.ask)
+  }
+}
+
+// Open the page in a browser tab inside Claude Code; where there is no such
+// browser, in the person's own. True when it opened inside Claude Code.
+async function openTab($: any, url: string): Promise<boolean> {
+  for (const server of BROWSERS) {
+    try {
+      const opened = await $.mcp.call(server, 'preview_start', { url })
+      if (!opened?.isError) return true
+    } catch {
+      // not this name, or no built-in browser here
+    }
+  }
+  await $.process.run([python, '-c', 'import sys, webbrowser; webbrowser.open(sys.argv[1])', url])
+  return false
 }
 
 async function refresh($: any) {
@@ -183,7 +252,8 @@ function fixMany(issues: Issue[], what: string): string {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     cwd = e.cwd
-    await $.command.register({ name: 'codegraph', description: 'Show this repo\'s codegraph map beside the chat' })
+    await $.command.register({ name: 'codegraph', description: 'Open this repo\'s codegraph map in a browser tab' })
+    await $.command.register({ name: 'codegraph-pane', description: 'Show a smaller codegraph map in a pane beside the chat' })
     await $.tool.register({
       name: 'check',
       description:
@@ -205,13 +275,26 @@ export const register: Register = on => {
       isDeferred: false,
     })
     const started = await next(e)
-    void refresh($).then(summary => {
-      if (summary?.source === 'tags') void $.ui.open({ id: PANE, title: 'Codegraph' })
-    })
+    void refresh($)
     return started
   })
 
   on('command.run', { command: 'codegraph' }, async $ => {
+    const url = await startMap($)
+    if (!url) {
+      await $.ui.open({ id: PANE, title: 'Codegraph' })
+      void refresh($)
+      return { text: 'The live map could not start (' + ((await read($, status)) || 'is Python 3.10+ on the PATH?') + '), so the pane shows it instead.' }
+    }
+    const inside = await openTab($, url)
+    return {
+      text: inside
+        ? 'The map is open in a browser tab. Fix, Ask and + Feature there fill this chat box; it redraws after every turn.'
+        : `The map is open in your browser at ${url}. Fix, Ask and + Feature there fill this chat box.`,
+    }
+  })
+
+  on('command.run', { command: 'codegraph-pane' }, async $ => {
     await $.ui.open({ id: PANE, title: 'Codegraph' })
     void refresh($)
     return { text: 'Codegraph pane opened.' }
@@ -233,7 +316,11 @@ export const register: Register = on => {
   // After a turn the code may have changed: read the map again.
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
-    if (e.agentId === undefined && cwd) void refresh($)
+    if (e.agentId === undefined && cwd) {
+      void refresh($)
+      // the live page reloads itself once its server has read the code again
+      if (mapUrl) void $.http.fetch(mapUrl + 'refresh', { method: 'POST' }).catch(() => undefined)
+    }
     return done
   })
 

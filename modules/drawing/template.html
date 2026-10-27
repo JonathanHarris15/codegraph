@@ -237,6 +237,31 @@ path.wire.breach{stroke-width:2}
 #panel .why{font-size:10px;color:var(--breach);padding:1px 6px 2px 19px;line-height:1.45}
 #panel ol.found{margin:0;padding:0 0 0 16px;font-family:var(--font-mono);font-size:10px;line-height:1.5}
 #panel ol.found li{margin-bottom:4px;word-break:break-word}
+/* a served page talks back: the mismatches list grows buttons, and cards with
+   a mismatch carry a red dot */
+#panel.listing{width:340px}
+#panel .phead{display:flex;align-items:center;gap:6px}
+#panel .phead .close{position:static}
+#panel ol.found.acting{list-style:none;padding:0}
+#panel ol.found.acting li{display:flex;gap:8px;align-items:flex-start;padding:6px 0;
+  border-top:1px solid var(--hair);margin:0}
+#panel .ftext{flex:1 1 auto;min-width:0;font-family:var(--font-ui);font-size:11.5px;line-height:1.4}
+#panel .where{display:block;font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:2px}
+#panel .fbtn{display:flex;gap:4px;flex:0 0 auto}
+#panel .fbtn button,#panel .phead button{white-space:nowrap}
+#panel .grp{display:flex;align-items:center;gap:6px;margin:12px 0 4px}
+#panel .grp .fold{border:0;background:none;padding:2px 0;font-weight:700;font-size:11px;text-align:left;flex:1 1 auto}
+#panel .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+button.act{background:var(--accent);color:var(--on-accent);border-color:transparent}
+button.act:hover{filter:brightness(1.08);border-color:transparent}
+button.sm{font-size:11px;padding:2px 8px}
+.card.flagged::after{content:"";position:absolute;top:7px;right:7px;width:8px;height:8px;
+  border-radius:50%;background:var(--breach);box-shadow:0 0 0 2px var(--surface)}
+#make{display:flex;gap:6px}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);
+  color:var(--surface);padding:8px 14px;border-radius:8px;font-size:12px;opacity:0;
+  transition:opacity .2s;pointer-events:none;z-index:50}
+#toast.on{opacity:1}
 #panel .names{font-family:var(--font-mono);font-size:9.5px;color:var(--muted);
   padding:1px 6px 2px 19px;line-height:1.45;word-break:break-word}
 #panel .names b{color:var(--breach);font-weight:600}
@@ -266,6 +291,7 @@ path.wire.breach{stroke-width:2}
     <button class="counts issues" id="issues" hidden></button>
     <span class="spacer"></span>
     <div class="toolbar">
+      <span id="make" hidden></span>
       <input type="search" id="q" placeholder="find a card" aria-label="Find a card">
     </div>
   </header>
@@ -290,9 +316,12 @@ path.wire.breach{stroke-width:2}
     </div>
   </div>
 </div>
+<div id="toast" role="status" aria-live="polite"></div>
 
 <script>
 var GRAPH = /*__GRAPH__*/null;
+/* set when the page is served live: where to send what the person asks */
+var LIVE = /*__LIVE__*/null;
 
 (function(){
 "use strict";
@@ -311,6 +340,16 @@ var VIEWS={files:{title:"Files",unit:"files",nodes:GRAPH.nodes,edges:GRAPH.edges
 var FILES={};
 GRAPH.nodes.forEach(function(n){ FILES[n.id]=n; });
 if(MODS) Object.keys(MODS.views).forEach(function(k){ VIEWS[k]=MODS.views[k]; });
+
+/* the mismatches apart, each in its group and pinned to its card; an older
+   graph has only their text */
+var ISSUES=!MODS?[]:MODS.issues||MODS.mismatches.map(function(m){
+  var at=m.indexOf("  ");
+  return {text:at<0?m:m.slice(at+2),rel:at<0?"":m.slice(0,at),line:0,line_text:m,group:"all",card:"",file:""};
+});
+var GROUPS=MODS&&MODS.groups||[{id:"all",label:"Mismatches"}];
+var FLAG={};
+ISSUES.forEach(function(i){ if(i.card) FLAG[i.card]=1; if(i.file) FLAG[i.file]=1; });
 
 /* every folder and module gets one hue, golden angle apart, the same in every view */
 var hue={}, hues=0;
@@ -564,7 +603,7 @@ function show(key){
     var el=document.createElement("div");
     el.className="card "+(CARDCLASS[n.kind]||"ext")+(n.start?" start":"")+
       (n.kind==="trigger"&&n.dir==="event"?" event":"")+
-      (VIEWS[n.id]&&n.id!==cur?" opens":"")+(folded[n.id]?" folded":"");
+      (VIEWS[n.id]&&n.id!==cur?" opens":"")+(folded[n.id]?" folded":"")+(FLAG[n.id]?" flagged":"");
     el.style.setProperty("--gc",gcolor(n.group));
     el.tabIndex=0; el.setAttribute("role","button");
     var hd=document.createElement("div"); hd.className="hd";
@@ -836,22 +875,62 @@ function applyView(){
 
 /* --------------------------------------------------------------- inspector */
 var listing=false;
+var shutGroups=load("shutGroups")||{}, listFolded=!!load("listFolded");
 function drawFindings(){
-  var h='<button class="close" id="p-close" aria-label="Close">\u00d7</button>';
-  h+='<h2>Mismatches ('+MODS.mismatches.length+')</h2>';
-  h+='<p class="note">Where the code breaks a rule or disagrees with its tags.</p>';
-  h+='<ol class="found">'+MODS.mismatches.map(function(m){ return '<li>'+esc(m)+'</li>'; }).join("")+'</ol>';
-  if(MODS.unknown.length){
-    h+='<h3>Cannot tell ('+MODS.unknown.length+')</h3>';
-    h+='<ol class="found">'+MODS.unknown.map(function(m){ return '<li>'+esc(m)+'</li>'; }).join("")+'</ol>';
+  var all=ISSUES;
+  var h='<div class="phead"><h2>Mismatches ('+all.length+')</h2><span class="spacer"></span>';
+  if(LIVE&&all.length) h+='<button class="act sm" id="fix-all">'+(all.length===1?"Fix it":"Fix all "+all.length)+'</button>';
+  h+='<button class="sm" id="p-fold" aria-label="'+(listFolded?"Show the list":"Fold the list away")+'">'+
+     (listFolded?"Show":"Fold")+'</button>';
+  h+='<button class="close" id="p-close" aria-label="Close">\u00d7</button></div>';
+  if(!listFolded){
+    h+='<p class="note">Where the code breaks a rule or disagrees with its tags, worst first.'+
+       (LIVE?' <b>Fix</b> puts the fix in the chat box; <b>Show</b> finds it on the map.':'')+'</p>';
+    GROUPS.forEach(function(g){
+      var list=all.filter(function(i){ return i.group===g.id; });
+      if(!list.length) return;
+      var shut=!!shutGroups[g.id];
+      h+='<div class="grp"><button class="fold" data-fold="'+esc(g.id)+'">'+(shut?"\u25b8":"\u25be")+' '+
+         esc(g.label)+' \u00b7 '+list.length+'</button>';
+      if(LIVE&&list.length>1&&!shut) h+='<button class="act sm" data-fixgroup="'+esc(g.id)+'">Fix these</button>';
+      h+='</div>';
+      if(shut) return;
+      h+='<ol class="found acting">'+list.map(function(i){
+        var k=all.indexOf(i);
+        return '<li><div class="ftext">'+esc(i.text)+'<span class="where">'+esc(i.rel+(i.line?":"+i.line:""))+
+          '</span></div><div class="fbtn">'+(i.card?'<button class="sm" data-show="'+k+'">Show</button>':'')+
+          (LIVE?'<button class="act sm" data-fix="'+k+'">Fix</button>':'')+'</div></li>';
+      }).join("")+'</ol>';
+    });
+    if(MODS.unknown.length){
+      h+='<h3>Cannot tell ('+MODS.unknown.length+')</h3>';
+      h+='<ol class="found">'+MODS.unknown.map(function(m){ return '<li>'+esc(m)+'</li>'; }).join("")+'</ol>';
+    }
   }
-  panel.innerHTML=h; panel.hidden=false;
-  document.getElementById("p-close").addEventListener("click",function(){ listing=false; panel.hidden=true; });
+  panel.innerHTML=h; panel.hidden=false; panel.classList.add("listing");
+  function on(sel,fn){ Array.prototype.forEach.call(panel.querySelectorAll(sel),function(b){
+    b.addEventListener("click",function(){ fn(b); }); }); }
+  on("#p-close",function(){ listing=false; panel.hidden=true; panel.classList.remove("listing"); });
+  on("#p-fold",function(){ listFolded=!listFolded; save("listFolded",listFolded); drawFindings(); });
+  on("#fix-all",function(){ send(fixMany(all,"mismatches")); });
+  on("[data-fold]",function(b){ var g=b.getAttribute("data-fold");
+    shutGroups[g]=!shutGroups[g]; save("shutGroups",shutGroups); drawFindings(); });
+  on("[data-fixgroup]",function(b){ var g=b.getAttribute("data-fixgroup");
+    var label=(GROUPS.filter(function(x){ return x.id===g; })[0]||{}).label||g;
+    send(fixMany(all.filter(function(i){ return i.group===g; }),'"'+label+'" mismatches')); });
+  on("[data-fix]",function(b){ send(fixOne(all[+b.getAttribute("data-fix")])); });
+  on("[data-show]",function(b){ showIssue(all[+b.getAttribute("data-show")]); });
+}
+/* find a mismatch where it lives: its card on the map, picked and centred */
+function showIssue(i){
+  if(cur!=="map"&&VIEWS.map) open("map");
+  var id=nodes[i.card]?i.card:nodes[i.file]?i.file:null;
+  if(id){ listing=false; select(id); focus(id); }
 }
 issues.addEventListener("click",function(){ listing=true; selected=null; render(); drawFindings(); });
 function drawPanel(){
   if(listing&&!selected){ drawFindings(); return; }
-  listing=false;
+  listing=false; panel.classList.remove("listing");
   panel.hidden=!selected;
   if(!selected) return;
   var n=nodes[selected], c=gcolor(n.group);
@@ -863,6 +942,15 @@ function drawPanel(){
   h+='<span>'+inn[n.id].length+' in</span><span>'+out[n.id].length+' out</span></div>';
   if(VIEWS[n.id]&&n.id!==cur)
     h+='<button class="open" data-open="'+esc(n.id)+'">Open '+esc(n.label)+' ›</button>';
+  var mine=ISSUES.filter(function(i){ return i.card===n.id||i.file===n.id; });
+  if(mine.length) h+='<p class="note" style="color:var(--breach)">'+mine.length+
+    (mine.length===1?" mismatch here":" mismatches here")+'</p>';
+  if(LIVE){
+    h+='<div class="acts"><button class="act sm" id="ask-card">Ask about it</button>';
+    if(mine.length) h+='<button class="act sm" id="fix-card">'+(mine.length===1?"Fix it":"Fix all "+mine.length)+'</button>';
+    if(n.kind==="module") h+='<button class="sm" id="feature-from">+ Feature using it</button>';
+    h+='</div>';
+  }
 
   function chips(title,arr,none){
     if(!arr) return "";
@@ -922,6 +1010,49 @@ function drawPanel(){
   Array.prototype.forEach.call(panel.querySelectorAll("[data-open]"),function(b){
     b.addEventListener("click",function(){ open(b.getAttribute("data-open")); });
   });
+  if(LIVE){
+    document.getElementById("ask-card").addEventListener("click",function(){ send(aboutCard(n)); });
+    var fx=document.getElementById("fix-card");
+    if(fx) fx.addEventListener("click",function(){ send(fixMany(mine,"mismatches in "+n.kind+" "+n.label)); });
+    var ff=document.getElementById("feature-from");
+    if(ff) ff.addEventListener("click",function(){
+      send("Build a new feature that uses the "+n.label+" module: "); });
+  }
+}
+
+/* -------------------------------------------------------------- talk back
+   A served page sends what the person asks to whoever serves it, which puts
+   it in Claude Code's chat box. A slash command takes the box's place. */
+function send(text){
+  if(!LIVE) return;
+  fetch(LIVE.ask,{method:"POST",headers:{"Content-Type":"application/json"},
+                  body:JSON.stringify({text:text})})
+    .then(function(r){ toast(r.ok?"In the chat box — press Enter to send":"Claude Code did not take it"); })
+    .catch(function(){ toast("Cannot reach Claude Code: run /codegraph again"); });
+}
+var toastEl=document.getElementById("toast"), toastTimer=0;
+function toast(text){
+  toastEl.textContent=text; toastEl.classList.add("on");
+  clearTimeout(toastTimer); toastTimer=setTimeout(function(){ toastEl.classList.remove("on"); },2600);
+}
+function fixOne(i){ return "/codegraph:fix "+i.line_text; }
+function fixMany(list,what){
+  return list.length===1?fixOne(list[0]):"/codegraph:fix all "+list.length+" "+what+", worst first, one commit each";
+}
+function aboutCard(n){
+  var files=(n.files||[]).map(function(f){ var o=FILES[f]; return o?(o.dir==="."?o.label:o.dir+"/"+o.label):f; });
+  var where=files.length?"; files "+files.join(", "):"";
+  if(n.kind==="feature") return "About the "+n.label+" feature (system "+(n.system||"none")+"; uses "+
+    ((n.uses||[]).join(", ")||"no modules")+where+"): ";
+  if(n.kind==="module") return "About the "+n.label+" module (front door "+((n.door||[]).join(", ")||"empty")+where+"): ";
+  if(n.kind==="page") return "About the "+n.label+" page (at "+(n.route||"no route")+where+"): ";
+  if(n.kind==="store") return "About the "+n.label+" store (owned by "+String(n.owner||"?").replace("module:","")+
+    "; "+((n.fields||[]).join(", ")||"no schema read")+"): ";
+  if(n.kind==="file"){
+    var o=FILES[n.id];
+    return "About "+(o?(o.dir==="."?o.label:o.dir+"/"+o.label):n.id)+(cur!=="map"?" (in "+V.title+")":"")+": ";
+  }
+  return "About "+n.label+" ("+n.kind+where+"): ";
 }
 function esc(s){ return String(s).replace(/[&<>"]/g,function(c){
   return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]; }); }
@@ -1101,6 +1232,43 @@ document.addEventListener("keydown",function(ev){
   }
   else open(MODS?"map":"files");
 })();
+
+/* served live: the buttons that start new work, and a reload whenever the
+   map changes, keeping the card the person had picked */
+if(LIVE){
+  var make=document.getElementById("make");
+  [["+ Feature","Build a new feature: "],["+ Module","Add a new module: "],["+ Page","Add a new page: "]]
+    .forEach(function(b){
+      var el=document.createElement("button"); el.textContent=b[0];
+      el.addEventListener("click",function(){ send(b[1]); });
+      make.appendChild(el);
+    });
+  var again=document.createElement("button"); again.textContent="Refresh";
+  again.title="Read the code again";
+  again.addEventListener("click",function(){
+    toast("Reading the code again…");
+    fetch(LIVE.refresh,{method:"POST"}).catch(function(){ toast("Cannot reach Claude Code: run /codegraph again"); });
+  });
+  make.appendChild(again);
+  make.hidden=false;
+
+  try{
+    var kept=JSON.parse(sessionStorage.getItem(KEY+".kept")||"null");
+    sessionStorage.removeItem(KEY+".kept");
+    if(kept&&kept.selected&&nodes[kept.selected]){ select(kept.selected); }
+    else if(kept&&kept.listing&&MODS){ listing=true; drawFindings(); }
+  }catch(e){}
+
+  var lost=0;
+  setInterval(function(){
+    fetch(LIVE.version,{cache:"no-store"}).then(function(r){ return r.json(); }).then(function(v){
+      lost=0;
+      if(v.version===LIVE.at) return;
+      try{ sessionStorage.setItem(KEY+".kept",JSON.stringify({selected:selected,listing:listing})); }catch(e){}
+      location.reload();
+    }).catch(function(){ if(++lost===3) toast("Lost Claude Code: run /codegraph to start the map again"); });
+  },1500);
+}
 })();
 </script>
 </body>

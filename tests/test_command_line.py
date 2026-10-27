@@ -7,6 +7,7 @@ import json
 import subprocess
 import sys
 import unittest
+import urllib.request
 from pathlib import Path
 
 from tests.helpers import Folder, mod, tree
@@ -68,6 +69,18 @@ class CommandLine(Folder):
         self.assertEqual(summary["source"], "tags")
         self.assertEqual([s["name"] for s in summary["systems"]], ["library"])
         self.assertEqual(summary["systems"][0]["features"][0]["uses"], ["engine"])
+
+
+    def test_serve_prints_where_the_page_is_then_what_it_asks(self):
+        tree(self.root, {"engine/__init__.py": mod("engine", "Book") + "class Book: pass\n"})
+        child = subprocess.Popen([sys.executable, str(CODEGRAPH), str(self.root), "--serve"],
+                                 stdout=subprocess.PIPE, text=True, encoding="utf-8")
+        self.addCleanup(child.wait, 10)
+        self.addCleanup(child.kill)
+        url = json.loads(child.stdout.readline())["ready"]
+        req = urllib.request.Request(url + "ask", data=b'{"text": "/codegraph:fix all"}', method="POST")
+        urllib.request.urlopen(req, timeout=10).close()
+        self.assertEqual(json.loads(child.stdout.readline()), {"ask": "/codegraph:fix all"})
 
 
 if __name__ == "__main__":

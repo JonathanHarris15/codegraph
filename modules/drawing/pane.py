@@ -51,12 +51,14 @@ def _trim(view: dict) -> dict:
     }
 
 
-def _issues(graph: dict, findings: list, cards: dict) -> list:
-    """Each mismatch apart: its file, line and text, its group, and the map
-    card and file card it belongs to."""
+def issues_of(graph: dict) -> list:
+    """Each mismatch on the map apart: its file, line and text, its group,
+    and the map card and file card it belongs to."""
+    m = graph["map"]
+    cards = {fid: n["id"] for n in m["views"]["map"]["nodes"] for fid in n.get("files", [])}
     file_of = {_rel_of(graph, n["id"]): n["id"] for n in graph["nodes"] if n["kind"] == "file"}
     out = []
-    for f in findings:
+    for f in m["mismatches"]:
         where, _, text = f.partition("  ")
         rel, _, line = where.partition(":")
         fid = file_of.get(rel, "")
@@ -73,7 +75,6 @@ def summary(graph: dict) -> dict:
     by_kind: dict = defaultdict(list)
     for n in nodes:
         by_kind[n["kind"]].append(n)
-    cards = {fid: n["id"] for n in nodes for fid in n.get("files", [])}
     systems: dict = defaultdict(list)
     triggers = defaultdict(list)
     for t in by_kind["trigger"]:
@@ -99,8 +100,7 @@ def summary(graph: dict) -> dict:
         "stores": [{"id": n["id"], "name": n["label"], "owner": n["owner"], "fields": n["fields"]}
                    for n in sorted(by_kind["store"], key=lambda n: n["label"])],
         "mismatches": m.get("mismatches", []), "unknown": m.get("unknown", []),
-        "issues": _issues(graph, m.get("mismatches", []), cards),
-        "groups": [{"id": g, "label": label} for g, label, _ in ISSUE_GROUPS],
+        "issues": m.get("issues", []), "groups": m.get("groups", []),
         "views": trimmed,
     }
 

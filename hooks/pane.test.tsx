@@ -69,7 +69,7 @@ const PANE = {
   },
 } as const
 
-function engine(on: any, surface: string, said: { filled: string; draft: string }) {
+function engine(on: any, surface: string, said: { filled: string; draft: string; all?: string[] }) {
   // Nothing sits beneath the plugin: each hook here stands for the engine.
   on('command.register', () => ({ value: { command: 'codegraph' } }))
   on('tool.register', () => ({ value: {} }))
@@ -81,6 +81,7 @@ function engine(on: any, surface: string, said: { filled: string; draft: string 
   on('prompt.read', () => ({ value: { text: said.draft, cursor: 0 } }))
   on('prompt.fill', (_: any, e: any) => {
     said.filled = e.text
+    said.all?.push(e.text)
     return { isFilled: true }
   })
   return surface
@@ -137,6 +138,36 @@ for (const surface of ['terminal', 'desktop'] as const) {
     await ui.unmount()
   })
 }
+
+test('/codegraph serves the live map, opens it in a browser tab, and its presses fill the chat', async ($, on) => {
+  const fills: string[] = []
+  const said = { filled: '', draft: '', all: fills }
+  engine(on, 'desktop', said)
+  const opened: any[] = []
+  const spawned: string[][] = []
+  on('process.spawn', async function* (_: any, e: any) {
+    spawned.push([...e.argv])
+    yield { stream: 'stdout', text: '{"ready": "http://127.0.0.1:7333/s3cret/"}\n{"ask": "Build a new' }
+    yield { stream: 'stdout', text: ' feature: "}\n' }
+    yield { stream: 'stdout', text: '{"ask": "/codegraph:fix all 2 mismatches, worst first, one commit each"}\n' }
+  } as any)
+  on('mcp.call', (_: any, e: any) => {
+    opened.push(e)
+    return { value: { content: [], isError: false } }
+  })
+
+  await $.session.start({ cwd: '/repo', surface: 'desktop', isInteractive: true })
+  const ran: any = await $.command.run({ command: 'codegraph', args: '' } as any)
+
+  expect(spawned[0]).toContain('--serve')
+  expect(spawned[0]).toContain('/repo')
+  expect(opened[0]).toMatchObject({ tool: 'preview_start', args: { url: 'http://127.0.0.1:7333/s3cret/' } })
+  expect(String(ran?.text ?? ran?.value?.text)).toContain('browser tab')
+  // the server is heard in the background, past the command's own answer
+  for (let i = 0; i < 50 && fills.length < 2; i++) await new Promise(r => (globalThis as any).setTimeout(r, 10))
+  expect(fills).toContain('Build a new feature: ')
+  expect(fills).toContain('/codegraph:fix all 2 mismatches, worst first, one commit each')
+})
 
 test('desktop: the picture pans and zooms, and Show finds a mismatch on it', async ($, on) => {
   const said = { filled: '', draft: '' }

@@ -20,11 +20,15 @@ words.
 
 The repo is a Claude Code plugin. Installing it gives you three things:
 
-- a **pane** beside the chat with the map: systems and their features,
-  modules and their front doors, pages, stores and their shapes, and the
-  mismatches. Click a feature, module or page and the chat box fills with a
-  prompt about it; the buttons start a new feature, module or page, or fix
-  the next mismatch. `/codegraph` opens it.
+- the **live map** in a browser tab inside Claude Code: `/codegraph` opens
+  it. It is the whole page below, served on this machine alone, and it talks
+  back: **Fix** on any mismatch, **Fix all**, **Ask about it** on any card, and
+  **+ Feature**, **+ Module**, **+ Page** each fill the chat box with the
+  prompt, ready to send. **Show** finds a mismatch's card on the map, a red
+  dot marks every card that has one, and the list folds away. After every
+  turn the page reads the code again and redraws, keeping your place.
+  Where no browser tab can open, `/codegraph-pane` shows a smaller map in a
+  pane beside the chat.
 - two **tools** the agent calls: `check`, run after every change, and `map`,
   read before deciding where work goes.
 - two **skills**: `/codegraph:setup` brings a repo under codegraph, and
@@ -116,6 +120,8 @@ schema named.
 | `--check` | read the code against its tags; exit 1 on a mismatch |
 | `--draft` | write a first tag into every file that has none |
 | `--summary` | print what the pane shows, as JSON |
+| `--serve` | serve the live map on this machine; print each request it sends, one JSON line each |
+| `--port N` | the port `--serve` uses (default: any free one) |
 | `--json` | print all the data instead of the page |
 | `--externals` | give third-party packages their own cards |
 | `--hidden` | read dotted folders too (`.claude`, `.github`) |
@@ -256,9 +262,9 @@ Codegraph is set up on itself, in the same three layers it asks of others.
 `python codegraph.py . --check` reads it like any other repo.
 
 - `modules/`: source (reads each file and what it imports and reaches),
-  tags, shapes, rules (the check's reading), drafting, layout, drawing.
+  tags, shapes, rules (the check's reading), drafting, layout, drawing, web (serves the live map).
   Each folder's `__init__.py` is its front door.
-- `features/`: check, draw-map and draft-tags, each a few lines that call
+- `features/`: check, draw-map, browse-map and draft-tags, each a few lines that call
   modules.
 - the UI: `codegraph.py`, the command line, and `hooks/register.tsx`, the
   pane. Both are start pages.
