@@ -309,6 +309,21 @@ class PageMap(Project):
                         "web/app/members/[id]/page.tsx": "// codegraph: page member\n"})
         self.assertIn(("page:home", "page:member", "leads"), r.wires)
 
+    def test_a_login_page_leads_where_it_sends_people_after_signing_in(self):
+        for line in ('signIn("credentials", { callbackUrl: "/members" })',
+                     "supabase.auth.signInWithOAuth({ options: { redirectTo: '/members' } })",
+                     '<SignIn forceRedirectUrl="/members" />',
+                     'throw redirect(303, "/members")',
+                     'navigate({ to: "/members" })',
+                     'window.location.assign("/members")',
+                     'return RedirectResponse(url="/members")',
+                     'return HttpResponseRedirect("/members")'):
+            with self.subTest(line):
+                r = self.pages({"web/login.tsx": "// codegraph: start page login at /login\n" + line,
+                                "web/members.tsx": "// codegraph: page members at /members\n"})
+                self.assertIn(("page:login", "page:members", "leads"), r.wires)
+                self.assertFalse(self.has(r.unknown, "builds a link"))
+
     def test_a_link_built_while_running_cannot_be_told(self):
         r = self.pages({"web/home.tsx": "// codegraph: start page home at /\n<Link href={url}>"})
         self.assertTrue(self.has(r.unknown, "builds a link"))
