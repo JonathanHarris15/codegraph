@@ -37,6 +37,14 @@ class Tags(unittest.TestCase):
         self.assertEqual(read_tags("// codegraph: design system").unit, "design")
         self.assertEqual(read_tags("# codegraph: tooling").unit, "tooling")
 
+    def test_a_module_may_hold_the_shape_of_its_store(self):
+        t = read_tags("# codegraph: module library\n# codegraph: shape of sales\n")
+        self.assertEqual((t.kind, t.name, t.shapes), ("module", "library", [("sales", 2)]))
+
+    def test_only_a_module_holds_a_shape(self):
+        t = read_tags("// codegraph: page home at /\n// codegraph: shape of sales\n")
+        self.assertTrue(any("shape" in text for _, text in t.errors))
+
     def test_tests_say_what_they_test(self):
         t = read_tags("# codegraph: test module engine")
         self.assertEqual((t.kind, t.of, t.name), ("test", "module", "engine"))

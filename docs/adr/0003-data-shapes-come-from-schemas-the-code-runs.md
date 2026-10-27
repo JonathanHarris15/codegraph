@@ -32,3 +32,8 @@ zod object made from a catalogue of columns: `store sales as SaleColumns`
 names it, codegraph finds it defined in the module, and lists the shape as
 unknown rather than red. Building it from the one list is the better design,
 and the check must not push toward writing a second.
+
+Amended by docs/adr/0006: where the fields are not in the code to read at all,
+the owning module may hold a shape helper — a file it runs to print the shape —
+rather than leaving the store unknown. The rule here is unchanged; a helper is
+something the program runs, not a comment.

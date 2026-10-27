@@ -1,6 +1,7 @@
 # codegraph: module rules
 from __future__ import annotations
 
+import os
 from collections import defaultdict
 from dataclasses import dataclass, field
 
@@ -90,12 +91,19 @@ def _sorted(findings: list) -> list:
     return sorted(set(findings))
 
 
-def read_map(root: Path, hidden: bool = False, drafted: dict | None = None) -> Reading:
+def read_map(root: Path, hidden: bool = False, drafted: dict | None = None,
+             helpers: bool | None = None) -> Reading:
     """Read the code against its tags, every rule in CONTEXT.md at once.
 
     `drafted` stands in for the tags of files that have none, by path: how
     the page draws a codebase nobody has tagged yet.
+
+    `helpers` says whether to run the shape helpers modules hold for stores
+    whose fields are not in the code to read (docs/adr/0006). On by default;
+    CODEGRAPH_NO_HELPERS=1 in the environment turns them off.
     """
+    if helpers is None:
+        helpers = not os.environ.get("CODEGRAPH_NO_HELPERS")
     files = files_in(root, hidden)
     index = {f.name: f for f in files}
     mis: list = []
@@ -104,6 +112,7 @@ def read_map(root: Path, hidden: bool = False, drafted: dict | None = None) -> R
     owner: dict = {}
     units: dict = {}
     store_tags: list = []
+    shape_tags: list = []
 
     # ---- what each file says it is
     for f in files:
@@ -137,6 +146,7 @@ def read_map(root: Path, hidden: bool = False, drafted: dict | None = None) -> R
         u.commands += t.commands
         u.start |= t.start
         store_tags += [(s, schema, f, line, u.id) for s, schema, line in t.stores]
+        shape_tags += [(s, f, line, u.id) for s, line in t.shapes]
 
     tests = {n for n, t in tags.items() if t.kind == "test"}
 
@@ -169,6 +179,18 @@ def read_map(root: Path, hidden: bool = False, drafted: dict | None = None) -> R
         rel = p.relative_to(root).as_posix()
         schemas += shapes.schemas_in(rel, p.read_text(encoding="utf-8", errors="replace"))
 
+    # A module may work its store's shape out while it runs and print it, where
+    # the fields are not in the code to read at all (docs/adr/0006). Run those
+    # first: a helper that answers is the shape, and the store is not asked for
+    # a schema codegraph could read instead.
+    shaped: dict = {}
+    for s, f, line, uid in shape_tags:
+        shaped.setdefault(s, (f, line, uid, None, ""))
+        if not helpers:
+            continue
+        found, why = shapes.helper_shape(root, f.rel, s)
+        shaped[s] = (f, line, uid, found, why)
+
     stores: dict = {}
     for s, schema, f, line, uid in store_tags:
         if s in stores:
@@ -176,17 +198,34 @@ def read_map(root: Path, hidden: bool = False, drafted: dict | None = None) -> R
                                "owning module".format(s, units[stores[s]["owner"]].label,
                                                       units[uid].label)))
             continue
-        found = shapes.find(schemas, schema or s, near=f.rel, exact=bool(schema))
-        if not found and schema and any(shapes.defines(index[n].rel, text_of(index[n]), schema)
-                                        for n in units[uid].files):
+        hf, hline, _huid, hfound, hwhy = shaped.get(s, (None, 0, None, None, ""))
+        found = hfound or shapes.find(schemas, schema or s, near=f.rel, exact=bool(schema))
+        if hfound:
+            pass                       # the module answered for itself
+        elif hf is not None and not found:
+            unk.append(Finding(hf.rel, hline, "holds the shape of store {} but {}; its shape is "
+                               "shown as unknown".format(s, hwhy or "codegraph did not run it")))
+        elif not found and schema and any(shapes.defines(index[n].rel, text_of(index[n]), schema)
+                                          for n in units[uid].files):
             unk.append(Finding(f.rel, line, "store {} names the schema {}, whose fields cannot "
                                "be read; its shape is shown as unknown".format(s, schema)))
         elif not found:
             mis.append(Finding(f.rel, line, "store {} {}".format(s, (
                 "names the schema {}, which codegraph cannot find".format(schema) if schema
                 else "has no schema codegraph can read; add one the module checks its "
-                     "data against"))))
+                     "data against, or hold its shape with `codegraph: shape of {}`"
+                     .format(s)))))
         stores[s] = {"owner": uid, "readers": set(), "schema": found, "rel": f.rel}
+
+    # The module that owns a store is the one that may answer for its shape.
+    for s, (f, line, uid, _found, _why) in shaped.items():
+        if s not in stores:
+            mis.append(Finding(f.rel, line, "holds the shape of store {}, which no module owns"
+                               .format(s)))
+        elif stores[s]["owner"] != uid:
+            mis.append(Finding(f.rel, line, "holds the shape of store {}, which {} owns; its "
+                               "owning module holds its shape"
+                               .format(s, units[stores[s]["owner"]].label)))
     for u in units.values():
         for r in sorted(u.reads):
             if r in stores:
@@ -408,10 +447,14 @@ def read_map(root: Path, hidden: bool = False, drafted: dict | None = None) -> R
                                "`codegraph: test ui` tag".format(pages[p].label)))
 
     # ---- a file of the program that only tests use: test data, or unused code
+    #
+    # A shape helper is not unused code that nothing imports: codegraph is what
+    # runs it (docs/adr/0006), so the program never reaches it and need not.
+    held_at = {f.rel for f, _line, _uid, _found, _why in shaped.values()}
     for f in files:
         u = units.get(owner.get(f.name, ""))
         if u and u.kind in ("module", "component", "design") and reached_by[f.name] == {"test"} \
-                and f.rel not in u.door_at:
+                and f.rel not in u.door_at and f.rel not in held_at:
             unk.append(Finding(f.rel, 0, "ships with the program, but only tests use it; test "
                                "data belongs with the tests, and unused code can go"))
 

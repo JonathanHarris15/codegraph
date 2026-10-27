@@ -83,6 +83,7 @@ One comment line each, in a file's first 30 lines. `#` or `//` both work.
 # codegraph: module members
 # codegraph: front door find_members, add_member     once per module
 # codegraph: store members as Member                 on the schema it owns
+# codegraph: shape of members                        this file prints its shape
 # codegraph: reads services                          another module's store
 ```
 
@@ -128,6 +129,11 @@ python codegraph.py path/to/repo --check
   TypedDict, SQLAlchemy, SQL `CREATE TABLE`, TypeScript types, zod, Prisma
   (docs/adr/0003); stores are read from SQL, from `.collection("x")`, and
   from Firebase's `collection(db, X)` with `X` a constant
+- where the fields are not in the code to read, because an outside source
+  decides them, the owning module holds a **shape helper**: a file tagged
+  `shape of <store>` that prints `{"name": "Sale", "fields": {...}}` when it
+  is run. codegraph runs it and shows what it says (docs/adr/0006);
+  `CODEGRAPH_NO_HELPERS=1` runs none of them
 - there is a start page, every page can be reached from it by its links (the
   shell's links lead from every page), and a UI test walks every page
 - a test fakes only what is outside the program, never the repo's own code,

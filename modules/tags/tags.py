@@ -17,6 +17,7 @@ from modules.source import files_in
 #   # codegraph: module engine                 a file of the engine module
 #   # codegraph: front door Book, tick         once per module
 #   # codegraph: store members as Member       the module owns this store
+#   # codegraph: shape of members              and this file prints its shape
 #   # codegraph: reads services                and may read this one
 #   // codegraph: feature plan-service in calendar
 #   // codegraph: uses services, members
@@ -50,6 +51,7 @@ STATEMENTS = (
     (re.compile(r"tooling$"), "tooling", None),
     (re.compile(r"front door\s*(.*)$"), "door", "module"),
     (re.compile(r"store " + NAME + r"(?: as " + NAME + r")?$"), "store", "module"),
+    (re.compile(r"shape of " + NAME + r"$"), "shape", "module"),
     (re.compile(r"reads (.+)$"), "reads", "module"),
     (re.compile(r"uses (.+)$"), "uses", "feature"),
     (re.compile(r"schedule (.+)$"), "schedule", "feature"),
@@ -72,6 +74,7 @@ class Tag:
     system: str = ""
     door: list | None = None          # a module's front door, on one of its files
     stores: list = field(default_factory=list)     # [(store, schema or "", line)]
+    shapes: list = field(default_factory=list)     # [(store, line)] this file prints
     reads: list = field(default_factory=list)
     uses: list = field(default_factory=list)
     schedules: list = field(default_factory=list)
@@ -129,6 +132,8 @@ def read_tags(text: str) -> Tag | None:
             tag.door = (tag.door or []) + _names(g[0])
         elif what == "store":
             tag.stores.append((g[0], g[1] or "", no))
+        elif what == "shape":
+            tag.shapes.append((g[0], no))
         elif what == "reads":
             tag.reads += _names(g[0])
         elif what == "uses":

@@ -125,10 +125,24 @@ _Avoid_: table, collection, model, entity, database
 **Shape**:
 What a store holds, or what an event or a request carries in: its fields and
 what kind each is.
-_Rule_: read only from a schema the program itself uses, such as a database
-model, a migration, a validator or a type; never from a comment; a schema
-codegraph cannot read is shown as an unknown shape, not guessed.
+_Rule_: read only from something the program itself runs — a database model, a
+migration, a validator, a type, or a shape helper the owning module runs; never
+from a comment; a schema codegraph cannot read and no helper answers for is
+shown as an unknown shape, not guessed.
 _Avoid_: schema, model, type, structure
+
+**Shape helper**:
+A file of the module that owns a store, which prints that store's shape as JSON
+when it is run: `{"name": "Sale", "fields": {"saleNo": "text"}}`. It is how a
+module answers for fields that are not in the code to read — a catalogue of
+columns the people using the app add to and switch on and off, kept in the
+store itself (docs/adr/0006). What it reads to work the answer out is the
+module's business: its own catalogue, or the outside source.
+_Rule_: tagged `shape of <store>` on a file of the owning module, and only that
+module's; codegraph runs it, and what it says is the shape; one that fails or
+needs credentials the machine has not got leaves the shape unknown and says why,
+and never stops the map being drawn.
+_Avoid_: generator, introspection, reflection, sampler
 
 ## UI
 

@@ -22,7 +22,7 @@ The check is the `mcp__codegraph__check` tool. Without it, run `python CG . --ch
    - *feature calls a feature*: the shared work moves into a module both use.
    - *feature, page or component reaches a store or an outside connection*: that work moves into the module that owns the store or the connection, behind its front door.
    - *name off a front door*: the caller uses what the door offers, or the module grows a door name that says what the caller needs. Never reach inside.
-   - *store with no schema*: add one the owning module checks its data against, and tag it.
+   - *store with no schema*: add one the owning module checks its data against, and tag it. Where the fields are not the code's to declare — an outside source decides them — give the owning module a shape helper instead: a file tagged `shape of <store>` that prints the shape as JSON when it is run (docs/adr/0006).
    - *another module writes a store*: it asks the owner, through the owner's front door.
    - *feature with no trigger*: a page acts on it, or it gains its schedule, event or command, or it was never a feature.
    - *page unreachable, or no UI test walks it*: link to it from a page that leads there, or add the UI test.

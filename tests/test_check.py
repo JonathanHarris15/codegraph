@@ -287,6 +287,52 @@ class Stores(Project):
         self.assertFalse(self.has(r.mismatches, "store sales"))
         self.assertTrue(self.has(r.unknown, "store sales", "SaleColumns"))
 
+    def test_a_module_may_hold_the_shape_of_a_store_the_code_cannot_declare(self):
+        # The columns are not in the code at all: people using the app add them
+        # and turn them on and off. The module works the shape out and says so.
+        r = self.check({
+            "sales/__init__.py": mod("sales", "") + "# codegraph: store sales as Sale\n"
+                                 "Sale = model_from(catalogue())\n",
+            "sales/shape.py": mod("sales") + "# codegraph: shape of sales\n"
+                              "import json\n"
+                              "print(json.dumps({\'name\': \'Sale\', \'fields\': {\'saleNo\': \'text\'}}))\n",
+        })
+        self.assertFalse(self.has(r.mismatches, "store sales"))
+        self.assertFalse(self.has(r.unknown, "store sales"))
+        self.assertEqual(read_map(self.root).stores["sales"]["schema"].lines(), ["saleNo: text"])
+
+    def test_a_helper_that_cannot_answer_leaves_the_shape_unknown_not_red(self):
+        r = self.check({
+            "sales/__init__.py": mod("sales", "") + "# codegraph: store sales\n",
+            "sales/shape.py": mod("sales") + "# codegraph: shape of sales\n"
+                              "import sys\n"
+                              "sys.stderr.write(\'no credentials\\n\')\n"
+                              "raise SystemExit(1)\n",
+        })
+        self.assertFalse(self.has(r.mismatches, "store sales"))
+        self.assertTrue(self.has(r.unknown, "store sales", "no credentials"))
+
+    def test_a_shape_helper_is_not_unused_code_because_nothing_imports_it(self):
+        # codegraph is what runs a helper, so the program never reaches it.
+        r = self.check({
+            "sales/__init__.py": mod("sales", "") + "# codegraph: store sales\n",
+            "sales/shape.py": mod("sales") + "# codegraph: shape of sales\n"
+                              "print(\'{\"fields\": {\"x\": \"text\"}}\')\n",
+        })
+        self.assertFalse(self.has(r.unknown, "only tests use it"))
+        self.assertFalse(self.has(r.mismatches, "store sales"))
+
+    def test_a_shape_held_by_a_module_that_does_not_own_the_store(self):
+        r = self.check({
+            "other/__init__.py": mod("other", "") + "# codegraph: shape of members\n"
+                                 "print(\'{}\')\n",
+        })
+        self.assertTrue(self.has(r.mismatches, "shape of store members", "members owns"))
+
+    def test_a_shape_of_a_store_no_module_owns(self):
+        r = self.check({"other/__init__.py": mod("other", "") + "# codegraph: shape of ghosts\n"})
+        self.assertTrue(self.has(r.mismatches, "shape of store ghosts", "no module owns"))
+
     def test_a_store_owned_twice(self):
         r = self.check({"other/__init__.py": mod("other", "") + "# codegraph: store members\n"})
         self.assertTrue(self.has(r.mismatches, "store members", "one owning module"))
