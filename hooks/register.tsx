@@ -27,9 +27,16 @@ const KIND_NAMES: Record<string, string> = {
 // The built-in browser's MCP server, by both spellings the engine accepts.
 const BROWSERS = ['Claude_Browser', 'Claude Browser']
 
-let cwd = ''
 let python = ''
 let mapUrl = '' // where the live map is served, while its server runs
+let served = '' // the folder it serves
+let server: any = null // its stream; ending it stops the server
+
+// The folder to read, asked each time: the desktop app starts a session in a
+// spare folder, then moves it to the project and deletes the spare.
+function folder($: any): Promise<string> {
+  return $.session.root()
+}
 
 async function findPython($: any): Promise<boolean> {
   for (const p of python ? [] : PYTHONS) {
@@ -50,23 +57,29 @@ async function run($: any, args: string[], timeoutMs = 120000) {
   if (!(await findPython($))) {
     return { exitCode: 127, stdout: '', stderr: 'codegraph needs Python 3.10 or newer on the PATH' }
   }
-  return $.process.run([python, `${$.plugin.root}/codegraph.py`, cwd, ...args], { timeoutMs })
+  return $.process.run([python, `${$.plugin.root}/codegraph.py`, await folder($), ...args], { timeoutMs })
 }
 
 // ---- the live map: a page codegraph serves, which talks back through it
 
 // Start the map's server once, and hear it for the session's life: its first
 // line says where the page is, and each line after is something the person
-// asked from the page, which goes in the chat box. Resolves with the address,
-// or '' when the server could not start.
+// asked from the page, which goes in the chat box. A session that moved since
+// gets a new server for its new folder. Resolves with the address, or '' when
+// the server could not start.
 async function startMap($: any): Promise<string> {
-  if (mapUrl) return mapUrl
+  const root = await folder($)
+  if (mapUrl && served === root) return mapUrl
+  if (server) void server.return?.()
+  mapUrl = ''
   if (!(await findPython($))) return ''
+  served = root
   return new Promise<string>(resolve => {
     void (async () => {
       let rest = ''
+      let child: any = null
       try {
-        const child = $.process.spawn({ argv: [python, `${$.plugin.root}/codegraph.py`, cwd, '--serve'] })
+        child = server = $.process.spawn({ argv: [python, `${$.plugin.root}/codegraph.py`, root, '--serve'] })
         for await (const piece of child) {
           if (piece.stream !== 'stdout' || typeof piece.text !== 'string') continue
           rest += piece.text
@@ -79,7 +92,10 @@ async function startMap($: any): Promise<string> {
       } catch {
         // it could not start, or it stopped: the next /codegraph starts it again
       }
-      mapUrl = ''
+      if (!child || server === child) {
+        server = null
+        mapUrl = ''
+      }
       resolve('')
     })()
   })
@@ -141,12 +157,13 @@ async function ask($: any, text: string) {
 }
 
 async function openMap($: any) {
-  const ran = await run($, ['-o', `${cwd}/${MAP_PAGE}`])
+  const page = `${await folder($)}/${MAP_PAGE}`
+  const ran = await run($, ['-o', page])
   if (ran.exitCode !== 0) {
     $.ui.toast('Could not draw the map: ' + (ran.stderr.trim().split('\n').pop() ?? ''))
     return
   }
-  await $.process.run([python, '-c', 'import sys, pathlib, webbrowser; webbrowser.open(pathlib.Path(sys.argv[1]).resolve().as_uri())', `${cwd}/${MAP_PAGE}`])
+  await $.process.run([python, '-c', 'import sys, pathlib, webbrowser; webbrowser.open(pathlib.Path(sys.argv[1]).resolve().as_uri())', page])
 }
 
 // ---- moving about the map
@@ -251,7 +268,6 @@ function fixMany(issues: Issue[], what: string): string {
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    cwd = e.cwd
     await $.command.register({ name: 'codegraph', description: 'Open this repo\'s codegraph map in a browser tab' })
     await $.command.register({ name: 'codegraph-pane', description: 'Show a smaller codegraph map in a pane beside the chat' })
     await $.tool.register({
@@ -316,7 +332,7 @@ export const register: Register = on => {
   // After a turn the code may have changed: read the map again.
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
-    if (e.agentId === undefined && cwd) {
+    if (e.agentId === undefined) {
       void refresh($)
       // the live page reloads itself once its server has read the code again
       if (mapUrl) void $.http.fetch(mapUrl + 'refresh', { method: 'POST' }).catch(() => undefined)

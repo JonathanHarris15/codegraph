@@ -69,15 +69,17 @@ const PANE = {
   },
 } as const
 
-function engine(on: any, surface: string, said: { filled: string; draft: string; all?: string[] }) {
+function engine(on: any, surface: string, said: { filled: string; draft: string; all?: string[]; ran?: string[][]; root?: () => string }) {
   // Nothing sits beneath the plugin: each hook here stands for the engine.
   on('command.register', () => ({ value: { command: 'codegraph' } }))
   on('tool.register', () => ({ value: {} }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('session.start', (_: any, e: any) => ({ cwd: e.cwd }))
-  on('process.run', (_: any, e: any) => ({
-    value: { exitCode: 0, stdout: e.argv.includes('--summary') ? JSON.stringify(SUMMARY) : 'Python 3.12.0', stderr: '' },
-  }))
+  on('session.root', () => ({ value: said.root?.() ?? '/repo' }))
+  on('process.run', (_: any, e: any) => {
+    said.ran?.push([...e.argv])
+    return { value: { exitCode: 0, stdout: e.argv.includes('--summary') ? JSON.stringify(SUMMARY) : 'Python 3.12.0', stderr: '' } }
+  })
   on('prompt.read', () => ({ value: { text: said.draft, cursor: 0 } }))
   on('prompt.fill', (_: any, e: any) => {
     said.filled = e.text
@@ -167,6 +169,34 @@ test('/codegraph serves the live map, opens it in a browser tab, and its presses
   for (let i = 0; i < 50 && fills.length < 2; i++) await new Promise(r => (globalThis as any).setTimeout(r, 10))
   expect(fills).toContain('Build a new feature: ')
   expect(fills).toContain('/codegraph:fix all 2 mismatches, worst first, one commit each')
+})
+
+test('a session that starts in a spare folder reads the project it moves to', async ($, on) => {
+  // The desktop app starts a session in a spare folder it then deletes, and
+  // moves the session to the project.
+  const ran: string[][] = []
+  let root = '/spares/spare-1'
+  engine(on, 'desktop', { filled: '', draft: '', ran, root: () => root })
+  const spawned: string[][] = []
+  on('process.spawn', async function* (_: any, e: any) {
+    spawned.push([...e.argv])
+    yield { stream: 'stdout', text: `{"ready": "http://127.0.0.1:7333/${spawned.length}/"}\n` }
+    await new Promise(() => undefined) // serves until stopped
+  } as any)
+  on('mcp.call', () => ({ value: { content: [], isError: false } }))
+
+  await $.session.start({ cwd: '/spares/spare-1', surface: 'desktop', isInteractive: true })
+  root = '/repo'
+  await $.tool.call({ tool: 'mcp__codegraph__check' } as any)
+  expect(ran.find(a => a.includes('--check'))).toContain('/repo')
+
+  await $.command.run({ command: 'codegraph', args: '' } as any)
+  expect(spawned[0]).toContain('/repo')
+
+  // moved again (a worktree, say): the live map serves the new folder
+  root = '/repo-wt'
+  await $.command.run({ command: 'codegraph', args: '' } as any)
+  expect(spawned[1]).toContain('/repo-wt')
 })
 
 test('desktop: the picture pans and zooms, and Show finds a mismatch on it', async ($, on) => {
