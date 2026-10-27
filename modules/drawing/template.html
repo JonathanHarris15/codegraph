@@ -88,6 +88,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
   font-variant-numeric:tabular-nums}
 .card.ext{border:1px dashed var(--gc);border-left:3px solid var(--gc);background:var(--surface-2)}
 .card.dim{opacity:.15}
+.card.hov{box-shadow:0 0 0 1px var(--accent),var(--stack)}
 .card.sel{box-shadow:0 0 0 2px var(--accent),0 4px 12px rgba(10,20,40,.14),var(--stack)}
 .card.near{box-shadow:0 0 0 1px var(--accent),var(--stack)}
 .card.hit{box-shadow:0 0 0 2px var(--w-lazy),var(--stack)}
@@ -100,6 +101,10 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 path.wire{fill:none;stroke-linecap:round;transition:opacity .14s}
 path.wire.dim{opacity:.06}
 path.wire.hot{stroke-width:2.2;opacity:1}
+/* while a wire draws itself on, its arrowhead waits at the far end instead of
+   hanging there ahead of the line */
+path.wire.drawing{marker-end:none;marker-start:none}
+#b-wires[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
 
 #panel{position:absolute;top:12px;right:max(12px,env(safe-area-inset-right,0px));
   width:266px;max-height:calc(100% - 68px);overflow:auto;background:var(--surface);
@@ -302,6 +307,8 @@ button.sm{font-size:11px;padding:2px 8px}
     <aside id="panel"></aside>
     <div id="marquee" hidden></div>
     <div id="corner">
+      <button id="b-wires" aria-pressed="false"
+        title="Show every wire, or only the ones on the card you point at or pick">All wires</button>
       <button id="b-fit">Fit</button>
       <button id="b-reset">Reset layout</button>
     </div>
@@ -388,7 +395,10 @@ var KEY="codegraph."+(GRAPH.root||"x");
 function save(k,v){ try{ localStorage.setItem(KEY+"."+k,JSON.stringify(v)); }catch(e){} }
 function load(k){ try{ var s=localStorage.getItem(KEY+"."+k); return s?JSON.parse(s):null; }catch(e){ return null; } }
 
-var selected=null, query="", scale=1, panX=0, panY=0;
+var selected=null, hovered=null, query="", scale=1, panX=0, panY=0;
+/* two ways to read the map: every wire at once, or only the ones belonging to
+   the card you point at or pick. The choice stays with the browser. */
+var focusWires=load("wires")===true;
 
 /* --------------------------------------------------------------------- DOM */
 var stage=document.getElementById("stage"), canvas=document.getElementById("canvas"),
@@ -647,7 +657,8 @@ function toggleFold(id){
 }
 
 function show(key){
-  V=VIEWS[key]; cur=key; selected=null; query=""; qbox.value=""; picked={};
+  V=VIEWS[key]; cur=key; selected=null; hovered=null; query=""; qbox.value=""; picked={};
+  shownWires={};
   nodes={}; order=V.nodes.slice();
   order.forEach(function(n){ nodes[n.id]=n; });
   edges=V.edges.filter(function(e){ return nodes[e.from]&&nodes[e.to]; })
@@ -741,6 +752,7 @@ function show(key){
       p.setAttribute("stroke-width",String(d.width));
       if(d.dash) p.setAttribute("stroke-dasharray",d.dash);
       p.setAttribute("opacity",bad?"0.95":isWiring(e.kind)?"0.6":"0.9");
+      p.addEventListener("transitionend",landed);
       gWires.appendChild(p);
       return p;
     }
@@ -917,6 +929,60 @@ function drawWire(e,show){
   });
   return [main].concat(rows.map(function(r){ return r.th.el; }));
 }
+/* which wires are lit: those on the card you point at, the one you picked,
+   and any you shift-picked. A red wire always shows: a broken rule is not
+   something to go looking for. */
+function litSet(){
+  var s={};
+  [selected,hovered].concat(pickedIds()).forEach(function(id){
+    if(!id||!out[id]) return;
+    out[id].forEach(function(e){ s[e.i]=true; });
+    inn[id].forEach(function(e){ s[e.i]=true; });
+  });
+  return s;
+}
+var STILL=window.matchMedia&&matchMedia("(prefers-reduced-motion:reduce)").matches;
+/* A wire appears by drawing itself from one card to the other: it hides behind
+   a gap as long as itself, and the gap slides off the end. The kind's own dash
+   pattern comes back when it lands. */
+function drawOn(p){
+  if(STILL) return;
+  var len=p.getTotalLength();
+  if(!len) return;
+  p.classList.add("drawing");
+  p.style.transition="none";
+  p.style.strokeDasharray=len+" "+len;
+  p.style.strokeDashoffset=len;
+  p.getBoundingClientRect();           // the browser takes that as the start
+  p.style.transition="stroke-dashoffset .42s cubic-bezier(.33,0,.2,1)";
+  p.style.strokeDashoffset="0";
+}
+function plain(p){
+  if(!p.style.strokeDasharray) return;
+  p.classList.remove("drawing");
+  p.style.transition=""; p.style.strokeDasharray=""; p.style.strokeDashoffset="";
+}
+function landed(ev){
+  if(ev.propertyName==="stroke-dashoffset") plain(ev.target);
+}
+/* which wires are on screen, so one that has just arrived draws itself and the
+   rest stay put. Pointing at a card runs this alone: nothing else moves. */
+var shownWires={};
+function lightWires(){
+  var lit=focusWires?litSet():null;
+  edges.forEach(function(e){
+    var on=!lit||!!lit[e.i]||e.bad.length>0;
+    var strands=drawWire(e,on);
+    var hot=!!selected&&(e.from===selected||e.to===selected);
+    var fresh=on&&!shownWires[e.i];
+    strands.forEach(function(p){
+      p.classList.toggle("hot",hot);
+      p.classList.toggle("dim",!lit&&!!selected&&!hot);
+      if(fresh&&lit) drawOn(p); else if(fresh) plain(p);
+    });
+    shownWires[e.i]=on;
+  });
+}
 function near(id){
   var set={}; set[id]=true;
   out[id].forEach(function(e){ set[e.to]=true; });
@@ -946,15 +1012,9 @@ function render(){
     el.classList.toggle("hit",!!query&&!selected&&hits(n));
     el.classList.toggle("picked",!!picked[n.id]);
   });
-  edges.forEach(function(e){
-    var strands=drawWire(e,true);
-    ev++; if(e.bad.length) bad++;
-    var hot=!!selected&&(e.from===selected||e.to===selected);
-    strands.forEach(function(p){
-      p.classList.toggle("hot",hot);
-      p.classList.toggle("dim",!!selected&&!hot);
-    });
-  });
+  lightWires();
+  ev=edges.length;
+  edges.forEach(function(e){ if(e.bad.length) bad++; });
   var b=extent();
   svg.setAttribute("width",b.w+40); svg.setAttribute("height",b.h+40);
   canvas.style.width=(b.w+40)+"px"; canvas.style.height=(b.h+40)+"px";
@@ -1220,6 +1280,16 @@ function drag(el,n){
     else select(selected===n.id?null:n.id);
   });
   el.addEventListener("pointercancel",function(){ id=null; });
+  // pointing at a card lights its wires; nothing else on the map moves
+  el.addEventListener("pointerenter",function(ev){
+    if(ev.pointerType==="touch"||!focusWires) return;
+    hovered=n.id; el.classList.add("hov"); lightWires();
+  });
+  el.addEventListener("pointerleave",function(){
+    el.classList.remove("hov");
+    if(hovered!==n.id) return;
+    hovered=null; lightWires();
+  });
   // a double click goes into a module
   el.addEventListener("dblclick",function(){ if(VIEWS[n.id]&&n.id!==cur) open(n.id); });
   el.addEventListener("keydown",function(ev){
@@ -1316,6 +1386,19 @@ function openView(){
   panX=22; panY=18; applyView();
 }
 
+var bWires=document.getElementById("b-wires");
+function wiresLabel(){
+  bWires.setAttribute("aria-pressed",String(focusWires));
+  bWires.textContent=focusWires?"Wires: on hover":"All wires";
+}
+bWires.addEventListener("click",function(){
+  focusWires=!focusWires; save("wires",focusWires); wiresLabel();
+  // every wire is leaving or arriving, so they all draw themselves again
+  shownWires={};
+  Object.keys(wireEls).forEach(function(k){ plain(wireEls[k]); });
+  lightWires();
+});
+wiresLabel();
 document.getElementById("b-fit").addEventListener("click",fit);
 document.getElementById("b-reset").addEventListener("click",function(){
   moved={}; save(posKey(),moved); layout(); openView(); render();
