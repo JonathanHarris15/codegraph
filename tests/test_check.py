@@ -448,6 +448,16 @@ class PageMap(Project):
                                            "<Link href={url}>"})
         self.assertTrue(self.has(r.mismatches, "page members", "cannot be reached"))
 
+    def test_a_built_link_in_ui_no_page_holds_might_lead_anywhere(self):
+        # An app frame tagged as a plain component, before `shell` existed:
+        # codegraph cannot tell which pages it is drawn on, so it cannot say
+        # its links lead nowhere.
+        r = self.pages({"web/frame.tsx": "// codegraph: component frame\n<Link href={url}>",
+                        "web/home.tsx": "// codegraph: start page home at /\n",
+                        "web/members.tsx": "// codegraph: page members at /members\n"})
+        self.assertFalse(self.has(r.mismatches, "cannot be reached"))
+        self.assertTrue(self.has(r.unknown, "page members", "cannot be reached"))
+
     def test_a_built_link_on_a_reached_page_might_lead_anywhere(self):
         r = self.pages({"web/home.tsx": "// codegraph: start page home at /\n<Link href={url}>",
                         "web/members.tsx": "// codegraph: page members at /members\n"})
@@ -544,7 +554,7 @@ class ShippedForTests(Project):
                         "app/fixture.py": mod("app") + "FAKE_SALES = []\n",
                         "tests/test_app.py": "# codegraph: test module app\n"
                                              "from app.fixture import FAKE_SALES\nimport app\n"})
-        self.assertEqual([u.rel for u in r.unknown if "only by tests" in u.text],
+        self.assertEqual([u.rel for u in r.unknown if "only tests use" in u.text],
                          ["app/fixture.py"])
 
 

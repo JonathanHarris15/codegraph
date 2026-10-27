@@ -395,8 +395,9 @@ def read_map(root: Path, hidden: bool = False, drafted: dict | None = None) -> R
                 if q not in reach:
                     reach.add(q); stack.append(q)
         # a link built while it runs might lead anywhere, but only from a page
-        # someone can get to
-        maybe = any(holds[p] & built for p in reach)
+        # someone can get to; UI that no page holds could be drawn on any
+        held = set().union(*holds.values())
+        maybe = any(holds[p] & built for p in reach) or bool(built - held)
         for p in sorted(set(pages) - reach):
             if starts:
                 (unk if maybe else mis).append(Finding(
@@ -406,13 +407,13 @@ def read_map(root: Path, hidden: bool = False, drafted: dict | None = None) -> R
             mis.append(Finding(first(pages[p]), 0, "no UI test walks {}; name it in a test's "
                                "`codegraph: test ui` tag".format(pages[p].label)))
 
-    # ---- test data that ships: a file of the program that only tests reach
+    # ---- a file of the program that only tests use: test data, or unused code
     for f in files:
         u = units.get(owner.get(f.name, ""))
         if u and u.kind in ("module", "component", "design") and reached_by[f.name] == {"test"} \
                 and f.rel not in u.door_at:
-            unk.append(Finding(f.rel, 0, "is reached only by tests, yet ships with the program; "
-                               "if it is test data, it belongs with the tests"))
+            unk.append(Finding(f.rel, 0, "ships with the program, but only tests use it; test "
+                               "data belongs with the tests, and unused code can go"))
 
     wires = [(stores[s]["owner"], "store:" + s, "writes") for s in sorted(stores)]
     wires += [(r, "store:" + s, "reads") for s in sorted(stores)
