@@ -396,9 +396,10 @@ function save(k,v){ try{ localStorage.setItem(KEY+"."+k,JSON.stringify(v)); }cat
 function load(k){ try{ var s=localStorage.getItem(KEY+"."+k); return s?JSON.parse(s):null; }catch(e){ return null; } }
 
 var selected=null, hovered=null, query="", scale=1, panX=0, panY=0;
-/* two ways to read the map: every wire at once, or only the ones belonging to
-   the card you point at or pick. The choice stays with the browser. */
-var focusWires=load("wires")===true;
+/* two ways to read the map: only the wires belonging to the card you point at
+   or pick, which is where it starts, or every wire at once. The choice stays
+   with the browser. */
+var focusWires=load("wires")!==false;
 
 /* --------------------------------------------------------------------- DOM */
 var stage=document.getElementById("stage"), canvas=document.getElementById("canvas"),

@@ -179,9 +179,10 @@ touch around them. The count in the header opens the list of mismatches.
 Drag cards about; the layout is kept in that browser. Shift-drag picks
 several. Scroll to zoom, drag the background to pan, and **Fit** brings
 everything back. On a wide map the wires can be more than you want at once:
-**All wires** turns into **Wires: on hover**, and from then on a wire shows
-only while you point at one of its cards, or while a card it touches is
-picked, drawing itself on as it comes. Red wires always show.
+a wire starts out showing only while you
+point at one of its cards, or while a card it touches is picked, drawing
+itself on as it comes. Red wires always show. **Wires: on hover** turns into
+**All wires** when you want them all at once.
 
 Grey wires are imports; dotted means the import is written inside a
 function. Every other colour is a wire the legend names.
