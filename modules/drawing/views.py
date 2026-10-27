@@ -153,7 +153,8 @@ def map_views(root: Path, graph: dict, r: Reading, source: str = "tags") -> dict
             col, row, columns = place_by_file(nodes, [(b, a) for a, b in
                                                       ((w["from"], w["to"]) for w in edges)], [])
         else:
-            col, row, columns, blocks = place_map(nodes, pairs)
+            col, row, columns, blocks = place_map(
+                nodes, pairs, [(w["from"], w["to"]) for w in edges if w["kind"] == "leads"])
             at = {i: b for b in blocks if not b.get("within") for i in b["cards"]}
             for n in nodes:
                 n["block"], n["tier"] = at[n["id"]]["id"], at[n["id"]]["tier"]

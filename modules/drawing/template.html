@@ -829,6 +829,7 @@ function drawCrumbs(){
    crossing as they leave. They spread over the card's head, not down a file
    list that would suggest a wire belongs to one file. */
 var ports={};
+function tierOf(id){ var t=nodes[id]&&nodes[id].tier; return t===undefined?1:t; }
 function placePorts(vis){
   var sides={};
   function add(id,side,e,end,other){
@@ -838,6 +839,13 @@ function placePorts(vis){
   ports={};
   vis.forEach(function(e){
     var a=pos[e.from], b=pos[e.to];
+    if(V.blocks&&tierOf(e.from)!==tierOf(e.to)){
+      // between a block and what hangs over or under it: up or down, always
+      var down=tierOf(e.to)>tierOf(e.from);
+      add(e.from,down?"b":"t",e,0,e.to);
+      add(e.to,down?"t":"b",e,1,e.from);
+      return;
+    }
     if(Math.abs(a.x+cw(e.from)/2-b.x-cw(e.to)/2)<Math.min(cw(e.from),cw(e.to))/2){
       // one above the other: straight down when nothing sits between them,
       // else out to the right and back, clear of the cards in between

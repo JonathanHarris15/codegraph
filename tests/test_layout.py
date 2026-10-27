@@ -70,11 +70,13 @@ class RowOrder(unittest.TestCase):
         self.assertGreater(row["x"], row["y"])
 
 
-def sketch(cards: dict, pairs: list = ()) -> tuple:
-    """Lay out the map for cards given as {id: kind}; ({id: (tier, col, row)},
+def sketch(cards: dict, pairs: list = (), leads: list = (), start: str = "") -> tuple:
+    """Lay out the map for cards given as {id: kind}, with links between
+    pages as `leads` from the `start` page; ({id: (tier, col, row)},
     {id: block}, the blocks)."""
-    nodes = [{"id": i, "kind": k, "group": k, "label": i, "files": []} for i, k in cards.items()]
-    col, row, _, blocks = place_map(nodes, list(pairs))
+    nodes = [{"id": i, "kind": k, "group": k, "label": i, "files": [], "start": i == start}
+             for i, k in cards.items()]
+    col, row, _, blocks = place_map(nodes, list(pairs), list(leads))
     tier = {i: b["tier"] for b in blocks for i in b["cards"]}
     block = {i: b["id"] for b in blocks for i in b["cards"]}
     return {i: (tier[i], col[i], row[i]) for i in cards}, block, blocks
@@ -174,6 +176,49 @@ class TheMap(unittest.TestCase):
         at, _, _ = sketch(cards, chain)
         for user, used in chain:
             self.assertLess(at[used][1:], at[user][1:])
+
+
+class ThePages(unittest.TestCase):
+    """The pages tell the story of getting around: the start page on the
+    left, and each page as far right as the fewest links it takes to reach
+    it. The components hang under the pages that hold them."""
+
+    def test_each_page_sits_as_many_columns_right_as_links_to_reach_it(self):
+        pages = {p: "page" for p in ("home", "list", "help", "item")}
+        leads = [("home", "list"), ("home", "help"), ("list", "item")]
+        at, _, _ = sketch(pages, leads=leads, start="home")
+        self.assertEqual(at["list"][1], at["home"][1] + 1)
+        self.assertEqual(at["help"][1], at["list"][1])
+        self.assertEqual(at["item"][1], at["list"][1] + 1)
+
+    def test_the_shortest_way_there_decides(self):
+        pages = {p: "page" for p in ("home", "list", "item")}
+        leads = [("home", "list"), ("list", "item"), ("home", "item"), ("item", "home")]
+        at, _, _ = sketch(pages, leads=leads, start="home")
+        self.assertEqual(at["item"][1], at["list"][1])
+
+    def test_pages_come_after_the_features(self):
+        cards = {"f:x": "feature", "home": "page", "list": "page"}
+        at, _, _ = sketch(cards, leads=[("home", "list")], start="home")
+        self.assertLess(at["f:x"][1], at["home"][1])
+
+    def test_a_page_no_link_reaches_sits_past_the_rest(self):
+        pages = {p: "page" for p in ("home", "list", "lost")}
+        at, _, _ = sketch(pages, leads=[("home", "list")], start="home")
+        self.assertGreater(at["lost"][1], at["list"][1])
+
+    def test_a_component_hangs_under_the_page_that_holds_it(self):
+        cards = {"home": "page", "list": "page", "item": "page",
+                 "c:row": "component", "c:cell": "component"}
+        at, _, _ = sketch(cards, pairs=[("item", "c:row"), ("c:row", "c:cell")],
+                          leads=[("home", "list"), ("list", "item")], start="home")
+        self.assertEqual(at["c:row"][:2], (2, at["item"][1]))
+        self.assertEqual(at["c:cell"][:2], (2, at["item"][1]))
+
+    def test_a_component_sits_under_the_one_that_holds_it(self):
+        cards = {"home": "page", "c:z": "component", "c:a": "component"}
+        at, _, _ = sketch(cards, pairs=[("home", "c:z"), ("c:z", "c:a")], start="home")
+        self.assertLess(at["c:z"][2], at["c:a"][2])
 
 
 class Sizes(unittest.TestCase):
