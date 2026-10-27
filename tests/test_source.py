@@ -5,6 +5,7 @@ small repo and reads it through the front door: files_in and reader_of."""
 from __future__ import annotations
 
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -217,6 +218,61 @@ class Outside(Repo):
 
     def test_prose_is_not_a_url(self):
         self.assertEqual(self.conns('"""See the docs. Ratio is 3:1."""'), {})
+
+    def test_a_pattern_that_looks_like_a_url_is_not_one(self):
+        # A regex for gs:// addresses, which is what the Firebase SDK ships.
+        # urlsplit reads the bracket as the start of an IPv6 host and raises;
+        # one of these anywhere used to take the whole map down with it.
+        self.assertEqual(self.conns(r'GS = r"gs://([A-Za-z0-9.\-_]+)(/(.*))?$"'), {})
+
+    def test_an_unreadable_address_leaves_the_rest_of_the_file_alone(self):
+        # The point is that the bad one is dropped, not that it stops the read.
+        got = self.conns('BAD = "gs://([A-Za-z0-9.-_]+)"\n'
+                         'GOOD = "https://api.example.com/v1"\n')
+        self.assertIn("net:api.example.com", got)
+
+
+SMALL_APP = {"app.py": "x = 1\n", "public/bundle.py": "y = 2\n"}
+
+
+class WhatIsNotSource(Repo):
+    """Build output is not the program, and git already knows which it is."""
+
+    def git_repo(self, files: dict, ignore: str):
+        tree(self.root, files)
+        (self.root / ".gitignore").write_text(ignore, encoding="utf-8")
+        for args in (["init", "-q"], ["add", "-A"]):
+            if subprocess.run(["git", "-C", str(self.root)] + args,
+                              capture_output=True).returncode:
+                self.skipTest("git is not available")
+        return sorted(f.rel for f in files_in(self.root))
+
+    def test_an_ignored_folder_is_not_walked(self):
+        # The case this came from: a Vite build lands in public/ because that is
+        # what Firebase Hosting serves, so a minified copy of the whole app sat
+        # beside the app and got read as source.
+        rels = self.git_repo(SMALL_APP, "public/\n")
+        self.assertEqual(rels, ["app.py"])
+
+    def test_a_generated_file_that_was_committed_stays(self):
+        # Checked in is checked in: it ships, so it is part of the program
+        # whoever wrote it.
+        rels = self.git_repo({"app.py": "x = 1\n", "built.py": "y = 2\n"}, "nothing/\n")
+        self.assertEqual(rels, ["app.py", "built.py"])
+
+    def test_a_folder_that_is_not_a_repo_is_read_whole(self):
+        tree(self.root, SMALL_APP)
+        self.assertEqual(sorted(f.rel for f in files_in(self.root)),
+                         ["app.py", "public/bundle.py"])
+
+    def test_a_file_written_since_the_last_read_is_picked_up(self):
+        # --serve reads the repo again on every refresh, and a file written
+        # while it runs is one git has not been told about yet. Remembering
+        # the first answer would keep that file off the map until a restart.
+        self.assertEqual(self.git_repo(SMALL_APP, "public/\n"), ["app.py"])
+        tree(self.root, {"later.py": "z = 3\n"})
+        self.assertEqual(sorted(f.rel for f in files_in(self.root)),
+                         ["app.py", "later.py"])
 
 
 @unittest.skipUnless(HAS_SCRIPT, "tree-sitter is not installed")

@@ -156,13 +156,25 @@ NAMESPACE_HOSTS = {"www.w3.org", "schemas.xmlsoap.org", "schemas.microsoft.com"}
 
 
 def urls_from(strings) -> list:
-    """Every URL written in these strings, scheme and host pulled apart."""
+    """Every URL written in these strings, scheme and host pulled apart.
+
+    A string that merely looks like an address is dropped, not raised on. The
+    regex is deliberately generous, so it also catches patterns ABOUT addresses
+    — `gs://([A-Za-z0-9.\\-_]+)`, which is how the Firebase SDK matches a bucket
+    path. urlsplit reads that bracket as the start of an IPv6 host and refuses
+    the string, and it has more than one way of saying so. Letting any of them
+    out means one line in one file takes down the whole map, with a ValueError
+    that names neither the file nor the string.
+    """
     found = []
     for text in strings:
         for raw in URL_RE.findall(text):
-            bits = urlsplit(raw.rstrip(".,);"))
-            # a port filled in later, `http://host:${port}`, leaves a bare colon
-            host = bits.netloc.split("@")[-1].rstrip(":")
+            try:
+                bits = urlsplit(raw.rstrip(".,);"))
+                # a port filled in later, `http://host:${port}`, leaves a bare colon
+                host = bits.netloc.split("@")[-1].rstrip(":")
+            except ValueError:
+                continue
             if not host or host in NAMESPACE_HOSTS:
                 continue
             found.append((bits.scheme.lower(), host, bits.path or "/"))

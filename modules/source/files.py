@@ -1,6 +1,7 @@
 # codegraph: module source
 from __future__ import annotations
 
+import subprocess
 from dataclasses import dataclass
 
 
@@ -31,21 +32,58 @@ class File:
 
 # ----------------------------------------------------------------- discovery
 
+def _kept_by_git(root: Path) -> set | None:
+    """Every file git would not ignore, or None when git cannot say.
+
+    Asked afresh on every read, and deliberately not cached: `--serve` reads
+    the repo again on each refresh, and a file written while it is running is
+    one git has not been told about yet. A remembered answer would leave that
+    file off the map until the server was restarted.
+
+    SKIP_DIRS names the folders every project has, but what a project calls
+    its build output is its own business: a Vite build lands in `public/`
+    when Firebase Hosting serves from there, and a minified copy of the whole
+    app is then sitting beside the app. The repo already says which files
+    those are, so this asks it rather than guessing at more names.
+
+    Run with `-C root`, git reports paths relative to root whether root is the
+    repository or a folder inside one. A folder that is no repository at all
+    gets None, and is read whole.
+    """
+    try:
+        done = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "--cached", "--others", "--exclude-standard"],
+            capture_output=True, text=True, timeout=60,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if done.returncode:
+        return None
+    return {line.strip() for line in done.stdout.splitlines() if line.strip()}
+
+
 def discover(root: Path, hidden: bool = False,
              suffixes: tuple = (".py",)) -> list[Path]:
     """Every source file under root with one of these endings, minus the
-    usual noise.
+    usual noise and anything the repo ignores.
 
     Dotted folders are skipped unless asked for: a folder whose name starts
     with a dot cannot be imported, so anything in one is tooling, not code the
     project runs.
+
+    Generated code that was COMMITTED stays: it ships, so it is part of the
+    program whoever wrote it.
     """
+    kept = _kept_by_git(root)
     found: list[Path] = []
     for path in sorted(p for p in root.rglob("*") if p.suffix in suffixes and p.is_file()):
-        parts = path.relative_to(root).parts[:-1]
+        rel = path.relative_to(root)
+        parts = rel.parts[:-1]
         if any(p in SKIP_DIRS for p in parts):
             continue
         if not hidden and any(p.startswith(".") for p in parts):
+            continue
+        if kept is not None and rel.as_posix() not in kept:
             continue
         found.append(path)
     return found
