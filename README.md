@@ -250,10 +250,24 @@ The file view's placement happens in `place_by_file`, the map's in
 `place_map`; each hands the page a column and a row per card. The page only turns those into pixels, so a new
 layout is a Python function and nothing else.
 
+## How codegraph itself is built
+
+Codegraph is set up on itself, in the same three layers it asks of others.
+`python codegraph.py . --check` reads it like any other repo.
+
+- `modules/`: source (reads each file and what it imports and reaches),
+  tags, shapes, rules (the check's reading), drafting, layout, drawing.
+  Each folder's `__init__.py` is its front door.
+- `features/`: check, draw-map and draft-tags, each a few lines that call
+  modules.
+- the UI: `codegraph.py`, the command line, and `hooks/register.tsx`, the
+  pane. Both are start pages.
+- `tests/`: one file per module or feature.
+
 ## Tests
 
 ```
-python -m unittest -v
+python -m unittest discover -s tests -t .
 ```
 
 Over the parts that can be quietly wrong: turning a path and an import

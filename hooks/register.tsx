@@ -1,3 +1,4 @@
+// codegraph: start page pane
 // The codegraph mod: the map of this repo in a pane beside the chat, a
 // check the model runs after every change, and a way to point the chat at
 // one feature, module or page with a click.

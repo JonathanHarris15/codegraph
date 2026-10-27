@@ -1,0 +1,4 @@
+[tool.pytest.ini_options]
+# the tests import modules/ and features/ from the repo root
+pythonpath = ["."]
+testpaths = ["tests"]

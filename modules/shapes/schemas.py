@@ -1,3 +1,4 @@
+# codegraph: module shapes
 """shapes - what a store holds, read from the schemas the code itself uses.
 
 A shape is never read from a comment (docs/adr/0003). It comes from

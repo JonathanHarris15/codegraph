@@ -1,3 +1,4 @@
+// codegraph: test ui pane
 import { expect, test } from 'claude-code/testing'
 
 const SUMMARY = {

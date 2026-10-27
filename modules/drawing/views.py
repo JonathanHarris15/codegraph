@@ -1,0 +1,180 @@
+# codegraph: module drawing
+from __future__ import annotations
+
+from collections import defaultdict
+
+from modules.layout import place_by_file, place_inside, place_map
+from modules.rules import UI_KINDS, relation
+from modules.source import EXTERNAL, OUTSIDE
+
+
+# ----------------------------------------------------------------- map views
+#
+# The page's levels. The map: every module, feature, page and component as a
+# card, with the stores, triggers and outside connections they touch, and the
+# wires between them. The pages: where a person can go. Inside each card, its
+# own files beside the cards they touch.
+
+STORES, TRIGGERS, UI_GROUP = "(stores)", "(triggers)", "(ui)"
+NAMED_WIRES = ("import", "lazy", "uses", "informed", "acts", "contains")
+TESTS_CARD, TOOLING_CARD, LOOSE_CARD = "test", "tooling", "(untagged)"
+
+
+def _group(u: Unit) -> str:
+    if u.kind == "feature":
+        return "system:" + (u.system or "?")
+    if u.kind in UI_KINDS:
+        return UI_GROUP
+    return u.id
+
+
+def _about(u: Unit, n: int) -> str:
+    files = "1 file" if n == 1 else "{} files".format(n)
+    if u.kind == "feature":
+        return "{} · {}".format(u.system or "no system", files)
+    if u.kind == "page":
+        return "{}{} · {}".format("start · " if u.start else "", u.route or "page", files)
+    if u.kind in ("component", "design"):
+        return "{} · {}".format("design system" if u.kind == "design" else "component", files)
+    return files
+
+
+def map_views(root: Path, graph: dict, r: Reading, source: str = "tags") -> dict:
+    shown = {n["id"]: n for n in graph["nodes"]}
+    is_file = {f.name for f in r.files}
+    units = r.units
+
+    def card(fid: str) -> str:
+        if fid not in is_file:
+            return fid                                  # outside or third party
+        return r.owner.get(fid, LOOSE_CARD)
+
+    cards: dict = {}
+    for uid, u in units.items():
+        ids = sorted(n for n in u.files if n in shown)
+        cards[uid] = {
+            "id": uid, "label": u.name or ("design system" if u.kind == "design" else u.kind),
+            "kind": u.kind, "dir": _about(u, len(ids)), "group": _group(u),
+            "lines": sum(shown[i]["lines"] for i in ids), "files": ids,
+            "door": sorted(u.door or ()), "system": u.system, "uses": sorted(u.uses),
+            "route": u.route, "start": u.start,
+            "stores": sorted(s for s, v in r.stores.items() if v["owner"] == uid),
+            "reads": sorted(u.reads),
+        }
+    loose = sorted(n["id"] for n in graph["nodes"] if n["kind"] == "file" and card(n["id"]) == LOOSE_CARD)
+    if loose:
+        cards[LOOSE_CARD] = {"id": LOOSE_CARD, "label": "untagged", "kind": "loose",
+                             "dir": "{} files with no tag".format(len(loose)), "group": LOOSE_CARD,
+                             "lines": sum(shown[i]["lines"] for i in loose), "files": loose}
+    for s, v in r.stores.items():
+        schema = v["schema"]
+        cards["store:" + s] = {
+            "id": "store:" + s, "label": s, "kind": "store", "group": STORES, "lines": 0,
+            "dir": "owned by " + units[v["owner"]].name, "files": [],
+            "fields": schema.lines() if schema else [],
+            "schema": "{}:{}".format(schema.rel, schema.line) if schema else "",
+            "owner": v["owner"], "readers": sorted(v["readers"]),
+        }
+    for t in r.triggers:
+        cards[t["id"]] = {"id": t["id"], "label": t["label"], "kind": "trigger",
+                          "group": TRIGGERS, "lines": 0, "dir": t["kind"], "files": [],
+                          "fields": t["fields"], "feature": t["feature"]}
+
+    def kind_of(e: dict):
+        """The wire an import between two files is, by what the files belong to,
+        and the rules it breaks. None when it is no wire on the map."""
+        k = e["kind"]
+        ua, ub = r.owner.get(e["from"]), r.owner.get(e["to"])
+        if k not in ("import", "lazy") or not ua or not ub or ua == ub:
+            return k, []
+        wire, wrong = relation(units[ua].kind, units[ub].kind)
+        why = r.bad.get((ua, ub), [])
+        if wrong:
+            return "import", why or [wrong]
+        if wire is None:
+            return None, []
+        return (k if wire == "import" else wire), why
+
+    def view(title: str, unit: str, own: list, mapping, keep, group: str = "",
+             inside: str = "") -> dict:
+        """Lift the file graph through `mapping`, keep the wires that touch
+        `own` between cards that `keep` allows, and lay out what is left.
+        Inside a card, its stores and triggers wire to the file that holds
+        the store's tag, else to its first file."""
+        def anchor(other: str) -> str:
+            s = r.stores.get(other[6:]) if other.startswith("store:") else None
+            held = next((f.name for f in r.files if s and f.rel == s["rel"]), None)
+            return held if held in own else own[0]
+        wires: dict = {}
+        for e in graph["edges"]:
+            a, b = mapping(e["from"]), mapping(e["to"])
+            if a == b or not (a in own or b in own) or not (keep(a) and keep(b)):
+                continue
+            k, why = kind_of(e)
+            if k is None:
+                continue
+            key = (a, b, "import" if k in ("import", "lazy") else k)
+            w = wires.setdefault(key, {"from": a, "to": b, "kind": k, "names": set(),
+                                       "bad": set(), "via": set(), "why": set()})
+            if w["kind"] == "lazy" and k == "import":
+                w["kind"] = "import"      # a real import beats one in a function
+            if a != e["from"]:
+                w["via"].add(e["from"])   # the files on a card this wire comes from
+            w["why"] |= set(why)
+        named: dict = defaultdict(list)
+        for w in wires.values():
+            if w["kind"] in NAMED_WIRES:
+                named[(w["from"], w["to"])].append(w)
+        for c in r.crossings:
+            for w in named.get((mapping(c.src), mapping(c.dst)), ()):
+                w["names"].add(c.name)
+                if not c.ok:
+                    w["bad"].add(c.name)
+        for a, b, k in r.wires:
+            if inside:                       # the card's own end lands on one of its files
+                a, b = (anchor(b) if a == inside else a), (anchor(a) if b == inside else b)
+            if (a in own or b in own) and (a in cards or a in own) and                     (b in cards or b in own) and keep(a) and keep(b):
+                wires.setdefault((a, b, k), {"from": a, "to": b, "kind": k, "names": set(),
+                                             "bad": set(), "via": set(), "why": set()})
+        edges = [dict(w, names=sorted(w["names"]), bad=sorted(w["bad"]), via=sorted(w["via"]),
+                      why=sorted(w["why"]))
+                 for _, w in sorted(wires.items())]
+
+        ids = list(dict.fromkeys(own + [x for w in edges for x in (w["from"], w["to"])]))
+        nodes = [dict(cards.get(i) or shown[i]) for i in ids]
+        tail = [g for g in (EXTERNAL, STORES, OUTSIDE) if any(n["group"] == g for n in nodes)]
+        pairs = [(w["from"], w["to"]) for w in edges if w["kind"] != "leads"]
+        if unit == "files":
+            for n in nodes:
+                n["own"] = n["id"] in own
+            col, row, columns = place_inside(nodes, pairs, set(own), tail)
+        elif unit == "pages":
+            col, row, columns = place_by_file(nodes, [(b, a) for a, b in
+                                                      ((w["from"], w["to"]) for w in edges)], [])
+        else:
+            col, row, columns = place_map(nodes, pairs)
+        for n in nodes:
+            n["col"], n["row"] = col[n["id"]], row[n["id"]]
+        groups = list(dict.fromkeys(n["group"] for n in nodes if n["group"] not in tail))
+        return {"title": title, "unit": unit, "nodes": nodes, "edges": edges,
+                "columns": columns, "groups": groups + tail, "group": group}
+
+    on_map = [c for c, v in cards.items() if v["kind"] not in ("test", "tooling")]
+    views = {"map": view("Map", "units", sorted(on_map), card,
+                         lambda c: c not in (TESTS_CARD, TOOLING_CARD))}
+    top = ["map"]
+    pages = sorted(c for c, v in cards.items() if v["kind"] == "page")
+    if pages:
+        views["pages"] = view("Pages", "pages", pages, card, lambda c: c in pages)
+        top.append("pages")
+    for cid in on_map:
+        own = cards[cid]["files"]
+        if own:
+            views[cid] = view(cards[cid]["label"], "files", own,
+                              lambda fid, own=set(own): fid if fid in own else card(fid),
+                              lambda c: c not in (TESTS_CARD, TOOLING_CARD),
+                              cards[cid]["group"], cid)
+
+    return {"source": source, "top": top, "views": views,
+            "mismatches": [str(m) for m in r.mismatches],
+            "unknown": [str(u) for u in r.unknown]}
