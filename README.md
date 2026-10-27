@@ -34,7 +34,24 @@ The repo is a Claude Code plugin. Installing it gives you three things:
 - two **skills**: `/codegraph:setup` brings a repo under codegraph, and
   `/codegraph:fix` fixes one mismatch at a time, test first.
 
-To try it from a working copy, start Claude Code with this folder as a plugin:
+To install it for every project, add this folder as a marketplace (the repo
+lists itself in `.claude-plugin/marketplace.json`), then install from it:
+
+```
+claude plugin marketplace add "path/to/codegraph"
+claude plugin install codegraph@codegraph
+```
+
+The install is a copy. After changing the code here, take the new version
+with:
+
+```
+claude plugin marketplace update codegraph
+claude plugin update codegraph@codegraph
+```
+
+To try a working copy for one session instead, start Claude Code with this
+folder as a plugin:
 
 ```
 claude --plugin-dir "path/to/codegraph"
