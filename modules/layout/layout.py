@@ -1,6 +1,7 @@
 # codegraph: module layout
 from __future__ import annotations
 
+import math
 from collections import defaultdict, deque
 
 
@@ -234,45 +235,187 @@ def place_inside(nodes: list, pairs: list, own: set, pinned: list) -> tuple:
     return col, order_rows(columns, pairs), [{"label": l} for l in labels]
 
 
-MAP_BANDS = (("outside", "outside"), ("store", "stores"), ("module", "modules"),
-             ("feature", "features"), ("trigger", "triggers"), ("component", "UI"),
-             ("page", "pages"))
+# The map's blocks, as in the drawing it copies: (block, label, kinds, tier,
+# beside). Tier 0 sits above the middle row, 2 below it; a block off the
+# middle row shares the columns of the block it is `beside`.
+MAP_BLOCKS = (
+    ("reach", "outside + stores", ("outside", "store"), 0, "modules"),
+    ("modules", "modules", ("module",), 1, ""),
+    ("starts", "triggers", ("trigger",), 0, "features"),
+    ("features", "features", ("feature",), 1, ""),
+    ("pages", "pages", ("page",), 1, ""),
+    ("kit", "design system + components", ("component",), 2, "pages"),
+)
+CELL = 3.8            # a column is this many cards tall in width, cards and gaps
+SYSTEM_GAP = 0.8      # room under a system's box for the next one's name, in cards
 
 
-def place_map(nodes: list, pairs: list) -> tuple:
-    """Lay out the map in bands, left to right as data flows to a person:
-    outside connections, stores, modules, features, triggers, the pieces of
-    UI, then pages. Modules that use other modules sit right of them."""
-    band_of = {"external": "outside", "design": "component", "loose": "page"}
-    kinds = {n["id"]: band_of.get(n["kind"], n["kind"]) for n in nodes}
+def size_cards(nodes: list) -> None:
+    """Give each card a `size`: how big it draws beside the others in view,
+    by the square root of its lines over the middle card's, from 0.9 to 2.
+    A card with no lines of its own, a store or a trigger, is 1."""
+    lines = sorted(n["lines"] for n in nodes if n.get("lines"))
+    mid = lines[len(lines) // 2] if lines else 0
+    for n in nodes:
+        n["size"] = (round(min(2.0, max(0.9, math.sqrt(n["lines"] / mid))), 2)
+                     if mid and n.get("lines") else 1)
+
+
+def _weight(n: dict) -> float:
+    """How tall a card draws, in cards: as big as its size, or its list of files."""
+    files = len(n.get("files") or ())
+    return max(1.2 + files / 5 if files else 1, n.get("size", 1))
+
+
+def _split(weights: list, k: int) -> list:
+    """Cut a run into k columns of about the same height, keeping its order:
+    the column each card lands in."""
+    total, out, c, run = sum(weights), [], 0, 0.0
+    for i, w in enumerate(weights):
+        left = len(weights) - i
+        if c < k - 1 and run > 0 and (run + w / 2 > total * (c + 1) / k or left <= k - 1 - c):
+            c += 1
+        out.append(c)
+        run += w
+    return out
+
+
+def _tall(weights: list, k: int) -> float:
+    per = defaultdict(float)
+    for c, w in zip(_split(weights, k), weights):
+        per[c] += w
+    return max(per.values(), default=0.0)
+
+
+def place_map(nodes: list, pairs: list, aspect: float = 1.0) -> tuple:
+    """Lay out the map in blocks: modules on the left with the outside
+    connections and stores they reach above them, features in the middle in
+    their systems with their triggers above, and pages in one tall column on
+    the right with the design system and components below. Modules and
+    systems wrap into as many columns as bring the whole map nearest
+    `aspect`, wide over tall; what sits above a block sits over the card it
+    is wired to.
+
+    Returns (col, row, columns, blocks): a card's column on the grid and its
+    row within that column and tier, and each block's cards and tier. A
+    system's block says it is `within` features."""
+    of = {"external": "outside", "design": "component", "loose": "page"}
+    kinds = {n["id"]: of.get(n["kind"], n["kind"]) for n in nodes}
+    block_of = {k: b for b, _, ks, _, _ in MAP_BLOCKS for k in ks}
+    for i, k in kinds.items():                       # anything else, with the pages
+        kinds[i] = k if k in block_of else "page"
+    by_id = {n["id"]: n for n in nodes}
+
+    # the order within each block: modules used on the left, then wires untangled
     mods = [i for i, k in kinds.items() if k == "module"]
     depth = layer(mods, [(s, d) for s, d in pairs if s in set(mods) and d in set(mods)])
     deepest = max(depth.values(), default=0)
-
-    col: dict = {}
-    labels: list = []
-    for kind, label in MAP_BANDS:
-        ids = [i for i, k in kinds.items() if k == kind]
-        if not ids:
-            continue
-        if kind == "module":
-            for i in ids:
-                col[i] = len(labels) + deepest - depth[i]      # used on the left
-            labels += [label] + [""] * deepest
-        else:
-            col.update({i: len(labels) for i in ids})
-            labels.append(label)
-    for i in kinds:                                  # anything else, at the end
-        if i not in col:
-            col[i] = len(labels) - 1 if labels else 0
-
+    band = {i: deepest - depth[i] if kinds[i] == "module" else 0 for i in kinds}
     columns: dict = defaultdict(list)
-    order = {n["id"]: (n["group"], n["label"]) for n in nodes}
     for i in kinds:
-        columns[col[i]].append(i)
-    for c in columns:
-        columns[c].sort(key=lambda i: order[i])
-    return col, order_rows(columns, pairs), [{"label": l} for l in labels]
+        columns[(block_of[kinds[i]], band[i])].append(i)
+    order = {n["id"]: (n["group"], n["label"]) for n in nodes}
+    for c in columns.values():
+        c.sort(key=lambda i: order[i])
+    keys = sorted(columns, key=lambda k: ([b for b, *_ in MAP_BLOCKS].index(k[0]), k[1]))
+    rows = order_rows({j: columns[k] for j, k in enumerate(keys)}, pairs)
+    run: dict = defaultdict(list)
+    for k in keys:
+        run[k[0]] += sorted(columns[k], key=lambda i: rows[i])
+
+    # what stacks together: a system's features, else each card on its own
+    groups: dict = defaultdict(list, {b: [[i] for i in run[b]] for b in run})
+    systems: dict = defaultdict(list)
+    for i in run["features"]:
+        systems[by_id[i]["group"]].append(i)
+    groups["features"] = sorted(systems.values(),
+                                key=lambda g: sum(run["features"].index(i) for i in g) / len(g))
+
+    def weights(b: str) -> list:
+        gap = SYSTEM_GAP if b == "features" else 0
+        return [sum(_weight(by_id[i]) for i in g) + gap for g in groups[b]]
+
+    def wide(b: str) -> float:
+        """How wide one of a block's columns draws, as its biggest card."""
+        biggest = max([by_id[i].get("size", 1) for i in run[b]], default=1)
+        return CELL * (0.4 + 0.6 * biggest)
+
+    def shape(k: dict) -> tuple:
+        """How wide and tall the map draws with k columns per block."""
+        top = max([-(-len(run[b]) // k[beside]) for b, _, _, t, beside in MAP_BLOCKS
+                   if t == 0 and run[b]], default=0)
+        mid = {b: _tall(weights(b), k[b]) for b, _, _, t, _ in MAP_BLOCKS if t == 1}
+        for b, _, _, t, beside in MAP_BLOCKS:        # hangs just under its block
+            if t == 2 and run[b]:
+                mid[beside] += 0.5 + _tall(weights(b), k[beside])
+        return (sum(n * wide(b) for b, n in k.items()),
+                top + max(mid.values(), default=0) + 0.5 * (top > 0))
+
+    def fits(k: dict) -> tuple:
+        """Nearest `aspect` overall, with the modules and features blocks
+        about as tall as each other, as the drawing has them."""
+        w, h = shape(k)
+        off = abs(math.log(max(w, 1) / max(h, 1) / aspect))
+        if run["modules"] and run["features"]:
+            off += abs(math.log(_tall(weights("modules"), k["modules"]) /
+                                _tall(weights("features"), k["features"])))
+        return off, sum(k.values())
+
+    width = {b: 1 if run[b] or any(t != 1 and beside == b and run[o]
+                                   for o, _, _, t, beside in MAP_BLOCKS) else 0
+             for b, _, _, t, _ in MAP_BLOCKS if t == 1}
+    best = dict(width)
+    for km in range(width["modules"], len(groups["modules"]) + 1):
+        for kf in range(width["features"], len(groups["features"]) + 1):
+            k = dict(width, modules=km, features=kf)
+            if fits(k) < fits(best):
+                best = k
+
+    first, start = {}, 0
+    for b, _, _, t, _ in MAP_BLOCKS:
+        if t == 1:
+            first[b], start = start, start + best[b]
+    col: dict = {}
+    row: dict = {}
+    seen: dict = defaultdict(int)
+
+    def put(i: str, c: int, t: int) -> None:
+        col[i], row[i] = c, seen[(t, c)]
+        seen[(t, c)] += 1
+
+    for b, _, _, t, beside in MAP_BLOCKS:            # the middle row and below it
+        if t == 0 or not run[b]:
+            continue
+        home = beside or b
+        for g, c in zip(groups[b], _split(weights(b), best[home])):
+            for i in g:
+                put(i, first[home] + c, t)
+    for b, _, _, t, beside in MAP_BLOCKS:            # above: over what each is wired to
+        if t != 0 or not run[b]:
+            continue
+        home = set(run[beside])
+        span = range(first[beside], first[beside] + best[beside])
+        room = -(-len(run[b]) // best[beside])
+        aim = {}
+        for i in run[b]:
+            near = [col[o] for s, d in pairs for o in ((d,) if s == i else (s,) if d == i else ())
+                    if o in home]
+            aim[i] = sum(near) / len(near) if near else None
+        for i in sorted(run[b], key=lambda i: (aim[i] is None, aim[i] or 0)):
+            free = [c for c in span if seen[(0, c)] < room]
+            put(i, min(free, key=lambda c: (abs(c - aim[i]) if aim[i] is not None else 0,
+                                            seen[(0, c)], c)), 0)
+
+    blocks: list = []
+    for b, label, _, t, _ in MAP_BLOCKS:
+        if not run[b]:
+            continue
+        blocks.append({"id": b, "label": label, "tier": t, "cards": list(run[b])})
+        if b == "features":
+            blocks += [{"id": by_id[g[0]]["group"], "label": by_id[g[0]]["group"].split(":", 1)[-1],
+                        "tier": 1, "within": b, "cards": list(g)}
+                       for g in groups[b] if by_id[g[0]]["group"].startswith("system:")]
+    return col, row, [{"label": ""} for _ in range(start)], blocks
 
 
 def place_by_folder(nodes: list, groups: list) -> tuple:

@@ -253,6 +253,25 @@ class MapViews(Folder):
         card = next(n for n in self.views["map"]["nodes"] if n["id"] == "store:members")
         self.assertEqual(card["fields"], ["name: str"])
 
+    def test_the_map_is_drawn_in_blocks(self):
+        at = {n["id"]: n for n in self.views["map"]["nodes"]}
+        self.assertEqual((at["store:members"]["block"], at["store:members"]["tier"]), ("reach", 0))
+        self.assertEqual((at["module:members"]["block"], at["module:members"]["tier"]), ("modules", 1))
+        self.assertEqual((at["design"]["block"], at["design"]["tier"]), ("kit", 2))
+        self.assertEqual([b["id"] for b in self.views["map"]["blocks"]],
+                         ["reach", "modules", "starts", "features", "system:people", "pages", "kit"])
+        self.assertEqual(self.views["map"]["blocks"][4]["within"], "features")
+
+    def test_every_card_in_every_view_has_a_size(self):
+        for name, view in self.views.items():
+            self.assertTrue(all(0.9 <= n["size"] <= 2 for n in view["nodes"]), name)
+
+    def test_the_pane_gets_the_blocks_too(self):
+        m = summary(self.g)["views"]["map"]
+        self.assertEqual(m["blocks"][0], {"id": "reach", "label": "outside + stores"})
+        store = next(n for n in m["nodes"] if n["id"] == "store:members")
+        self.assertEqual((store["block"], store["tier"]), ("reach", 0))
+
     def test_the_page_map_starts_on_the_left(self):
         col = {n["id"]: n["col"] for n in self.views["pages"]["nodes"]}
         self.assertLess(col["page:home"], col["page:about"])

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from modules.layout import place_by_file, place_inside, place_map
+from modules.layout import place_by_file, place_inside, place_map, size_cards
 from modules.rules import UI_KINDS, relation
 from modules.source import EXTERNAL, OUTSIDE
 
@@ -142,6 +142,7 @@ def map_views(root: Path, graph: dict, r: Reading, source: str = "tags") -> dict
 
         ids = list(dict.fromkeys(own + [x for w in edges for x in (w["from"], w["to"])]))
         nodes = [dict(cards.get(i) or shown[i]) for i in ids]
+        size_cards(nodes)
         tail = [g for g in (EXTERNAL, STORES, OUTSIDE) if any(n["group"] == g for n in nodes)]
         pairs = [(w["from"], w["to"]) for w in edges if w["kind"] != "leads"]
         if unit == "files":
@@ -152,12 +153,18 @@ def map_views(root: Path, graph: dict, r: Reading, source: str = "tags") -> dict
             col, row, columns = place_by_file(nodes, [(b, a) for a, b in
                                                       ((w["from"], w["to"]) for w in edges)], [])
         else:
-            col, row, columns = place_map(nodes, pairs)
+            col, row, columns, blocks = place_map(nodes, pairs)
+            at = {i: b for b in blocks if not b.get("within") for i in b["cards"]}
+            for n in nodes:
+                n["block"], n["tier"] = at[n["id"]]["id"], at[n["id"]]["tier"]
         for n in nodes:
             n["col"], n["row"] = col[n["id"]], row[n["id"]]
         groups = list(dict.fromkeys(n["group"] for n in nodes if n["group"] not in tail))
-        return {"title": title, "unit": unit, "nodes": nodes, "edges": edges,
-                "columns": columns, "groups": groups + tail, "group": group}
+        placed = {"title": title, "unit": unit, "nodes": nodes, "edges": edges,
+                  "columns": columns, "groups": groups + tail, "group": group}
+        if unit == "units":
+            placed["blocks"] = [{k: b[k] for k in ("id", "label", "within") if k in b} for b in blocks]
+        return placed
 
     on_map = [c for c, v in cards.items() if v["kind"] not in ("test", "tooling")]
     views = {"map": view("Map", "units", sorted(on_map), card,

@@ -215,7 +215,7 @@ function zoom($: any, step: number) {
 function focusOn($: any, id: string) {
   return move($, (n, view) => {
     const at = view && place(view).at.get(id)
-    return at ? { selected: id, zoom: Math.max(n.zoom, 2.25), cx: at.x + 82, cy: at.y + 21 } : { selected: id }
+    return at ? { selected: id, zoom: Math.max(n.zoom, 2.25), cx: at.x + at.w / 2, cy: at.y + at.h / 2 } : { selected: id }
   })
 }
 

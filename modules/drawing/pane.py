@@ -13,7 +13,7 @@ from collections import defaultdict
 # group setup reports it under and pinned to the card it belongs to.
 
 # What each view's cards and wires keep for the pane.
-NODE_KEYS = ("id", "label", "kind", "dir", "col", "row", "own", "system", "door", "uses",
+NODE_KEYS = ("id", "label", "kind", "dir", "col", "row", "tier", "block", "size", "own", "system", "door", "uses",
              "route", "start", "fields", "owner")
 VIEW_LIMIT = 600000          # past this many characters, only the map and the pages travel
 
@@ -42,13 +42,13 @@ def _kept(v) -> bool:
 def _trim(view: dict) -> dict:
     def bad(e: dict) -> list:
         return list(e.get("bad") or []) + list(e.get("why") or [])
-    return {
+    return dict({
         "title": view.get("title", ""),
         "columns": [c.get("label", "") for c in view.get("columns", [])],
         "nodes": [{k: n[k] for k in NODE_KEYS if _kept(n.get(k))} for n in view["nodes"]],
         "edges": [dict({"from": e["from"], "to": e["to"], "kind": e["kind"]},
                        **({"bad": bad(e)[:3]} if bad(e) else {})) for e in view["edges"]],
-    }
+    }, **({"blocks": view["blocks"]} if view.get("blocks") else {}))
 
 
 def issues_of(graph: dict) -> list:

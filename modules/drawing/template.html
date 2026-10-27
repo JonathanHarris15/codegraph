@@ -80,7 +80,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
   padding:7px 9px 8px;cursor:grab;--stack:0 1px 2px rgba(10,20,40,.06);box-shadow:var(--stack);
   transition:opacity .14s,box-shadow .14s}
 .card:active{cursor:grabbing}
-.card .nm{font-family:var(--font-mono);font-size:12px;font-weight:500;line-height:1.25;
+.card .nm{font-family:var(--font-mono);font-size:calc(9px + 3px*var(--s,1));font-weight:500;line-height:1.25;
   word-break:break-word}
 .card .dir{font-family:var(--font-mono);font-size:9.5px;color:var(--muted);margin-top:1px;
   word-break:break-all}
@@ -184,7 +184,7 @@ path.wire.hot{stroke-width:2.2;opacity:1}
   border-bottom-left-radius:2px}
 .frame{position:absolute;border:1px solid var(--gc);border-radius:12px;pointer-events:none;
   background:color-mix(in srgb,var(--gc) 4%,transparent)}
-.frame span{position:absolute;top:5px;left:12px;font-family:var(--font-mono);font-size:11px;
+.frame span{position:absolute;top:5px;left:12px;white-space:nowrap;font-family:var(--font-mono);font-size:11px;
   font-weight:700;letter-spacing:.04em;color:var(--gc)}
 .card .hd{display:flex;align-items:flex-start;gap:6px}
 .card .hd .nm{flex:1 1 auto;min-width:0}
@@ -328,7 +328,7 @@ var LIVE = /*__LIVE__*/null;
 "use strict";
 if(!GRAPH){document.getElementById("panel").textContent="No graph data.";return;}
 
-var CW=170, CH=62, COLGAP=112, HEADY=26;
+var CW=170, CH=62, COLGAP=112, HEADY=26, TIERGAP=96, SYSGAP=44, X0=24;
 
 /* ------------------------------------------------------------------- views
    The file graph is always one view. The tags (or a draft of them) add the
@@ -442,7 +442,9 @@ var gWires=document.createElementNS(NS,"g"); svg.appendChild(gWires);
     legend.classList.toggle("closed",!open);
     btn.setAttribute("aria-expanded",String(open));
   }
-  set(load("legend")!==false);
+  // a square window has no corner to spare, so there it starts folded
+  var kept=load("legend");
+  set(kept===null?innerWidth>1.3*innerHeight:kept!==false);
   btn.addEventListener("click",function(){
     var open=legend.classList.contains("closed"); set(open); save("legend",open);
   });
@@ -450,19 +452,31 @@ var gWires=document.createElementNS(NS,"g"); svg.appendChild(gWires);
 
 /* ------------------------------------------------------------- open a view */
 var cur=null, trail=[], V=null, nodes={}, order=[], edges=[], out={}, inn={},
-    base={}, colX={}, pos={}, cardEls={}, wireEls={}, threadEls={}, rowY={}, frame=null;
+    base={}, colX={}, pos={}, cardEls={}, wireEls={}, threadEls={}, rowY={}, frame=null,
+    frames=[];
 
-function drawFrame(){
-  if(!frame) return;
-  var x0=Infinity, y0=Infinity, x1=-Infinity, y1=-Infinity, PAD=16;
+/* a box around the cards it holds, wherever they have been dragged; a box
+   holding boxes stands further out, to clear their names */
+function box(el,holds,outer){
+  var x0=Infinity, y0=Infinity, x1=-Infinity, y1=-Infinity, PAD=outer?28:16, HEAD=outer?36:18;
   order.forEach(function(n){
-    if(!n.own) return;
+    if(!holds(n)) return;
     x0=Math.min(x0,pos[n.id].x); y0=Math.min(y0,pos[n.id].y);
-    x1=Math.max(x1,pos[n.id].x+CW); y1=Math.max(y1,pos[n.id].y+hgt[n.id]);
+    x1=Math.max(x1,pos[n.id].x+cw(n.id)); y1=Math.max(y1,pos[n.id].y+hgt[n.id]);
   });
-  frame.style.left=(x0-PAD)+"px"; frame.style.top=(y0-PAD-18)+"px";
-  frame.style.width=(x1-x0+2*PAD)+"px"; frame.style.height=(y1-y0+2*PAD+18)+"px";
+  el.style.left=(x0-PAD)+"px"; el.style.top=(y0-PAD-HEAD)+"px";
+  el.style.width=(x1-x0+2*PAD)+"px"; el.style.height=(y1-y0+2*PAD+HEAD)+"px";
 }
+function drawFrame(){
+  if(frame) box(frame,function(n){ return n.own; });
+  frames.forEach(function(f){
+    box(f.el,function(n){ return f.within?n.group===f.id:n.block===f.id; },
+        frames.some(function(g){ return g.within===f.id; }));
+  });
+}
+/* how wide a card draws: as big as the code it holds */
+var wid={};
+function cw(id){ return wid[id]||CW; }
 
 /* where each file sits in a card's list, measured while the list is drawn */
 function measureRows(id){
@@ -478,21 +492,82 @@ var hgt={}, moved={}, GAP=16;
 var folded=load("folded")||{};
 function posKey(){ return "at:"+cur; }
 
-/* turn the generator's columns and rows into pixels: each column stacked by
-   the cards' real heights, and centred against the tallest */
+/* the room between two cards stacked in a column: more between two systems,
+   for the second one's box and name */
+function gapAfter(a,b){ return V.blocks&&a.block==="features"&&a.group!==b.group?GAP+SYSGAP:GAP; }
+function stack(list){
+  return list.reduce(function(s,n,i){ return s+hgt[n.id]+(i?gapAfter(list[i-1],n):0); },0);
+}
+
+/* slide each card in a column level with the cards it is wired to, keeping
+   the column's order and gaps and staying between lo and hi; a few sweeps
+   back and forth settle it */
+function relax(cols,keys,lo,hi){
+  var centre=function(id){ return base[id].y+hgt[id]/2; };
+  for(var sweep=0;sweep<6;sweep++){
+    (sweep%2?keys.slice().reverse():keys).forEach(function(k){
+      var list=cols[k], ys=list.map(function(n){
+        var near=out[n.id].map(function(e){ return e.to; }).concat(inn[n.id].map(function(e){ return e.from; }))
+          .filter(function(o){ return base[o]&&base[o].x!==base[n.id].x; });
+        return near.length?near.reduce(function(s,o){ return s+centre(o); },0)/near.length-hgt[n.id]/2
+                          :base[n.id].y;
+      });
+      for(var i=list.length-1;i>=0;i--){          // from the foot up, no lower than hi
+        var floor=i===list.length-1?hi:ys[i+1]-gapAfter(list[i],list[i+1]);
+        ys[i]=Math.min(ys[i],floor-hgt[list[i].id]);
+      }
+      for(i=0;i<list.length;i++){                 // from the head down, no higher than lo
+        ys[i]=Math.max(ys[i],i?ys[i-1]+hgt[list[i-1].id]+gapAfter(list[i-1],list[i]):lo);
+        base[list[i].id].y=ys[i];
+      }
+    });
+  }
+}
+
+/* turn the generator's columns and rows into pixels: each column as wide as
+   its biggest card and stacked by the cards' real heights. The map comes in
+   tiers, each column in a tier stacked from the top, or from the bottom
+   above the middle tier so those cards sit on the block below them; below
+   it, they start just under the block they hang from. Any other view is one
+   tier, its columns centred against the tallest. Then the middle tier's
+   cards slide level with what they are wired to. */
 function layout(){
-  var cols={}, total={}, tallest=0;
+  var cols={}, total={}, tall={}, top={}, tiers=[], colW=[], blocks=!!V.blocks;
   base={}; colX={};
-  order.forEach(function(n){ (cols[n.col]=cols[n.col]||[]).push(n); });
-  Object.keys(cols).forEach(function(c){
-    cols[c].sort(function(a,b){ return a.row-b.row; });
-    total[c]=cols[c].reduce(function(s,n){ return s+hgt[n.id]; },0)+GAP*(cols[c].length-1);
-    tallest=Math.max(tallest,total[c]);
+  order.forEach(function(n){
+    var k=(n.tier===undefined?1:n.tier)+"|"+n.col;
+    (cols[k]=cols[k]||[]).push(n);
+    colW[n.col]=Math.max(colW[n.col]||0,cw(n.id));
   });
-  Object.keys(cols).forEach(function(c){
-    var x=Number(c)*(CW+COLGAP), y=HEADY+(tallest-total[c])/2;
-    colX[c]=x;
-    cols[c].forEach(function(n){ base[n.id]={x:x,y:y}; y+=hgt[n.id]+GAP; });
+  for(var c=0,x=blocks?X0:0;c<colW.length;c++){ colX[c]=x; x+=(colW[c]||CW)+COLGAP; }
+  Object.keys(cols).forEach(function(k){
+    var t=Number(k.split("|")[0]);
+    cols[k].sort(function(a,b){ return a.row-b.row; });
+    total[k]=stack(cols[k]);
+    if(tall[t]===undefined) tiers.push(t);
+    tall[t]=Math.max(tall[t]||0,total[k]);
+  });
+  var y0=blocks?2*HEADY:HEADY;
+  tiers.sort(function(a,b){ return a-b; }).forEach(function(t){ top[t]=y0; y0+=tall[t]+TIERGAP; });
+  function place(k,y){
+    var c=Number(k.split("|")[1]);
+    cols[k].forEach(function(n,i){
+      if(i) y+=gapAfter(cols[k][i-1],n);
+      base[n.id]={x:colX[c]+((colW[c]||CW)-cw(n.id))/2,y:y};
+      y+=hgt[n.id];
+    });
+  }
+  var keys=Object.keys(cols), mid=keys.filter(function(k){ return k.split("|")[0]==="1"; });
+  keys.forEach(function(k){
+    var t=Number(k.split("|")[0]), spare=tall[t]-total[k];
+    if(t<=1) place(k,!blocks?top[t]+spare/2:t<1?top[t]+spare:top[t]);
+  });
+  relax(cols,mid,top[1],top[1]+tall[1]);
+  keys.forEach(function(k){                // below: just under the block it hangs from
+    if(k.split("|")[0]<=1) return;
+    var c=k.split("|")[1], foot=0;
+    (cols["1|"+c]||[]).forEach(function(n){ foot=Math.max(foot,base[n.id].y+hgt[n.id]); });
+    place(k,foot?foot+TIERGAP:top[Number(k.split("|")[0])]);
   });
   pos={};
   order.forEach(function(n){
@@ -598,10 +673,25 @@ function show(key){
     frame.appendChild(tag);
     canvas.insertBefore(frame,svg);          // behind the wires too
   }
+  /* on the map, a box around each block: modules, features, pages and
+     what sits above and below them; inside features, one round each system */
+  frames=(V.blocks||[]).map(function(b){
+    var el=document.createElement("div");
+    el.className="frame";
+    el.style.setProperty("--gc",b.within?gcolor(b.id):"var(--muted)");
+    var tag=document.createElement("span"); tag.textContent=b.label;
+    el.appendChild(tag);
+    canvas.insertBefore(el,svg);
+    return {id:b.id, el:el, within:b.within};
+  });
 
-  cardEls={}; hgt={};
+  cardEls={}; hgt={}; wid={};
   order.forEach(function(n){
     var el=document.createElement("div");
+    // a card as big as the code it holds, beside the others in this view
+    wid[n.id]=Math.round(CW*(n.size||1));
+    el.style.width=wid[n.id]+"px"; el.style.minHeight=Math.round(CH*(n.size||1))+"px";
+    el.style.setProperty("--s",n.size||1);
     el.className="card "+(CARDCLASS[n.kind]||"ext")+(n.start?" start":"")+
       (n.kind==="trigger"&&n.dir==="event"?" event":"")+
       (VIEWS[n.id]&&n.id!==cur?" opens":"")+(folded[n.id]?" folded":"")+(FLAG[n.id]?" flagged":"");
@@ -733,31 +823,48 @@ function placePorts(vis){
   }
   ports={};
   vis.forEach(function(e){
-    var fwd=pos[e.to].x>=pos[e.from].x;
+    var a=pos[e.from], b=pos[e.to];
+    if(Math.abs(a.x+cw(e.from)/2-b.x-cw(e.to)/2)<Math.min(cw(e.from),cw(e.to))/2){
+      // one above the other: straight down when nothing sits between them,
+      // else out to the right and back, clear of the cards in between
+      var lo=Math.min(a.y,b.y), hi=Math.max(a.y,b.y), down=b.y>a.y;
+      var between=order.some(function(n){
+        var p=pos[n.id];
+        return Math.abs(p.x+cw(n.id)/2-a.x-cw(e.from)/2)<cw(n.id)/2&&p.y>lo&&p.y<hi;
+      });
+      add(e.from,between?"r":down?"b":"t",e,0,e.to);
+      add(e.to,between?"r":down?"t":"b",e,1,e.from);
+      return;
+    }
+    var fwd=b.x>=a.x;
     // every wire keeps its place on the side, open or folded, so folding a
     // card moves only the wires that go to its rows
     add(e.from,fwd?"r":"l",e,0,e.to);
     add(e.to,fwd?"l":"r",e,1,e.from);
   });
   Object.keys(sides).forEach(function(k){
-    var s=sides[k], top=pos[s.id].y;
+    var s=sides[k], top=pos[s.id].y, flat=s.side==="t"||s.side==="b";
     var span=Math.min(hgt[s.id],Math.max(CH,12*(s.list.length+1)));
     s.list.sort(function(a,b){
       var ay=pos[a.other].y+Math.min(hgt[a.other],CH)/2,
           by=pos[b.other].y+Math.min(hgt[b.other],CH)/2;
-      return ay-by||pos[a.other].x-pos[b.other].x||a.e.i-b.e.i;
+      return (flat?0:ay-by)||pos[a.other].x-pos[b.other].x||a.e.i-b.e.i;
     });
     s.list.forEach(function(p,i){
-      (ports[p.e.i]=ports[p.e.i]||[])[p.end]={
-        x:s.side==="r"?pos[s.id].x+CW:pos[s.id].x,
-        y:top+span*(i+1)/(s.list.length+1),
-        d:s.side==="r"?1:-1};
+      var at=(i+1)/(s.list.length+1);
+      (ports[p.e.i]=ports[p.e.i]||[])[p.end]=flat?{
+        x:pos[s.id].x+cw(s.id)*at, y:s.side==="b"?top+hgt[s.id]:top,
+        d:0, v:s.side==="b"?1:-1}:{
+        x:s.side==="r"?pos[s.id].x+cw(s.id):pos[s.id].x, y:top+span*at,
+        d:s.side==="r"?1:-1, v:0};
     });
   });
 }
 function curve(s,t){
-  var bend=Math.max(34,Math.min(150,Math.abs(t.x-s.x)*0.46));
-  return "M"+s.x+" "+s.y+" C"+(s.x+s.d*bend)+" "+s.y+" "+(t.x+t.d*bend)+" "+t.y+" "+t.x+" "+t.y;
+  var far=s.v||t.v?Math.abs(t.y-s.y):Math.abs(t.x-s.x);
+  var bend=Math.max(34,Math.min(150,far*0.46));
+  return "M"+s.x+" "+s.y+" C"+(s.x+s.d*bend)+" "+(s.y+s.v*bend)+" "+
+    (t.x+t.d*bend)+" "+(t.y+t.v*bend)+" "+t.x+" "+t.y;
 }
 
 /* With a card's file list open, a wire lands on the files that pull it in.
@@ -771,7 +878,7 @@ var openness={};
 function threaded(e){
   return !!(threadEls[e.i]&&threadEls[e.i].length&&openness[e.from]>0&&rowY[e.from]);
 }
-function lerp(a,b,k){ return {x:a.x+(b.x-a.x)*k, y:a.y+(b.y-a.y)*k, d:b.d}; }
+function lerp(a,b,k){ return {x:a.x+(b.x-a.x)*k, y:a.y+(b.y-a.y)*k, d:b.d, v:b.v}; }
 function drawWire(e,show){
   var main=wireEls[e.i], threads=threadEls[e.i]||[];
   threads.forEach(function(t){ t.el.style.display="none"; });
@@ -780,7 +887,7 @@ function drawWire(e,show){
   var side=ports[e.i][0], t=ports[e.i][1];
   var atFrom=e.at!=="to", atTo=e.at!=="from";
   if(atTo) main.setAttribute("marker-end",e.head); else main.removeAttribute("marker-end");
-  if(!threaded(e)){
+  if(!threaded(e)||!side.d){                  // off the top or bottom, it lands on the card
     if(atFrom) main.setAttribute("marker-start",e.head); else main.removeAttribute("marker-start");
     main.setAttribute("d",curve(side,t));
     return [main];
@@ -789,7 +896,7 @@ function drawWire(e,show){
   var rows=threads.map(function(th){
     var y=rowY[c][th.fid];
     y=pos[c].y+(y===undefined?Math.min(hgt[c],CH)/2:Math.min(y,hgt[c]-6));
-    var at=lerp(side,{x:x,y:y,d:d},o);
+    var at=lerp(side,{x:x,y:y,d:d,v:0},o);
     sum+=at.y; return {th:th, at:at};
   });
   if(rows.length===1){
@@ -798,7 +905,7 @@ function drawWire(e,show){
     return [main];
   }
   // the split starts on the side and steps out as the list opens
-  var j=lerp(side,{x:x+d*SPLIT, y:sum/rows.length, d:d},o);
+  var j=lerp(side,{x:x+d*SPLIT, y:sum/rows.length, d:d, v:0},o);
   main.removeAttribute("marker-start");
   main.setAttribute("d",curve(j,t));
   rows.forEach(function(r){
@@ -817,7 +924,7 @@ function near(id){
 }
 function extent(){
   var w=0,h=0;
-  order.forEach(function(n){ w=Math.max(w,pos[n.id].x+CW); h=Math.max(h,pos[n.id].y+hgt[n.id]); });
+  order.forEach(function(n){ w=Math.max(w,pos[n.id].x+cw(n.id)); h=Math.max(h,pos[n.id].y+hgt[n.id]); });
   return {w:w,h:h};
 }
 function hits(n){
@@ -1060,7 +1167,7 @@ function esc(s){ return String(s).replace(/[&<>"]/g,function(c){
 function select(id){ selected=id; render(); drawPanel(); }
 function focus(id){
   var r=stage.getBoundingClientRect();
-  panX=r.width/2-(pos[id].x+CW/2)*scale;
+  panX=r.width/2-(pos[id].x+cw(id)/2)*scale;
   panY=r.height/2-(pos[id].y+Math.min(hgt[id],r.height/scale/2)/2)*scale;
   stopZoom(); applyView();
 }
@@ -1136,7 +1243,7 @@ function drag(el,n){
     Object.keys(before).forEach(function(k){ picked[k]=before[k]; });
     order.forEach(function(n){
       var p=pos[n.id];
-      if(p.x<x1&&p.x+CW>x0&&p.y<y1&&p.y+hgt[n.id]>y0) picked[n.id]=true;
+      if(p.x<x1&&p.x+cw(n.id)>x0&&p.y<y1&&p.y+hgt[n.id]>y0) picked[n.id]=true;
     });
     render();
   }
@@ -1200,6 +1307,10 @@ function fit(){
 function openView(){
   var r=stage.getBoundingClientRect(), b=extent();
   stopZoom();
+  if(V.blocks){                    // the map is laid out to fit, so show all of it
+    scale=zoomTo=Math.max(MINZ,Math.min(1,(r.width-24)/(b.w+40),(r.height-24)/(b.h+40)));
+    panX=(r.width-(b.w+40)*scale)/2; panY=12; applyView(); return;
+  }
   scale=zoomTo=Math.max(0.4,Math.min(1,(r.height-56)/(b.h+40)));
   panX=22; panY=18; applyView();
 }
@@ -1252,6 +1363,7 @@ if(LIVE){
   });
   make.appendChild(again);
   make.hidden=false;
+  openView();                      // the buttons took room from the view it opened on
 
   try{
     var kept=JSON.parse(sessionStorage.getItem(KEY+".kept")||"null");

@@ -28,6 +28,9 @@ export type ViewNode = {
   kind: string
   col: number
   row: number
+  tier?: number // on the map: 0 above the middle row, 2 below it
+  block?: string
+  size?: number // how big it draws beside the others in view, 0.9 to 2
   dir?: string
   own?: boolean
   system?: string
@@ -42,7 +45,10 @@ export type ViewNode = {
 // One wire; `bad` holds the rules it breaks.
 export type ViewEdge = { from: string; to: string; kind: string; bad?: string[] }
 
-export type View = { title: string; columns: string[]; nodes: ViewNode[]; edges: ViewEdge[] }
+// The map's blocks, each drawn as a box round its cards.
+export type Block = { id: string; label: string; within?: string }
+
+export type View = { title: string; columns: string[]; nodes: ViewNode[]; edges: ViewEdge[]; blocks?: Block[] }
 
 // One mismatch, pinned to the map card and the file it belongs to.
 export type Issue = {

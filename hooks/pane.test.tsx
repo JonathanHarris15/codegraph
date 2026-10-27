@@ -29,13 +29,16 @@ const SUMMARY = {
            { id: 'pages', label: 'Triggers and pages' }],
   views: {
     map: {
-      title: 'map', columns: ['stores', 'modules', 'features', 'pages'],
+      title: 'map', columns: ['', '', ''],
+      blocks: [{ id: 'reach', label: 'outside + stores' }, { id: 'modules', label: 'modules' },
+               { id: 'features', label: 'features' }, { id: 'system:calendar', label: 'calendar', within: 'features' },
+               { id: 'pages', label: 'pages' }],
       nodes: [
-        { id: 'store:services', label: 'services', kind: 'store', col: 0, row: 0, fields: ['date: str'], owner: 'module:services' },
-        { id: 'module:services', label: 'services', kind: 'module', col: 1, row: 0, door: ['plan'] },
-        { id: 'feature:plan-service', label: 'plan-service', kind: 'feature', col: 2, row: 0, system: 'calendar', uses: ['services'] },
-        { id: 'feature:join', label: 'join', kind: 'feature', col: 2, row: 1, system: 'calendar' },
-        { id: 'page:home', label: 'home', kind: 'page', col: 3, row: 0, route: '/', start: true },
+        { id: 'store:services', label: 'services', kind: 'store', col: 0, row: 0, tier: 0, block: 'reach', fields: ['date: str'], owner: 'module:services' },
+        { id: 'module:services', label: 'services', kind: 'module', col: 0, row: 0, tier: 1, block: 'modules', size: 1.6, door: ['plan'] },
+        { id: 'feature:plan-service', label: 'plan-service', kind: 'feature', col: 1, row: 0, tier: 1, block: 'features', system: 'calendar', uses: ['services'] },
+        { id: 'feature:join', label: 'join', kind: 'feature', col: 1, row: 1, tier: 1, block: 'features', system: 'calendar' },
+        { id: 'page:home', label: 'home', kind: 'page', col: 2, row: 0, tier: 1, block: 'pages', route: '/', start: true },
       ],
       edges: [
         { from: 'module:services', to: 'store:services', kind: 'writes' },
@@ -197,6 +200,24 @@ test('a session that starts in a spare folder reads the project it moves to', as
   root = '/repo-wt'
   await $.command.run({ command: 'codegraph', args: '' } as any)
   expect(spawned[1]).toContain('/repo-wt')
+})
+
+test('desktop: the map is a square picture in boxes, stores above the modules, cards by size', async ($, on) => {
+  engine(on, 'desktop', { filled: '', draft: '' })
+  await $.session.start({ cwd: '/repo', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+
+  const found: any = await ui.find({ type: 'Svg' })
+  const svg = String(found?.props?.source ?? found?.source ?? '')
+  const [, , w, h] = (svg.match(/viewBox="([^"]+)"/)?.[1] ?? '').split(' ').map(Number)
+  expect(w).toBe(h)
+  for (const label of ['OUTSIDE + STORES', 'MODULES', 'FEATURES', 'CALENDAR', 'PAGES']) expect(svg).toContain(label)
+  const rect = (what: string) =>
+    svg.match(new RegExp(`<title>${what}[^<]*</title><rect x="[\\d.]+" y="([\\d.]+)" width="([\\d.]+)"`))
+  expect(Number(rect('store services')?.[1])).toBeLessThan(Number(rect('module services')?.[1]))
+  // a card as big as the code it holds
+  expect(Number(rect('module services')?.[2])).toBeGreaterThan(Number(rect('feature join')?.[2]))
+  await ui.unmount()
 })
 
 test('desktop: the picture pans and zooms, and Show finds a mismatch on it', async ($, on) => {
