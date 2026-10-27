@@ -212,6 +212,9 @@ class Outside(Repo):
     def test_a_file_that_touches_nothing_outside(self):
         self.assertEqual(self.conns("def add(a, b):\n    return a + b\n"), {})
 
+    def test_an_xml_namespace_is_not_a_connection(self):
+        self.assertEqual(self.conns('NS = "http://www.w3.org/2000/svg"'), {})
+
     def test_prose_is_not_a_url(self):
         self.assertEqual(self.conns('"""See the docs. Ratio is 3:1."""'), {})
 

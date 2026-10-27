@@ -286,7 +286,23 @@ class MapViews(Folder):
         self.assertEqual(s["systems"][0]["name"], "people")
         self.assertEqual(s["systems"][0]["features"][0]["triggers"], ["schedule every day"])
         self.assertEqual(s["stores"][0]["fields"], ["name: str"])
-        self.assertTrue(s["svg"].startswith("<svg"))
+        self.assertEqual(set(s["views"]), set(self.views))
+        home = next(n for n in s["views"]["map"]["nodes"] if n["id"] == "page:home")
+        self.assertEqual((home["start"], home["route"]), (True, "/"))
+        for name, view in s["views"].items():
+            self.assertTrue(all("col" in n and "row" in n for n in view["nodes"]), name)
+        self.assertEqual(s["issues"], [])
+
+    def test_each_mismatch_in_the_summary_names_its_group_and_card(self):
+        tree(self.root, {"features/join.py": ("# codegraph: feature join in people\n"
+                                              "# codegraph: uses members\n"
+                                              "from members import find, Member\n")})
+        s = summary(build(self.root, reading=read_map(self.root)))
+        door = next(i for i in s["issues"] if "front door" in i["text"])
+        self.assertEqual((door["group"], door["card"], door["rel"]),
+                         ("doors", "feature:join", "features/join.py"))
+        self.assertEqual(door["line_text"], "{}:{}  {}".format(door["rel"], door["line"], door["text"]))
+        self.assertEqual([g["id"] for g in s["groups"]][:2], ["layers", "doors"])
 
     def test_no_reading_no_map(self):
         self.assertNotIn("map", build(self.root))

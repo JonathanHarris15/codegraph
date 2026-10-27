@@ -1,18 +1,27 @@
 // codegraph: start page pane
-// The codegraph mod: the map of this repo in a pane beside the chat, a
-// check the model runs after every change, and a way to point the chat at
-// one feature, module or page with a click.
+// The codegraph mod: the map of this repo in a pane beside the chat, to pan,
+// zoom and go into card by card; the mismatches beside it, each one a press
+// away from a fix in the chat; and a check the model runs after every change.
 import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 
-import type { Summary } from '../types'
+import type { Issue, Nav, Summary, View, ViewNode } from '../types'
+import { drawView, frame, place } from './draw'
 
 const PANE = 'codegraph'
+const START: Nav = { trail: ['map'], selected: null, zoom: 1, cx: null, cy: null, issuesOpen: true, closed: [], more: [] }
 const map = atom({ plugin: 'codegraph', key: 'map' } as const, null as Summary | null)
 const status = atom({ plugin: 'codegraph', key: 'status' } as const, '')
+const nav = atom({ plugin: 'codegraph', key: 'nav' } as const, START)
 
 const PYTHONS = ['python', 'python3', 'py']
 const MAP_PAGE = '.codegraph/map.html'
+const SHOWN = 5 // mismatches listed per group before "more"
+const ZOOMS = [1, 1.5, 2.25, 3.4, 5]
+const KIND_NAMES: Record<string, string> = {
+  feature: 'Features', module: 'Modules', page: 'Pages', component: 'Components', design: 'Design system',
+  store: 'Stores', trigger: 'Triggers', outside: 'Outside', file: 'Files', external: 'Third party',
+}
 
 let cwd = ''
 let python = ''
@@ -46,13 +55,20 @@ async function refresh($: any) {
   const summary: Summary = JSON.parse(ran.stdout)
   await update($, map, () => summary)
   await update($, status, () => '')
+  // a view that went away with the last change takes the person back out
+  await update($, nav, n => {
+    const trail = (n ?? START).trail.filter(v => summary.views[v])
+    return { ...(n ?? START), trail: trail.length ? trail : ['map'] }
+  })
   return summary
 }
 
-// Put a prompt in the box, after anything already typed there.
+// Put a prompt in the box. A slash command has to start the box, so it takes
+// the box's place; anything else goes after what is already typed there.
 async function ask($: any, text: string) {
   const { text: draft } = await $.prompt.read()
-  await $.prompt.fill({ text: draft.trim() ? `\n${text}` : text, mode: draft.trim() ? 'append' : 'replace' })
+  const after = draft.trim() && !text.startsWith('/')
+  await $.prompt.fill({ text: after ? `\n${text}` : text, mode: after ? 'append' : 'replace' })
 }
 
 async function openMap($: any) {
@@ -63,6 +79,106 @@ async function openMap($: any) {
   }
   await $.process.run([python, '-c', 'import sys, pathlib, webbrowser; webbrowser.open(pathlib.Path(sys.argv[1]).resolve().as_uri())', `${cwd}/${MAP_PAGE}`])
 }
+
+// ---- moving about the map
+
+function current(n: Nav): string {
+  return n.trail[n.trail.length - 1] ?? 'map'
+}
+
+async function move($: any, change: (n: Nav, view: View | undefined) => Partial<Nav>) {
+  const m = await read($, map)
+  await update($, nav, n => {
+    const now = n ?? START
+    return { ...now, ...change(now, m?.views[current(now)]) }
+  })
+}
+
+function goInto($: any, id: string) {
+  return move($, n => ({ trail: [...n.trail, id], selected: null, zoom: 1, cx: null, cy: null }))
+}
+
+function goTo($: any, depth: number) {
+  return move($, n => ({ trail: n.trail.slice(0, depth + 1), selected: null, zoom: 1, cx: null, cy: null }))
+}
+
+function tab($: any, root: string) {
+  return move($, () => ({ trail: [root], selected: null, zoom: 1, cx: null, cy: null }))
+}
+
+function pick($: any, id: string) {
+  return move($, n => ({ selected: n.selected === id ? null : id }))
+}
+
+function pan($: any, dx: number, dy: number) {
+  return move($, (n, view) => {
+    if (!view) return {}
+    const f = frame(place(view), n.zoom, n.cx, n.cy)
+    return { cx: f.cx + dx * f.w * 0.3, cy: f.cy + dy * f.h * 0.3 }
+  })
+}
+
+function zoom($: any, step: number) {
+  return move($, n => {
+    const i = ZOOMS.findIndex(z => z >= n.zoom)
+    const next = ZOOMS[Math.min(ZOOMS.length - 1, Math.max(0, (i < 0 ? ZOOMS.length - 1 : i) + step))]
+    return next === 1 ? { zoom: 1, cx: null, cy: null } : { zoom: next }
+  })
+}
+
+function focusOn($: any, id: string) {
+  return move($, (n, view) => {
+    const at = view && place(view).at.get(id)
+    return at ? { selected: id, zoom: Math.max(n.zoom, 2.25), cx: at.x + 82, cy: at.y + 21 } : { selected: id }
+  })
+}
+
+// Show a mismatch where it lives: its card on the map, picked and centred.
+async function showIssue($: any, issue: Issue) {
+  await move($, () => ({ trail: ['map'], selected: null, zoom: 1, cx: null, cy: null }))
+  await focusOn($, issue.card)
+}
+
+function fold($: any, key: 'closed' | 'more', id: string) {
+  return move($, n => ({ [key]: n[key].includes(id) ? n[key].filter(x => x !== id) : [...n[key], id] }))
+}
+
+function toggleIssues($: any) {
+  return move($, n => ({ issuesOpen: !n.issuesOpen }))
+}
+
+// ---- what a press puts in the chat
+
+function aboutCard(m: Summary, n: ViewNode, inside: string): string {
+  const unit = [...m.modules, ...m.pages, ...m.components, ...m.systems.flatMap(s => s.features)].find(u => u.id === n.id)
+  const files = unit?.files.length ? `; files ${unit.files.join(', ')}` : ''
+  switch (n.kind) {
+    case 'feature':
+      return `About the ${n.label} feature (system ${n.system ?? 'none'}; uses ${n.uses?.join(', ') || 'no modules'}${files}): `
+    case 'module':
+      return `About the ${n.label} module (front door ${n.door?.join(', ') || 'empty'}${files}): `
+    case 'page':
+      return `About the ${n.label} page (at ${n.route || 'no route'}${files}): `
+    case 'store':
+      return `About the ${n.label} store (owned by ${(n.owner ?? '?').replace('module:', '')}; ${n.fields?.join(', ') || 'no schema read'}): `
+    case 'file':
+      return `About ${n.dir ? n.dir + '/' : ''}${n.label}${inside ? ` (in ${inside})` : ''}: `
+    default:
+      return `About ${n.label} (${n.kind}${files}): `
+  }
+}
+
+function fixOne(issue: Issue): string {
+  return `/codegraph:fix ${issue.line_text}`
+}
+
+function fixMany(issues: Issue[], what: string): string {
+  return issues.length === 1 && issues[0]
+    ? fixOne(issues[0])
+    : `/codegraph:fix all ${issues.length} ${what}, worst first, one commit each`
+}
+
+// ---- the hooks
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
@@ -101,16 +217,16 @@ export const register: Register = on => {
     return { text: 'Codegraph pane opened.' }
   })
 
-  on('tool.call', { tool: 'mcp__codegraph__check' }, async $ => {
+  on('tool.call', { tool: 'mcp__codegraph__check' as any }, async $ => {
     const ran = await run($, ['--check'])
     void refresh($)
     return { result: (ran.stdout + ran.stderr).trim() || 'no output' }
   })
 
-  on('tool.call', { tool: 'mcp__codegraph__map' }, async $ => {
+  on('tool.call', { tool: 'mcp__codegraph__map' as any }, async $ => {
     const summary = await refresh($)
     if (!summary) return { result: await read($, status) }
-    const { svg, ...rest } = summary
+    const { views, issues, groups, ...rest } = summary
     return { result: JSON.stringify(rest, null, 1) }
   })
 
@@ -126,6 +242,7 @@ export const register: Register = on => {
     const { Box, Text, Button } = table
     const m = await read($, map)
     const problem = await read($, status)
+    const n: Nav = (await read($, nav)) ?? START
 
     if (!m) {
       return (
@@ -135,104 +252,190 @@ export const register: Register = on => {
       )
     }
 
-    const shown = m.mismatches.slice(0, 8)
+    const here = current(n)
+    const view = m.views[here] ?? m.views.map
+    const flagged = new Set<string>()
+    for (const i of m.issues) {
+      if (i.card) flagged.add(i.card)
+      if (i.file) flagged.add(i.file)
+    }
+    const picked = view?.nodes.find(c => c.id === n.selected)
+    const titleOf = (id: string) => (id === 'map' ? 'Map' : id === 'pages' ? 'Pages' : m.views[id]?.title ?? id)
+    const svg = table.Svg && view ? drawView(view, { selected: n.selected, zoom: n.zoom, cx: n.cx, cy: n.cy, flagged }) : ''
 
-    return (
-      <Box flexDirection="column" gap={1}>
+    // ---- the header: where the repo stands, and the ways out of the pane
+    const head = (
+      <Box key="head" flexDirection="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
         <Box flexDirection="column">
           <Text bold>{m.root}</Text>
           {m.source === 'draft' ? (
-            <Text dimColor>Not set up yet: this is a guess from folders. Run /codegraph:setup to tag the repo.</Text>
+            <Text dimColor>Not set up yet: this map is a guess from folders. Run /codegraph:setup to tag the repo.</Text>
           ) : (
-            <Text color={m.mismatches.length ? 'red' : 'green'}>
-              {m.mismatches.length ? `${m.mismatches.length} mismatches` : 'Clean: the code matches its tags'}
+            <Text color={m.issues.length ? 'error' : 'success'}>
+              {m.issues.length ? `${m.issues.length} mismatches` : 'Clean: the code matches its tags'}
               {m.unknown.length ? ` · ${m.unknown.length} cannot tell` : ''}
             </Text>
           )}
         </Box>
-
-        <Box flexDirection="row" gap={1} flexWrap="wrap">
-          <Button key="new-feature" label="New feature" onPress={() => ask($, 'Build a new feature: ')} />
-          <Button key="new-module" label="New module" onPress={() => ask($, 'Add a new module: ')} />
-          <Button key="new-page" label="New page" onPress={() => ask($, 'Add a new page: ')} />
-          {m.mismatches.length > 0 && (
-            <Button key="fix" label="Fix the next mismatch" variant="primary" onPress={() => ask($, '/codegraph:fix')} />
-          )}
-          <Button key="open" label="Open full map" onPress={() => openMap($)} />
-          <Button key="refresh" label="Refresh" dimColor onPress={() => refresh($)} />
+        <Box flexDirection="row" gap={1}>
+          <Button key="refresh" label="Refresh" onPress={() => refresh($)} />
+          <Button key="open" label="Open in browser" onPress={() => openMap($)} />
         </Box>
+      </Box>
+    )
 
-        {table.Svg && m.svg && <table.Svg source={m.svg} alt={`The codegraph map of ${m.root}`} />}
+    // ---- where on the map: the two maps, and the trail into the cards
+    const trail = (
+      <Box key="trail" flexDirection="row" gap={1} alignItems="center" flexWrap="wrap">
+        <Button key="tab-map" label="Map" variant={n.trail[0] === 'map' ? 'primary' : 'secondary'} onPress={() => tab($, 'map')} />
+        {m.views.pages && (
+          <Button key="tab-pages" label="Pages" variant={n.trail[0] === 'pages' ? 'primary' : 'secondary'} onPress={() => tab($, 'pages')} />
+        )}
+        {n.trail.length > 1 && <Button key="back" label="‹ Back" plain onPress={() => goTo($, n.trail.length - 2)} />}
+        {n.trail.length > 1 &&
+          n.trail.map((id, d) =>
+            d === n.trail.length - 1 ? (
+              <Text key={`at-${d}`} bold>{titleOf(id)}</Text>
+            ) : (
+              <Button key={`crumb-${d}`} plain dimColor label={`${titleOf(id)} ›`} onPress={() => goTo($, d)} />
+            ),
+          )}
+      </Box>
+    )
 
-        {m.systems.map(s => (
-          <Box key={`system-${s.name}`} flexDirection="column">
-            <Text bold>System {s.name}</Text>
-            {s.features.map(f => (
-              <Button
-                key={f.id}
-                plain
-                label={`${f.name}  ·  uses ${f.uses.join(', ') || 'nothing'}${f.triggers.length ? '  ·  ' + f.triggers.join(', ') : ''}`}
-                onPress={() =>
-                  ask($, `About the ${f.name} feature (system ${s.name}; uses ${f.uses.join(', ') || 'no modules'}; ` +
-                    `files ${f.files.join(', ')}): `)
-                }
-              />
-            ))}
+    // ---- the picture, and the controls that move it
+    const picture = svg ? (
+      <Box key="picture" flexDirection="column" gap={1}>
+        <table.Svg source={svg} alt={`The codegraph ${titleOf(here)} of ${m.root}`} isInteractive />
+        <Box flexDirection="row" gap={1} flexWrap="wrap" alignItems="center">
+          <Button key="pan-left" label="◀" onPress={() => pan($, -1, 0)} />
+          <Button key="pan-up" label="▲" onPress={() => pan($, 0, -1)} />
+          <Button key="pan-down" label="▼" onPress={() => pan($, 0, 1)} />
+          <Button key="pan-right" label="▶" onPress={() => pan($, 1, 0)} />
+          <Button key="zoom-out" label="−" onPress={() => zoom($, -1)} />
+          <Button key="zoom-in" label="+" onPress={() => zoom($, 1)} />
+          <Button key="fit" label="Fit" onPress={() => move($, () => ({ zoom: 1, cx: null, cy: null }))} />
+          <Text dimColor>{n.zoom === 1 ? 'whole map' : `${n.zoom}×`} · hover a card for its details</Text>
+        </Box>
+      </Box>
+    ) : table.Svg && view ? (
+      <Text key="picture" dimColor>This view is too big to draw here; Open in browser shows all of it.</Text>
+    ) : null
+
+    // ---- the picked card: what it is, and what can be done with it
+    const pickedIssues = picked ? m.issues.filter(i => i.card === picked.id || i.file === picked.id) : []
+    const card = picked && (
+      <Box key="card" flexDirection="column" gap={1} borderStyle="round" borderColor={pickedIssues.length ? 'error' : 'subtle'} paddingX={1}>
+        <Box flexDirection="column">
+          <Text bold>{picked.kind === 'file' ? picked.label : `${picked.kind} ${picked.label}`}{picked.start ? ' · start page' : ''}</Text>
+          {picked.dir && <Text dimColor>{picked.dir}</Text>}
+          {picked.door?.length ? <Text>Front door: {picked.door.join(', ')}</Text> : null}
+          {picked.uses?.length ? <Text>Uses: {picked.uses.join(', ')}</Text> : null}
+          {picked.route ? <Text>At {picked.route}</Text> : null}
+          {picked.fields?.length ? <Text>{picked.fields.join(' · ')}</Text> : null}
+          {pickedIssues.length > 0 && <Text color="error">{pickedIssues.length} mismatches here</Text>}
+        </Box>
+        <Box flexDirection="row" gap={1} flexWrap="wrap">
+          {m.views[picked.id] && <Button key="go-in" label="Open" variant="primary" onPress={() => goInto($, picked.id)} />}
+          <Button key="ask-card" label="Ask about it" onPress={() => ask($, aboutCard(m, picked, here === 'map' ? '' : titleOf(here)))} />
+          {pickedIssues.length > 0 && (
+            <Button key="fix-card" label={pickedIssues.length === 1 ? 'Fix it' : `Fix all ${pickedIssues.length}`}
+              onPress={() => ask($, fixMany(pickedIssues, `mismatches in ${picked.kind} ${picked.label}`))} />
+          )}
+          {table.Svg && <Button key="focus" label="Zoom to it" onPress={() => focusOn($, picked.id)} />}
+          <Button key="unpick" label="Clear" plain dimColor onPress={() => pick($, picked.id)} />
+        </Box>
+      </Box>
+    )
+
+    // ---- every card in this view, to pick from
+    const byKind = new Map<string, ViewNode[]>()
+    for (const c of view?.nodes ?? []) byKind.set(c.kind, [...(byKind.get(c.kind) ?? []), c])
+    const cards = (
+      <Box key="cards" flexDirection="column" gap={1}>
+        {[...byKind].map(([kind, cs]) => (
+          <Box key={`kind-${kind}`} flexDirection="column">
+            <Text dimColor>{KIND_NAMES[kind] ?? kind}</Text>
+            <Box flexDirection="row" gap={1} flexWrap="wrap">
+              {cs.sort((a, b) => a.label.localeCompare(b.label)).map(c => (
+                <Button key={c.id} label={`${c.label}${flagged.has(c.id) ? ' ●' : ''}`}
+                  variant={c.id === n.selected ? 'primary' : 'secondary'} onPress={() => pick($, c.id)} />
+              ))}
+            </Box>
           </Box>
         ))}
+      </Box>
+    )
 
-        {m.modules.length > 0 && (
-          <Box flexDirection="column">
-            <Text bold>Modules</Text>
-            {m.modules.map(u => (
-              <Button
-                key={u.id}
-                plain
-                label={`${u.name}  ·  front door ${u.door?.join(', ') || 'empty'}${u.stores?.length ? '  ·  owns ' + u.stores.join(', ') : ''}`}
-                onPress={() =>
-                  ask($, `About the ${u.name} module (front door ${u.door?.join(', ') || 'empty'}; files ${u.files.join(', ')}): `)
-                }
-              />
-            ))}
-          </Box>
-        )}
+    const build = (
+      <Box key="build" flexDirection="row" gap={1} flexWrap="wrap">
+        <Button key="new-feature" label="+ Feature" onPress={() => ask($, 'Build a new feature: ')} />
+        <Button key="new-module" label="+ Module" onPress={() => ask($, 'Add a new module: ')} />
+        <Button key="new-page" label="+ Page" onPress={() => ask($, 'Add a new page: ')} />
+      </Box>
+    )
 
-        {m.pages.length > 0 && (
-          <Box flexDirection="column">
-            <Text bold>Pages</Text>
-            {m.pages.map(u => (
-              <Button
-                key={u.id}
-                plain
-                label={`${u.name}  ·  ${u.route || 'no route'}${u.start ? '  ·  start' : ''}`}
-                onPress={() => ask($, `About the ${u.name} page (at ${u.route || 'no route'}; files ${u.files.join(', ')}): `)}
-              />
-            ))}
+    // ---- the mismatches, by group, worst first; folded away on request
+    const groups = m.groups.map(g => ({ ...g, issues: m.issues.filter(i => i.group === g.id) })).filter(g => g.issues.length)
+    const issues = m.issues.length > 0 && (
+      <Box key="issues" flexDirection="column" gap={1} borderStyle="round" borderColor="error" paddingX={1}>
+        <Box flexDirection="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
+          <Text bold color="error">Mismatches · {m.issues.length}</Text>
+          <Box flexDirection="row" gap={1}>
+            <Button key="fix-all" label={m.issues.length === 1 ? 'Fix it' : `Fix all ${m.issues.length}`} variant="primary"
+              onPress={() => ask($, fixMany(m.issues, 'mismatches'))} />
+            <Button key="issues-toggle" label={n.issuesOpen ? 'Hide' : 'Show'} onPress={() => toggleIssues($)} />
           </Box>
-        )}
+        </Box>
+        {n.issuesOpen &&
+          groups.map(g => {
+            const open = !n.closed.includes(g.id)
+            const all = n.more.includes(g.id)
+            const shown = all ? g.issues : g.issues.slice(0, SHOWN)
+            return (
+              <Box key={`group-${g.id}`} flexDirection="column">
+                <Box flexDirection="row" gap={1} alignItems="center" flexWrap="wrap">
+                  <Button key={`fold-${g.id}`} plain label={`${open ? '▾' : '▸'} ${g.label} · ${g.issues.length}`} onPress={() => fold($, 'closed', g.id)} />
+                  {open && g.issues.length > 1 && (
+                    <Button key={`fix-group-${g.id}`} plain dimColor label="Fix these"
+                      onPress={() => ask($, fixMany(g.issues, `"${g.label}" mismatches`))} />
+                  )}
+                </Box>
+                {open &&
+                  shown.map(i => {
+                    const k = m.issues.indexOf(i)
+                    return (
+                      <Box key={`issue-${k}`} flexDirection="row" gap={1} alignItems="center" justifyContent="space-between">
+                        <Box flexDirection="column" flexShrink={1}>
+                          <Text>{i.text}</Text>
+                          <Text dimColor>{i.rel}{i.line ? `:${i.line}` : ''}</Text>
+                        </Box>
+                        <Box flexDirection="row" gap={1}>
+                          {i.card && <Button key={`show-${k}`} label="Show" plain onPress={() => showIssue($, i)} />}
+                          <Button key={`fix-${k}`} label="Fix" onPress={() => ask($, fixOne(i))} />
+                        </Box>
+                      </Box>
+                    )
+                  })}
+                {open && g.issues.length > SHOWN && (
+                  <Button key={`more-${g.id}`} plain dimColor label={all ? 'Show fewer' : `Show ${g.issues.length - SHOWN} more`}
+                    onPress={() => fold($, 'more', g.id)} />
+                )}
+              </Box>
+            )
+          })}
+      </Box>
+    )
 
-        {m.stores.length > 0 && (
-          <Box flexDirection="column">
-            <Text bold>Stores</Text>
-            {m.stores.map(s => (
-              <Text key={s.id} dimColor>
-                {s.name} ({s.owner.replace('module:', '')}): {s.fields.join(', ') || 'no schema read'}
-              </Text>
-            ))}
-          </Box>
-        )}
-
-        {shown.length > 0 && (
-          <Box flexDirection="column">
-            <Text bold color="red">Mismatches</Text>
-            {shown.map((line, i) => (
-              <Button key={`mismatch-${i}`} plain dimColor label={line} onPress={() => ask($, `Fix this codegraph mismatch: ${line}`)} />
-            ))}
-            {m.mismatches.length > shown.length && (
-              <Text dimColor>and {m.mismatches.length - shown.length} more; the full map lists them all</Text>
-            )}
-          </Box>
-        )}
+    return (
+      <Box flexDirection="column" gap={1}>
+        {head}
+        {issues}
+        {trail}
+        {picture}
+        {card}
+        {cards}
+        {build}
       </Box>
     )
   })

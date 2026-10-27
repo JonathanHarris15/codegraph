@@ -150,6 +150,11 @@ def match_probe(name: str, probes: tuple = PROBES):
     return None
 
 
+# Hosts whose URLs name an XML namespace (`xmlns="http://www.w3.org/2000/svg"`):
+# written in the code, never fetched.
+NAMESPACE_HOSTS = {"www.w3.org", "schemas.xmlsoap.org", "schemas.microsoft.com"}
+
+
 def urls_from(strings) -> list:
     """Every URL written in these strings, scheme and host pulled apart."""
     found = []
@@ -158,7 +163,7 @@ def urls_from(strings) -> list:
             bits = urlsplit(raw.rstrip(".,);"))
             # a port filled in later, `http://host:${port}`, leaves a bare colon
             host = bits.netloc.split("@")[-1].rstrip(":")
-            if not host:
+            if not host or host in NAMESPACE_HOSTS:
                 continue
             found.append((bits.scheme.lower(), host, bits.path or "/"))
     return found
