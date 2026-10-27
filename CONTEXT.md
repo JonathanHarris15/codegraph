@@ -210,7 +210,9 @@ _Avoid_: reads, fetches, queries
 A wire between a page or component and the feature it starts, such as a button
 that places a trade.
 _Rule_: two-way, since the feature answers; lands on a feature, never straight
-on a module.
+on a module. Code that runs when a person acts on a page, such as a click
+handler, and reaches a module that keeps a store or goes outside, is a
+feature's work done in the page, and a mismatch (docs/adr/0007).
 _Avoid_: calls, drives, commands, writes
 
 **Starts**:

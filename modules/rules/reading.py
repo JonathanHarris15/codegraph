@@ -249,6 +249,8 @@ def read_map(root: Path, hidden: bool = False, drafted: dict | None = None,
     links: dict = defaultdict(set)
     built: set = set()                     # units holding a link built while it runs
     reached_by: dict = defaultdict(set)    # file -> the kinds of file that import it
+    worldly = {v["owner"] for v in stores.values()}   # modules keeping a store or reaching out
+    handled: list = []                     # (file, unit, Act): UI code a person's action runs
     for f in files:
         here = owner.get(f.name)
         if here is None:
@@ -317,7 +319,10 @@ def read_map(root: Path, hidden: bool = False, drafted: dict | None = None,
                                            .format(what)))
             continue
 
-        if kind != "module":
+        if kind == "module":
+            if any(c.kind != "serves" for c in reader.outside(f)):
+                worldly.add(here)
+        else:
             for conn in reader.outside(f):
                 if conn.kind != "serves":
                     mis.append(Finding(f.rel, 0, "reaches {} ({}); only a module reaches an "
@@ -331,6 +336,7 @@ def read_map(root: Path, hidden: bool = False, drafted: dict | None = None,
                                    "its schema in the module that owns it with `codegraph: "
                                    "store {}`".format(name, name)))
             elif kind != "module":
+                worldly.add(stores[s]["owner"])
                 mis.append(Finding(f.rel, line, "reaches store {} directly; only a module reaches "
                                    "a store, so go through {}".format(
                                        s, units[stores[s]["owner"]].label)))
@@ -344,7 +350,11 @@ def read_map(root: Path, hidden: bool = False, drafted: dict | None = None,
                                    "reads {}`, or go through {}".format(
                                        s, s, units[stores[s]["owner"]].label)))
 
+        if kind == "module" and store_calls(text, f.lang, shared):
+            worldly.add(here)
+
         if kind in ("page", "component", "shell"):
+            handled += [(f, here, a) for a in reader.acts(f, index)]
             for link, line in page_links(text):
                 if link is None:
                     built.add(here)
@@ -352,6 +362,23 @@ def read_map(root: Path, hidden: bool = False, drafted: dict | None = None,
                                        "leads cannot be told"))
                 else:
                     links[here].add((link, f.rel, line))
+
+    # ---- the UI doing a feature's work
+    #
+    # A page may show what a module offers. What runs when a person acts on
+    # it, and reaches a module that keeps a store or goes outside, is a whole
+    # piece of work a person asked for: a feature's, which the page acts on.
+    said: set = set()
+    for f, here, a in handled:
+        there = owner.get(a.target)
+        if there not in worldly or there == here or (f.rel, a.by, there) in said:
+            continue
+        said.add((f.rel, a.by, there))
+        wrong = ("acting lands on a feature, never straight on a module; move this work into a "
+                 "feature the {} acts on".format(units[here].kind))
+        mis.append(Finding(f.rel, a.line, "{} does a feature's work: {} calls {} from {}; {}"
+                           .format(units[here].label, a.by, a.name, units[there].label, wrong)))
+        bad[(here, there)].append(wrong)
 
     # ---- features: what they said they use, and what starts them
     triggers: list = []

@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 import ast
+import re
 import sys
 from dataclasses import dataclass
 
-from .files import Link, Use, file_of
+from .files import Act, Link, Use, file_of
 from .outside import dotted_name, read_outside
 
 
@@ -115,6 +116,9 @@ class PythonReader:
     def uses(self, f: File, index: dict) -> list:
         return read_uses(f.path, f.package, index)
 
+    def acts(self, f: File, index: dict) -> list:
+        return read_acts(f.path, f.package, index)
+
     def outside(self, f: File) -> list:
         return read_outside(f.path)
 
@@ -127,63 +131,137 @@ def read_uses(path: Path, package: str, index: dict) -> list:
     bound whole and then passed around, or `import *`, is a use that cannot
     be told, and says so rather than guess.
     """
-    try:
-        tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"), str(path))
-    except (OSError, SyntaxError, ValueError):
+    tree = _parse(path)
+    if tree is None:
         return []
+    names = _Names(tree, package, index)
+    uses = list(names.imported)
+    # names read off a file bound whole: take the outermost a.b.c of a chain
+    for node in _outermost(tree):
+        if isinstance(node, ast.Attribute) or (isinstance(node, ast.Name)
+                                               and node.id not in names.taken):
+            use = names.use(node)
+            if use:
+                uses.append(use)
+    return uses
 
-    uses: list = []
-    bound: dict = {}                     # local name -> dotted path it stands for
 
-    def longest(dotted: str):
+# What a person does that runs code: `on_save`, `handle_submit`, or a function
+# handed to a widget as `on_click=` or `command=`.
+HANDLER_NAMES = re.compile(r"^(on|handle)(_\w+|[A-Z]\w*)$")
+HANDLER_ARGS = re.compile(r"^(on(_\w+|[A-Z]\w*)|command)$")
+
+
+def read_acts(path: Path, package: str, index: dict) -> list:
+    """Every name from another file used by code that runs when a person acts,
+    following the file's own functions those handlers call."""
+    tree = _parse(path)
+    if tree is None:
+        return []
+    names = _Names(tree, package, index)
+    local = {}
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            local[node.name] = node
+        elif isinstance(node, ast.Assign) and isinstance(node.value, ast.Lambda):
+            for t in node.targets:
+                if isinstance(t, ast.Name):
+                    local[t.id] = node.value
+
+    acts: list = []
+
+    def follow(root, by: str, seen: set) -> None:
+        for node in _outermost(root):
+            if isinstance(node, ast.Name) and node.id in local and node.id not in seen                     and local[node.id] is not root:
+                seen.add(node.id)
+                follow(local[node.id], by, seen)
+            elif isinstance(node, (ast.Name, ast.Attribute)):
+                use = names.use(node)
+                if use and use.name:
+                    acts.append(Act(use.target, use.name, use.line, by))
+
+    for name, node in local.items():
+        if HANDLER_NAMES.match(name):
+            follow(node, name, {name})
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            for kw in node.keywords:
+                if kw.arg and HANDLER_ARGS.match(kw.arg):
+                    follow(kw.value, kw.arg, set())
+    return acts
+
+
+def _parse(path: Path):
+    try:
+        return ast.parse(path.read_text(encoding="utf-8", errors="replace"), str(path))
+    except (OSError, SyntaxError, ValueError):
+        return None
+
+
+def _outermost(root: ast.AST):
+    """Every node under root, leaving out the inner links of an a.b.c chain."""
+    nodes = list(ast.walk(root))
+    inner = {id(n.value) for n in nodes if isinstance(n, ast.Attribute)}
+    return [n for n in nodes if id(n) not in inner]
+
+
+class _Names:
+    """What the names in one file stand for, by its imports."""
+
+    def __init__(self, tree: ast.AST, package: str, index: dict):
+        self.index = index
+        self.bound: dict = {}            # local name -> dotted path it stands for
+        self.taken: dict = {}            # local name -> (file, name) taken from it
+        self.imported: list = []         # the uses the imports themselves make
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.asname:
+                        self.bound[alias.asname] = alias.name
+                    else:
+                        top = alias.name.split(".")[0]
+                        self.bound[top] = top
+            elif isinstance(node, ast.ImportFrom):
+                target = absolute(RawImport(node.module, (), node.level or 0, False), package)
+                if not target:
+                    continue
+                # a folder of loose scripts: `from helpers import x` is next door
+                if package and not any(k == target or k.startswith(target + ".")
+                                       for k in index):
+                    target = package + "." + target
+                for alias in node.names:
+                    sub = target + "." + alias.name
+                    if alias.name == "*":
+                        if target in index:
+                            self.imported.append(Use(target, None, node.lineno, "import *"))
+                    elif sub in index:
+                        self.bound[alias.asname or alias.name] = sub
+                    elif target in index:
+                        self.imported.append(Use(target, alias.name, node.lineno))
+                        self.taken[alias.asname or alias.name] = (target, alias.name)
+
+    def longest(self, dotted: str):
         parts = dotted.split(".")
         for i in range(len(parts), 0, -1):
             head = ".".join(parts[:i])
-            if head in index:
+            if head in self.index:
                 return head, parts[i:]
         return None, parts
 
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                if alias.asname:
-                    bound[alias.asname] = alias.name
-                else:
-                    top = alias.name.split(".")[0]
-                    bound[top] = top
-        elif isinstance(node, ast.ImportFrom):
-            target = absolute(RawImport(node.module, (), node.level or 0, False), package)
-            if not target:
-                continue
-            # a folder of loose scripts: `from helpers import x` is next door
-            if package and not any(k == target or k.startswith(target + ".")
-                                   for k in index):
-                target = package + "." + target
-            for alias in node.names:
-                sub = target + "." + alias.name
-                if alias.name == "*":
-                    if target in index:
-                        uses.append(Use(target, None, node.lineno, "import *"))
-                elif sub in index:
-                    bound[alias.asname or alias.name] = sub
-                elif target in index:
-                    uses.append(Use(target, alias.name, node.lineno))
-
-    # names read off a file bound whole: take the outermost a.b.c of a chain
-    inner = {id(n.value) for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
-    for node in ast.walk(tree):
-        if id(node) in inner:
-            continue
+    def use(self, node: ast.AST) -> Use | None:
+        """The name from another file this outermost node reads, if any."""
         if isinstance(node, ast.Attribute):
             dotted = dotted_name(node)
             head, _, rest = dotted.partition(".")
-            if head not in bound:
-                continue
-            found, tail = longest(bound[head] + "." + rest)
+            if head not in self.bound:
+                return None
+            found, tail = self.longest(self.bound[head] + "." + rest)
             if found:
-                uses.append(Use(found, tail[0], node.lineno) if tail else
-                            Use(found, None, node.lineno, "a module passed whole"))
-        elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load) \
-                and bound.get(node.id) in index:
-            uses.append(Use(bound[node.id], None, node.lineno, "a module passed whole"))
-    return uses
+                return (Use(found, tail[0], node.lineno) if tail else
+                        Use(found, None, node.lineno, "a module passed whole"))
+        elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+            if node.id in self.taken:
+                return Use(*self.taken[node.id], node.lineno)
+            if self.bound.get(node.id) in self.index:
+                return Use(self.bound[node.id], None, node.lineno, "a module passed whole")
+        return None

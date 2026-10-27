@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import re
 
-from .files import File, Link, SKIP_DIRS, Use, _count_lines
+from .files import Act, File, Link, SKIP_DIRS, Use, _count_lines
 from .outside import connections, urls_from
 
 
@@ -84,6 +84,88 @@ def loose_json(text: str):
         else:
             out.append(c); i += 1
     return json.loads(re.sub(r",(\s*[}\]])", r"\1", "".join(out)))
+
+
+FUNCTIONS = ("function_declaration", "function_expression", "function", "arrow_function",
+             "method_definition", "generator_function_declaration")
+# What a person does that runs code: `handleSave`, `onPick`, or a function
+# handed to an element as `onClick={...}` or to addEventListener.
+HANDLER_NAMES = re.compile(r"^(on|handle)[A-Z]\w*$")
+
+
+def handler_uses(root, bound: dict, whole: dict, text) -> list:
+    """(spec, name, line, by) for every imported name used by code that runs
+    when a person acts, following the file's own functions those call."""
+    local: dict = {}                # a function's name -> its node
+
+    def fn_of(node):
+        """The function a value is: itself, or the one useCallback wraps."""
+        if node is None:
+            return None
+        if node.type in FUNCTIONS:
+            return node
+        if node.type == "call_expression":
+            fn = node.child_by_field_name("function")
+            args = node.child_by_field_name("arguments")
+            first = next((a for a in args.children if a.is_named), None) if args else None
+            if fn is not None and text(fn) in ("useCallback", "React.useCallback"):
+                return fn_of(first)
+        return None
+
+    roots: list = []                # (node, by)
+
+    def gather(node):
+        t = node.type
+        if t in ("function_declaration", "generator_function_declaration", "method_definition"):
+            name = node.child_by_field_name("name")
+            if name is not None:
+                local[text(name)] = node
+        elif t in ("variable_declarator", "public_field_definition", "field_definition"):
+            name = node.child_by_field_name("name") or node.child_by_field_name("property")
+            fn = fn_of(node.child_by_field_name("value"))
+            if name is not None and fn is not None:
+                local[text(name)] = fn
+        elif t == "jsx_attribute":
+            name = next((c for c in node.children if c.type == "property_identifier"), None)
+            value = next((c for c in node.children if c.type == "jsx_expression"), None)
+            if name is not None and value is not None and HANDLER_NAMES.match(text(name)):
+                roots.append((value, text(name)))
+        elif t == "call_expression":
+            fn = node.child_by_field_name("function")
+            args = node.child_by_field_name("arguments")
+            if fn is not None and text(fn).endswith("addEventListener") and args is not None:
+                named = [a for a in args.children if a.is_named]
+                if len(named) > 1:
+                    roots.append((named[1], "addEventListener"))
+        for c in node.children:
+            gather(c)
+
+    gather(root)
+    roots += [(node, name) for name, node in local.items() if HANDLER_NAMES.match(name)]
+
+    out: list = []
+
+    def follow(node, by: str, seen: set):
+        t = node.type
+        if t == "identifier":
+            name = text(node)
+            parent = node.parent
+            if name in bound:
+                spec, member = bound[name]
+                out.append((spec, member, node.start_point[0] + 1, by))
+            elif name in whole and parent is not None and parent.type == "member_expression"                     and parent.child_by_field_name("object") == node:
+                prop = parent.child_by_field_name("property")
+                out.append((whole[name], text(prop), node.start_point[0] + 1, by))
+            elif name in local and name not in seen:
+                seen.add(name)
+                follow(local[name], by, seen)
+            return
+        for c in node.children:
+            follow(c, by, seen)
+
+    for node, by in roots:
+        follow(node, by, {by})
+    return out
 
 
 def package_name(spec: str) -> str:
@@ -234,6 +316,7 @@ class ScriptReader:
                 walk(c, deeper)
 
         walk(tree.root_node, False)
+        facts["acts"] = handler_uses(tree.root_node, bound, whole, text)
         # a call written through an import means the library: spawn() is
         # child_process.spawn, new Anthropic() is @anthropic-ai/sdk
         def through(name: str) -> str:
@@ -374,6 +457,14 @@ class ScriptReader:
             if hit and hit[0] == "file":
                 out.append(Use(hit[1], name, line) if name else
                            Use(hit[1], None, line, "a module passed whole"))
+        return out
+
+    def acts(self, f: File, index: dict) -> list:
+        out = []
+        for spec, name, line, by in self.facts(f)["acts"]:
+            hit = self.land(spec, f, index)
+            if hit and hit[0] == "file":
+                out.append(Act(hit[1], name, line, by))
         return out
 
     def outside(self, f: File) -> list:

@@ -410,6 +410,120 @@ class Stores(Project):
         self.assertEqual(r.mismatches, [])
 
 
+class UIDoingFeatureWork(Project):
+    """A page may show what a module offers, but what it does when a person
+    acts on it is a feature's work: acting lands on a feature, never straight
+    on a module that keeps a store or reaches outside."""
+
+    def setUp(self):
+        super().setUp()
+        tree(self.root, {
+            "members/__init__.py": mod("members", "add, find"),
+            "members/model.py": (mod("members") + "# codegraph: store members\n"
+                                 "from pydantic import BaseModel\n"
+                                 "class Member(BaseModel):\n    name: str\n"),
+            "members/db.py": (mod("members") + "def add(c): c.execute('INSERT INTO members "
+                              "VALUES (?)')\ndef find(c): c.execute('SELECT * FROM members')\n"),
+            "dates/__init__.py": mod("dates", "pretty") + "def pretty(d): return str(d)\n",
+            "features/join.py": ("# codegraph: feature join in people\n# codegraph: uses members\n"
+                                 "# codegraph: event signed-up\n"
+                                 "from members import add\ndef join(name): add(name)\n"),
+            "tests/walk.py": "# codegraph: test ui home\n",
+        })
+
+    def page(self, source: str):
+        return self.check({"ui/home.py": "# codegraph: start page home\n" + source})
+
+    def acting(self, r) -> list:
+        return [(m.rel, m.line) for m in r.mismatches if "feature's work" in m.text]
+
+    def test_a_handler_that_calls_a_module_does_a_features_work(self):
+        r = self.page("from members import add\ndef on_save(name):\n    add(name)\n")
+        self.assertEqual(self.acting(r), [("ui/home.py", 4)])
+        self.assertTrue(self.has(r.mismatches, "page home", "on_save", "add", "module members"))
+
+    def test_a_handler_passed_to_a_widget(self):
+        r = self.page("import members\nButton(on_click=lambda: members.add('x'))\n")
+        self.assertEqual(self.acting(r), [("ui/home.py", 3)])
+
+    def test_a_handler_that_calls_a_local_helper_that_calls_a_module(self):
+        r = self.page("from members import add\ndef keep(n):\n    add(n)\n"
+                      "Button(command=lambda: keep('x'))\n")
+        self.assertEqual(self.acting(r), [("ui/home.py", 4)])
+
+    def test_showing_a_module_when_the_page_is_drawn_is_fine(self):
+        self.assertEqual(self.page("from members import find\nrows = find()\n").mismatches, [])
+
+    def test_a_handler_that_acts_on_a_feature_is_fine(self):
+        r = self.page("from features.join import join\ndef on_save(n):\n    join(n)\n")
+        self.assertEqual(r.mismatches, [])
+
+    def test_a_handler_using_a_module_that_keeps_nothing_is_fine(self):
+        r = self.page("from dates import pretty\ndef on_pick(d):\n    show(pretty(d))\n")
+        self.assertEqual(r.mismatches, [])
+
+    def test_a_component_is_held_to_it_too(self):
+        r = self.check({"ui/home.py": "# codegraph: start page home\nfrom ui.form import x\n",
+                        "ui/form.py": ("# codegraph: component form\nfrom members import add\n"
+                                       "def handle_submit(n):\n    add(n)\n")})
+        self.assertEqual(self.acting(r), [("ui/form.py", 4)])
+
+    def test_the_map_draws_the_wire_as_broken(self):
+        self.page("from members import add\ndef on_save(n):\n    add(n)\n")
+        bad = read_map(self.root).bad
+        self.assertTrue(any("feature" in w for w in bad.get(("page:home", "module:members"), [])))
+
+
+@unittest.skipUnless(HAS_SCRIPT, "tree-sitter is not installed")
+class ScriptUIDoingFeatureWork(Project):
+    """The same rule, read from React."""
+
+    def setUp(self):
+        super().setUp()
+        tree(self.root, {
+            "src/comps/index.ts": ("// codegraph: module comps\n// codegraph: front door addComp\n"
+                                   "export async function addComp(c) {\n"
+                                   "  await fetch('https://api.example.com/comps', {method: 'POST'});\n}\n"),
+            "src/walk.test.ts": "// codegraph: test ui home\n",
+        })
+
+    def page(self, source: str):
+        return self.check({"src/Home.tsx": "// codegraph: start page home at /\n" + source})
+
+    def acting(self, r) -> list:
+        return [m.line for m in r.mismatches if "feature's work" in m.text]
+
+    def test_an_inline_click_handler(self):
+        r = self.page('import { addComp } from "./comps";\n'
+                      "export default () => (\n"
+                      "  <button onClick={() => addComp(1)}>Add</button>\n);\n")
+        self.assertEqual(self.acting(r), [4])
+        self.assertTrue(self.has(r.mismatches, "onClick", "addComp", "module comps"))
+
+    def test_a_handle_function_through_a_namespace(self):
+        r = self.page('import * as comps from "./comps";\n'
+                      "async function handleSave() {\n  await comps.addComp(1);\n}\n")
+        self.assertEqual(self.acting(r), [4])
+
+    def test_a_callback_hook_handed_to_a_form(self):
+        r = self.page('import { addComp } from "./comps";\n'
+                      "export default function Home() {\n"
+                      "  const save = useCallback(async () => { await addComp(1); }, []);\n"
+                      "  return <form onSubmit={save} />;\n}\n")
+        self.assertEqual(self.acting(r), [4])
+
+    def test_the_module_handed_over_as_the_handler(self):
+        r = self.page('import { addComp } from "./comps";\n'
+                      "export default () => <Picker onPick={addComp} />;\n")
+        self.assertEqual(self.acting(r), [3])
+
+    def test_loading_what_the_page_shows_is_fine(self):
+        r = self.page('import { addComp } from "./comps";\n'
+                      "export default function Home() {\n"
+                      "  useEffect(() => { addComp(1); }, []);\n  return null;\n}\n")
+        self.assertEqual(self.acting(r), [])
+
+
 class PageMap(Project):
     """Where a person can go: pages, their links, and the start page."""
 

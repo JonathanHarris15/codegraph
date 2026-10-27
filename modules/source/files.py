@@ -143,6 +143,16 @@ class Use:
     why: str = ""
 
 
+@dataclass(frozen=True)
+class Act:
+    """One name a file takes from another file in the project, used in code
+    that runs when a person acts: a click, a submit, a pick."""
+    target: str          # dotted name of the file the name comes from
+    name: str | None
+    line: int
+    by: str              # what runs it: onClick, handleSave, on_save
+
+
 def text_of(f: File) -> str:
     try:
         return f.path.read_text(encoding="utf-8", errors="replace")

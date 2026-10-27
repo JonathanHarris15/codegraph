@@ -5,7 +5,7 @@ This repo is built in three layers, and every source file says in a `codegraph:`
 
 - **Modules** do the real work behind a small front door. Only a module touches a store (a table or collection) or an outside connection (an API, a feed, the environment). A module never calls a feature or the UI.
 - **Features** are the things a person, a schedule or an event asks the app to do. Each is thin, belongs to one system, and gets its power from the modules it names in `uses`.
-- **UI** is how a person reaches features: pages, components (used on more than one page, may pull data) and the design system (pulls no data). The UI acts on features and may show what a module's front door offers.
+- **UI** is how a person reaches features: pages, components (used on more than one page, may pull data) and the design system (pulls no data). The UI acts on features and may show what a module's front door offers. What runs when a person clicks, submits or picks is a feature's work: the page hands it to a feature and shows the answer, and never does the job itself.
 
 How to work here:
 
