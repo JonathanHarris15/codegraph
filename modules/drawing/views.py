@@ -4,6 +4,7 @@ from __future__ import annotations
 from collections import defaultdict
 
 from modules.layout import place_by_file, place_inside, place_map, size_cards
+from modules.planning import compare, read_plans
 from modules.rules import UI_KINDS, relation
 from modules.source import EXTERNAL, OUTSIDE
 
@@ -96,11 +97,13 @@ def map_views(root: Path, graph: dict, r: Reading, source: str = "tags") -> dict
         return (k if wire == "import" else wire), why
 
     def view(title: str, unit: str, own: list, mapping, keep, group: str = "",
-             inside: str = "") -> dict:
+             inside: str = "", extra: tuple = ({}, [])) -> dict:
         """Lift the file graph through `mapping`, keep the wires that touch
         `own` between cards that `keep` allows, and lay out what is left.
         Inside a card, its stores and triggers wire to the file that holds
-        the store's tag, else to its first file."""
+        the store's tag, else to its first file. `extra` is the ghosts of
+        what plans ask for and the code has not got: cards, and wires."""
+        ghosts, planned = extra
         def anchor(other: str) -> str:
             s = r.stores.get(other[6:]) if other.startswith("store:") else None
             held = next((f.name for f in r.files if s and f.rel == s["rel"]), None)
@@ -139,9 +142,12 @@ def map_views(root: Path, graph: dict, r: Reading, source: str = "tags") -> dict
         edges = [dict(w, names=sorted(w["names"]), bad=sorted(w["bad"]), via=sorted(w["via"]),
                       why=sorted(w["why"]))
                  for _, w in sorted(wires.items())]
+        known = set(own) | set(cards) | set(ghosts)
+        edges += [w for w in planned if w["from"] in known and w["to"] in known
+                  and (w["from"] in own or w["to"] in own) and keep(w["from"]) and keep(w["to"])]
 
         ids = list(dict.fromkeys(own + [x for w in edges for x in (w["from"], w["to"])]))
-        nodes = [dict(cards.get(i) or shown[i]) for i in ids]
+        nodes = [dict(ghosts.get(i) or cards.get(i) or shown[i]) for i in ids]
         size_cards(nodes)
         tail = [g for g in (EXTERNAL, STORES, OUTSIDE) if any(n["group"] == g for n in nodes)]
         pairs = [(w["from"], w["to"]) for w in edges if w["kind"] != "leads"]
@@ -168,13 +174,23 @@ def map_views(root: Path, graph: dict, r: Reading, source: str = "tags") -> dict
         return placed
 
     on_map = [c for c, v in cards.items() if v["kind"] not in ("test", "tooling")]
-    views = {"map": view("Map", "units", sorted(on_map), card,
-                         lambda c: c not in (TESTS_CARD, TOOLING_CARD))}
+    keep = lambda c: c not in (TESTS_CARD, TOOLING_CARD)
+    views = {"map": view("Map", "units", sorted(on_map), card, keep)}
+    plans = compare(read_plans(root), views["map"]["nodes"], views["map"]["edges"])
+    ghosts, planned, notes = _ghosts(plans)
+    if ghosts or planned:
+        views["map"] = view("Map", "units", sorted(on_map) + sorted(ghosts), card, keep,
+                            extra=(ghosts, planned))
     top = ["map"]
-    pages = sorted(c for c, v in cards.items() if v["kind"] == "page")
+    pages = sorted(c for c, v in list(cards.items()) + list(ghosts.items()) if v["kind"] == "page")
     if pages:
-        views["pages"] = view("Pages", "pages", pages, card, lambda c: c in pages)
+        views["pages"] = view("Pages", "pages", pages, card, lambda c: c in pages,
+                              extra=(ghosts, planned))
         top.append("pages")
+    for v in (views["map"], views.get("pages")):
+        for n in (v or {}).get("nodes", []):
+            if n["id"] in notes and not n.get("ghost"):
+                n.update(notes[n["id"]])
     for cid in on_map:
         own = cards[cid]["files"]
         if own:
@@ -183,6 +199,56 @@ def map_views(root: Path, graph: dict, r: Reading, source: str = "tags") -> dict
                               lambda c: c not in (TESTS_CARD, TOOLING_CARD),
                               cards[cid]["group"], cid)
 
-    return {"source": source, "top": top, "views": views,
+    return {"source": source, "top": top, "views": views, "plans": plans,
             "mismatches": [str(m) for m in r.mismatches],
             "unknown": [str(u) for u in r.unknown]}
+
+
+# ------------------------------------------------------------------ ghosts
+#
+# What plans ask for and the code has not got yet, drawn over the map: a card
+# the map lacks becomes a ghost card, a wire it lacks a ghost wire, and a card
+# it has but short of what was asked carries what is left to build.
+
+def _ghosts(plans: list) -> tuple:
+    """({id: ghost card}, [ghost wire], {id: what a real card is still asked for})."""
+    ghosts: dict = {}
+    notes: dict = {}
+    wires: list = []
+    for p in plans:
+        for c in p["cards"]:
+            if c["built"] or c["id"] in ghosts or c["id"] in notes:
+                continue
+            said = {k: c[k] for k in ("about", "program", "takes", "gives", "roles", "triggers",
+                                      "problems") if c.get(k)}
+            if c["left"] != ["not on the map yet"]:
+                notes[c["id"]] = dict(said, plan=p["name"], left=c["left"])
+                continue
+            door = [d.get("name", "") if isinstance(d, dict) else str(d) for d in c.get("door") or []]
+            ghosts[c["id"]] = dict(said, **{
+                "id": c["id"], "label": c["name"], "kind": c["kind"], "ghost": True,
+                "plan": p["name"], "left": c["left"], "group": _ghost_group(c),
+                "dir": "planned · " + p["name"], "lines": 0, "files": [],
+                "door": door, "doors": [d for d in c.get("door") or [] if isinstance(d, dict)],
+                "system": c.get("system", ""), "route": c.get("route", ""),
+                "start": bool(c.get("start")), "uses": [], "stores": [], "reads": [],
+                "owner": "module:" + str(c.get("owner", "")).replace("module:", "")
+                         if c["kind"] == "store" else "",
+                "fields": ["{}: {}".format(k, v) if v else k
+                           for k, v in (c.get("fields") or {}).items()]})
+        for w in p["wires"]:
+            if not w["built"]:
+                wires.append({"from": w["from"], "to": w["to"], "kind": w["kind"], "names": [],
+                              "bad": [], "via": [], "why": list(w["problems"]), "plan": p["name"],
+                              "carries": w.get("carries", "")})
+    return ghosts, wires, notes
+
+
+def _ghost_group(c: dict) -> str:
+    if c["kind"] == "feature":
+        return "system:" + (c.get("system") or "?")
+    if c["kind"] in UI_KINDS:
+        return UI_GROUP
+    if c["kind"] == "store":
+        return STORES
+    return c["id"]

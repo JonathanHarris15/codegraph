@@ -755,3 +755,25 @@ class ScriptUses(unittest.TestCase):
     def test_faking_the_repos_own_file(self):
         tree(self.root, {"core/book.test.ts": "// codegraph: test module core\nvi.mock('./book');\n"})
         self.assertTrue(any("fakes ./book" in m.text for m in check(self.root).mismatches))
+
+
+class Plans(Project):
+    """A plan waits in plans/ until it is built, and then must go."""
+
+    def setUp(self):
+        super().setUp()
+        tree(self.root, {"engine/__init__.py": mod("engine", "Book") + "class Book: pass\n"})
+
+    def test_a_plan_still_to_build_is_no_mismatch(self):
+        tree(self.root, {"plans/next.json": '{"cards": [{"kind": "module", "name": "mail"}]}'})
+        self.assertEqual(check(self.root).mismatches, [])
+
+    def test_a_built_plan_left_behind_is_a_mismatch(self):
+        tree(self.root, {"plans/done.json": '{"cards": [{"kind": "module", "name": "engine"}]}'})
+        found = check(self.root).mismatches
+        self.assertEqual([(m.rel, "delete it" in m.text) for m in found], [("plans/done.json", True)])
+
+    def test_a_file_in_plans_that_is_no_plan_is_a_mismatch(self):
+        tree(self.root, {"plans/oops.json": "not json"})
+        self.assertTrue(self.has(check(self.root).mismatches, "not a plan"))
+

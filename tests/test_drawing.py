@@ -323,5 +323,29 @@ class MapViews(Folder):
         self.assertEqual(door["line_text"], "{}:{}  {}".format(door["rel"], door["line"], door["text"]))
         self.assertEqual([g["id"] for g in s["groups"]][:2], ["layers", "doors"])
 
+    def test_a_plan_draws_what_is_not_built_yet_as_ghosts(self):
+        tree(self.root, {"plans/remind.json": json.dumps({
+            "ask": "Remind people.",
+            "cards": [{"kind": "feature", "name": "remind", "system": "people",
+                       "about": "Sends the reminders.", "triggers": ["schedule every Monday"]},
+                      {"kind": "module", "name": "members", "door": ["find", "email"]},
+                      {"kind": "page", "name": "rota", "route": "/rota"}],
+            "wires": [{"from": "feature:remind", "kind": "uses", "to": "module:members"},
+                      {"from": "feature:join", "kind": "uses", "to": "module:members"},
+                      {"from": "page:about", "kind": "leads to", "to": "page:rota"}]})})
+        g = build(self.root, reading=read_map(self.root))
+        plan = g["map"]["plans"][0]
+        self.assertEqual((plan["name"], plan["built"]), ("remind", False))
+        nodes = {n["id"]: n for n in g["map"]["views"]["map"]["nodes"]}
+        ghost = nodes["feature:remind"]
+        self.assertEqual((ghost["ghost"], ghost["plan"], ghost["about"]), (True, "remind", "Sends the reminders."))
+        self.assertEqual(nodes["module:members"]["left"], ["front door lacks email"])
+        self.assertNotIn("ghost", nodes["module:members"])
+        planned = [(e["from"], e["to"]) for e in g["map"]["views"]["map"]["edges"] if e.get("plan")]
+        self.assertIn(("feature:remind", "module:members"), planned)
+        self.assertNotIn(("feature:join", "module:members"), planned)      # already built
+        self.assertIn("page:rota", {n["id"] for n in g["map"]["views"]["pages"]["nodes"]})
+        self.assertEqual([p["name"] for p in summary(g)["plans"]], ["remind"])
+
     def test_no_reading_no_map(self):
         self.assertNotIn("map", build(self.root))

@@ -299,7 +299,8 @@ export const register: Register = on => {
       description:
         'This repo\'s codegraph map as JSON: its systems and their features (with the modules each ' +
         'uses and what triggers it), its modules (with their front doors and stores), pages, ' +
-        'components, stores and their shapes, and the mismatches. Read it before deciding whether a ' +
+        'components, stores and their shapes, the mismatches, and the plans waiting in plans/ with ' +
+        'what of each is left to build. Read it before deciding whether a ' +
         'request is a feature, a module, or UI, and where the work goes.',
       inputSchema: { type: 'object', properties: {} },
       isDeferred: false,

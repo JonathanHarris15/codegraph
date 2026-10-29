@@ -276,6 +276,19 @@ button.sm{font-size:11px;padding:2px 8px}
 #panel .chips span{font-family:var(--font-mono);font-size:10px;padding:1px 6px;
   border:1px solid var(--hair);border-radius:4px;background:var(--surface-2)}
 #panel .note{font-size:11px;color:var(--muted);line-height:1.5}
+/* a plan: what someone asked for that the code has not got yet, dashed */
+.card.ghost{border-style:dashed;border-left-style:dashed;
+  background:color-mix(in srgb,var(--surface) 60%,transparent);box-shadow:none}
+.card.ghost .nm::before{content:"+ ";color:var(--accent)}
+.card .ptag{margin-top:4px;font-family:var(--font-mono);font-size:9px;font-weight:700;
+  letter-spacing:.03em;color:var(--accent)}
+.card.planned{outline:1px dashed var(--accent);outline-offset:3px}
+#panel .fact{display:flex;gap:8px;font-size:11px;line-height:1.45;margin:2px 0}
+#panel .fact span{flex:0 0 58px;font-family:var(--font-mono);font-size:10px;color:var(--muted)}
+#panel ul.left{margin:4px 0 0;padding:0 0 0 16px;font-family:var(--font-mono);font-size:10px;line-height:1.5}
+#panel .plan{border-top:1px solid var(--hair-soft);margin-top:10px;padding-top:2px}
+#panel .plan .grp b{flex:1 1 auto;font-family:var(--font-mono);font-size:12px}
+#panel .plan .where{display:inline;margin:0}
 #panel .open{display:block;width:100%;margin-top:10px;background:var(--accent);
   border-color:var(--accent);color:var(--on-accent)}
 
@@ -296,6 +309,7 @@ button.sm{font-size:11px;padding:2px 8px}
     <nav id="crumbs" aria-label="Where you are in the codebase"></nav>
     <span class="counts" id="counts"></span>
     <button class="counts issues" id="issues" hidden></button>
+    <button class="counts issues" id="plans-btn" hidden></button>
     <span class="spacer"></span>
     <div class="toolbar">
       <span id="make" hidden></span>
@@ -405,6 +419,7 @@ var focusWires=load("wires")!==false;
 var stage=document.getElementById("stage"), canvas=document.getElementById("canvas"),
     svg=document.getElementById("wires"), panel=document.getElementById("panel"),
     counts=document.getElementById("counts"), issues=document.getElementById("issues"),
+    plansBtn=document.getElementById("plans-btn"),
     crumbs=document.getElementById("crumbs"), qbox=document.getElementById("q");
 document.getElementById("gen").textContent="read "+(GRAPH.generated||"").replace("T"," ").replace("+00:00"," UTC");
 document.title="codegraph "+(GRAPH.root||"");
@@ -665,6 +680,7 @@ function show(key){
   edges=V.edges.filter(function(e){ return nodes[e.from]&&nodes[e.to]; })
     .map(function(e,i){ return {i:i,from:e.from,to:e.to,kind:e.kind,
                                 names:e.names||[],why:e.why||[],via:e.via||[],
+                                plan:e.plan||"",carries:e.carries||"",
                                 bad:(e.bad||[]).concat((e.why||[]).length&&!(e.bad||[]).length?["rule"]:[])}; });
   out={}; inn={};
   order.forEach(function(n){ out[n.id]=[]; inn[n.id]=[]; });
@@ -707,7 +723,8 @@ function show(key){
     el.style.setProperty("--s",n.size||1);
     el.className="card "+(CARDCLASS[n.kind]||"ext")+(n.start?" start":"")+
       (n.kind==="trigger"&&n.dir!=="schedule"?" "+n.dir:"")+
-      (VIEWS[n.id]&&n.id!==cur?" opens":"")+(folded[n.id]?" folded":"")+(FLAG[n.id]?" flagged":"");
+      (VIEWS[n.id]&&n.id!==cur?" opens":"")+(folded[n.id]?" folded":"")+(FLAG[n.id]?" flagged":"")+
+      (n.ghost?" ghost":n.plan?" planned":"");
     el.style.setProperty("--gc",gcolor(n.group));
     el.tabIndex=0; el.setAttribute("role","button");
     var hd=document.createElement("div"); hd.className="hd";
@@ -722,6 +739,12 @@ function show(key){
       band.appendChild(hd); band.appendChild(dir); band.appendChild(foot);
       el.appendChild(band);
     } else { el.appendChild(hd); el.appendChild(dir); el.appendChild(foot); }
+    if(n.plan){
+      var pt=document.createElement("div"); pt.className="ptag";
+      pt.textContent=n.ghost?"planned \u00b7 "+n.plan:"plan "+n.plan+" \u00b7 "+n.left.length+" left";
+      if(n.ghost) dir.textContent=n.about||n.dir;
+      el.appendChild(pt);
+    }
     if(n.files&&n.files.length) fileList(el,hd,n);
     if(n.kind==="store"||n.kind==="trigger") fieldList(el,n);
     canvas.appendChild(el); cardEls[n.id]=el;
@@ -748,10 +771,10 @@ function show(key){
     var d=KINDS[e.kind]||KINDS["import"], bad=e.bad.length>0;
     function strand(){
       var p=document.createElementNS(NS,"path");
-      p.setAttribute("class","wire"+(bad?" breach":""));
+      p.setAttribute("class","wire"+(bad?" breach":"")+(e.plan?" planned":""));
       p.setAttribute("stroke",bad?"var(--breach)":kcolor(e.kind));
       p.setAttribute("stroke-width",String(d.width));
-      if(d.dash) p.setAttribute("stroke-dasharray",d.dash);
+      if(d.dash||e.plan) p.setAttribute("stroke-dasharray",e.plan?"6 5":d.dash);
       p.setAttribute("opacity",bad?"0.95":isWiring(e.kind)?"0.6":"0.9");
       p.addEventListener("transitionend",landed);
       gWires.appendChild(p);
@@ -980,7 +1003,7 @@ var shownWires={};
 function lightWires(){
   var lit=focusWires?litSet():null;
   edges.forEach(function(e){
-    var on=!lit||!!lit[e.i]||e.bad.length>0;
+    var on=!lit||!!lit[e.i]||e.bad.length>0||!!e.plan;     // a planned wire is the news
     var strands=drawWire(e,on);
     var hot=!!selected&&(e.from===selected||e.to===selected);
     var fresh=on&&!shownWires[e.i];
@@ -1035,6 +1058,9 @@ function render(){
   var found=MODS?MODS.mismatches.length:0;
   issues.hidden=!found;
   issues.textContent=found+(found===1?" mismatch":" mismatches")+(bad?" · "+bad+" red wires":"");
+  var plans=MODS&&MODS.plans||[];
+  plansBtn.hidden=!plans.length;
+  plansBtn.textContent=plans.length+(plans.length===1?" plan":" plans");
 }
 /* panning and zooming only move the canvas, so they skip redrawing the wires;
    the dot grid moves with it so the background reads as the same surface.
@@ -1105,9 +1131,53 @@ function showIssue(i){
   var id=nodes[i.card]?i.card:nodes[i.file]?i.file:null;
   if(id){ listing=false; select(id); focus(id); }
 }
-issues.addEventListener("click",function(){ listing=true; selected=null; render(); drawFindings(); });
+issues.addEventListener("click",function(){ listing=true; listingPlans=false; selected=null; render(); drawFindings(); });
+plansBtn.addEventListener("click",function(){ listingPlans=true; listing=false; selected=null; render(); drawPlans(); });
+
+/* the plans waiting to be built: what each asked for, what is left, and the
+   rules it breaks, which the agent corrects as it builds */
+var listingPlans=false;
+function wireWords(w){ return w.from+" "+((KINDS[w.kind]||{}).label||w.kind)+" "+w.to; }
+function buildPlan(name){ return "/codegraph:plan build "+name; }
+function drawPlans(){
+  var all=MODS.plans||[];
+  var h='<div class="phead"><h2>Plans ('+all.length+')</h2><span class="spacer"></span>'+
+        '<button class="close" id="p-close" aria-label="Close">\u00d7</button></div>';
+  h+='<p class="note">Changes waiting to be built. Dashed cards and wires are what the code has not got yet.'+
+     (LIVE?' <b>Build it</b> puts it in the chat box.':'')+'</p>';
+  all.forEach(function(p,k){
+    var items=p.cards.concat(p.wires);
+    var done=items.filter(function(x){ return x.built; }).length;
+    h+='<div class="plan"><div class="grp"><b>'+esc(p.name)+'</b><span class="where">'+done+' of '+
+       items.length+' built</span></div>';
+    if(p.ask) h+='<p class="note">'+esc(p.ask)+'</p>';
+    var todo=p.cards.filter(function(c){ return !c.built; }).map(function(c){
+      return c.kind+" "+c.name+": "+(c.left.join("; ")||"cannot be read");
+    }).concat(p.wires.filter(function(w){ return !w.built; }).map(wireWords));
+    if(todo.length) h+='<ol class="found">'+todo.map(function(t){ return '<li>'+esc(t)+'</li>'; }).join("")+'</ol>';
+    var why=p.problems.concat.apply(p.problems,items.map(function(x){ return x.problems; }));
+    why.forEach(function(w){ h+='<div class="why">'+esc(w)+'</div>'; });
+    if(p.built) h+='<p class="note">Built. Delete '+esc(p.file)+'.</p>';
+    h+='<div class="acts"><button class="sm" data-showplan="'+k+'">Show</button>'+
+       (LIVE&&!p.built?'<button class="act sm" data-build="'+esc(p.name)+'">Build it</button>':'')+'</div></div>';
+  });
+  panel.innerHTML=h; panel.hidden=false; panel.classList.add("listing");
+  function on(sel,fn){ Array.prototype.forEach.call(panel.querySelectorAll(sel),function(b){
+    b.addEventListener("click",function(){ fn(b); }); }); }
+  on("#p-close",function(){ listingPlans=false; panel.hidden=true; panel.classList.remove("listing"); });
+  on("[data-build]",function(b){ send(buildPlan(b.getAttribute("data-build"))); });
+  on("[data-showplan]",function(b){ showPlan(all[+b.getAttribute("data-showplan")]); });
+}
+/* find a plan on the map: its first card the map has, picked and centred */
+function showPlan(p){
+  if(cur!=="map"&&VIEWS.map) open("map");
+  var id=p.cards.map(function(c){ return c.id; }).concat(p.wires.map(function(w){ return w.from; }))
+    .filter(function(i){ return nodes[i]; })[0];
+  if(id){ listingPlans=false; select(id); focus(id); }
+}
 function drawPanel(){
   if(listing&&!selected){ drawFindings(); return; }
+  if(listingPlans&&!selected){ drawPlans(); return; }
   listing=false; panel.classList.remove("listing");
   panel.hidden=!selected;
   if(!selected) return;
@@ -1143,7 +1213,22 @@ function drawPanel(){
   }
   if(n.kind==="feature"){
     h+='<p class="note">In system <b>'+esc(n.system||"none")+'</b></p>';
-    h+=chips("Says it uses",n.uses,"No modules named.");
+    if(!n.ghost) h+=chips("Says it uses",n.uses,"No modules named.");
+  }
+  if(n.plan){
+    h+='<h3>'+(n.ghost?"Planned":"Plan asks for more")+' \u00b7 '+esc(n.plan)+'</h3>';
+    if(n.about) h+='<p class="note">'+esc(n.about)+'</p>';
+    [["program",n.program],["takes",n.takes],["gives",n.gives],["roles",(n.roles||[]).join(", ")],
+     ["started by",(n.triggers||[]).join("; ")]].forEach(function(f){
+      if(f[1]) h+='<div class="fact"><span>'+f[0]+'</span>'+esc(f[1])+'</div>';
+    });
+    (n.doors||[]).forEach(function(d){
+      var said=[d.takes?"takes "+d.takes:"",d.gives?"gives "+d.gives:""].filter(Boolean).join("; ");
+      if(said) h+='<div class="fact"><span>'+esc(d.name)+'</span>'+esc(said)+'</div>';
+    });
+    if(!n.ghost&&n.left.length) h+='<ul class="left">'+n.left.map(function(l){ return '<li>'+esc(l)+'</li>'; }).join("")+'</ul>';
+    (n.problems||[]).forEach(function(w){ h+='<div class="why">'+esc(w)+'</div>'; });
+    if(LIVE) h+='<div class="acts"><button class="act sm" data-build="'+esc(n.plan)+'">Build plan '+esc(n.plan)+'</button></div>';
   }
   if(n.kind==="page") h+='<p class="note">'+(n.start?"Start page at ":"At ")+'<b>'+esc(n.route||"no route")+'</b></p>';
   if(n.kind==="store"||n.kind==="trigger"){
@@ -1159,7 +1244,7 @@ function drawPanel(){
     vis.sort(function(a,b){ return a[key]<b[key]?-1:1; }).forEach(function(e){
       var o=nodes[e[key]];
       var tag = e.kind==="lazy" ? "lazy"
-              : e.kind==="import" ? "" : (KINDS[e.kind]||{}).label||e.kind;
+              : e.kind==="import" ? "" : ((KINDS[e.kind]||{}).label||e.kind)+(e.plan?" \u00b7 planned":"");
       s+='<li><button data-go="'+esc(o.id)+'">'+
          '<span class="dot" style="background:'+
            (e.bad.length?"var(--breach)":isWiring(e.kind)?gcolor(o.group):kcolor(e.kind))+'"></span>'+
@@ -1169,6 +1254,7 @@ function drawPanel(){
       if(e.names.length) s+='<div class="names">'+e.names.map(function(nm){
         return e.bad.indexOf(nm)>=0?'<b>'+esc(nm)+'</b>':esc(nm);
       }).join(", ")+'</div>';
+      if(e.carries) s+='<div class="names">carries '+esc(e.carries)+'</div>';
       e.why.forEach(function(w){ s+='<div class="why">'+esc(w)+'</div>'; });
       s+='</li>';
     });
@@ -1192,6 +1278,9 @@ function drawPanel(){
     document.getElementById("ask-card").addEventListener("click",function(){ send(aboutCard(n)); });
     var fx=document.getElementById("fix-card");
     if(fx) fx.addEventListener("click",function(){ send(fixMany(mine,"mismatches in "+n.kind+" "+n.label)); });
+    Array.prototype.forEach.call(panel.querySelectorAll("[data-build]"),function(b){
+      b.addEventListener("click",function(){ send(buildPlan(b.getAttribute("data-build"))); });
+    });
     var ff=document.getElementById("feature-from");
     if(ff) ff.addEventListener("click",function(){
       send("Build a new feature that uses the "+n.label+" module: "); });
@@ -1218,6 +1307,7 @@ function fixMany(list,what){
   return list.length===1?fixOne(list[0]):"/codegraph:fix all "+list.length+" "+what+", worst first, one commit each";
 }
 function aboutCard(n){
+  if(n.ghost) return "About the planned "+n.kind+" "+n.label+" in plan "+n.plan+" (plans/"+n.plan+".json): ";
   var files=(n.files||[]).map(function(f){ var o=FILES[f]; return o?(o.dir==="."?o.label:o.dir+"/"+o.label):f; });
   var where=files.length?"; files "+files.join(", "):"";
   if(n.kind==="feature") return "About the "+n.label+" feature (system "+(n.system||"none")+"; uses "+
@@ -1463,6 +1553,7 @@ if(LIVE){
     sessionStorage.removeItem(KEY+".kept");
     if(kept&&kept.selected&&nodes[kept.selected]){ select(kept.selected); }
     else if(kept&&kept.listing&&MODS){ listing=true; drawFindings(); }
+    else if(kept&&kept.plans&&MODS){ listingPlans=true; drawPlans(); }
   }catch(e){}
 
   var lost=0;
@@ -1470,7 +1561,7 @@ if(LIVE){
     fetch(LIVE.version,{cache:"no-store"}).then(function(r){ return r.json(); }).then(function(v){
       lost=0;
       if(v.version===LIVE.at) return;
-      try{ sessionStorage.setItem(KEY+".kept",JSON.stringify({selected:selected,listing:listing})); }catch(e){}
+      try{ sessionStorage.setItem(KEY+".kept",JSON.stringify({selected:selected,listing:listing,plans:listingPlans})); }catch(e){}
       location.reload();
     }).catch(function(){ if(++lost===3) toast("Lost Claude Code: run /codegraph to start the map again"); });
   },1500);

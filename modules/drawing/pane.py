@@ -14,7 +14,7 @@ from collections import defaultdict
 
 # What each view's cards and wires keep for the pane.
 NODE_KEYS = ("id", "label", "kind", "dir", "col", "row", "tier", "block", "size", "own", "system", "door", "uses",
-             "route", "start", "fields", "owner")
+             "route", "start", "fields", "owner", "ghost", "plan", "left")
 VIEW_LIMIT = 600000          # past this many characters, only the map and the pages travel
 
 # The groups setup reports mismatches in, worst first: (group, label, words
@@ -47,7 +47,8 @@ def _trim(view: dict) -> dict:
         "columns": [c.get("label", "") for c in view.get("columns", [])],
         "nodes": [{k: n[k] for k in NODE_KEYS if _kept(n.get(k))} for n in view["nodes"]],
         "edges": [dict({"from": e["from"], "to": e["to"], "kind": e["kind"]},
-                       **({"bad": bad(e)[:3]} if bad(e) else {})) for e in view["edges"]],
+                       **({"bad": bad(e)[:3]} if bad(e) else {}),
+                       **({"plan": e["plan"]} if e.get("plan") else {})) for e in view["edges"]],
     }, **({"blocks": view["blocks"]} if view.get("blocks") else {}))
 
 
@@ -101,6 +102,7 @@ def summary(graph: dict) -> dict:
                    for n in sorted(by_kind["store"], key=lambda n: n["label"])],
         "mismatches": m.get("mismatches", []), "unknown": m.get("unknown", []),
         "issues": m.get("issues", []), "groups": m.get("groups", []),
+        "plans": m.get("plans", []),
         "views": trimmed,
     }
 

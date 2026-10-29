@@ -32,9 +32,10 @@ The repo is a Claude Code plugin. Installing it gives you three things:
   pane beside the chat.
 - three **tools** the agent calls: `check`, run after every change, `map`,
   read before deciding where work goes, and `open`, which opens the live map.
-- three **skills**: `/codegraph:setup` brings a repo under codegraph,
-  `/codegraph:fix` fixes one mismatch at a time, test first, and
-  `/codegraph:open` opens the live map.
+- four **skills**: `/codegraph:setup` brings a repo under codegraph,
+  `/codegraph:fix` fixes one mismatch at a time, test first,
+  `/codegraph:plan` puts a change on the map as a plan before it is built,
+  and `/codegraph:open` opens the live map.
 
 To install it for every project, add this folder as a marketplace (the repo
 lists itself in `.claude-plugin/marketplace.json`), then install from it:
@@ -74,6 +75,23 @@ writes the rules into the repo's `CLAUDE.md` so every agent there builds in
 the three layers and test first, and hands back the mismatches, worst first.
 Setup changes no behaviour; fixing is `/codegraph:fix`, one small change at a
 time (docs/adr/0004).
+
+## Plans
+
+A plan is a change someone wants, put on the map before any code is written
+(docs/adr/0008). Tell the agent what you want, ramble or ticket, and
+`/codegraph:plan` writes it to `plans/<name>.json`: the cards and wires to add
+or change, each card with a few plain lines on what it is for, and where known
+which program it ships in, which roles may start it, and what it takes and
+gives.
+
+The map draws what the code has not got yet as dashed cards and wires over
+the real map, red where the plan breaks a rule, and the agent corrects those
+before you see it. **Plans** in the header lists each one, what is left to
+build, and **Build it**. As the code is written the dashed cards go; a card the
+code has but short of what was asked says what is left. Once nothing is left,
+the plan is deleted: the check reports a built plan still in `plans/` as a
+mismatch. The map is only ever read from the code.
 
 ## Tags
 
@@ -298,7 +316,8 @@ Codegraph is set up on itself, in the same three layers it asks of others.
 `python codegraph.py . --check` reads it like any other repo.
 
 - `modules/`: source (reads each file and what it imports and reaches),
-  tags, shapes, rules (the check's reading), drafting, layout, drawing, web (serves the live map).
+  tags, shapes, rules (the check's reading), planning (plans held against the map),
+  drafting, layout, drawing, web (serves the live map).
   Each folder's `__init__.py` is its front door.
 - `features/`: check, draw-map, browse-map and draft-tags, each a few lines that call
   modules.

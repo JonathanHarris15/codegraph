@@ -243,6 +243,38 @@ A wire from a page or a component to a component it shows.
 _Rule_: a component contains no page.
 _Avoid_: renders, includes
 
+## Plans
+
+**Plan**:
+A change a person or an agent wants made, drawn on the map before it is
+built: the cards and wires to add or change, each card with a few lines of
+plain words saying what it is for. It waits as a file in `plans/`.
+_Rule_: a plan is a request, not a declaration (docs/adr/0008). The map draws
+what of it is not built yet as ghosts; once the map read from the code has
+every card and wire in it, the plan is deleted, and a plan left behind after
+that is a mismatch.
+_Avoid_: proposal, spec, design, draft, sketch
+
+**Program**:
+One thing the repo ships that runs on its own, such as a browser app, a server
+or a cloud function. Code in one program cannot import code in another.
+_Rule_: every card belongs to one program. For now only a plan says which;
+codegraph does not yet read it from the code.
+_Avoid_: deployable, container, service, app
+
+**Role**:
+A kind of person the app knows, such as an elder or a member.
+_Rule_: a feature a person starts says which roles may start it. For now only
+a plan says so; codegraph does not yet read it from the code.
+_Avoid_: user type, persona, permission, group
+
+**Takes and gives**:
+What a feature or a front-door name is handed when it starts, and what it
+hands back, in plain words or as a shape.
+_Rule_: for now only a plan says so; codegraph does not yet read it from the
+code.
+_Avoid_: input and output, signature, parameters, returns
+
 ## Checking
 
 **Tag**:
