@@ -9,6 +9,9 @@ out can reach it:
     GET  /<secret>/version    {"version": n}: the page reloads when n moves
     POST /<secret>/ask        {"text": ...}: what the person asked, passed on
     POST /<secret>/refresh    read the repo again, then move the version on
+    POST /<secret>/plan       a plan drawn on the page, to write; its answer back
+    GET  /<secret>/design/... a design kept beside a plan, boxed in: it may not
+                              run a script or reach this server
 """
 from __future__ import annotations
 
@@ -16,20 +19,24 @@ import json
 import secrets
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 MAX_BODY = 100000
+MAX_PLAN = 30000000          # a plan carries its designs: screens and pages of HTML
 
 
 class Server(ThreadingHTTPServer):
     """A page server bound to this machine alone. `page(live)` draws the
-    page, `on_ask(text)` hears a request, `on_refresh()` reads the repo again."""
+    page, `on_ask(text)` hears a request, `on_refresh()` reads the repo again,
+    `on_plan(body)` writes a plan and answers (ValueError: refused, and why),
+    and `design(path)` gives a design's (bytes, media type), or None."""
 
     daemon_threads = True
 
-    def __init__(self, page, on_ask, on_refresh, port: int = 0):
+    def __init__(self, page, on_ask, on_refresh, port: int = 0, on_plan=None, design=None):
         super().__init__(("127.0.0.1", port), _Handler)
         self.page, self.on_ask, self.on_refresh = page, on_ask, on_refresh
+        self.on_plan, self.design = on_plan, design
         self.secret = secrets.token_urlsafe(18)
         self.version = 0
         self.lock = threading.Lock()
@@ -41,7 +48,7 @@ class Server(ThreadingHTTPServer):
     def live(self) -> dict:
         base = "/" + self.secret + "/"
         return {"ask": base + "ask", "version": base + "version", "refresh": base + "refresh",
-                "at": self.version}
+                "plan": base + "plan", "design": base + "design/", "at": self.version}
 
     def refresh(self) -> int:
         with self.lock:
@@ -68,12 +75,16 @@ class _Handler(BaseHTTPRequestHandler):
         return origin is None or origin in ("http://127.0.0.1:{}".format(port),
                                             "http://localhost:{}".format(port))
 
-    def _send(self, status: int, body: str, kind: str = "application/json") -> None:
-        data = body.encode("utf-8")
+    def _send(self, status: int, body, kind: str = "application/json",
+              boxed: bool = False) -> None:
+        data = body if isinstance(body, bytes) else body.encode("utf-8")
         self.send_response(status)
-        self.send_header("Content-Type", kind + "; charset=utf-8")
+        self.send_header("Content-Type", kind + ("" if isinstance(body, bytes) else "; charset=utf-8"))
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-store")
+        if boxed:
+            self.send_header("Content-Security-Policy", "sandbox")
+            self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(data)
 
@@ -83,6 +94,12 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(200, self.server.page(self.server.live()), "text/html")
         elif route == "version":
             self._send(200, json.dumps({"version": self.server.version}))
+        elif route and route.startswith("design/") and self.server.design:
+            found = self.server.design(unquote(route[len("design/"):]))
+            if found is None:
+                self._send(404, json.dumps({"error": "not here"}))
+            else:
+                self._send(200, found[0], found[1], boxed=True)
         else:
             self._send(404, json.dumps({"error": "not here"}))
 
@@ -91,8 +108,8 @@ class _Handler(BaseHTTPRequestHandler):
         # read what was sent before answering, refusals too: a socket closed
         # with data still unread is reset on Windows, and the answer is lost
         size = int(self.headers.get("Content-Length") or 0)
-        body = self.rfile.read(min(size, MAX_BODY))
-        if route not in ("ask", "refresh"):
+        body = self.rfile.read(min(size, MAX_PLAN if route == "plan" else MAX_BODY))
+        if route not in ("ask", "refresh", "plan") or (route == "plan" and not self.server.on_plan):
             self._send(404, json.dumps({"error": "not here"}))
             return
         if not self._same_site():
@@ -100,6 +117,15 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if route == "refresh":
             self._send(200, json.dumps({"version": self.server.refresh()}))
+            return
+        if route == "plan":
+            try:
+                sent = json.loads(body or b"{}")
+                if not isinstance(sent, dict):
+                    raise ValueError("a plan comes as an object")
+                self._send(200, json.dumps(self.server.on_plan(sent)))
+            except ValueError as e:
+                self._send(400, json.dumps({"error": str(e)}))
             return
         try:
             text = json.loads(body or b"{}").get("text", "")

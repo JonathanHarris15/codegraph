@@ -19,8 +19,19 @@ class Served(unittest.TestCase):
         def again():
             self.read += 1
 
+        def plan(body):
+            if body.get("name") == "bad":
+                raise ValueError("no good")
+            self.planned.append(body)
+            return {"file": "plans/{}.json".format(body["name"])}
+
+        def design(rel):
+            return (b"<script>x</script>", "text/html") if rel == "plans/a/a.html" else None
+
+        self.planned: list = []
         self.server = Server(page=lambda live: "<p>" + json.dumps(live) + "</p>",
-                             on_ask=self.asked.append, on_refresh=again)
+                             on_ask=self.asked.append, on_refresh=again,
+                             on_plan=plan, design=design)
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
         self.addCleanup(self.server.server_close)
         self.addCleanup(self.server.shutdown)
@@ -64,3 +75,25 @@ class Served(unittest.TestCase):
         self.assertEqual(json.loads(self.call("version")[1])["version"], 0)
         self.call("refresh", {})
         self.assertEqual((self.read, json.loads(self.call("version")[1])["version"]), (1, 1))
+
+    def test_a_drawn_plan_is_handed_on_and_its_answer_returned(self):
+        status, text = self.call("plan", {"name": "rota", "plan": {}, "designs": {}})
+        self.assertEqual((status, json.loads(text)), (200, {"file": "plans/rota.json"}))
+        self.assertEqual(self.planned[0]["name"], "rota")
+
+    def test_a_plan_refused_says_why(self):
+        status, text = self.call("plan", {"name": "bad"})
+        self.assertEqual((status, json.loads(text)["error"]), (400, "no good"))
+
+    def test_another_site_cannot_write_a_plan(self):
+        status, _ = self.call("plan", {"name": "rota"}, origin="https://evil.example")
+        self.assertEqual((status, self.planned), (403, []))
+
+    def test_a_design_is_served_boxed_in(self):
+        url = self.server.url + "design/plans/a/a.html"
+        with urllib.request.urlopen(url, timeout=5) as r:
+            self.assertEqual(r.read(), b"<script>x</script>")
+            self.assertEqual(r.headers["Content-Security-Policy"], "sandbox")
+            self.assertEqual(r.headers["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(self.call("design/plans/b.png")[0], 404)
+

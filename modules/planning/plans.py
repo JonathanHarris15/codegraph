@@ -9,17 +9,22 @@ it is built (docs/adr/0008):
                 "triggers": ["schedule every Monday at 09:00"]},
                {"kind": "module", "name": "mail", "door": ["send", {"name": "bounce", "takes": "..."}]},
                {"kind": "store", "name": "reminders", "owner": "reminders", "fields": {"sent": "date"}},
-               {"kind": "page", "name": "rota", "route": "/rota"},
+               {"kind": "page", "name": "rota", "route": "/rota", "design": "plans/<name>/rota.png"},
                {"kind": "component", "name": "people-picker"}],
      "wires": [{"from": "page:rota", "kind": "acts on", "to": "feature:remind"}]}
 
 A card or wire is built once the map read from the code has it, with every
 detail the plan asks for. Program, roles, takes and gives ride along on the
-card: the code does not tell codegraph those yet.
+card: the code does not tell codegraph those yet. Nor does a page's design:
+a screen or a page of HTML, kept beside the plan in `plans/<name>/` and
+deleted with it.
 """
 from __future__ import annotations
 
+import base64
+import binascii
 import json
+import re
 from pathlib import Path
 
 from modules.rules import relation
@@ -32,7 +37,12 @@ WIRE_WORDS = {"uses": "uses", "informed by": "informed", "acts on": "acts", "con
               "writes": "writes", "reads": "reads", "leads to": "leads", "imports": "import"}
 WIRE_NAMES = {v: k for k, v in WIRE_WORDS.items()}
 KEPT = ("about", "program", "takes", "gives", "roles", "system", "route", "start",
-        "door", "owner", "fields", "triggers")
+        "door", "owner", "fields", "triggers", "design")
+# what a design may be, and how it is served back
+DESIGNS = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
+           ".webp": "image/webp", ".svg": "image/svg+xml", ".html": "text/html"}
+NAME = re.compile(r"[a-z0-9][a-z0-9-]*$")
+FILE = re.compile(r"[a-z0-9][a-z0-9_-]*(\.[a-z0-9]+)$")
 
 
 def read_plans(root: Path) -> list:
@@ -42,6 +52,8 @@ def read_plans(root: Path) -> list:
     out = []
     for path in sorted(folder.glob("*.json")) if folder.is_dir() else []:
         p = {"name": path.stem, "file": PLANS + "/" + path.name}
+        if (folder / path.stem).is_dir():
+            p["designs"] = "{}/{}/".format(PLANS, path.stem)
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as e:
@@ -63,8 +75,51 @@ def left_behind(plans: list) -> list:
         if p.get("error"):
             out.append((p["file"], "is not a plan codegraph can read: " + p["error"]))
         elif p["built"]:
-            out.append((p["file"], "plan {} is built: delete it".format(p["name"])))
+            out.append((p["file"], "plan {} is built: delete it{}".format(
+                p["name"], " and its designs in " + p["designs"] if p.get("designs") else "")))
     return out
+
+
+def write_plan(root: Path, name: str, plan: dict, designs: dict) -> str:
+    """Write a plan drawn on the map, and its designs beside it, as
+    `{file: data URL}`. Where the plan went; ValueError for a name, a file or
+    a plan that could land anywhere else, or one already waiting."""
+    if not NAME.match(str(name)):
+        raise ValueError("a plan's name is lower case letters, numbers and dashes: " + repr(name))
+    if not isinstance(plan, dict):
+        raise ValueError("a plan is an object with cards and wires")
+    folder = Path(root) / PLANS
+    if (folder / (name + ".json")).exists():
+        raise ValueError("a plan named {} is already waiting".format(name))
+    files = {}
+    for file, url in (designs or {}).items():
+        m = FILE.match(str(file))
+        if not m or m.group(1) not in DESIGNS:
+            raise ValueError("a design is a {} file with a plain name: {!r}".format(
+                ", ".join(DESIGNS), file))
+        head, _, data = str(url).partition(",")
+        try:
+            files[file] = base64.b64decode(data, validate=True) if head.endswith(";base64")                 else data.encode("utf-8")
+        except (binascii.Error, ValueError):
+            raise ValueError("design {} is not a data URL".format(file))
+    if files:
+        (folder / name).mkdir(parents=True, exist_ok=True)
+        for file, raw in files.items():
+            (folder / name / file).write_bytes(raw)
+    folder.mkdir(exist_ok=True)
+    (folder / (name + ".json")).write_text(json.dumps(plan, indent=1) + "\n", encoding="utf-8")
+    return "{}/{}.json".format(PLANS, name)
+
+
+def design_file(root: Path, rel: str) -> tuple | None:
+    """(bytes, media type) of a design kept beside a plan, or None for
+    anything else: a design is only ever served from inside `plans/`."""
+    folder = (Path(root) / PLANS).resolve()
+    path = (Path(root) / str(rel)).resolve()
+    kind = DESIGNS.get(path.suffix.lower())
+    if not kind or folder not in path.parents or not path.is_file():
+        return None
+    return path.read_bytes(), kind
 
 
 def compare(plans: list, nodes: list, edges: list) -> list:
@@ -80,6 +135,8 @@ def _norm(s: str) -> str:
 def _compare(p: dict, nodes: list, edges: list) -> dict:
     out = {"name": p["name"], "file": p["file"], "ask": "", "cards": [], "wires": [],
            "problems": [], "built": False}
+    if p.get("designs"):
+        out["designs"] = p["designs"]
     if p.get("error"):
         out["error"] = p["error"]
         out["problems"].append(p["error"])
@@ -218,6 +275,9 @@ def _left(c: dict, real: dict | None, nodes: list) -> list:
             left.append("is at {}, not {}".format(real.get("route") or "no route", c["route"]))
         if c.get("start") and not real.get("start"):
             left.append("is not the start page")
+        if c.get("design"):
+            left.append("has a design codegraph cannot check: take it off this card once "
+                        "the page matches it")
     if c["kind"] == "store":
         owner = str(c.get("owner", "")).replace("module:", "")
         has = str(real.get("owner", "")).replace("module:", "")

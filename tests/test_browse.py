@@ -47,3 +47,12 @@ class LiveMap(Folder):
         self.assertNotIn("_open", self.get())
         self.post("refresh", {})
         self.assertIn("not on its front door", self.get())
+
+    def test_a_plan_drawn_on_the_map_is_written_and_drawn_back(self):
+        self.post("plan", {"name": "next", "plan": {"ask": "A mail module",
+                                                    "cards": [{"kind": "module", "name": "mail"}]},
+                           "designs": {}})
+        self.assertTrue((self.root / "plans/next.json").exists())
+        self.post("refresh", {})
+        self.assertIn('"plan": "next"', self.get())
+

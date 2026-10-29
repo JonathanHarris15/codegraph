@@ -35,6 +35,11 @@ does not hold them against the code until codegraph can read them there.
 
 ## Consequences
 
+A page's design (a screen, or a page of HTML from Claude Design) lives beside
+its plan in `plans/<name>/` and goes when the plan does. Codegraph cannot tell
+when a page looks like a picture, so a design stays on its card, unbuilt,
+until the agent judges the page matches it and takes it off.
+
 The check reads plans too, so it builds the map to compare them against.
 A plan's words for wires are the map's own (CONTEXT.md, Wires), written from
 the card that reaches to the card it reaches: `page home acts on feature

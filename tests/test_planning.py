@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 import unittest
 
-from modules.planning import compare, left_behind, read_plans
+import base64
+
+from modules.planning import compare, design_file, left_behind, read_plans, write_plan
 from tests.helpers import Folder, tree
 
 
@@ -87,6 +89,12 @@ class Plans(Folder):
         c = self.one({"cards": [{"kind": "page", "name": "home", "route": "/start"}]})["cards"][0]
         self.assertEqual(c["left"], ["is at /, not /start"])
 
+    def test_a_design_is_left_until_the_agent_takes_it_off_the_card(self):
+        c = self.one({"cards": [{"kind": "page", "name": "home",
+                                 "design": "plans/p/home.png"}]})["cards"][0]
+        self.assertFalse(c["built"])
+        self.assertIn("design codegraph cannot check", c["left"][0])
+
     def test_a_store_must_have_its_fields_and_its_owner(self):
         c = self.one({"cards": [{"kind": "store", "name": "members", "owner": "mail",
                                  "fields": {"name": "text", "phone": "text"}}]})["cards"][0]
@@ -143,6 +151,55 @@ class Plans(Folder):
         self.assertEqual((c["program"], c["roles"], c["takes"], c["gives"]),
                          ("server", ["elder"], "a week", "who was reminded"))
         self.assertEqual(c["problems"], [])
+
+
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
+
+
+def data_url(kind: str, raw: bytes) -> str:
+    return "data:{};base64,{}".format(kind, base64.b64encode(raw).decode())
+
+
+class Writing(Folder):
+    """A plan drawn on the map, written where the agent and the map read it."""
+
+    def test_a_drawn_plan_and_its_designs_are_written_beside_each_other(self):
+        rel = write_plan(self.root, "rota-pages",
+                         {"ask": "A rota", "cards": [{"kind": "page", "name": "rota",
+                                                      "design": "plans/rota-pages/rota.png"}]},
+                         {"rota.png": data_url("image/png", PNG),
+                          "week.html": data_url("text/html", b"<h1>week</h1>")})
+        self.assertEqual(rel, "plans/rota-pages.json")
+        self.assertEqual((self.root / "plans/rota-pages/rota.png").read_bytes(), PNG)
+        p = compare(read_plans(self.root), [], [])[0]
+        self.assertEqual(p["cards"][0]["design"], "plans/rota-pages/rota.png")
+        self.assertEqual(p["designs"], "plans/rota-pages/")
+
+    def test_a_name_or_a_file_that_could_land_elsewhere_is_refused(self):
+        for name in ("../x", "Rota Pages", "", "a/b"):
+            with self.assertRaises(ValueError):
+                write_plan(self.root, name, {"cards": []}, {})
+        for file in ("../evil.png", "x.exe", ".png", "a/b.png"):
+            with self.assertRaises(ValueError):
+                write_plan(self.root, "ok", {"cards": []}, {file: data_url("image/png", PNG)})
+        self.assertFalse((self.root / "plans").exists())
+
+    def test_a_plan_already_waiting_is_not_written_over(self):
+        write_plan(self.root, "rota", {"cards": []}, {})
+        with self.assertRaises(ValueError):
+            write_plan(self.root, "rota", {"cards": []}, {})
+
+    def test_a_built_plan_with_designs_says_to_delete_them_too(self):
+        write_plan(self.root, "done", {"cards": []}, {"a.png": data_url("image/png", PNG)})
+        (_, why), = left_behind(compare(read_plans(self.root), [], []))
+        self.assertIn("plans/done/", why)
+
+    def test_a_design_is_served_only_from_inside_plans(self):
+        write_plan(self.root, "rota", {"cards": []}, {"rota.png": data_url("image/png", PNG)})
+        self.assertEqual(design_file(self.root, "plans/rota/rota.png"), (PNG, "image/png"))
+        tree(self.root, {"secret.png": "x", "plans/notes.txt": "x"})
+        for rel in ("secret.png", "plans/../secret.png", "plans/notes.txt", "plans/rota/none.png"):
+            self.assertIsNone(design_file(self.root, rel), rel)
 
 
 if __name__ == "__main__":

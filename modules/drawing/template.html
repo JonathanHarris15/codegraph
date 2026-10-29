@@ -293,6 +293,38 @@ path.wire.planned{stroke-width:2.6}
 path.wire.faint{opacity:.08}
 .s-plan{width:17px;height:12px;border:1.5px dashed var(--plan);border-radius:3px;
   background:color-mix(in srgb,var(--plan) 20%,transparent)}
+/* sketching on the pages view: the bar, the dot a link is dragged from, and a
+   design shown on its page */
+#sketchbar{position:absolute;top:12px;left:12px;z-index:3;display:flex;flex-wrap:wrap;gap:6px 8px;
+  align-items:center;max-width:min(560px,calc(100% - 300px));background:var(--surface);
+  border:1px solid var(--hair);border-left:4px solid var(--plan);border-radius:9px;padding:7px 10px;
+  box-shadow:0 4px 14px rgba(10,20,40,.1);font-size:11px}
+#sketchbar[hidden]{display:none}
+#sketchbar b{color:var(--plan);font-family:var(--font-mono);font-size:11px}
+#sketchbar .tally{font-family:var(--font-mono);font-size:10px;color:var(--muted)}
+#sketchbar .hint{flex:1 0 100%;color:var(--muted);font-size:10.5px;line-height:1.45}
+.card .link{position:absolute;right:-9px;top:50%;width:16px;height:16px;margin-top:-8px;border-radius:50%;
+  background:var(--plan);border:3px solid var(--surface);cursor:crosshair;z-index:1;touch-action:none}
+.card .link:hover{transform:scale(1.25)}
+.card.droppable{box-shadow:0 0 0 3px var(--plan),var(--stack)}
+#stage.droppable{outline:3px dashed var(--plan);outline-offset:-6px}
+.design{position:relative;display:block;width:100%;height:96px;margin-top:6px;overflow:hidden;
+  border:1px solid var(--hair);border-radius:4px;background:var(--surface-2)}
+#panel .design{height:150px}
+#panel .design.big{height:200px}
+.design img{width:100%;height:100%;object-fit:cover;object-position:top;display:block}
+.design iframe{width:400%;height:400%;border:0;transform:scale(.25);transform-origin:0 0;
+  pointer-events:none;background:#fff}
+#panel form{display:flex;flex-direction:column;gap:7px;margin-top:10px}
+#panel label{display:flex;flex-direction:column;gap:3px;font-size:10px;color:var(--muted);
+  font-family:var(--font-mono)}
+#panel input[type=text],#panel textarea{font:inherit;font-family:var(--font-ui);font-size:12px;color:var(--ink);
+  background:var(--surface-2);border:1px solid var(--hair);border-radius:6px;padding:5px 7px}
+#panel textarea{min-height:64px;resize:vertical}
+#panel input:focus,#panel textarea:focus{outline:2px solid var(--plan);outline-offset:-1px}
+#panel .err{color:var(--breach);font-size:11px}
+#panel .drawn{display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:10.5px;margin:3px 0}
+#panel .drawn span{flex:1 1 auto;word-break:break-all}
 #panel .fact{display:flex;gap:8px;font-size:11px;line-height:1.45;margin:2px 0}
 #panel .fact span{flex:0 0 58px;font-family:var(--font-mono);font-size:10px;color:var(--muted)}
 #panel ul.left{margin:4px 0 0;padding:0 0 0 16px;font-family:var(--font-mono);font-size:10px;line-height:1.5}
@@ -330,6 +362,7 @@ path.wire.faint{opacity:.08}
     <div id="canvas"><svg id="wires"></svg></div>
     <aside id="panel"></aside>
     <div id="marquee" hidden></div>
+    <div id="sketchbar" hidden></div>
     <div id="corner">
       <button id="b-wires" aria-pressed="false"
         title="Show every wire, or only the ones on the card you point at or pick">All wires</button>
@@ -739,7 +772,7 @@ function show(key){
       (VIEWS[n.id]&&n.id!==cur?" opens":"")+(folded[n.id]?" folded":"")+(FLAG[n.id]?" flagged":"")+
       (n.ghost?" ghost":n.plan?" planned":"");
     el.style.setProperty("--gc",gcolor(n.group));
-    el.tabIndex=0; el.setAttribute("role","button");
+    el.tabIndex=0; el.setAttribute("role","button"); el.setAttribute("data-id",n.id);
     var hd=document.createElement("div"); hd.className="hd";
     var nm=document.createElement("div"); nm.className="nm"; nm.textContent=n.label;
     hd.appendChild(nm);
@@ -760,6 +793,7 @@ function show(key){
     }
     if(n.files&&n.files.length) fileList(el,hd,n);
     if(n.kind==="store"||n.kind==="trigger") fieldList(el,n);
+    if(n.kind==="page") pageSketching(el,n);
     canvas.appendChild(el); cardEls[n.id]=el;
     hgt[n.id]=el.offsetHeight;
     if(n.files&&!folded[n.id]) measureRows(n.id);
@@ -803,7 +837,7 @@ function show(key){
   });
 
   drawKey(); drawCrumbs(); drawTabs(); save("trail",trail);
-  render(); drawPanel(); openView();
+  render(); drawPanel(); drawSketchBar(); openView();
 }
 
 /* from the top: the map, then the card you went into. Pages and Files
@@ -1191,6 +1225,7 @@ function showPlan(p){
   if(id){ listingPlans=false; select(id); focus(id); }
 }
 function drawPanel(){
+  if(sketchForm&&!selected){ drawSketchForm(); return; }
   if(listing&&!selected){ drawFindings(); return; }
   if(listingPlans&&!selected){ drawPlans(); return; }
   listing=false; panel.classList.remove("listing");
@@ -1208,7 +1243,7 @@ function drawPanel(){
   var mine=ISSUES.filter(function(i){ return i.card===n.id||i.file===n.id; });
   if(mine.length) h+='<p class="note" style="color:var(--breach)">'+mine.length+
     (mine.length===1?" mismatch here":" mismatches here")+'</p>';
-  if(LIVE){
+  if(LIVE&&!n.draft){
     h+='<div class="acts"><button class="act sm" id="ask-card">Ask about it</button>';
     if(mine.length) h+='<button class="act sm" id="fix-card">'+(mine.length===1?"Fix it":"Fix all "+mine.length)+'</button>';
     if(n.kind==="module") h+='<button class="sm" id="feature-from">+ Feature using it</button>';
@@ -1230,7 +1265,8 @@ function drawPanel(){
     h+='<p class="note">In system <b>'+esc(n.system||"none")+'</b></p>';
     if(!n.ghost) h+=chips("Says it uses",n.uses,"No modules named.");
   }
-  if(n.plan){
+  if(sketchingHere()&&n.kind==="page") h+=sketchPanel(n);
+  else if(n.plan){
     h+='<h3>'+(n.ghost?"Planned":"Plan asks for more")+' \u00b7 '+esc(n.plan)+'</h3>';
     if(n.about) h+='<p class="note">'+esc(n.about)+'</p>';
     [["program",n.program],["takes",n.takes],["gives",n.gives],["roles",(n.roles||[]).join(", ")],
@@ -1241,6 +1277,8 @@ function drawPanel(){
       var said=[d.takes?"takes "+d.takes:"",d.gives?"gives "+d.gives:""].filter(Boolean).join("; ");
       if(said) h+='<div class="fact"><span>'+esc(d.name)+'</span>'+esc(said)+'</div>';
     });
+    if(n.design&&LIVE) h+=designHtml({url:LIVE.design+n.design,type:designType(n.design)},"big")+
+      '<p class="note"><a href="'+esc(LIVE.design+n.design)+'" target="_blank" rel="noopener">Open the design</a></p>';
     if(!n.ghost&&n.left.length) h+='<ul class="left">'+n.left.map(function(l){ return '<li>'+esc(l)+'</li>'; }).join("")+'</ul>';
     (n.problems||[]).forEach(function(w){ h+='<div class="why">'+esc(w)+'</div>'; });
     if(LIVE) h+='<div class="acts"><button class="act sm" data-build="'+esc(n.plan)+'">Build plan '+esc(n.plan)+'</button></div>';
@@ -1279,6 +1317,8 @@ function drawPanel(){
   h+=list(n.kind==="file"?"Imports":"Out",out[n.id],"to",isInside);
   h+=list(n.kind==="file"?"Used by":"In",inn[n.id],"from",isInside);
   panel.innerHTML=h;
+  fillDesigns(panel);
+  bindSketchPanel(n);
 
   document.getElementById("p-close").addEventListener("click",function(){ select(null); });
   Array.prototype.forEach.call(panel.querySelectorAll("[data-go]"),function(b){
@@ -1289,7 +1329,7 @@ function drawPanel(){
   Array.prototype.forEach.call(panel.querySelectorAll("[data-open]"),function(b){
     b.addEventListener("click",function(){ open(b.getAttribute("data-open")); });
   });
-  if(LIVE){
+  if(LIVE&&!n.draft){
     document.getElementById("ask-card").addEventListener("click",function(){ send(aboutCard(n)); });
     var fx=document.getElementById("fix-card");
     if(fx) fx.addEventListener("click",function(){ send(fixMany(mine,"mismatches in "+n.kind+" "+n.label)); });
@@ -1434,7 +1474,7 @@ function drag(el,n){
   }
   stage.addEventListener("pointerdown",function(ev){
     if(ev.target.closest(".card")||ev.target.closest("#panel")||ev.target.closest("#legend")||
-       ev.target.closest("#corner")) return;
+       ev.target.closest("#corner")||ev.target.closest("#sketchbar")) return;
     stopZoom();
     id=ev.pointerId; sx=ev.clientX; sy=ev.clientY; px=panX; py=panY;
     boxing=ev.shiftKey;
@@ -1496,8 +1536,9 @@ function openView(){
     scale=zoomTo=Math.max(MINZ,Math.min(1,(r.width-24)/(b.w+40),(r.height-24)/(b.h+40)));
     panX=(r.width-(b.w+40)*scale)/2; panY=12; applyView(); return;
   }
-  scale=zoomTo=Math.max(0.4,Math.min(1,(r.height-56)/(b.h+40)));
-  panX=22; panY=18; applyView();
+  var bar=document.getElementById("sketchbar"), under=bar.hidden?0:bar.offsetHeight+12;
+  scale=zoomTo=Math.max(0.4,Math.min(1,(r.height-56-under)/(b.h+40)));
+  panX=22; panY=18+under; applyView();
 }
 
 var bWires=document.getElementById("b-wires");
@@ -1532,6 +1573,306 @@ document.addEventListener("keydown",function(ev){
   else if(selected) select(null);
   else if(trail.length>1) open(trail[0]);       // Escape climbs back out of a card
 });
+
+/* ---------------------------------------------------------- sketching
+   On the pages view a person can sketch a change by hand: new pages, links
+   between pages, and a design (a screen, or a page of HTML) dropped on any
+   page. Send writes the sketch to plans/ as a plan and asks the agent to
+   correct it; Build it builds it. Until it is sent the sketch is kept in
+   this browser, so the page reloading after a turn does not lose it. */
+var DESIGN_EXT={".png":1,".jpg":1,".jpeg":1,".gif":1,".webp":1,".svg":1,".html":1};
+var DESIGN_MAX=8000000;
+var sketch=null, sketchForm=null, sketchErr="";
+// a repo with no links between pages yet has not been told how one is drawn
+if(MODS&&!KINDS.leads) KINDS.leads={label:"leads to",hue:330,dash:"",width:1.5,head:"to"};
+try{ sketch=JSON.parse(localStorage.getItem(KEY+".sketch")||"null"); }catch(e){ sketch=null; }
+function canSketch(){ return !!(LIVE&&LIVE.plan&&MODS); }
+function sketchingHere(){ return !!sketch&&cur==="pages"; }
+// a new project has no pages yet, and sketching them is how it gets some
+if(canSketch()&&!VIEWS.pages){
+  VIEWS.pages={title:"Pages",unit:"pages",nodes:[],edges:[],columns:[],groups:[]};
+  TOP.splice(TOP.indexOf("files"),0,"pages");
+}
+var BASEPAGES=VIEWS.pages?{nodes:VIEWS.pages.nodes.slice(),edges:VIEWS.pages.edges.slice()}:null;
+function keepSketch(){
+  try{
+    if(sketch) localStorage.setItem(KEY+".sketch",JSON.stringify(sketch));
+    else localStorage.removeItem(KEY+".sketch");
+  }catch(e){ toast("This sketch is too big to keep if the page reloads: send it soon"); }
+}
+function slug(s){ return String(s).toLowerCase().replace(/\.[a-z0-9]+$/,"").replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,""); }
+function extOf(name){ var m=/\.[a-z0-9]+$/.exec(String(name).toLowerCase()); return m?m[0]:""; }
+function designType(path){ return /\.html$/i.test(path)?"text/html":"image"; }
+/* a design as a picture, or a page of HTML boxed in a frame that may run no
+   script. A served page of HTML is fetched and handed to its frame whole,
+   the same way as one not sent yet, so the two draw alike. */
+function designHtml(d,cls){
+  var at=d.url||d.data;
+  return '<div class="design'+(cls?" "+cls:"")+'">'+(d.type==="text/html"
+    ? '<iframe sandbox="" tabindex="-1" title="design" '+(d.url?'data-html="':'src="')+esc(at)+'"></iframe>'
+    : '<img alt="design" src="'+esc(at)+'">')+'</div>';
+}
+var designText={};
+function fillDesigns(root){
+  Array.prototype.forEach.call(root.querySelectorAll("iframe[data-html]"),function(fr){
+    var url=fr.getAttribute("data-html");
+    if(designText[url]!==undefined){ fr.srcdoc=designText[url]; return; }
+    fetch(url).then(function(r){ return r.ok?r.text():""; })
+      .then(function(t){ designText[url]=t; fr.srcdoc=t; }).catch(function(){});
+  });
+}
+/* the pages view, with what is sketched laid over it: new pages in a column
+   of their own on the right, drawn links dashed, designs on their pages */
+function sketchView(){
+  if(!BASEPAGES) return;
+  var v=VIEWS.pages, right=-1, row=0;
+  v.nodes=BASEPAGES.nodes.map(function(n){
+    right=Math.max(right,n.col||0);
+    var d=sketch&&sketch.designs[n.id];
+    return d?Object.assign({},n,{sketched:d}):n;
+  });
+  v.edges=BASEPAGES.edges.slice();
+  if(!sketch) return;
+  Object.keys(sketch.pages).forEach(function(id){
+    var p=sketch.pages[id];
+    v.nodes.push({id:id,label:p.name,kind:"page",ghost:true,draft:true,plan:"sketch",left:[],
+      about:p.about||"",route:p.route||"",dir:p.route||"new page",group:"(ui)",
+      col:right+1,row:row++,size:1,files:[],sketched:sketch.designs[id]});
+  });
+  sketch.wires.forEach(function(w){
+    v.edges.push({from:w.from,to:w.to,kind:"leads",plan:"sketch",names:[],why:[],via:[],bad:[]});
+  });
+}
+sketchView();
+function redrawSketch(pick){
+  keepSketch(); sketchView();
+  if(cur!=="pages"){ open("pages"); return; }
+  var s=scale,x=panX,y=panY;
+  show("pages");
+  scale=zoomTo=s; panX=x; panY=y; applyView();
+  if(pick&&nodes[pick]) select(pick);
+}
+function startSketch(){
+  if(!sketch){ sketch={pages:{},wires:[],designs:{}}; }
+  sketchForm=null; redrawSketch();
+}
+function drawSketchBar(){
+  var bar=document.getElementById("sketchbar");
+  if(!canSketch()||cur!=="pages"){ bar.hidden=true; return; }
+  bar.hidden=false;
+  if(!sketch){
+    bar.innerHTML='<button class="act sm" id="sk-start">Sketch a change</button>'+
+      '<span class="hint">Add pages, draw where each leads, and drop designs from Claude Design on them.</span>';
+    bar.querySelector("#sk-start").addEventListener("click",startSketch);
+    return;
+  }
+  var np=Object.keys(sketch.pages).length, nw=sketch.wires.length, nd=Object.keys(sketch.designs).length;
+  bar.innerHTML='<b>Sketching</b><span class="tally">'+np+(np===1?" new page":" new pages")+" · "+
+    nw+(nw===1?" link":" links")+" · "+nd+(nd===1?" design":" designs")+'</span>'+
+    '<button class="sm" id="sk-page">+ Page</button>'+
+    '<button class="act sm" id="sk-send"'+(np+nw+nd?'':' disabled')+'>Send</button>'+
+    '<button class="sm" id="sk-drop">Discard</button>'+
+    '<span class="hint">Drag a page’s amber dot onto another page to say it leads there. '+
+    'Drop a screen or an HTML file on a page to give it a design, or on empty space for a new page.</span>';
+  bar.querySelector("#sk-page").addEventListener("click",function(){ openSketchForm("page"); });
+  bar.querySelector("#sk-send").addEventListener("click",function(){ openSketchForm("send"); });
+  var drop=bar.querySelector("#sk-drop");
+  drop.addEventListener("click",function(){
+    if(drop.textContent!=="Sure?"){ drop.textContent="Sure?"; return; }
+    sketch=null; sketchForm=null; redrawSketch();
+  });
+}
+function openSketchForm(kind,more){
+  sketchForm={kind:kind,more:more||{}}; sketchErr=""; listing=false; listingPlans=false;
+  selected=null; render(); drawSketchForm();
+}
+function drawSketchForm(){
+  var f=sketchForm, h='<div class="phead"><h2>'+(f.kind==="page"?"New page":"Send the sketch")+
+    '</h2><span class="spacer"></span><button class="close" id="p-close" aria-label="Close">×</button></div>';
+  if(f.kind==="page"){
+    h+='<p class="note">A place a person can land. Say what it is for in your own words; the agent works out the rest.</p>'+
+      '<form id="sk-form"><label>name<input type="text" name="name" required value="'+esc(f.more.name||"")+'"></label>'+
+      '<label>route, if you know it<input type="text" name="route" placeholder="/rota"></label>'+
+      '<label>what it is for<textarea name="about"></textarea></label>'+
+      (f.more.design?designHtml(f.more.design):'')+
+      '<button class="act sm" type="submit">Add page</button></form>';
+  } else {
+    var names=Object.keys(sketch.pages).map(function(id){ return sketch.pages[id].name; });
+    h+='<p class="note">Writes the sketch to <b>plans/</b> and puts a request in the chat box: the agent checks it '+
+      'against the rules, corrects what breaks them, and tells you before building anything.</p>'+
+      '<form id="sk-form"><label>plan name<input type="text" name="name" required value="'+
+      esc(slug(names.join("-")||"page-flow").slice(0,40))+'"></label>'+
+      '<label>what this change is for<textarea name="ask"></textarea></label>'+
+      '<button class="act sm" type="submit">Send</button></form>';
+  }
+  if(sketchErr) h+='<p class="err">'+esc(sketchErr)+'</p>';
+  panel.innerHTML=h; panel.hidden=false; panel.classList.remove("listing");
+  panel.querySelector("#p-close").addEventListener("click",function(){ sketchForm=null; panel.hidden=true; });
+  var form=panel.querySelector("#sk-form");
+  form.addEventListener("submit",function(ev){
+    ev.preventDefault();
+    var v={}; Array.prototype.forEach.call(form.elements,function(el){ if(el.name) v[el.name]=el.value.trim(); });
+    if(f.kind==="page") addPage(v,f.more.design); else sendSketch(v);
+  });
+  var first=form.querySelector("input"); if(first) first.focus();
+}
+function addPage(v,design){
+  var name=slug(v.name), id="page:"+name;
+  sketchErr=!name?"Give the page a name.":nodes[id]||sketch.pages[id]?"There is a page called "+name+" already.":"";
+  if(sketchErr){ drawSketchForm(); return; }
+  sketch.pages[id]={name:name,route:v.route,about:v.about};
+  if(design) sketch.designs[id]=design;
+  sketchForm=null; redrawSketch(id);
+}
+function addLink(a,b){
+  var had=sketch.wires.some(function(w){ return w.from===a&&w.to===b; })||
+    (BASEPAGES.edges.some(function(e){ return e.from===a&&e.to===b&&e.kind==="leads"; }));
+  if(had){ toast(nodes[a].label+" already leads to "+nodes[b].label); return; }
+  sketch.wires.push({from:a,to:b}); redrawSketch(a);
+}
+function readDesign(file,then){
+  var ext=extOf(file.name);
+  if(!DESIGN_EXT[ext]){ toast("A design is a picture or an HTML file"); return; }
+  if(file.size>DESIGN_MAX){ toast("That file is too big: keep a design under 8 MB"); return; }
+  var r=new FileReader();
+  r.onload=function(){ then({ext:ext,type:ext===".html"?"text/html":"image",data:r.result,name:file.name}); };
+  r.readAsDataURL(file);
+}
+function hasFiles(ev){ return ev.dataTransfer&&Array.prototype.indexOf.call(ev.dataTransfer.types||[],"Files")>=0; }
+/* each page card, while sketching here: a dot to drag a link from, and a
+   place to drop a design. Every page shows the design it has. */
+function pageSketching(el,n){
+  var d=n.sketched||(n.design&&LIVE?{url:LIVE.design+n.design,type:designType(n.design)}:null);
+  if(d){ el.insertAdjacentHTML("beforeend",designHtml(d)); fillDesigns(el); }
+  if(!canSketch()||cur!=="pages") return;
+  el.addEventListener("dragover",function(ev){
+    if(!hasFiles(ev)) return;
+    ev.preventDefault(); ev.stopPropagation(); el.classList.add("droppable");
+  });
+  el.addEventListener("dragleave",function(){ el.classList.remove("droppable"); });
+  el.addEventListener("drop",function(ev){
+    if(!hasFiles(ev)) return;
+    ev.preventDefault(); ev.stopPropagation(); el.classList.remove("droppable");
+    readDesign(ev.dataTransfer.files[0],function(design){
+      if(!sketch) sketch={pages:{},wires:[],designs:{}};
+      sketch.designs[n.id]=design; redrawSketch(n.id);
+    });
+  });
+  if(!sketch) return;
+  var dot=document.createElement("span"); dot.className="link";
+  dot.title="Drag onto another page: this page leads there";
+  dot.addEventListener("pointerdown",function(ev){ ev.stopPropagation(); ev.preventDefault(); linkFrom(n.id,ev); });
+  el.appendChild(dot);
+}
+function linkFrom(id,ev){
+  var line=document.createElementNS(NS,"path");
+  line.setAttribute("class","wire planned"); line.setAttribute("stroke","var(--plan)");
+  line.setAttribute("stroke-width","2.6"); line.setAttribute("stroke-dasharray","9 6");
+  gWires.appendChild(line);
+  var a={x:pos[id].x+cw(id), y:pos[id].y+hgt[id]/2};
+  function at(e){ var r=stage.getBoundingClientRect(); return {x:(e.clientX-r.left-panX)/scale, y:(e.clientY-r.top-panY)/scale}; }
+  function move(e){
+    var b=at(e), k=Math.max(40,Math.abs(b.x-a.x)/2);
+    line.setAttribute("d","M"+a.x+" "+a.y+" C"+(a.x+k)+" "+a.y+" "+(b.x-k)+" "+b.y+" "+b.x+" "+b.y);
+  }
+  function up(e){
+    window.removeEventListener("pointermove",move); window.removeEventListener("pointerup",up);
+    if(line.parentNode) line.parentNode.removeChild(line);
+    var hit=document.elementFromPoint(e.clientX,e.clientY), card=hit&&hit.closest(".card");
+    var to=card&&card.getAttribute("data-id");
+    if(to&&to!==id&&nodes[to]&&nodes[to].kind==="page") addLink(id,to);
+  }
+  window.addEventListener("pointermove",move); window.addEventListener("pointerup",up); move(ev);
+}
+// a design dropped on empty space is a new page, named after its file
+stage.addEventListener("dragover",function(ev){
+  if(!canSketch()||cur!=="pages"||!hasFiles(ev)) return;
+  ev.preventDefault(); stage.classList.add("droppable");
+});
+stage.addEventListener("dragleave",function(ev){ if(ev.target===stage) stage.classList.remove("droppable"); });
+stage.addEventListener("drop",function(ev){
+  stage.classList.remove("droppable");
+  if(!canSketch()||cur!=="pages"||!hasFiles(ev)) return;
+  ev.preventDefault();
+  readDesign(ev.dataTransfer.files[0],function(design){
+    if(!sketch){ sketch={pages:{},wires:[],designs:{}}; redrawSketch(); }
+    openSketchForm("page",{name:slug(design.name),design:design});
+  });
+});
+/* what the panel says about a page while sketching: its design, the links
+   drawn from it, and for a new page what it is for */
+function sketchPanel(n){
+  var h='<h3>Sketched</h3>', p=sketch.pages[n.id];
+  if(p){
+    h+='<form id="sk-edit"><label>route<input type="text" name="route" value="'+esc(p.route||"")+'"></label>'+
+      '<label>what it is for<textarea name="about">'+esc(p.about||"")+'</textarea></label>'+
+      '<button class="sm" type="submit">Save</button></form>';
+  }
+  var d=sketch.designs[n.id];
+  if(d) h+=designHtml(d,"big")+'<div class="drawn"><span>'+esc(d.name||"design")+'</span>'+
+    '<button class="sm" data-undesign="1">Remove design</button></div>';
+  else h+='<p class="note">Drop a screen or an HTML file on this page to give it a design.</p>';
+  sketch.wires.forEach(function(w,i){
+    if(w.from!==n.id&&w.to!==n.id) return;
+    h+='<div class="drawn"><span>'+esc(nodes[w.from]?nodes[w.from].label:w.from)+" leads to "+
+      esc(nodes[w.to]?nodes[w.to].label:w.to)+'</span><button class="sm" data-unlink="'+i+'">×</button></div>';
+  });
+  if(p) h+='<div class="acts"><button class="sm" data-unpage="1">Remove this page</button></div>';
+  return h;
+}
+function bindSketchPanel(n){
+  if(!sketchingHere()||n.kind!=="page") return;
+  var form=panel.querySelector("#sk-edit");
+  if(form) form.addEventListener("submit",function(ev){
+    ev.preventDefault();
+    sketch.pages[n.id].route=form.elements.route.value.trim();
+    sketch.pages[n.id].about=form.elements.about.value.trim();
+    redrawSketch(n.id);
+  });
+  Array.prototype.forEach.call(panel.querySelectorAll("[data-unlink]"),function(b){
+    b.addEventListener("click",function(){ sketch.wires.splice(+b.getAttribute("data-unlink"),1); redrawSketch(n.id); });
+  });
+  var un=panel.querySelector("[data-undesign]");
+  if(un) un.addEventListener("click",function(){ delete sketch.designs[n.id]; redrawSketch(n.id); });
+  var gone=panel.querySelector("[data-unpage]");
+  if(gone) gone.addEventListener("click",function(){
+    delete sketch.pages[n.id]; delete sketch.designs[n.id];
+    sketch.wires=sketch.wires.filter(function(w){ return w.from!==n.id&&w.to!==n.id; });
+    redrawSketch();
+  });
+}
+/* the sketch as a plan: pages, leads-to wires, and each design as a file
+   kept beside the plan */
+function sendSketch(v){
+  var name=slug(v.name);
+  if(!name){ sketchErr="Give the plan a name."; drawSketchForm(); return; }
+  var cards={}, designs={};
+  Object.keys(sketch.pages).forEach(function(id){
+    var p=sketch.pages[id], c={kind:"page",name:p.name};
+    if(p.route) c.route=p.route;
+    if(p.about) c.about=p.about;
+    cards[id]=c;
+  });
+  Object.keys(sketch.designs).forEach(function(id){
+    var d=sketch.designs[id], file=slug(id.slice(5))+d.ext;
+    designs[file]=d.data;
+    cards[id]=cards[id]||{kind:"page",name:id.slice(5)};
+    cards[id].design="plans/"+name+"/"+file;
+  });
+  var plan={ask:v.ask, drawn:true,
+    cards:Object.keys(cards).map(function(id){ return cards[id]; }),
+    wires:sketch.wires.map(function(w){ return {from:w.from,kind:"leads to",to:w.to}; })};
+  fetch(LIVE.plan,{method:"POST",headers:{"Content-Type":"application/json"},
+                   body:JSON.stringify({name:name,plan:plan,designs:designs})})
+    .then(function(r){ return r.json().then(function(b){ return {ok:r.ok,body:b}; }); })
+    .then(function(a){
+      if(!a.ok){ sketchErr=a.body.error||"Claude Code did not take it"; drawSketchForm(); return; }
+      sketch=null; sketchForm=null; keepSketch(); panel.hidden=true;
+      send("/codegraph:plan review "+name);
+      fetch(LIVE.refresh,{method:"POST"}).catch(function(){});
+    })
+    .catch(function(){ sketchErr="Cannot reach Claude Code: run /codegraph again"; drawSketchForm(); });
+}
 
 /* start where this browser left off, else at the top */
 (function(){

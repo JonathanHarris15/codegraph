@@ -93,6 +93,16 @@ code has but short of what was asked says what is left. Once nothing is left,
 the plan is deleted: the check reports a built plan still in `plans/` as a
 mismatch. The map is only ever read from the code.
 
+You can also sketch a plan yourself. On the **Pages** view, **Sketch a change**
+lets you add pages, drag a page's amber dot onto another to say it leads
+there, and drop a screen or an HTML file from Claude Design onto a page to
+give it a design, or onto empty space to start a new page from it. **Send**
+writes the sketch to `plans/`, designs beside it in `plans/<name>/`, and asks
+the agent to check it: it fills in the features the pages need, corrects
+what breaks a rule, and tells you before it builds. Where links sit on each
+page is the agent's call; you only say where a person can go. Designs are
+shown boxed in: an HTML design may not run a script.
+
 ## Tags
 
 One comment line each, in a file's first 30 lines. `#` or `//` both work.

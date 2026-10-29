@@ -170,6 +170,11 @@ logging. They crowd the map and the agent reads code at that depth anyway.
   takes and gives, and which roles — from the start, before codegraph reads
   them from the code.
 - Plans live in `plans/` in the repo.
+- Step 1 is built: the agent writes plans and the map shows them.
+- Step 2 is built without a build step for the map page: on the Pages view a
+  person sketches pages, links and designs, and sends the sketch as a plan.
+  The one page file is now large; step 3 is where a build step pays for
+  itself.
 
 ## What I need from you
 

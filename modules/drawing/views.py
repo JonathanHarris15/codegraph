@@ -220,7 +220,7 @@ def _ghosts(plans: list) -> tuple:
             if c["built"] or c["id"] in ghosts or c["id"] in notes:
                 continue
             said = {k: c[k] for k in ("about", "program", "takes", "gives", "roles", "triggers",
-                                      "problems") if c.get(k)}
+                                      "problems", "design") if c.get(k)}
             if c["left"] != ["not on the map yet"]:
                 notes[c["id"]] = dict(said, plan=p["name"], left=c["left"])
                 continue
