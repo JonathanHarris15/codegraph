@@ -12,7 +12,7 @@
   --bg:#eceef3; --grid:#dfe3ea; --surface:#fff; --surface-2:#f6f7fa;
   --ink:#121820; --muted:#5d6878; --hair:#ced5e0; --hair-soft:#e3e8f0;
   --accent:#2f5fe0; --on-accent:#fff;
-  --w-import:#8c97a8; --w-lazy:#9aa5b6; --breach:#cf3434;
+  --w-import:#8c97a8; --w-lazy:#9aa5b6; --breach:#cf3434; --plan:#b86e00;
   --sat:58%; --lig:38%;
   --font-ui:ui-sans-serif,system-ui,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
   --font-mono:ui-monospace,'Cascadia Mono','JetBrains Mono',Consolas,'Liberation Mono',monospace;
@@ -22,7 +22,7 @@
   --bg:#0d1117; --grid:#161d26; --surface:#161d26; --surface-2:#1c2531;
   --ink:#e4ebf4; --muted:#8c98a9; --hair:#2b3644; --hair-soft:#222c38;
   --accent:#6f9bff; --on-accent:#0d1117;
-  --w-import:#6d7a8c; --w-lazy:#5c6878; --breach:#ff6e6e;
+  --w-import:#6d7a8c; --w-lazy:#5c6878; --breach:#ff6e6e; --plan:#f2a93b;
   --sat:62%; --lig:68%;
   color-scheme:dark;
 }}
@@ -30,7 +30,7 @@
   --bg:#0d1117; --grid:#161d26; --surface:#161d26; --surface-2:#1c2531;
   --ink:#e4ebf4; --muted:#8c98a9; --hair:#2b3644; --hair-soft:#222c38;
   --accent:#6f9bff; --on-accent:#0d1117;
-  --w-import:#6d7a8c; --w-lazy:#5c6878; --breach:#ff6e6e;
+  --w-import:#6d7a8c; --w-lazy:#5c6878; --breach:#ff6e6e; --plan:#f2a93b;
   --sat:62%; --lig:68%;
   color-scheme:dark;
 }
@@ -276,13 +276,23 @@ button.sm{font-size:11px;padding:2px 8px}
 #panel .chips span{font-family:var(--font-mono);font-size:10px;padding:1px 6px;
   border:1px solid var(--hair);border-radius:4px;background:var(--surface-2)}
 #panel .note{font-size:11px;color:var(--muted);line-height:1.5}
-/* a plan: what someone asked for that the code has not got yet, dashed */
-.card.ghost{border-style:dashed;border-left-style:dashed;
-  background:color-mix(in srgb,var(--surface) 60%,transparent);box-shadow:none}
-.card.ghost .nm::before{content:"+ ";color:var(--accent)}
-.card .ptag{margin-top:4px;font-family:var(--font-mono);font-size:9px;font-weight:700;
-  letter-spacing:.03em;color:var(--accent)}
-.card.planned{outline:1px dashed var(--accent);outline-offset:3px}
+/* a plan: what someone asked for that the code has not got yet. Amber,
+   striped and dashed, so it reads apart from built code at any zoom */
+.card.ghost{border:2px dashed var(--plan);border-left:5px solid var(--plan);
+  background:repeating-linear-gradient(135deg,
+    color-mix(in srgb,var(--plan) 20%,var(--surface)) 0 9px,
+    color-mix(in srgb,var(--plan) 7%,var(--surface)) 9px 18px);
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--plan) 25%,transparent)}
+.card.ghost .nm::before{content:"+ ";color:var(--plan);font-weight:700}
+.card .ptag{display:inline-block;margin-top:5px;padding:1px 6px;border-radius:4px;
+  font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.04em;
+  background:var(--plan);color:var(--surface)}
+.card.planned{outline:2px dashed var(--plan);outline-offset:4px}
+.card.faint{opacity:.28}
+path.wire.planned{stroke-width:2.6}
+path.wire.faint{opacity:.08}
+.s-plan{width:17px;height:12px;border:1.5px dashed var(--plan);border-radius:3px;
+  background:color-mix(in srgb,var(--plan) 20%,transparent)}
 #panel .fact{display:flex;gap:8px;font-size:11px;line-height:1.45;margin:2px 0}
 #panel .fact span{flex:0 0 58px;font-family:var(--font-mono);font-size:10px;color:var(--muted)}
 #panel ul.left{margin:4px 0 0;padding:0 0 0 16px;font-family:var(--font-mono);font-size:10px;line-height:1.5}
@@ -438,6 +448,7 @@ function marker(id,fill){
 }
 Object.keys(KINDS).forEach(function(k){ marker(k,kcolor(k)); });
 marker("breach","var(--breach)");
+marker("plan","var(--plan)");
 svg.appendChild(defs);
 var gWires=document.createElementNS(NS,"g"); svg.appendChild(gWires);
 
@@ -456,11 +467,13 @@ var gWires=document.createElementNS(NS,"g"); svg.appendChild(gWires);
     var d=KINDS[k]; row(kcolor(k),d.width+0.3,d.dash,d.label);
   });
   if(MODS) row("var(--breach)",2.3,"","breaks a rule");
+  if(MODS&&(MODS.plans||[]).length) row("var(--plan)",2.6,"9 6","planned, not built yet");
   var shapes=document.createElement("div"); shapes.className="shapes";
   shapes.innerHTML='<i class="s-mod"></i><span>module</span><i class="s-feat"></i><span>feature</span>'+
     '<i class="s-page"></i><span>page</span><i class="s-comp"></i><span>component</span>'+
     '<i class="s-store"></i><span>store</span><i class="s-file"></i><span>file</span>'+
-    '<i class="s-ext"></i><span>outside</span>';
+    '<i class="s-ext"></i><span>outside</span>'+
+    (MODS&&(MODS.plans||[]).length?'<i class="s-plan"></i><span>planned</span>':'');
   rows.insertBefore(shapes,rows.firstChild);
 })();
 (function(){
@@ -741,7 +754,7 @@ function show(key){
     } else { el.appendChild(hd); el.appendChild(dir); el.appendChild(foot); }
     if(n.plan){
       var pt=document.createElement("div"); pt.className="ptag";
-      pt.textContent=n.ghost?"planned \u00b7 "+n.plan:"plan "+n.plan+" \u00b7 "+n.left.length+" left";
+      pt.textContent=n.ghost?"PLANNED \u00b7 "+n.plan:"PLAN \u00b7 "+n.left.length+" left";
       if(n.ghost) dir.textContent=n.about||n.dir;
       el.appendChild(pt);
     }
@@ -772,15 +785,15 @@ function show(key){
     function strand(){
       var p=document.createElementNS(NS,"path");
       p.setAttribute("class","wire"+(bad?" breach":"")+(e.plan?" planned":""));
-      p.setAttribute("stroke",bad?"var(--breach)":kcolor(e.kind));
+      p.setAttribute("stroke",bad?"var(--breach)":e.plan?"var(--plan)":kcolor(e.kind));
       p.setAttribute("stroke-width",String(d.width));
-      if(d.dash||e.plan) p.setAttribute("stroke-dasharray",e.plan?"6 5":d.dash);
+      if(d.dash||e.plan) p.setAttribute("stroke-dasharray",e.plan?"9 6":d.dash);
       p.setAttribute("opacity",bad?"0.95":isWiring(e.kind)?"0.6":"0.9");
       p.addEventListener("transitionend",landed);
       gWires.appendChild(p);
       return p;
     }
-    e.head="url(#ar-"+(bad?"breach":e.kind)+")";
+    e.head="url(#ar-"+(bad?"breach":e.plan?"plan":e.kind)+")";
     e.at=headOf(e.kind);
     wireEls[e.i]=strand();
     // one thread per file on the importing card that pulls this wire in
@@ -1010,6 +1023,7 @@ function lightWires(){
     strands.forEach(function(p){
       p.classList.toggle("hot",hot);
       p.classList.toggle("dim",!lit&&!!selected&&!hot);
+      p.classList.toggle("faint",listingPlans&&!e.plan);
       if(fresh&&lit) drawOn(p); else if(fresh) plain(p);
     });
     shownWires[e.i]=on;
@@ -1043,6 +1057,7 @@ function render(){
     el.classList.toggle("dim",!!ring&&!ring[n.id]);
     el.classList.toggle("hit",!!query&&!selected&&hits(n));
     el.classList.toggle("picked",!!picked[n.id]);
+    el.classList.toggle("faint",listingPlans&&!n.plan);
   });
   lightWires();
   ev=edges.length;
@@ -1164,7 +1179,7 @@ function drawPlans(){
   panel.innerHTML=h; panel.hidden=false; panel.classList.add("listing");
   function on(sel,fn){ Array.prototype.forEach.call(panel.querySelectorAll(sel),function(b){
     b.addEventListener("click",function(){ fn(b); }); }); }
-  on("#p-close",function(){ listingPlans=false; panel.hidden=true; panel.classList.remove("listing"); });
+  on("#p-close",function(){ listingPlans=false; panel.hidden=true; panel.classList.remove("listing"); render(); });
   on("[data-build]",function(b){ send(buildPlan(b.getAttribute("data-build"))); });
   on("[data-showplan]",function(b){ showPlan(all[+b.getAttribute("data-showplan")]); });
 }
