@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 import unittest
 
-from modules.installing import CONTEXT_BLOCK, PLUGIN, install_in
+from modules.installing import CONTEXT_BLOCK, PLUGIN, install_for_profile, install_in
 from tests.helpers import Folder, tree
 
 START, END = "<!-- codegraph:start -->", "<!-- codegraph:end -->"
@@ -81,9 +81,44 @@ class Installing(Folder):
         self.assertTrue(any(".claude/settings.json" in p for p in done.problems))
         self.assertIn("CLAUDE.md", done.changed)
 
+    def test_a_marketplace_the_repo_already_names_is_kept(self):
+        mine = {"source": {"source": "github", "repo": "someone/codegraph-fork"}}
+        tree(self.root, {".claude/settings.json": json.dumps({"extraKnownMarketplaces": {"codegraph": mine}})})
+        install_in(self.root)
+        self.assertEqual(self.settings()["extraKnownMarketplaces"]["codegraph"], mine)
+        self.assertIs(self.settings()["enabledPlugins"][PLUGIN], True)
+
     def test_the_block_is_the_one_setup_writes(self):
         self.assertTrue(CONTEXT_BLOCK.startswith(START))
         self.assertTrue(CONTEXT_BLOCK.rstrip().endswith(END))
+
+
+class ForTheProfile(Folder):
+    """Codegraph turned on once, in a person's own Claude settings, for every
+    project they open."""
+
+    def test_the_profile_gets_the_plugin_and_keeps_its_other_settings(self):
+        path = self.root / "settings.json"
+        path.write_text(json.dumps({"model": "opus", "enabledPlugins": {"other@shop": False}}), encoding="utf-8")
+        done = install_for_profile(path)
+        s = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(done.changed, [str(path)])
+        self.assertEqual(s["model"], "opus")
+        self.assertEqual(s["enabledPlugins"], {"other@shop": False, PLUGIN: True})
+        self.assertEqual(s["extraKnownMarketplaces"]["codegraph"]["source"]["repo"], "JonathanHarris15/codegraph")
+        self.assertEqual(install_for_profile(path).changed, [])
+
+    def test_a_profile_with_no_settings_yet_gets_them(self):
+        path = self.root / "fresh/settings.json"
+        install_for_profile(path)
+        self.assertIs(json.loads(path.read_text(encoding="utf-8"))["enabledPlugins"][PLUGIN], True)
+
+    def test_a_copy_of_codegraph_added_from_a_folder_keeps_its_folder(self):
+        path = self.root / "settings.json"
+        mine = {"source": {"source": "directory", "path": "/dev/codegraph"}}
+        path.write_text(json.dumps({"extraKnownMarketplaces": {"codegraph": mine}}), encoding="utf-8")
+        install_for_profile(path)
+        self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["extraKnownMarketplaces"]["codegraph"], mine)
 
 
 if __name__ == "__main__":

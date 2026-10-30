@@ -6,7 +6,7 @@
 import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 
-import type { Issue, Nav, Summary, View, ViewNode } from '../types'
+import type { Issue, Nav, SetUp, Summary, View, ViewNode } from '../types'
 import { drawView, frame, place } from './draw'
 
 const PANE = 'codegraph'
@@ -14,8 +14,13 @@ const START: Nav = { trail: ['map'], selected: null, zoom: 1, cx: null, cy: null
 const map = atom({ plugin: 'codegraph', key: 'map' } as const, null as Summary | null)
 const status = atom({ plugin: 'codegraph', key: 'status' } as const, '')
 const nav = atom({ plugin: 'codegraph', key: 'nav' } as const, START)
+const setup = atom({ plugin: 'codegraph', key: 'setup' } as const, 'none' as SetUp)
 
 const PYTHONS = ['python', 'python3', 'py']
+const RULES = ['CLAUDE.md', 'AGENTS.md']
+const START_MARK = '<!-- codegraph:start -->'
+const END_MARK = '<!-- codegraph:end -->'
+const NOT_SET_UP = 'Codegraph is not set up in this repo: /codegraph:setup sets it up.'
 const MAP_PAGE = '.codegraph/map.html'
 const SHOWN = 5 // mismatches listed per group before "more"
 const ZOOMS = [1, 1.5, 2.25, 3.4, 5]
@@ -137,7 +142,7 @@ async function openLive($: any): Promise<string> {
   const url = await startMap($)
   if (!url) {
     await $.ui.open({ id: PANE, title: 'Codegraph' })
-    void refresh($)
+    refreshLater($)
     return 'The live map could not start (' + ((await read($, status)) || 'is Python 3.10+ on the PATH?') + '), so the pane shows it instead.'
   }
   return (await openTab($, url))
@@ -145,7 +150,42 @@ async function openLive($: any): Promise<string> {
     : `The map is open in your browser at ${url}. Fix, Ask and + Feature there fill this chat box.`
 }
 
+// Whether this repo is set up: its rules hold the codegraph block, and the
+// block is the one this copy of codegraph writes. Read from the files alone,
+// so a repo that is not set up costs no run of the program.
+async function readSetUp($: any): Promise<SetUp> {
+  const root = await folder($)
+  const block = (text: string) => {
+    const a = text.indexOf(START_MARK)
+    const b = text.indexOf(END_MARK)
+    return a >= 0 && b > a ? text.slice(a, b + END_MARK.length).replace(/\r\n/g, '\n').trim() : ''
+  }
+  const text = async (path: string) => ((await $.fs.exists(path)) ? String(await $.fs.read(path)) : '')
+  const ours = block(await text(`${$.plugin.root}/skills/setup/CONTEXT-BLOCK.md`))
+  for (const name of RULES) {
+    const theirs = block(await text(`${root}/${name}`))
+    if (theirs) {
+      const said: SetUp = ours && theirs !== ours ? 'stale' : 'current'
+      await update($, setup, () => said)
+      return said
+    }
+  }
+  await update($, setup, () => 'none')
+  return 'none'
+}
+
+// Read the map again in the background. The session may end before it is
+// read, and then there is nowhere to put it.
+function refreshLater($: any) {
+  void refresh($).catch(() => undefined)
+}
+
 async function refresh($: any) {
+  if ((await readSetUp($)) === 'none') {
+    await update($, map, () => null)
+    await update($, status, () => NOT_SET_UP)
+    return null
+  }
   const ran = await run($, ['--summary'])
   if (ran.exitCode !== 0) {
     await update($, status, () => (ran.stderr || ran.stdout).trim().split('\n').pop() ?? '')
@@ -321,7 +361,7 @@ export const register: Register = on => {
       isDeferred: false,
     })
     const started = await next(e)
-    void refresh($)
+    refreshLater($)
     return started
   })
 
@@ -333,13 +373,14 @@ export const register: Register = on => {
 
   on('command.run', { command: 'codegraph-pane' }, async $ => {
     await $.ui.open({ id: PANE, title: 'Codegraph' })
-    void refresh($)
+    refreshLater($)
     return { text: 'Codegraph pane opened.' }
   })
 
   on('tool.call', { tool: 'mcp__codegraph__check' as any }, async $ => {
+    if ((await readSetUp($)) === 'none') return { result: NOT_SET_UP }
     const ran = await run($, ['--check'])
-    void refresh($)
+    refreshLater($)
     return { result: (ran.stdout + ran.stderr).trim() || 'no output' }
   })
 
@@ -354,7 +395,7 @@ export const register: Register = on => {
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
     if (e.agentId === undefined) {
-      void refresh($)
+      refreshLater($)
       // the live page reloads itself once its server has read the code again
       if (mapUrl) void $.http.fetch(mapUrl + 'refresh', { method: 'POST' }).catch(() => undefined)
     }
@@ -364,15 +405,18 @@ export const register: Register = on => {
   // A row above the chat box: where the repo stands, and the map one press
   // away, so nobody has to send /codegraph:open to see it.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (e.props.hasSurvey) return next(e)
+    // a repo that is not set up for codegraph shows nothing of it
+    const here = await read($, setup)
+    if (e.props.hasSurvey || here === 'none') return next(e)
     const { Box, Text, Button } = $.ui.resolve(e)
     const m = await read($, map)
     const said = !m ? (await read($, status)) || 'reading the map...'
-      : m.source === 'draft' ? 'not set up yet'
+      : m.source === 'draft' ? 'not tagged yet'
       : m.issues.length ? `${m.issues.length} mismatches` : 'clean'
+    const old = here === 'stale' ? ' · rules out of date: /codegraph:setup updates them' : ''
     return (
       <Box flexDirection="row" gap={1} alignItems="center">
-        <Text dimColor>Codegraph · {said}</Text>
+        <Text dimColor>Codegraph · {said}{old}</Text>
         <Button key="open-map" label="Open map" onPress={async () => $.ui.toast(await openLive($))} />
       </Box>
     )

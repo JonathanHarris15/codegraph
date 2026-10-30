@@ -94,8 +94,12 @@ export type Nav = {
   more: string[]
 }
 
+// Whether the repo is set up for codegraph: its rules hold the codegraph
+// block ('current'), an older one than this copy writes ('stale'), or none.
+export type SetUp = 'none' | 'stale' | 'current'
+
 declare module 'claude-code' {
   interface PluginState {
-    codegraph: { map: Summary | null; status: string; nav: Nav }
+    codegraph: { map: Summary | null; status: string; nav: Nav; setup: SetUp }
   }
 }

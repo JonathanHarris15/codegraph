@@ -4,6 +4,7 @@ them, then draw the page and the pane's summary."""
 from __future__ import annotations
 
 import json
+import os
 import socket
 import subprocess
 import sys
@@ -60,6 +61,14 @@ class CommandLine(Folder):
         again = self.run_it("--install")
         self.assertEqual(again.returncode, 0)
         self.assertIn("already on here", again.stdout)
+
+    def test_profile_turns_the_plugin_on_in_the_claude_settings_it_is_pointed_at(self):
+        env = {**os.environ, "CLAUDE_CONFIG_DIR": str(self.root / "profile")}
+        first = subprocess.run([sys.executable, str(CODEGRAPH), "--profile"],
+                               capture_output=True, text=True, encoding="utf-8", env=env)
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+        settings = json.loads((self.root / "profile/settings.json").read_text(encoding="utf-8"))
+        self.assertIs(settings["enabledPlugins"]["codegraph@codegraph"], True)
 
     def test_the_page_and_the_summary(self):
         tree(self.root, {

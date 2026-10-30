@@ -13,6 +13,7 @@ you can open in a browser. No third-party packages, no model in the loop.
     python codegraph.py ../.. --draft          # declare modules and front doors
     python codegraph.py ../.. --check          # read the code against them
     python codegraph.py ../.. --install        # turn codegraph on in that repo
+    python codegraph.py --profile              # turn it on for every project you open
 
 What it knows how to see:
 
@@ -35,7 +36,7 @@ from pathlib import Path
 from features.browse import browse
 from features.check import check
 from features.draft import draft
-from features.install import install
+from features.install import install, install_profile
 from features.map import draw_map
 from modules.drawing import nodes_by_id, render, summary
 from modules.source import KINDS
@@ -46,7 +47,7 @@ def main(argv: list[str] | None = None) -> int:
         prog="codegraph",
         description="Draw a codebase as modules, features and UI, and check it against its tags.",
     )
-    ap.add_argument("root", type=Path, help="folder to read")
+    ap.add_argument("root", type=Path, nargs="?", help="folder to read")
     ap.add_argument("-o", "--out", type=Path, default=Path("codegraph.html"),
                     help="where to write the page (default: codegraph.html)")
     ap.add_argument("--json", action="store_true", help="print the data, write no page")
@@ -66,6 +67,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="write a first tag into every file that has none")
     ap.add_argument("--install", action="store_true",
                     help="turn codegraph on in the repo: plugin, rules, ignore line")
+    ap.add_argument("--profile", action="store_true",
+                    help="turn codegraph on in your own Claude settings, for every project")
     ap.add_argument("--summary", action="store_true",
                     help="print what the mod beside the chat shows, as JSON")
     ap.add_argument("--serve", action="store_true",
@@ -73,6 +76,21 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--port", type=int, default=0,
                     help="the port to serve on (default: any free one)")
     args = ap.parse_args(argv)
+
+    if args.profile:
+        done = install_profile()
+        for path in done.changed:
+            print("wrote " + path)
+        for problem in done.problems:
+            print("could not: " + problem)
+        if not done.changed and not done.problems:
+            print("codegraph is already on in your Claude settings")
+        if not done.problems:
+            print("The next Claude Code session loads the codegraph plugin, in every project. "
+                  "/codegraph:setup sets a repo up.")
+        return 1 if done.problems else 0
+    if args.root is None:
+        ap.error("the folder to read is missing")
 
     root = args.root.resolve()
     if not root.is_dir():

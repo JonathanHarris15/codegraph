@@ -18,19 +18,24 @@ words.
 
 ## Install
 
-Give an agent this repository's link and ask it to install codegraph in your
-repo:
+Codegraph is one plugin in your own Claude, set up in each repo you want
+it in. Give an agent this repository's link:
 
 ```
-Install codegraph in this repo: https://github.com/JonathanHarris15/codegraph
+Install codegraph: https://github.com/JonathanHarris15/codegraph
 ```
 
-It follows [INSTALL.md](INSTALL.md): it turns the plugin on in the repo's
-committed `.claude/settings.json`, writes the rules into its `CLAUDE.md`, and
-tags every file, on a branch. The next Claude Code session there loads the
-plugin by itself once the folder is trusted, and keeps it up to date; so does
-everyone else's who opens the repo. `python codegraph.py path/to/repo --install`
-does the first two on its own.
+It follows [INSTALL.md](INSTALL.md) and turns the plugin on in your Claude
+settings (`python codegraph.py --profile` does it by hand), once per
+machine. From the next session it loads in every project and keeps itself up
+to date. Where a repo is not set up, it stays out of the way.
+
+Then, in a repo, run `/codegraph:setup`: it writes the rules into the repo's
+`CLAUDE.md`, tags every file, and turns the plugin on in the repo's committed
+`.claude/settings.json` as well, so anyone else who opens the repo gets it
+too. Run it again to update a repo once codegraph's rules change; the row
+above the chat box says when they have. Ask the agent to install codegraph
+"in this repo" and it does both at once.
 
 The repo is a Claude Code plugin. Installing it gives you three things:
 
@@ -46,12 +51,12 @@ The repo is a Claude Code plugin. Installing it gives you three things:
   pane beside the chat.
 - three **tools** the agent calls: `check`, run after every change, `map`,
   read before deciding where work goes, and `open`, which opens the live map.
-- four **skills**: `/codegraph:setup` brings a repo under codegraph,
+- four **skills**: `/codegraph:setup` brings a repo under codegraph, or updates one,
   `/codegraph:fix` fixes one mismatch at a time, test first,
   `/codegraph:plan` puts a change on the map as a plan before it is built,
   and `/codegraph:open` opens the live map.
 
-To install it for every project instead, add this folder as a marketplace (the repo
+To work on codegraph itself, add this folder as a marketplace (the repo
 lists itself in `.claude-plugin/marketplace.json`), then install from it:
 
 ```
@@ -88,7 +93,8 @@ tags every file with a first guess, corrects each guess by reading the code,
 writes the rules into the repo's `CLAUDE.md` so every agent there builds in
 the three layers and test first, and hands back the mismatches, worst first.
 Setup changes no behaviour; fixing is `/codegraph:fix`, one small change at a
-time (docs/adr/0004).
+time (docs/adr/0004). On a repo already set up it is the update: the rules
+become this codegraph's, and only files with no tag get one.
 
 ## Plans
 
@@ -220,6 +226,7 @@ program that only tests reach.
 | `--check` | read the code against its tags; exit 1 on a mismatch |
 | `--draft` | write a first tag into every file that has none |
 | `--install` | turn codegraph on in the repo: the plugin in `.claude/settings.json`, the rules in `CLAUDE.md`, `.codegraph/` in `.gitignore` |
+| `--profile` | turn codegraph on in your own Claude settings, for every project; takes no folder |
 | `--summary` | print what the pane shows, as JSON |
 | `--serve` | serve the live map on this machine; print each request it sends, one JSON line each |
 | `--port N` | the port `--serve` uses (default: any free one) |
@@ -389,7 +396,7 @@ Codegraph is set up on itself, in the same three layers it asks of others.
 
 - `modules/`: source (reads each file and what it imports and reaches),
   tags, shapes, rules (the check's reading), planning (plans held against the map),
-  drafting, installing (turns codegraph on in a repo), layout, drawing,
+  drafting, installing (turns codegraph on for a person and in a repo), layout, drawing,
   web (serves the live map).
   Each folder's `__init__.py` is its front door.
 - `features/`: check, draw-map, browse-map, draft-tags and install, each a few lines that call
