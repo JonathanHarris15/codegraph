@@ -12,6 +12,7 @@ you can open in a browser. No third-party packages, no model in the loop.
     python codegraph.py ../.. --externals      # third-party packages as cards too
     python codegraph.py ../.. --draft          # declare modules and front doors
     python codegraph.py ../.. --check          # read the code against them
+    python codegraph.py ../.. --install        # turn codegraph on in that repo
 
 What it knows how to see:
 
@@ -34,6 +35,7 @@ from pathlib import Path
 from features.browse import browse
 from features.check import check
 from features.draft import draft
+from features.install import install
 from features.map import draw_map
 from modules.drawing import nodes_by_id, render, summary
 from modules.source import KINDS
@@ -62,6 +64,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="read the code against its tags; exit 1 on a mismatch")
     ap.add_argument("--draft", action="store_true",
                     help="write a first tag into every file that has none")
+    ap.add_argument("--install", action="store_true",
+                    help="turn codegraph on in the repo: plugin, rules, ignore line")
     ap.add_argument("--summary", action="store_true",
                     help="print what the mod beside the chat shows, as JSON")
     ap.add_argument("--serve", action="store_true",
@@ -87,6 +91,17 @@ def main(argv: list[str] | None = None) -> int:
         except KeyboardInterrupt:
             pass
         return 0
+    if args.install:
+        done = install(root)
+        for rel in done.changed:
+            print("wrote " + rel)
+        for problem in done.problems:
+            print("could not: " + problem)
+        if not done.changed and not done.problems:
+            print("codegraph is already on here")
+        print("Commit these. The next Claude Code session here, once the folder is "
+              "trusted, loads the codegraph plugin.")
+        return 1 if done.problems else 0
     if args.draft:
         drafts, seeded = draft(root, hidden=args.hidden)
         counts: dict = defaultdict(int)
