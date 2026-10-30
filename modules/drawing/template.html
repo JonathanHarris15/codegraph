@@ -855,10 +855,22 @@ function layout(){
     if(t<=1) place(k,!blocks?top[t]+spare/2:t<1?top[t]+spare:top[t]);
   });
   relax(cols,mid,top[1],top[1]+tall[1]);
+  // each middle block's columns and foot: what hangs below a block starts
+  // under all of it, not under its own column, or the two boxes overlap
+  var span={};
+  mid.forEach(function(k){
+    cols[k].forEach(function(n){
+      var s=span[n.block]=span[n.block]||{lo:n.col,hi:n.col,foot:0};
+      s.lo=Math.min(s.lo,n.col); s.hi=Math.max(s.hi,n.col);
+      s.foot=Math.max(s.foot,base[n.id].y+hgt[n.id]);
+    });
+  });
   keys.forEach(function(k){                // below: just under the block it hangs from
     if(k.split("|")[0]<=1) return;
-    var c=k.split("|")[1], foot=0;
-    (cols["1|"+c]||[]).forEach(function(n){ foot=Math.max(foot,base[n.id].y+hgt[n.id]); });
+    var c=Number(k.split("|")[1]), foot=0;
+    Object.keys(span).forEach(function(b){
+      if(span[b].lo<=c&&c<=span[b].hi) foot=Math.max(foot,span[b].foot);
+    });
     place(k,foot?foot+TIERGAP:top[Number(k.split("|")[0])]);
   });
   order.forEach(function(n){ if(n.draft&&n.at) base[n.id]={x:n.at.x,y:n.at.y}; });
