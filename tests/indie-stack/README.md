@@ -15,7 +15,7 @@ The codegraph way, as `CLAUDE.md` says:
   accounts; `write-note` and `delete-note` in notes
 - **pages** in `app/routes/`, each tagged with its address; a page's form hands
   its work to a feature. `root.tsx` and the two entry files are the shell.
-- **tests**: `app/checks.test.ts` (Vitest) and `cypress/e2e/smoke.cy.ts`,
+- **tests**: `app/checks.spec.ts` (Vitest) and `cypress/e2e/smoke.cy.ts`,
   which walks every page and takes a picture of each for the map.
 
 `python ../../codegraph.py . --check` should say `0 mismatches`.
