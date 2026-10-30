@@ -1,0 +1,3 @@
+[submodule "examples/indie-stack"]
+	path = examples/indie-stack
+	url = https://github.com/remix-run/indie-stack

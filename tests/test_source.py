@@ -364,8 +364,8 @@ class ScriptOutside(unittest.TestCase):
         self.root = Path(self.tmp.name)
         self.addCleanup(self.tmp.cleanup)
 
-    def conns(self, source: str) -> dict:
-        tree(self.root, {"a.ts": source})
+    def conns(self, source: str, name: str = "a.ts") -> dict:
+        tree(self.root, {name: source})
         f = files_in(self.root)[0]
         return {c.target: c.kind for c in reader_of(f).outside(f)}
 
@@ -391,3 +391,20 @@ class ScriptOutside(unittest.TestCase):
 
     def test_an_app_link_is_not_a_web_call(self):
         self.assertEqual(self.conns('open("obsidian://open?vault=x");\n'), {})
+
+    def test_a_link_or_an_image_on_a_page_is_not_a_call(self):
+        # the browser follows these when a person clicks or the page draws;
+        # the code itself never reaches the host
+        page = ('export default function Home() {\n'
+                '  return <a href="https://remix.run"><img src="https://cdn.example.com/a.svg" /></a>;\n'
+                '}\n')
+        self.assertEqual(self.conns(page, "home.tsx"), {})
+
+    def test_a_link_kept_in_a_list_for_a_page_is_not_a_call(self):
+        logos = 'const logos = [{ src: "https://cdn.example.com/a.svg", href: "https://fly.io" }];\n'
+        self.assertEqual(self.conns(logos), {})
+
+    def test_a_url_fetched_beside_a_link_still_counts(self):
+        page = ('const data = await fetch("https://api.example.com/x");\n'
+                'export const Home = () => <a href="https://remix.run">Remix</a>;\n')
+        self.assertEqual(self.conns(page, "home.tsx"), {"net:api.example.com": "http"})

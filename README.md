@@ -352,3 +352,45 @@ The mod's own tests draw the pane on each surface and press its buttons:
 ```
 claude plugin test .
 ```
+
+## A real repo to try it on
+
+`examples/indie-stack` is Remix's Indie Stack, a small notes app (sign up,
+log in, write and delete notes, a Prisma SQLite database, unit and click-through
+tests), MIT licensed and archived upstream, so it holds still. It is a git
+submodule pinned to one commit: codegraph's own check never reads it, and
+pointing codegraph at it reads it as a repo of its own. Unit tests prove the
+parts; this is where the whole of codegraph gets tried, the way a person would
+use it.
+
+After cloning this repo, fetch it once:
+
+```
+git submodule update --init
+```
+
+Read it, draw it, or serve the live map of it:
+
+```
+python codegraph.py examples/indie-stack --check
+python codegraph.py examples/indie-stack --serve
+```
+
+For a full try, setup, a plan, a build, start Claude Code inside it with this
+folder as the plugin, so it runs the working copy rather than the installed one:
+
+```
+cd examples/indie-stack
+claude --plugin-dir ../..
+```
+
+Do each try on a branch inside it. Upstream is archived, so nothing there is
+pushed; to start again from the pinned commit:
+
+```
+git submodule update --init --force examples/indie-stack
+git -C examples/indie-stack clean -fdx
+```
+
+The second line deletes everything git does not track in it, `node_modules`
+included.

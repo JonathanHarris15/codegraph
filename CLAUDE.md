@@ -20,3 +20,7 @@ How to work here:
 
 To clean up what the map already shows red, use the `codegraph:fix` skill. When someone describes something new to build, or hands over a ticket, use `codegraph:plan` to put it on the map as a plan they approve before you build it; a plan waits in `plans/` and is deleted once it is built.
 <!-- codegraph:end -->
+
+## Trying codegraph for real
+
+`examples/indie-stack` is a small real app (Remix, Prisma, SQLite) kept as a git submodule for trying codegraph end to end: setup, the map, plans, sketches, builds. Point codegraph at it (`python codegraph.py examples/indie-stack --check`), or start a session inside it with `claude --plugin-dir ../..`. Work there on a branch of its own, never push it, and reset it from the pinned commit as the README says. What a try turns up that codegraph gets wrong is a fix to codegraph, made here with a test; the example's own code changes only as part of the try.

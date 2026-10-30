@@ -65,6 +65,10 @@ SCRIPT_PROBES = (
     ("execa*",                        "process", None),
 )
 
+# Where a URL is a link or a picture, not a call: `<a href>`, `<img src>`, and
+# the same names in the lists a page draws them from.
+FOLLOWED = {"href", "src", "srcSet"}
+
 
 def loose_json(text: str):
     """Parse JSON the way tsconfig writes it: comments and trailing commas."""
@@ -249,6 +253,21 @@ class ScriptReader:
                         bound[text(alias) if alias else name] = (spec, name)
                         facts["uses"].append((spec, name, s.start_point[0] + 1))
 
+        def followed(frag) -> bool:
+            """A string given as a link or an image, `<a href="...">` or
+            `{ src: "..." }`: the browser follows it when a person clicks or the
+            page draws, and the code itself never reaches the host."""
+            holder = frag.parent.parent if frag.parent is not None else None
+            if holder is None:
+                return False
+            if holder.type == "jsx_attribute":
+                key = holder.children[0] if holder.children else None
+            elif holder.type == "pair":
+                key = holder.child_by_field_name("key")
+            else:
+                return False
+            return key is not None and text(key).strip("\"'") in FOLLOWED
+
         def walk(node, nested):
             t = node.type
             if t == "import_statement":
@@ -308,7 +327,7 @@ class ScriptReader:
                     and node.parent.child_by_field_name("object") == node) and \
                     node.parent.type not in ("namespace_import", "variable_declarator"):
                 facts["uses"].append((whole[text(node)], None, node.start_point[0] + 1))
-            if t in ("string_fragment",):
+            if t in ("string_fragment",) and not followed(node):
                 facts["strings"].append(text(node))
             deeper = nested or t in ("function_declaration", "function_expression", "arrow_function",
                                      "method_definition", "generator_function_declaration")
