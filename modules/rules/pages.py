@@ -5,10 +5,11 @@ import re
 
 
 # Links a page or component follows, as written in its code: an attribute or
-# a key (`href=`, `to:`, and where a sign-in sends people after, such as
-# `callbackUrl`, `redirectTo` or `forceRedirectUrl`), or a call that moves
-# the person on, a status code or `url=` before the path allowed.
-KEYS = r"""(?:href|to|callbackUrl|returnTo|return_to|\w*[Rr]edirect(?:Url|URL|To|_to|_url))"""
+# a key (`href=`, `to:`, a form's `action=` that posts the person there, a
+# `pathname:` written beside a query, and where a sign-in sends people after,
+# such as `callbackUrl`, `redirectTo` or `forceRedirectUrl`), or a call that
+# moves the person on, a status code or `url=` before the path allowed.
+KEYS = r"""(?:href|to|action|pathname|callbackUrl|returnTo|return_to|\w*[Rr]edirect(?:Url|URL|To|_to|_url))"""
 CALLS = (r"""(?:navigate|navigateTo|push|replace|redirect|goto|assign|redirect_to"""
          r"""|RedirectResponse|HttpResponseRedirect)""")
 LINK_RES = (
@@ -16,7 +17,7 @@ LINK_RES = (
     re.compile(r"""\b""" + CALLS + r"""\(\s*(?:\d+\s*,\s*)?(?:url\s*=\s*)?(["'`])(.*?)\1"""),
 )
 BUILT_LINK_RES = (
-    re.compile(r"""\b(?:href|to)\s*=\s*\{\s*(?![\s"'`])"""),
+    re.compile(r"""\b(?:href|to)\s*=\s*\{\s*(?![\s"'`]|\{\s*pathname\s*:\s*["'`])"""),
     re.compile(r"""\b(?:router\.push|router\.replace|navigate|redirect)\(\s*"""
                r"""(?![\s"'`)]|\d+\s*,\s*["'`]|\{\s*to\s*:\s*["'`])"""),
 )

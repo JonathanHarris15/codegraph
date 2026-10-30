@@ -1,0 +1,13 @@
+// codegraph: component no-note-picked
+import { Link } from "@remix-run/react";
+
+export default function NoteIndexPage() {
+  return (
+    <p>
+      No note selected. Select a note on the left, or{" "}
+      <Link to="/notes/new" className="text-blue-500 underline">
+        create a new note.
+      </Link>
+    </p>
+  );
+}

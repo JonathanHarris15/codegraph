@@ -544,6 +544,24 @@ class PageMap(Project):
                         "web/app/members/[id]/page.tsx": "// codegraph: page member\n"})
         self.assertIn(("page:home", "page:member", "leads"), r.wires)
 
+    def test_a_form_leads_to_the_page_it_posts_to(self):
+        for line in ('<Form action="/members" method="post">', "<form method='post' action='/members'>"):
+            with self.subTest(line):
+                r = self.pages({"web/home.tsx": "// codegraph: start page home at /\n" + line,
+                                "web/members.tsx": "// codegraph: page members at /members\n"})
+                self.assertIn(("page:home", "page:members", "leads"), r.wires)
+        r = self.pages({"web/home.tsx": "// codegraph: start page home at /\n"
+                                        "export const action = async () => go('/members')\n",
+                        "web/members.tsx": "// codegraph: page members at /members\n"})
+        self.assertNotIn(("page:home", "page:members", "leads"), r.wires)
+
+    def test_a_link_written_as_a_path_and_a_query_leads_to_its_path(self):
+        r = self.pages({"web/home.tsx": "// codegraph: start page home at /\n"
+                                        "<Link to={{ pathname: \"/members\", search: query }}>",
+                        "web/members.tsx": "// codegraph: page members at /members\n"})
+        self.assertIn(("page:home", "page:members", "leads"), r.wires)
+        self.assertFalse(self.has(r.unknown, "builds a link"))
+
     def test_a_login_page_leads_where_it_sends_people_after_signing_in(self):
         for line in ('signIn("credentials", { callbackUrl: "/members" })',
                      "supabase.auth.signInWithOAuth({ options: { redirectTo: '/members' } })",

@@ -261,6 +261,17 @@ class WhatIsNotSource(Repo):
                          "src/designs/button.py": "y = 2\n"})
         self.assertEqual(sorted(f.rel for f in files_in(self.root)), ["app.py", "src/designs/button.py"])
 
+    def test_a_folder_set_up_for_codegraph_on_its_own_is_read_on_its_own(self):
+        # an app kept inside the repo to try codegraph on carries tags of its
+        # own; read as part of the repo around it, they would claim its modules
+        block = "# Rules\n<!-- codegraph:start -->\n...\n<!-- codegraph:end -->\n"
+        tree(self.root, {"app.py": "x = 1\n", "tests/example/CLAUDE.md": block,
+                         "tests/example/server.py": "y = 2\n", "tests/test_app.py": "z = 3\n",
+                         "docs/CLAUDE.md": "No block here.\n", "docs/build.py": "w = 4\n"})
+        self.assertEqual(sorted(f.rel for f in files_in(self.root)),
+                         ["app.py", "docs/build.py", "tests/test_app.py"])
+        self.assertEqual([f.rel for f in files_in(self.root / "tests" / "example")], ["server.py"])
+
     def test_a_generated_file_that_was_committed_stays(self):
         # Checked in is checked in: it ships, so it is part of the program
         # whoever wrote it.

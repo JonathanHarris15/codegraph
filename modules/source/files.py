@@ -10,6 +10,10 @@ SKIP_DIRS = {
     ".mypy_cache", ".pytest_cache", ".ruff_cache", ".tox", ".eggs",
     "build", "dist", "site-packages", ".idea", ".vscode",
 }
+# Where a repo keeps its agent rules, and the line codegraph's setup writes
+# into them: a folder holding one is a codegraph repo of its own.
+RULES_FILES = ("CLAUDE.md", "AGENTS.md")
+SETUP_MARK = "<!-- codegraph:start -->"
 # The folder at a repo's root that holds pages exported from Claude Design:
 # pictures and pages of HTML, scripts and all, that the program never runs.
 DESIGNS = "designs"
@@ -78,11 +82,14 @@ def discover(root: Path, hidden: bool = False,
     program whoever wrote it.
     """
     kept = _kept_by_git(root)
+    own = _set_up_on_their_own(root)
     found: list[Path] = []
     for path in sorted(p for p in root.rglob("*") if p.suffix in suffixes and p.is_file()):
         rel = path.relative_to(root)
         parts = rel.parts[:-1]
         if any(p in SKIP_DIRS for p in parts) or parts[:1] == (DESIGNS,):
+            continue
+        if any(parts[:i] in own for i in range(1, len(parts) + 1)):
             continue
         if not hidden and any(p.startswith(".") for p in parts):
             continue
@@ -90,6 +97,25 @@ def discover(root: Path, hidden: bool = False,
             continue
         found.append(path)
     return found
+
+
+def _set_up_on_their_own(root: Path) -> set:
+    """The folders under root, as tuples of parts, that codegraph's setup has
+    made repos of their own: their tags answer to them, not to root, so root
+    leaves them to be read on their own (an app kept inside a repo to try
+    codegraph on, say)."""
+    out = set()
+    for name in RULES_FILES:
+        for rules in root.rglob(name):
+            folder = rules.parent.relative_to(root).parts
+            if not folder or any(p in SKIP_DIRS for p in folder):
+                continue
+            try:
+                if SETUP_MARK in rules.read_text(encoding="utf-8", errors="replace"):
+                    out.add(folder)
+            except OSError:
+                continue
+    return out
 
 
 def file_of(path: Path, root: Path) -> File:
