@@ -198,16 +198,20 @@ path.wire.drawing{marker-end:none;marker-start:none}
   background:color-mix(in srgb,var(--gc) 8%,transparent)}
 .card .hd{display:flex;align-items:flex-start;gap:6px}
 .card .hd .nm{flex:1 1 auto;min-width:0}
-.card .fold{flex:0 0 auto;padding:0 5px;font-size:10px;line-height:15px;border-radius:4px;
-  background:none;border:1px solid transparent;color:var(--muted)}
-.card .fold:hover{border-color:var(--hair);color:var(--ink)}
+/* a card's own buttons, side by side at the end of its title row: the only
+   places on a card, with the wire dots, that do not drag it */
+.card .tools{flex:0 0 auto;display:flex;align-items:center;gap:3px;margin:-1px -3px 0 0}
+.card .tools button{display:flex;align-items:center;justify-content:center;gap:2px;height:18px;
+  min-width:18px;padding:0 4px;border-radius:9px;border:1px solid transparent;background:none;
+  color:var(--muted);cursor:pointer;font:inherit}
+.card .tools button:hover{border-color:var(--hair);background:var(--surface);color:var(--ink)}
+.card .fold{font-size:10px;line-height:1}
 .card .fold{transition:transform .24s ease}
 .card .fold[aria-expanded="false"]{transform:rotate(-90deg)}
 .card ul.flist{list-style:none;margin:6px 0 0;padding:5px 0 0;border-top:1px solid var(--hair-soft);
   display:flex;flex-direction:column;gap:1px}
 .card ul.flist li{font-family:var(--font-mono);font-size:10.5px;padding:1px 4px;border-radius:3px;
-  cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.card ul.flist li:hover{background:var(--surface-2);color:var(--accent)}
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .card ul.flist li span{color:var(--muted)}
 .card.folded ul.flist{display:none}
 .card.mod.opens .nm::after{content:" ›";color:var(--muted)}
@@ -356,14 +360,14 @@ ins{color:var(--agent);text-decoration:underline;text-decoration-color:var(--age
 #panel .note.gone{text-decoration:line-through;opacity:.7}
 path.wire.struck{opacity:.55}
 /* a comment button on every card, and the comments it opens */
-.card .cbtn{position:absolute;top:-9px;right:14px;display:flex;align-items:center;gap:2px;height:20px;
-  padding:0 5px;border-radius:10px;border:1px solid var(--hair);background:var(--surface);color:var(--muted);
-  cursor:pointer;opacity:0;transition:opacity .12s;z-index:3}
+.card .cbtn{opacity:0;transition:opacity .12s}
 .card .cbtn svg{width:12px;height:12px;fill:currentColor}
 .card .cbtn b{font-size:10px;font-family:var(--font-mono)}
 .card:hover .cbtn,.card .cbtn.has{opacity:1}
-.card .cbtn.has{color:var(--plan);border-color:var(--plan)}
-.card .cbtn.agent{color:var(--agent);border-color:var(--agent)}
+.card .tools .cbtn.has{color:var(--plan);border-color:var(--plan)}
+.card .tools .cbtn.agent{color:var(--agent);border-color:var(--agent)}
+/* a picture on a card is part of the card: it drags the card, never itself */
+.card img{pointer-events:none;-webkit-user-drag:none;user-select:none}
 #cpop{position:absolute;z-index:25;width:288px;display:flex;flex-direction:column;gap:8px;padding:10px 12px;
   background:var(--surface);border:1px solid var(--hair);border-left:4px solid var(--plan);border-radius:10px;
   box-shadow:0 10px 30px rgba(0,0,0,.25)}
@@ -883,12 +887,20 @@ function layout(){
 
 /* a module card lists its files, folded or not; the choice is per module and
    kept in this browser */
+// the row of a card's own buttons, at the end of its title
+function toolsOf(hd){
+  var t=hd.querySelector(".tools");
+  if(!t){ t=document.createElement("span"); t.className="tools"; hd.appendChild(t); }
+  return t;
+}
 function fileList(el,hd,n){
   var fold=document.createElement("button");
   fold.className="fold"; fold.setAttribute("aria-label","Show or hide the files");
   fold.setAttribute("aria-expanded",String(!folded[n.id]));
   fold.textContent="▾";
-  hd.appendChild(fold);
+  fold.addEventListener("pointerdown",function(ev){ ev.stopPropagation(); });
+  fold.addEventListener("click",function(ev){ ev.stopPropagation(); toggleFold(n.id); });
+  toolsOf(hd).appendChild(fold);
   var seen={};
   n.files.forEach(function(fid){ var f=FILES[fid]; if(f) seen[f.label]=(seen[f.label]||0)+1; });
   var ul=document.createElement("ul"); ul.className="flist";
@@ -1033,7 +1045,9 @@ function show(key){
     if(n.kind==="store"||n.kind==="trigger") fieldList(el,n);
     if(n.kind==="page") pageSketching(el,n);
     wireDots(el,n);
-    commentButton(el,n);
+    commentButton(hd,n);
+    // the browser's own drag of a picture or a piece of text never starts on a card
+    el.addEventListener("dragstart",function(ev){ ev.preventDefault(); });
     canvas.appendChild(el); cardEls[n.id]=el;
     hgt[n.id]=el.offsetHeight;
     if(n.files&&!folded[n.id]) measureRows(n.id);
@@ -1735,21 +1749,14 @@ function drag(el,n){
       return;
     }
     if(ev.shiftKey){ picked[n.id]=!picked[n.id]; render(); return; }
-    // a click lands on the fold toggle, a file in the list, or the card itself
-    var file=hit&&hit.closest("[data-file]");
+    // a click anywhere else on the card picks it; a double click goes into it
     if(editing===n.id) return;                 // a click on a card being typed in is not a pick
     if(n.draft&&sketch&&sketch.cards[n.id]&&!(hit&&hit.closest(".cbtn"))){
       // a card drawn here opens for typing again, the one open before kept first
       if(editing){ doneCard(editing); if(editing) return; }
       editCard(n.id,false); return;
     }
-    if(hit&&hit.closest(".fold")) toggleFold(n.id);
-    else if(file){
-      var fid=file.getAttribute("data-file");
-      if(VIEWS[n.id]&&n.id!==cur) open(n.id);
-      if(nodes[fid]){ select(fid); focus(fid); }
-    }
-    else select(selected===n.id?null:n.id);
+    select(selected===n.id?null:n.id);
   });
   el.addEventListener("pointercancel",function(){ id=null; unliftCard(); });
   // pointing at a card lights its wires; nothing else on the map moves
@@ -2444,7 +2451,7 @@ function cardComments(n){
   var mine=((sketch&&sketch.notes)||{})[n.id]||[];
   return (n.comments||[]).concat(mine.map(function(t){ return {by:"person",text:t,drawn:true}; }));
 }
-function commentButton(el,n){
+function commentButton(hd,n){
   if(!LIVE||!drawsHere()) return;
   var all=cardComments(n), b=document.createElement("button");
   b.className="cbtn"+(all.length?" has":"")+(all.some(function(c){ return c.by==="agent"; })?" agent":"");
@@ -2453,7 +2460,8 @@ function commentButton(el,n){
     (all.length?'<b>'+all.length+'</b>':'');
   b.addEventListener("pointerdown",function(ev){ ev.stopPropagation(); });
   b.addEventListener("click",function(ev){ ev.stopPropagation(); openComments(n.id); });
-  el.appendChild(b);
+  var tools=toolsOf(hd);
+  tools.insertBefore(b,tools.firstChild);
 }
 function commentsHtml(n){
   var all=cardComments(n);
