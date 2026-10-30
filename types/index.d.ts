@@ -17,6 +17,7 @@ export type UnitBrief = {
   reads?: string[]
   route?: string
   start?: boolean
+  preview?: { taken: string; stale: boolean } // a page's newest picture from a UI test
 }
 
 export type StoreBrief = { id: string; name: string; owner: string; fields: string[] }
@@ -40,6 +41,8 @@ export type ViewNode = {
   start?: boolean
   fields?: string[]
   owner?: string
+  ghost?: boolean
+  preview?: { picture: string; url: string; taken: string; stale: boolean } // what a UI test saw of a page
 }
 
 // One wire; `bad` holds the rules it breaks.

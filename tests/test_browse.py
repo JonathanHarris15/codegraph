@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import threading
+import urllib.error
 import urllib.request
 
 from features.browse import browse
@@ -47,6 +48,14 @@ class LiveMap(Folder):
         self.assertNotIn("_open", self.get())
         self.post("refresh", {})
         self.assertIn("not on its front door", self.get())
+
+    def test_the_picture_a_ui_test_took_is_served_and_nothing_else(self):
+        tree(self.root, {".codegraph/shots/home.png": "png", "secret.png": "keep out",
+                         ".codegraph/shots/home.json": json.dumps(
+                             {"url": "/", "picture": ".codegraph/shots/home.png"})})
+        self.assertEqual(self.get("design/.codegraph/shots/home.png"), "png")
+        with self.assertRaises(urllib.error.HTTPError):
+            self.get("design/secret.png")
 
     def test_a_plan_drawn_on_the_map_is_written_and_drawn_back(self):
         self.post("plan", {"name": "next", "plan": {"ask": "A mail module",

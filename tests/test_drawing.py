@@ -385,6 +385,24 @@ class MapViews(Folder):
         g = build(self.root, reading=read_map(self.root))
         self.assertEqual([d["file"] for d in g["map"]["designs"]], ["designs/invoices.html"])
 
+    def test_a_page_card_carries_the_picture_a_ui_test_took_of_it(self):
+        shots = self.root / ".codegraph" / "shots"
+        shots.mkdir(parents=True)
+        (shots / "about.png").write_bytes(b"png")
+        (shots / "about.json").write_text(json.dumps({
+            "url": "http://localhost/about", "taken": "2001-01-01T00:00:00Z",
+            "picture": ".codegraph/shots/about.png"}), encoding="utf-8")
+        g = build(self.root, reading=read_map(self.root))
+        for view in ("map", "pages"):
+            nodes = {n["id"]: n for n in g["map"]["views"][view]["nodes"]}
+            self.assertEqual(nodes["page:about"]["preview"],
+                             {"picture": ".codegraph/shots/about.png", "url": "/about",
+                              "taken": "2001-01-01T00:00:00Z", "stale": True})
+            self.assertNotIn("preview", nodes["page:home"])
+        about = next(p for p in summary(g)["pages"] if p["id"] == "page:about")
+        self.assertEqual((about["preview"]["taken"], about["preview"]["stale"]),
+                         ("2001-01-01T00:00:00Z", True))
+
     def test_the_map_says_which_wires_a_person_may_draw(self):
         g = build(self.root, reading=read_map(self.root))
         self.assertIn(["feature", "module", "uses"], g["map"]["wiring"])

@@ -5,6 +5,7 @@ from collections import defaultdict
 
 from modules.layout import place_by_file, place_inside, place_map, size_cards
 from modules.planning import compare, designs_in, drawable_wires, read_plans
+from modules.previews import previews_of
 from modules.rules import UI_KINDS, relation
 from modules.source import EXTERNAL, OUTSIDE
 
@@ -62,6 +63,12 @@ def map_views(root: Path, graph: dict, r: Reading, source: str = "tags") -> dict
             "stores": sorted(s for s, v in r.stores.items() if v["owner"] == uid),
             "reads": sorted(u.reads),
         }
+    path_of = {f.name: f.path for f in r.files}
+    seen = previews_of(root, [{"id": c["id"], "name": c["label"], "route": c["route"],
+                               "files": [path_of[i] for i in units[c["id"]].files if i in path_of]}
+                              for c in cards.values() if c["kind"] == "page"])
+    for pid, shot in seen.items():
+        cards[pid]["preview"] = shot
     loose = sorted(n["id"] for n in graph["nodes"] if n["kind"] == "file" and card(n["id"]) == LOOSE_CARD)
     if loose:
         cards[LOOSE_CARD] = {"id": LOOSE_CARD, "label": "untagged", "kind": "loose",

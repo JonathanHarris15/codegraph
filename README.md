@@ -247,6 +247,26 @@ itself on as it comes. Red wires always show. **Wires: on hover** turns into
 Grey wires are imports; dotted means the import is written inside a
 function. Every other colour is a wire the legend names.
 
+### What each page looks like
+
+On the live map, a page card shows a picture of the page as a UI test last
+saw it, with the day it was taken; click the card for a bigger one. Nothing
+is drawn for it: the picture is the real page in a real browser. Once the
+page's files change after the picture was taken, it fades and says so, until
+the tests run again.
+
+To take the pictures, copy one helper into the repo's tests and call it
+wherever a test has a page up. Run the tests from the repo's root. The copy
+is the repo's own test tooling now, not codegraph's module: change its tag to
+`// codegraph: tooling`, or drop it where the repo has no tags yet.
+
+- Cypress: `modules/snapshots/cypress.js`, then `snapshot()`
+- Playwright: `modules/snapshots/playwright.mjs`, then `await snapshot(page)`
+
+The map finds the page by the address the test is at. Where codegraph cannot
+read a page's route, name the page instead: `snapshot('notes-new')`. Each
+picture is noted in `.codegraph/shots/`; keep that folder out of git.
+
 ## What it sees
 
 It parses, it does not run: it reads what is written. Everything that depends

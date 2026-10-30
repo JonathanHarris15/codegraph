@@ -14,7 +14,7 @@ from collections import defaultdict
 
 # What each view's cards and wires keep for the pane.
 NODE_KEYS = ("id", "label", "kind", "dir", "col", "row", "tier", "block", "size", "own", "system", "door", "uses",
-             "route", "start", "fields", "owner", "ghost", "plan", "left")
+             "route", "start", "fields", "owner", "ghost", "plan", "left", "preview")
 VIEW_LIMIT = 600000          # past this many characters, only the map and the pages travel
 
 # The groups setup reports mismatches in, worst first: (group, label, words
@@ -96,7 +96,9 @@ def summary(graph: dict) -> dict:
         "systems": [{"name": s, "features": f} for s, f in sorted(systems.items())],
         "modules": [brief(n, "door", "stores", "reads") for n in
                     sorted(by_kind["module"], key=lambda n: n["label"])],
-        "pages": [brief(n, "route", "start") for n in sorted(by_kind["page"], key=lambda n: n["label"])],
+        "pages": [dict(brief(n, "route", "start"), **({"preview": {k: n["preview"][k] for k in ("taken", "stale")}}
+                                                       if n.get("preview") else {}))
+                  for n in sorted(by_kind["page"], key=lambda n: n["label"])],
         "components": [brief(n) for n in sorted(by_kind["component"], key=lambda n: n["label"])],
         "stores": [{"id": n["id"], "name": n["label"], "owner": n["owner"], "fields": n["fields"]}
                    for n in sorted(by_kind["store"], key=lambda n: n["label"])],

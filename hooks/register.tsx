@@ -249,6 +249,13 @@ function toggleIssues($: any) {
 
 // ---- what a press puts in the chat
 
+// When a UI test last saw a page; the picture itself is on the live map.
+function seen(p: ViewNode['preview']): string {
+  if (!p) return 'No UI test has taken a picture of it yet'
+  const day = p.taken.slice(0, 10)
+  return p.stale ? `Seen by a UI test on ${day}, changed since` : `Seen by a UI test on ${day}`
+}
+
 function aboutCard(m: Summary, n: ViewNode, inside: string): string {
   const unit = [...m.modules, ...m.pages, ...m.components, ...m.systems.flatMap(s => s.features)].find(u => u.id === n.id)
   const files = unit?.files.length ? `; files ${unit.files.join(', ')}` : ''
@@ -466,6 +473,7 @@ export const register: Register = on => {
           {picked.door?.length ? <Text>Front door: {picked.door.join(', ')}</Text> : null}
           {picked.uses?.length ? <Text>Uses: {picked.uses.join(', ')}</Text> : null}
           {picked.route ? <Text>At {picked.route}</Text> : null}
+          {picked.kind === 'page' && !picked.ghost ? <Text key="seen" color={picked.preview?.stale ? 'error' : undefined} dimColor={!picked.preview?.stale}>{seen(picked.preview)}</Text> : null}
           {picked.fields?.length ? <Text>{picked.fields.join(' · ')}</Text> : null}
           {pickedIssues.length > 0 && <Text color="error">{pickedIssues.length} mismatches here</Text>}
         </Box>

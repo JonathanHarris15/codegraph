@@ -426,6 +426,10 @@ path.whit{fill:none;stroke:transparent;stroke-width:14;pointer-events:stroke;cur
 .design img{width:100%;height:100%;object-fit:cover;object-position:top;display:block}
 .design iframe{width:400%;height:400%;border:0;transform:scale(.25);transform-origin:0 0;
   pointer-events:none;background:#fff}
+/* what a UI test saw of a page, and when; faded once the page has changed since */
+.shot{font-family:var(--font-mono);font-size:9px;color:var(--muted);margin-top:3px}
+.shot.stale{color:var(--breach)}
+.design.stale img{opacity:.55;filter:grayscale(.6)}
 #panel form{display:flex;flex-direction:column;gap:7px;margin-top:10px}
 #panel label{display:flex;flex-direction:column;gap:3px;font-size:10px;color:var(--muted);
   font-family:var(--font-mono)}
@@ -1532,6 +1536,13 @@ function drawPanel(){
   else h+=commentsHtml(n);
   h+=wireNotesHtml(n);
   if(n.kind==="page") h+='<p class="note">'+(n.start?"Start page at ":"At ")+'<b>'+esc(n.route||"no route")+'</b></p>';
+  if(n.kind==="page"&&!n.ghost&&LIVE) h+=n.preview
+    ? '<h3>As a UI test saw it</h3>'+previewHtml(n.preview,"big")+
+      '<p class="note">At <b>'+esc(n.preview.url)+'</b>. '+(n.preview.stale
+        ?'The page has changed since: run the UI tests again for a new picture.'
+        :'Nothing on the page has changed since.')+
+      ' <a href="'+esc(LIVE.design+n.preview.picture)+'" target="_blank" rel="noopener">Open the picture</a></p>'
+    : '<p class="note">No UI test has taken a picture of this page yet.</p>';
   if(n.kind==="store"||n.kind==="trigger"){
     h+=chips(n.kind==="store"?"Shape":"Carries",n.fields,n.kind==="store"?
       "No schema read: add one the owner checks its data against.":"No schema named.");
@@ -1944,6 +1955,13 @@ function designHtml(d,cls){
   return '<div class="design'+(cls?" "+cls:"")+'">'+(d.type==="text/html"
     ? '<iframe sandbox="" tabindex="-1" title="design" '+(d.url?'data-html="':'src="')+esc(at)+'"></iframe>'
     : '<img alt="design" src="'+esc(at)+'">')+'</div>';
+}
+/* the picture a UI test took of a page, with when; dimmed once it is stale */
+function previewHtml(p,cls){
+  var when=new Date(p.taken), day=isNaN(when)?p.taken:when.toLocaleDateString(undefined,{day:"numeric",month:"short"});
+  return '<div class="design'+(cls?" "+cls:"")+(p.stale?" stale":"")+'"><img alt="the page as a UI test saw it" src="'+
+    esc(LIVE.design+p.picture)+'"></div><div class="shot'+(p.stale?" stale":"")+'">'+
+    (p.stale?"seen "+esc(day)+", changed since":"seen "+esc(day))+'</div>';
 }
 var designText={};
 function fillDesigns(root){
@@ -2515,6 +2533,7 @@ function hasFiles(ev){ return ev.dataTransfer&&Array.prototype.indexOf.call(ev.d
 function pageSketching(el,n){
   var d=n.sketched||(n.design&&LIVE?{url:LIVE.design+n.design,type:designType(n.design)}:null);
   if(d){ el.insertAdjacentHTML("beforeend",designHtml(d)); fillDesigns(el); }
+  else if(n.preview&&LIVE) el.insertAdjacentHTML("beforeend",previewHtml(n.preview,""));
   if(!drawsHere()) return;
   el.addEventListener("dragover",function(ev){
     if(!hasFiles(ev)) return;

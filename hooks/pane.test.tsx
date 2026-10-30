@@ -38,7 +38,8 @@ const SUMMARY = {
         { id: 'module:services', label: 'services', kind: 'module', col: 0, row: 0, tier: 1, block: 'modules', size: 1.6, door: ['plan'] },
         { id: 'feature:plan-service', label: 'plan-service', kind: 'feature', col: 1, row: 0, tier: 1, block: 'features', system: 'calendar', uses: ['services'] },
         { id: 'feature:join', label: 'join', kind: 'feature', col: 1, row: 1, tier: 1, block: 'features', system: 'calendar' },
-        { id: 'page:home', label: 'home', kind: 'page', col: 2, row: 0, tier: 1, block: 'pages', route: '/', start: true },
+        { id: 'page:home', label: 'home', kind: 'page', col: 2, row: 0, tier: 1, block: 'pages', route: '/', start: true,
+          preview: { picture: '.codegraph/shots/start.png', url: '/', taken: '2026-10-29T10:00:00Z', stale: true } },
       ],
       edges: [
         { from: 'module:services', to: 'store:services', kind: 'writes' },
@@ -140,6 +141,9 @@ for (const surface of ['terminal', 'desktop'] as const) {
     await ui.press({ key: 'crumb-0' })
     expect(await ui.find({ key: 'server.services' })).toBeUndefined()
     expect(await ui.find({ key: 'page:home' })).toBeTruthy()
+
+    await ui.press({ key: 'page:home' })
+    expect((await ui.find({ type: 'Text', text: /^Seen by a UI test/ }))?.text).toBe('Seen by a UI test on 2026-10-29, changed since')
     await ui.unmount()
   })
 }
