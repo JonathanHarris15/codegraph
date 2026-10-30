@@ -35,6 +35,7 @@ from modules.source import files_in
 TAG_LINES = 30                     # a tag sits in a file's first lines
 
 TAG_RE = re.compile(r"^\s*(?:#|//|/\*+|\*|--|<!--)\s*codegraph:\s*(.*?)\s*(?:\*/|-->)?\s*$")
+QUOTES = re.compile(r'"""|' + r"'''")
 NAME = r"([\w.\-/@]+)"
 KINDS_OF_FILE = ("module", "feature", "page", "component", "design", "shell", "test",
                  "tooling")
@@ -97,8 +98,13 @@ class Tag:
 def read_tags(text: str) -> Tag | None:
     """The tags in a file's first lines, or None when it has none."""
     tag, seen, said = Tag(), False, []
+    quote = None                    # the """ or ''' a line starts inside, if any
     for no, line in enumerate(text.splitlines()[:TAG_LINES], start=1):
-        m = TAG_RE.match(line)
+        inside = quote
+        for q in QUOTES.findall(line):
+            quote = None if q == quote else quote or q
+        # a docstring that shows a tag, to explain tags, is not one
+        m = None if inside else TAG_RE.match(line)
         if not m:
             continue
         seen, stmt = True, m.group(1)

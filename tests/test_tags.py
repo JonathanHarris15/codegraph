@@ -59,6 +59,12 @@ class Tags(unittest.TestCase):
     def test_no_tags_is_none(self):
         self.assertIsNone(read_tags("import os\n# a codegraph comment, not a tag\n"))
 
+    def test_a_tag_shown_in_a_docstring_is_not_a_tag(self):
+        t = read_tags('# codegraph: module shapes\n"""A helper is tagged\n\n'
+                      '    # codegraph: shape of sales\n\nand prints its shape."""\n'
+                      "# codegraph: front door helper_shape\n")
+        self.assertEqual((t.shapes, t.door, t.errors), ([], ["helper_shape"], []))
+
     def test_a_tag_must_sit_near_the_top(self):
         self.assertIsNone(read_tags("\n" * 40 + "# codegraph: module late\n"))
 
