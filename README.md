@@ -97,9 +97,10 @@ You can also draw a plan yourself. Right-click empty space on the map or the
 **Pages** view and pick a new module, feature, page, store or system: the
 card takes its place in the box for its kind (modules, features, pages,
 outside + stores), the view flies in to it, and you type in the card itself,
-its name and in plain words what it is for (Enter moves on, Esc is done).
-Drag a card by its edge or its top. Drag a new feature into a system's box
-to say it belongs there; one made by right-clicking inside a system starts
+its name and in plain words what it is for (Tab moves on, Enter keeps it,
+Esc takes it back). Drag a card by its edge or its top. Drag a new feature
+into a system's box to say it belongs there: as you drag, the box it leaves
+closes up and the box under it opens a gap for it; one made by right-clicking inside a system starts
 there. A new system says in plain words what its features should do, and the
 agent works each one out; right-click it to draw a feature in it yourself.
 
@@ -111,7 +112,8 @@ has a dot on each side: drag it onto another card and the map draws the wire
 the rules allow between them (a feature uses a module, a page acts on a
 feature, a page leads to a page), whichever way you dragged, or says why
 there is none. Write a few words on a wire as you draw it, if you like, to
-say what you imagine it carries. Every card also has a comment button: ask a
+say what you imagine it carries; click a wire you drew to change that or
+delete it. Every card also has a comment button: ask a
 question or make a suggestion, and it goes with the drawing.
 
 When the agent has checked a drawing, the map shows its revision against what
@@ -120,8 +122,8 @@ struck out crossed through in red, reworded text with the old words struck
 and the new ones underlined, and a comment on each change saying why. Press
 **Keep mine** where you disagree, **Ask why**, or reply in a card's comments;
 **Build it** when you are happy.
-Zoom out and carry on; double-click a new card to edit it, right-click it to
-remove it. **Send** writes the drawing to `plans/`, designs beside it in
+Zoom out and carry on; click a new card to edit it again, or remove it from
+there. **Send** writes the drawing to `plans/`, designs beside it in
 `plans/<name>/`, and asks the agent to check it: it fills in what the cards
 need, corrects what breaks a rule, and tells you before it builds. Where links sit on each
 page is the agent's call; you only say where a person can go. Designs are

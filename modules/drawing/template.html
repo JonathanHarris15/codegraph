@@ -191,6 +191,11 @@ path.wire.drawing{marker-end:none;marker-start:none}
   background:color-mix(in srgb,var(--gc) 4%,transparent)}
 .frame span{position:absolute;top:5px;left:12px;white-space:nowrap;font-family:var(--font-mono);font-size:11px;
   font-weight:700;letter-spacing:.04em;color:var(--gc)}
+.frame{transition:background-color .18s,border-width .18s}
+.frame.taking{border-width:2px;background:color-mix(in srgb,var(--gc) 10%,transparent)}
+.card.lifted{z-index:6;cursor:grabbing;box-shadow:0 10px 26px rgba(10,20,40,.22),var(--stack)}
+.dropslot{position:absolute;border:1.5px dashed var(--gc);border-radius:7px;pointer-events:none;
+  background:color-mix(in srgb,var(--gc) 8%,transparent)}
 .card .hd{display:flex;align-items:flex-start;gap:6px}
 .card .hd .nm{flex:1 1 auto;min-width:0}
 .card .fold{flex:0 0 auto;padding:0 5px;font-size:10px;line-height:15px;border-radius:4px;
@@ -391,6 +396,8 @@ path.wire.struck{opacity:.55}
   border-radius:6px;padding:5px 7px}
 #wnote input:focus{outline:2px solid var(--plan);outline-offset:-1px}
 #wnote span{font-size:9.5px;color:var(--muted)}
+#wnote .wrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
+path.whit{fill:none;stroke:transparent;stroke-width:14;pointer-events:stroke;cursor:pointer}
 #gallery{position:absolute;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;
   background:color-mix(in srgb,var(--bg,#000) 55%,transparent);backdrop-filter:blur(3px)}
 #gallery .gbox{width:min(880px,calc(100% - 48px));max-height:calc(100% - 64px);display:flex;flex-direction:column;
@@ -633,7 +640,7 @@ var gWires=document.createElementNS(NS,"g"); svg.appendChild(gWires);
 /* ------------------------------------------------------------- open a view */
 var cur=null, trail=[], V=null, nodes={}, order=[], edges=[], out={}, inn={},
     base={}, colX={}, pos={}, cardEls={}, wireEls={}, threadEls={}, rowY={}, frame=null,
-    frames=[];
+    frames=[], hitEls={};
 
 /* a box around the cards it holds, wherever they have been dragged; a box
    holding boxes stands further out, to clear their names */
@@ -641,8 +648,9 @@ function box(el,holds,outer){
   var x0=Infinity, y0=Infinity, x1=-Infinity, y1=-Infinity, PAD=outer?28:16, HEAD=outer?36:18;
   order.forEach(function(n){
     if(!holds(n)) return;
-    x0=Math.min(x0,pos[n.id].x); y0=Math.min(y0,pos[n.id].y);
-    x1=Math.max(x1,pos[n.id].x+cw(n.id)); y1=Math.max(y1,pos[n.id].y+hgt[n.id]);
+    var p=spot(n.id);
+    x0=Math.min(x0,p.x); y0=Math.min(y0,p.y);
+    x1=Math.max(x1,p.x+cw(n.id)); y1=Math.max(y1,p.y+hgt[n.id]);
   });
   el.style.left=(x0-PAD)+"px"; el.style.top=(y0-PAD-HEAD)+"px";
   el.style.width=(x1-x0+2*PAD)+"px"; el.style.height=(y1-y0+2*PAD+HEAD)+"px";
@@ -652,7 +660,106 @@ function drawFrame(){
   frames.forEach(function(f){
     box(f.el,function(n){ return f.within?n.group===f.id:n.block===f.id; },
         frames.some(function(g){ return g.within===f.id; }));
+    f.el.classList.toggle("taking",!!lift&&lift.into===f);
   });
+  var el=dropSlot();
+  el.hidden=!(lift&&lift.slot);
+  if(el.hidden) return;
+  el.style.left=lift.slot.x+"px"; el.style.top=lift.slot.y+"px";
+  el.style.width=cw(lift.id)+"px"; el.style.height=hgt[lift.id]+"px";
+  el.style.setProperty("--gc",lift.into&&lift.into.within?gcolor(lift.into.id):"var(--muted)");
+}
+
+/* While a drawn feature is dragged on the map, the boxes show where it would
+   go: the box it leaves closes around the rest, the box under it opens a gap
+   for it, and every card between slides aside. lift is that drag: the card,
+   the box it would join, and the gap it would fill. Cards chase where the new
+   layout puts them a little each frame, so the boxes grow and shrink smoothly. */
+var lift=null, aim={}, glideFrame=0, slotEl=null;
+var GLIDE=matchMedia("(prefers-reduced-motion: reduce)").matches?1:0.2;
+// where a card counts for its box: the gap it would fill, while it is lifted
+function spot(id){ return lift&&lift.id===id&&lift.slot?lift.slot:pos[id]; }
+function dropSlot(){
+  if(!slotEl||slotEl.parentNode!==canvas){
+    slotEl=document.createElement("div"); slotEl.className="dropslot"; slotEl.hidden=true;
+    canvas.insertBefore(slotEl,svg);
+  }
+  return slotEl;
+}
+function chase(p,a){
+  var dx=a.x-p.x, dy=a.y-p.y;
+  return Math.abs(dx)+Math.abs(dy)<0.5?{x:a.x,y:a.y}:{x:p.x+dx*GLIDE,y:p.y+dy*GLIDE};
+}
+function glide(){
+  var still=true;
+  Object.keys(aim).forEach(function(k){
+    if(!pos[k]||lift&&lift.id===k) return;           // the lifted card follows the pointer
+    pos[k]=chase(pos[k],aim[k]);
+    if(pos[k].x!==aim[k].x||pos[k].y!==aim[k].y) still=false;
+  });
+  if(lift&&lift.slot&&lift.gap){
+    lift.slot=chase(lift.slot,lift.gap);
+    if(lift.slot.x!==lift.gap.x||lift.slot.y!==lift.gap.y) still=false;
+  }
+  render();
+  glideFrame=still?0:requestAnimationFrame(glide);
+}
+function glideTo(targets){
+  aim=targets;
+  if(!glideFrame) glideFrame=requestAnimationFrame(glide);
+}
+// the place a drawn card would take in the map's layout if it sat in box f
+function wouldSit(id,f){
+  var c=sketch.cards[id], t=JSON.parse(JSON.stringify(c));
+  if(f.within) joinBox(t,f.id); else { delete t.system; delete t.in; }
+  delete (t.at||{}).map;
+  sketch.cards[id]=t; sketchView();
+  var n=VIEWS.map.nodes.filter(function(m){ return m.id===id; })[0];
+  sketch.cards[id]=c; sketchView();
+  return n;
+}
+var SITS=["block","group","tier","col","row","system","at"];
+function liftCard(id){
+  var n=nodes[id], was={};
+  SITS.forEach(function(p){ was[p]=n[p]; });
+  lift={id:id, was:was, into:undefined, slot:null, gap:null};
+  cardEls[id].classList.add("lifted");
+}
+// the pointer moved the lifted card: if the box under it changed, lay the
+// map out again as if it sat there, and send every other card on its way
+function hover(){
+  var id=lift.id, n=nodes[id];
+  var f=frameAt({x:pos[id].x+cw(id)/2,y:pos[id].y+Math.min(hgt[id],60)/2},id);
+  if(f&&!f.within&&f.id!=="features") f=null;
+  if(f===lift.into){ if(!f) n.at=pos[id]; return; }
+  lift.into=f;
+  if(f){
+    var w=wouldSit(id,f);
+    SITS.forEach(function(p){ n[p]=w[p]; });
+    n.at=undefined;
+  } else {
+    SITS.forEach(function(p){ n[p]=lift.was[p]; });
+    n.at=pos[id];                                   // dropped here, it stays here
+  }
+  var now=pos; layout(); var to=pos; pos=now;
+  lift.gap=f?to[id]:null;
+  lift.slot=f?(lift.slot||{x:pos[id].x,y:pos[id].y}):null;
+  delete to[id];
+  glideTo(to);
+}
+function dropCard(){
+  if(!lift) return;
+  cardEls[lift.id]&&cardEls[lift.id].classList.remove("lifted");
+  lift=null;
+}
+// the card let go back to where it was lifted from, everything else with it
+function unliftCard(){
+  if(!lift) return;
+  var n=nodes[lift.id];
+  SITS.forEach(function(p){ n[p]=lift.was[p]; });
+  dropCard();
+  var now=pos; layout(); var to=pos; pos=now;
+  glideTo(to);
 }
 /* how wide a card draws: as big as the code it holds */
 var wid={};
@@ -828,7 +935,7 @@ function toggleFold(id){
 }
 
 function show(key){
-  editing=null;
+  editing=null; aim={}; lift=null;
   V=VIEWS[key]; cur=key; selected=null; hovered=null; query=""; qbox.value=""; picked={};
   shownWires={};
   nodes={}; order=V.nodes.slice();
@@ -930,7 +1037,7 @@ function show(key){
     canvas.appendChild(d);
   });
 
-  wireEls={}; threadEls={};
+  wireEls={}; threadEls={}; hitEls={};
   edges.forEach(function(e){
     var d=KINDS[e.kind]||KINDS["import"], bad=e.bad.length>0;
     function strand(){
@@ -951,6 +1058,7 @@ function show(key){
     e.head="url(#ar-"+(e.struck?"struck":e.change==="added"?"agent":bad?"breach":e.plan?"plan":e.kind)+")";
     e.at=headOf(e.kind);
     wireEls[e.i]=strand();
+    if(e.plan==="sketch"&&drawsHere()) hitEls[e.i]=wireHit(e);
     // one thread per file on the importing card that pulls this wire in
     if(nodes[e.from].files) threadEls[e.i]=e.via.map(function(fid){
       return {fid:fid, el:strand()};
@@ -1092,7 +1200,16 @@ function threaded(e){
   return !!(threadEls[e.i]&&threadEls[e.i].length&&openness[e.from]>0&&rowY[e.from]);
 }
 function lerp(a,b,k){ return {x:a.x+(b.x-a.x)*k, y:a.y+(b.y-a.y)*k, d:b.d, v:b.v}; }
+// a wire drawn here also has a wide clear twin along it, to click it by
 function drawWire(e,show){
+  var lines=drawStrands(e,show), hit=hitEls[e.i];
+  if(hit){
+    hit.style.display=show?"":"none";
+    if(show) hit.setAttribute("d",wireEls[e.i].getAttribute("d"));
+  }
+  return lines;
+}
+function drawStrands(e,show){
   var main=wireEls[e.i], threads=threadEls[e.i]||[];
   threads.forEach(function(t){ t.el.style.display="none"; });
   main.style.display=show?"":"none";
@@ -1556,17 +1673,23 @@ function drag(el,n){
     Object.keys(from).forEach(function(k){
       pos[k]={x:Math.round(from[k].x+dx),y:Math.round(from[k].y+dy)};
     });
+    // one drawn feature on its own shows where it would land as it goes
+    var ks=Object.keys(from);
+    if(!lift&&cur==="map"&&ks.length===1&&n.draft&&n.kind==="feature"&&sketch&&sketch.cards[n.id]) liftCard(n.id);
+    if(lift) hover();
     render();
   });
   el.addEventListener("pointerup",function(ev){
     if(id===null||ev.pointerId!==id) return;
     id=null;
     if(went){
-      var into=null;
+      var into=null, was={}, shown=lift?lift.into:undefined;   // where the drag showed it would land
+      Object.keys(pos).forEach(function(k){ was[k]={x:pos[k].x,y:pos[k].y}; });
+      dropCard();
       Object.keys(from).forEach(function(k){
         var c=nodes[k]&&nodes[k].draft&&sketch&&sketch.cards[k];
         if(!c){ moved[k]=pos[k]; return; }
-        var f=cur==="map"&&c.kind==="feature"&&
+        var f=shown!==undefined?shown:cur==="map"&&c.kind==="feature"&&
           frameAt({x:pos[k].x+cw(k)/2,y:pos[k].y+Math.min(hgt[k],60)/2},k);
         if(f&&(f.within||f.id==="features")){
           // into a system, or loose among the features: it takes its place in the box
@@ -1578,6 +1701,12 @@ function drag(el,n){
       if(into){
         var keepOpen=editing===into;
         redrawSketch(into,keepOpen?function(){ editCard(into,false); }:null);
+        // the map is laid out again; each card glides on from where it was
+        var to={};
+        Object.keys(was).forEach(function(k){
+          if(pos[k]){ to[k]=pos[k]; pos[k]=was[k]; }
+        });
+        render(); glideTo(to);
         toast(sketch.cards[into].system||sketch.cards[into].in?"Put in "+systemOf(sketch.cards[into]):"Taken out of its system");
       }
       return;
@@ -1586,6 +1715,11 @@ function drag(el,n){
     // a click lands on the fold toggle, a file in the list, or the card itself
     var file=hit&&hit.closest("[data-file]");
     if(editing===n.id) return;                 // a click on a card being typed in is not a pick
+    if(n.draft&&sketch&&sketch.cards[n.id]&&!(hit&&hit.closest(".cbtn"))){
+      // a card drawn here opens for typing again, the one open before kept first
+      if(editing){ doneCard(editing); if(editing) return; }
+      editCard(n.id,false); return;
+    }
     if(hit&&hit.closest(".fold")) toggleFold(n.id);
     else if(file){
       var fid=file.getAttribute("data-file");
@@ -1594,7 +1728,7 @@ function drag(el,n){
     }
     else select(selected===n.id?null:n.id);
   });
-  el.addEventListener("pointercancel",function(){ id=null; });
+  el.addEventListener("pointercancel",function(){ id=null; unliftCard(); });
   // pointing at a card lights its wires; nothing else on the map moves
   el.addEventListener("pointerenter",function(ev){
     if(ev.pointerType==="touch"||!focusWires) return;
@@ -1903,8 +2037,8 @@ function drawSketchBar(){
     nw+(nw===1?" link":" links")+" · "+nd+(nd===1?" design":" designs")+'</span>'+
     '<button class="act sm" id="sk-send">Send</button>'+
     '<button class="sm" id="sk-drop">Discard</button>'+
-    '<span class="hint">Right-click empty space for another card or a system; drag a card by its edge or top; double-click a new card to edit it. '+
-    'Drag the dot on a card’s side onto another card to wire them.</span>';
+    '<span class="hint">Right-click empty space for another card or a system; drag a card by its edge or top; click a new card to edit it. '+
+    'Drag the dot on a card’s side onto another card to wire them; click a wire you drew to note it or delete it.</span>';
   bar.querySelector("#sk-send").addEventListener("click",function(){ openSketchForm("send"); });
   var drop=bar.querySelector("#sk-drop");
   drop.addEventListener("click",function(){
@@ -1972,7 +2106,7 @@ function newCard(kind,p,design,inside){
   if(kind==="feature"&&f&&f.within) joinBox(c,f.id);
   if(design){ sketch.designs[id]=design; c.name=slug(design.name); }
   sketch.cards[id]=c;
-  redrawSketch(null,function(){ editCard(id,true); });
+  redrawSketch(null,function(){ editCard(id,true,true); });
 }
 /* what a right click offers: on empty space, a new card of each kind, first
    the kind whose box it landed in; on a card drawn here, its edits */
@@ -2090,10 +2224,14 @@ function flyTo(id,then){
     if(t<1) requestAnimationFrame(step); else { zoomTo=scale; if(then) then(); }
   })(t0);
 }
-function editCard(id,fly){
+/* Enter keeps the card (Shift+Enter starts a new line in its words), Tab
+   steps through the card's own fields and no further, and Esc takes back what
+   was typed: a card just made goes, one opened again goes back as it was. */
+function editCard(id,fly,fresh){
   var c=sketch&&sketch.cards[id], el=cardEls[id];
   if(!c||!el) return;
   editing=id; select(null);
+  var before={name:c.name||"", about:c.about||""};
   var d=sketch.designs[id];
   el.classList.add("editing");
   var ed=document.createElement("div"); ed.className="cedit";
@@ -2107,7 +2245,8 @@ function editCard(id,fly){
     (c.kind==="page"?(d?designHtml(d):"")+
       '<button class="sm cimport" type="button">'+(d?"Change the design…":"Pick a design…")+'</button>':"")+
     '<div class="crow"><button class="act sm cdone" type="button">Done</button>'+
-    '<span>Enter: next · Esc: done</span></div>';
+    (fresh?'':'<button class="sm cgone" type="button">Remove</button>')+
+    '<span>Enter: done · Tab: next · Esc: cancel</span></div>';
   // the card's own face goes while it is typed in; Done puts it back
   Array.prototype.forEach.call(el.children,function(ch){ ch.style.display="none"; });
   el.appendChild(ed); fillDesigns(ed);
@@ -2121,14 +2260,24 @@ function editCard(id,fly){
   [name,about,route].forEach(function(f){ if(f) f.addEventListener("input",function(){ keep(); if(f===about) grow(); }); });
   ed.addEventListener("keydown",function(ev){
     ev.stopPropagation();
-    if(ev.key==="Escape"||(ev.key==="Enter"&&(ev.metaKey||ev.ctrlKey))){ ev.preventDefault(); doneCard(id); return; }
-    if(ev.key==="Enter"&&ev.target!==about){
+    if(ev.key==="Escape"){
       ev.preventDefault();
-      var next=ev.target===name?about:null;
-      if(next) next.focus(); else doneCard(id);
+      if(fresh){ editing=null; removeCard(id); return; }
+      c.name=before.name; c.about=before.about; editing=null; redrawSketch(id); return;
+    }
+    if(ev.key==="Enter"&&!(ev.shiftKey&&ev.target===about)&&ev.target.tagName!=="BUTTON"){
+      ev.preventDefault(); doneCard(id); return;
+    }
+    if(ev.key==="Tab"){
+      var all=Array.prototype.slice.call(ed.querySelectorAll("input,textarea,button"));
+      var at=all.indexOf(ev.target);
+      ev.preventDefault();
+      all[(at+(ev.shiftKey?all.length-1:1))%all.length].focus();
     }
   });
   ed.querySelector(".cdone").addEventListener("click",function(){ doneCard(id); });
+  var gone=ed.querySelector(".cgone");
+  if(gone) gone.addEventListener("click",function(){ editing=null; removeCard(id); });
   var imp=ed.querySelector(".cimport");
   if(imp) imp.addEventListener("click",function(){ keep(); pickDesign(function(dd){ giveDesign(id,dd); }); });
   hgt[id]=el.offsetHeight; render();
@@ -2200,7 +2349,7 @@ function wireNote(i){
   note=document.createElement("div"); note.id="wnote";
   note.innerHTML='<div class="wk">'+esc(nodes[w.from].label)+' <b>'+esc(w.kind)+'</b> '+esc(nodes[w.to].label)+'</div>'+
     '<input type="text" placeholder="What is this wire for? (optional)" value="'+esc(w.about||"")+'">'+
-    '<span>Enter: keep · Esc: skip</span>';
+    '<div class="wrow"><span>Enter: keep · Esc: skip</span><button class="sm wgone" type="button">Delete wire</button></div>';
   note.style.left=Math.max(8,Math.min(x-150,r.width-316))+"px"; note.style.top=Math.max(8,Math.min(y-30,r.height-90))+"px";
   var inp=note.querySelector("input");
   inp.addEventListener("keydown",function(ev){
@@ -2208,10 +2357,37 @@ function wireNote(i){
     if(ev.key==="Enter"){ w.about=inp.value.trim(); keepSketch(); closeNote(); redrawSketch(w.from); }
     if(ev.key==="Escape") closeNote();
   });
+  note.querySelector(".wgone").addEventListener("click",function(){
+    var from=w.from;
+    sketch.wires.splice(sketch.wires.indexOf(w),1); closeNote(); redrawSketch(from);
+    toast("Wire deleted");
+  });
   note.addEventListener("pointerdown",function(ev){ ev.stopPropagation(); });
   stage.appendChild(note); inp.focus();
 }
 var note=null;
+// the drawn wire a path on the map stands for, by where it runs
+function sketchWire(e){
+  for(var i=0;i<sketch.wires.length;i++){
+    var w=sketch.wires[i];
+    if(w.from===e.from&&w.to===e.to) return i;
+  }
+  return -1;
+}
+function wireHit(e){
+  var p=document.createElementNS(NS,"path");
+  p.setAttribute("class","whit");
+  p.addEventListener("pointerdown",function(ev){ ev.stopPropagation(); });
+  p.addEventListener("pointerenter",function(){ wireEls[e.i].classList.add("hot"); });
+  p.addEventListener("pointerleave",function(){ wireEls[e.i].classList.remove("hot"); });
+  p.addEventListener("click",function(ev){
+    ev.stopPropagation();
+    var i=sketch?sketchWire(e):-1;
+    if(i>=0) wireNote(i);
+  });
+  gWires.appendChild(p);
+  return p;
+}
 function closeNote(){ if(note&&note.parentNode) note.parentNode.removeChild(note); note=null; }
 function wireDots(el,n){
   if(!drawsHere()||!WIREABLE[n.kind]) return;
