@@ -354,6 +354,23 @@ export const register: Register = on => {
     return done
   })
 
+  // A row above the chat box: where the repo stands, and the map one press
+  // away, so nobody has to send /codegraph:open to see it.
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (e.props.hasSurvey) return next(e)
+    const { Box, Text, Button } = $.ui.resolve(e)
+    const m = await read($, map)
+    const said = !m ? (await read($, status)) || 'reading the map...'
+      : m.source === 'draft' ? 'not set up yet'
+      : m.issues.length ? `${m.issues.length} mismatches` : 'clean'
+    return (
+      <Box flexDirection="row" gap={1} alignItems="center">
+        <Text dimColor>Codegraph · {said}</Text>
+        <Button key="open-map" label="Open map" onPress={async () => $.ui.toast(await openLive($))} />
+      </Box>
+    )
+  })
+
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const table: any = $.ui.resolve(e)
     const { Box, Text, Button } = table
