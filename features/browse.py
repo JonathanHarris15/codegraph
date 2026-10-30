@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from modules.drawing import map_of, render
+from modules.drawing import fresh_map_of, map_of, render
 from modules.planning import design_file, write_plan
 from modules.web import Server
 
@@ -18,7 +18,9 @@ def browse(root: Path, port: int = 0, hidden: bool = False, say=print) -> Server
     held = {"graph": map_of(root, hidden=hidden)}
 
     def again() -> None:
-        held["graph"] = map_of(root, hidden=hidden)
+        # read by codegraph as it is now, which may have changed since this
+        # server started
+        held["graph"] = fresh_map_of(root, hidden=hidden)
 
     def plan(body: dict) -> dict:
         return {"file": write_plan(root, body.get("name", ""), body.get("plan"),

@@ -1,8 +1,12 @@
 # codegraph: module drawing
 from __future__ import annotations
 
+import json
+import subprocess
+import sys
 from collections import defaultdict
 from datetime import datetime, timezone
+from pathlib import Path
 
 from modules.drafting import as_tags, draft_tags
 from modules.layout import order_groups, place_by_file, place_by_folder
@@ -24,6 +28,29 @@ def map_of(root: Path, externals: bool = False, hidden: bool = False, outside: b
     reading = read_map(root, hidden, drafted)
     return build(root, externals=externals, hidden=hidden, outside=outside, layout=layout,
                  keep_empty=keep_empty, reading=reading, source=source)
+
+
+# What a new Python process runs to read a map and print it.
+FRESH = ("import json, sys; from pathlib import Path; from modules.drawing import map_of; "
+         "print(json.dumps(map_of(Path(sys.argv[1]), hidden=sys.argv[2] == '1')))")
+CODEGRAPH = Path(__file__).resolve().parents[2]
+
+
+def fresh_map_of(root: Path, hidden: bool = False) -> dict:
+    """map_of, read by a new Python process. A map server runs for a whole
+    session holding the codegraph it started with; codegraph on disk may have
+    changed since (an update, or work on codegraph itself), and a refresh
+    should read the repo the way codegraph reads it now. Where that process
+    fails, the map is read here instead."""
+    try:
+        ran = subprocess.run([sys.executable, "-c", FRESH, str(root), "1" if hidden else "0"],
+                             cwd=CODEGRAPH, capture_output=True, text=True, encoding="utf-8",
+                             timeout=600)
+        if ran.returncode == 0:
+            return json.loads(ran.stdout)
+    except (OSError, subprocess.SubprocessError, ValueError):
+        pass
+    return map_of(root, hidden=hidden)
 
 
 # --------------------------------------------------------------------- build

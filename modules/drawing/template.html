@@ -1894,8 +1894,8 @@ if(LIVE){
       el.addEventListener("click",function(){ send(b[1]); });
       make.appendChild(el);
     });
-  var again=document.createElement("button"); again.textContent="Refresh";
-  again.title="Read the code again";
+  var again=document.createElement("button"); again.textContent="↻ Reload";
+  again.title="Read the code again, with codegraph as it is now";
   again.addEventListener("click",function(){
     toast("Reading the code again…");
     fetch(LIVE.refresh,{method:"POST"}).catch(function(){ toast("Cannot reach Claude Code: run /codegraph again"); });

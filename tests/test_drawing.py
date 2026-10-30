@@ -8,7 +8,7 @@ import unittest
 from collections import defaultdict
 from pathlib import Path
 
-from modules.drawing import build, summary
+from modules.drawing import build, fresh_map_of, map_of, summary
 from modules.rules import read_map
 from modules.source import OUTSIDE
 from tests.helpers import Folder, mod, tree
@@ -349,3 +349,18 @@ class MapViews(Folder):
 
     def test_no_reading_no_map(self):
         self.assertNotIn("map", build(self.root))
+
+
+class FreshRead(unittest.TestCase):
+    """A map server runs for a whole session, holding the codegraph it started
+    with; a refresh reads the repo with codegraph as it is on disk now."""
+
+    def test_a_fresh_read_draws_the_same_map(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            tree(root, {"pkg/__init__.py": "# codegraph: module pkg\n# codegraph: front door\n",
+                        "pkg/a.py": "# codegraph: module pkg\nimport os\nos.getenv('X')\n"})
+            here, fresh = map_of(root), fresh_map_of(root)
+            here.pop("generated", None)
+            fresh.pop("generated", None)
+            self.assertEqual(fresh, json.loads(json.dumps(here)))
