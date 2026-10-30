@@ -213,8 +213,8 @@ what it is: a feature *uses* a module, a page *acts on* a feature and is
 breaks a rule, and the panel says which.
 
 **Pages** is the map of where a person can go: every page, from the start
-page on the left, with the links that lead between them. **Files** is every
-file and every import.
+page on the left, with the links that lead between them. A repo with no
+modules yet is drawn as every file and every import instead.
 
 Click a card and everything unrelated dims; the panel lists its front door,
 system, route or shape, and its wires. Double-click a card, or press

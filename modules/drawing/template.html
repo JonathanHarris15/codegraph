@@ -424,7 +424,8 @@ var CW=170, CH=62, COLGAP=112, HEADY=26, TIERGAP=96, SYSGAP=44, X0=24;
    map, the page map, and one view inside each card. The generator places
    every card in every view; the page only draws whichever is open. */
 var MODS=GRAPH.map||null;
-var TOP=(MODS?MODS.top:[]).concat(["files"]);
+// the file graph is only the fallback, for a codebase with no modules: a map has no Files tab
+var TOP=MODS?MODS.top.slice():["files"];
 var VIEWS={files:{title:"Files",unit:"files",nodes:GRAPH.nodes,edges:GRAPH.edges,
                   columns:GRAPH.columns,groups:GRAPH.groups}};
 var FILES={};
@@ -1664,7 +1665,7 @@ function sketchSize(){
 // a new project has no pages yet, and drawing them is how it gets some
 if(canSketch()&&!VIEWS.pages){
   VIEWS.pages={title:"Pages",unit:"pages",nodes:[],edges:[],columns:[],groups:[]};
-  TOP.splice(TOP.indexOf("files"),0,"pages");
+  TOP.push("pages");
 }
 var BASE={};
 ["map","pages"].forEach(function(k){
