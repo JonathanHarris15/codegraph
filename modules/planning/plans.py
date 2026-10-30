@@ -10,14 +10,17 @@ it is built (docs/adr/0008):
                {"kind": "module", "name": "mail", "door": ["send", {"name": "bounce", "takes": "..."}]},
                {"kind": "store", "name": "reminders", "owner": "reminders", "fields": {"sent": "date"}},
                {"kind": "page", "name": "rota", "route": "/rota", "design": "plans/<name>/rota.png"},
-               {"kind": "component", "name": "people-picker"}],
+               {"kind": "component", "name": "people-picker"},
+               {"kind": "system", "name": "billing", "about": "the features it should hold"}],
      "wires": [{"from": "page:rota", "kind": "acts on", "to": "feature:remind"}]}
 
 A card or wire is built once the map read from the code has it, with every
 detail the plan asks for. Program, roles, takes and gives ride along on the
 card: the code does not tell codegraph those yet. Nor does a page's design:
 a screen or a page of HTML, kept beside the plan in `plans/<name>/` and
-deleted with it.
+deleted with it. A system card names a collection of features and says in
+plain words what they should be, for the agent to work out; it is built once
+a feature on the map sits in it.
 """
 from __future__ import annotations
 
@@ -30,7 +33,7 @@ from pathlib import Path
 from modules.rules import relation
 
 PLANS = "plans"
-CARD_KINDS = ("module", "feature", "page", "component", "store")
+CARD_KINDS = ("module", "feature", "page", "component", "store", "system")
 TRIGGER_KINDS = ("schedule", "event", "command")
 # the words CONTEXT.md uses for each wire, and the map's own name for it
 WIRE_WORDS = {"uses": "uses", "informed by": "informed", "acts on": "acts", "contains": "contains",
@@ -111,6 +114,28 @@ def write_plan(root: Path, name: str, plan: dict, designs: dict) -> str:
     return "{}/{}.json".format(PLANS, name)
 
 
+# the kinds of card a person draws on the map, and may wire together
+DRAWN = ("module", "feature", "page", "component", "store")
+
+
+def drawable_wires() -> list:
+    """(from kind, to kind, wire word) for every wire the rules allow between
+    two kinds of card a person draws, in the words a plan uses. A module
+    writes a store it owns and reads one it does not; this says writes."""
+    out = []
+    for a in DRAWN:
+        for b in DRAWN:
+            if (a, b) == ("module", "store"):
+                out.append((a, b, "writes"))
+            elif (a, b) == ("page", "page"):
+                out.append((a, b, "leads to"))
+            else:
+                wire, wrong = relation(a, b)
+                if wire and not wrong:
+                    out.append((a, b, WIRE_NAMES[wire]))
+    return out
+
+
 def design_file(root: Path, rel: str) -> tuple | None:
     """(bytes, media type) of a design kept beside a plan, or None for
     anything else: a design is only ever served from inside `plans/`."""
@@ -153,8 +178,8 @@ def _compare(p: dict, nodes: list, edges: list) -> dict:
         c = {"id": "{}:{}".format(kind, name), "kind": kind, "name": name, "problems": []}
         c.update({k: raw[k] for k in KEPT if k in raw})
         if kind not in CARD_KINDS:
-            c["problems"].append("a plan's card is a module, feature, page, component or store, "
-                                 "not " + (kind or "nothing"))
+            c["problems"].append("a plan's card is a module, feature, page, component, store or "
+                                 "system, not " + (kind or "nothing"))
         if not name:
             c["problems"].append("this card has no name")
         cards.append(c)
@@ -252,6 +277,9 @@ def _card_rules(c: dict, kind_of, wires: list, nodes: list, edges: list) -> list
 
 def _left(c: dict, real: dict | None, nodes: list) -> list:
     """What the map has not got yet of what the card asks for."""
+    if c["kind"] == "system":            # a system is on the map once a feature is in it
+        held = any(n.get("kind") == "feature" and n.get("system") == c["name"] for n in nodes)
+        return [] if held else ["not on the map yet"]
     if real is None:
         return ["not on the map yet"]
     left = []

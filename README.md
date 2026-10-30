@@ -94,13 +94,18 @@ the plan is deleted: the check reports a built plan still in `plans/` as a
 mismatch. The map is only ever read from the code.
 
 You can also draw a plan yourself. Right-click empty space on the map or the
-**Pages** view and pick a new module, feature or page: the card appears where
+**Pages** view and pick a new module, feature, page or system: the card appears where
 you clicked, the view flies in to it, and you type in the card itself, its
 name and in plain words what it is for (Enter moves on, Esc is done). A
-feature made inside a system's box joins that system. A page can take a
+feature made inside a system's box joins that system. A new system says in
+plain words what its features should do, and the agent works each one out;
+right-click it to draw a feature in it yourself. A page can take a
 design from Claude Design: **New page from a design…**, or drop a screen or
-an HTML file onto a page, or onto empty space for a new page. On the
-**Pages** view, drag a page's amber dot onto another to say it leads there.
+an HTML file onto a page, or onto empty space for a new page. Every card
+has a dot on each side: drag it onto another card and the map draws the wire
+the rules allow between them (a feature uses a module, a page acts on a
+feature, a page leads to a page), whichever way you dragged, or says why
+there is none.
 Zoom out and carry on; double-click a new card to edit it, right-click it to
 remove it. **Send** writes the drawing to `plans/`, designs beside it in
 `plans/<name>/`, and asks the agent to check it: it fills in what the cards

@@ -323,7 +323,7 @@ def place_map(nodes: list, pairs: list, leads: list = (), aspect: float = 1.0) -
     Returns (col, row, columns, blocks): a card's column on the grid and its
     row within that column and tier, and each block's cards and tier. A
     system's block says it is `within` features."""
-    of = {"external": "outside", "design": "component", "loose": "page"}
+    of = {"external": "outside", "design": "component", "loose": "page", "system": "feature"}
     kinds = {n["id"]: of.get(n["kind"], n["kind"]) for n in nodes}
     block_of = {k: b for b, _, ks, _, _ in MAP_BLOCKS for k in ks}
     for i, k in kinds.items():                       # anything else, with the pages

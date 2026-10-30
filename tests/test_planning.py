@@ -7,7 +7,7 @@ import unittest
 
 import base64
 
-from modules.planning import compare, design_file, left_behind, read_plans, write_plan
+from modules.planning import compare, design_file, drawable_wires, left_behind, read_plans, write_plan
 from tests.helpers import Folder, tree
 
 
@@ -134,6 +134,26 @@ class Plans(Folder):
                                 {"kind": "page", "name": "rota"}],
                       "wires": [{"from": "page:rota", "kind": "acts on", "to": "feature:remind"}]})
         self.assertEqual(p["cards"][0]["problems"], [])
+
+    def test_a_system_is_built_once_a_feature_on_the_map_sits_in_it(self):
+        # a person names a system and says what its features are for; the
+        # agent works out the features
+        p = self.one({"cards": [{"kind": "system", "name": "billing", "about": "Invoices and reminders"}]})
+        c = p["cards"][0]
+        self.assertEqual((c["id"], c["problems"], c["left"], c["built"]),
+                         ("system:billing", [], ["not on the map yet"], False))
+        p = self.one({"cards": [{"kind": "system", "name": "calendar"}]})
+        self.assertTrue(p["cards"][0]["built"])
+
+    def test_the_wires_a_person_may_draw_between_two_kinds_of_card(self):
+        words = {(a, b): w for a, b, w in drawable_wires()}
+        self.assertEqual(words[("feature", "module")], "uses")
+        self.assertEqual(words[("page", "feature")], "acts on")
+        self.assertEqual(words[("page", "module")], "informed by")
+        self.assertEqual(words[("page", "page")], "leads to")
+        self.assertEqual(words[("module", "store")], "writes")
+        self.assertNotIn(("module", "feature"), words)
+        self.assertNotIn(("page", "store"), words)
 
     def test_a_built_plan_and_a_broken_file_are_left_behind(self):
         self.plan("done", {"cards": [{"kind": "module", "name": "mail"}]})

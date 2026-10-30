@@ -178,8 +178,10 @@ logging. They crowd the map and the agent reads code at that depth anyway.
 - Step 3 has begun, still without a build step: a right click on the map or
   the pages view makes a module, feature or page where it lands, flies in to
   it, and the person types what it is for in the card itself; a page takes a
-  design from Claude Design. The + buttons that only filled the chat box are
-  gone. Wires other than leads-to are not drawn by hand yet.
+  design from Claude Design. A system can be drawn as a box that says what
+  its features should do, for the agent to work out. Every card has a dot on
+  each side to drag a wire from; the map picks the wire the rules allow, or
+  refuses. The + buttons that only filled the chat box are gone.
 
 ## What I need from you
 

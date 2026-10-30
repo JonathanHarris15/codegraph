@@ -347,6 +347,20 @@ class MapViews(Folder):
         self.assertIn("page:rota", {n["id"] for n in g["map"]["views"]["pages"]["nodes"]})
         self.assertEqual([p["name"] for p in summary(g)["plans"]], ["remind"])
 
+    def test_a_planned_system_is_a_box_among_the_features(self):
+        tree(self.root, {"plans/billing.json": json.dumps({
+            "cards": [{"kind": "system", "name": "billing", "about": "Invoices, and reminding people to pay."}]})})
+        g = build(self.root, reading=read_map(self.root))
+        view = g["map"]["views"]["map"]
+        ghost = {n["id"]: n for n in view["nodes"]}["system:billing"]
+        self.assertEqual((ghost["ghost"], ghost["block"], ghost["group"]), (True, "features", "system:billing"))
+        self.assertIn({"id": "system:billing", "label": "billing", "within": "features"},
+                      [{k: b[k] for k in ("id", "label", "within") if k in b} for b in view["blocks"]])
+
+    def test_the_map_says_which_wires_a_person_may_draw(self):
+        g = build(self.root, reading=read_map(self.root))
+        self.assertIn(["feature", "module", "uses"], g["map"]["wiring"])
+
     def test_no_reading_no_map(self):
         self.assertNotIn("map", build(self.root))
 

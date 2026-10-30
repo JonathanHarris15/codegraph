@@ -321,9 +321,15 @@ path.wire.faint{opacity:.08}
 #sketchbar b{color:var(--plan);font-family:var(--font-mono);font-size:11px}
 #sketchbar .tally{font-family:var(--font-mono);font-size:10px;color:var(--muted)}
 #sketchbar .hint{flex:1 0 100%;color:var(--muted);font-size:10.5px;line-height:1.45}
-.card .link{position:absolute;right:-9px;top:50%;width:16px;height:16px;margin-top:-8px;border-radius:50%;
-  background:var(--plan);border:3px solid var(--surface);cursor:crosshair;z-index:1;touch-action:none}
-.card .link:hover{transform:scale(1.25)}
+.card .port{position:absolute;top:50%;width:14px;height:14px;margin-top:-7px;border-radius:50%;
+  background:var(--surface);border:2.5px solid var(--plan);cursor:crosshair;z-index:2;touch-action:none;
+  opacity:0;transition:opacity .12s,transform .12s}
+.card .port.left{left:-8px}
+.card .port.right{right:-8px}
+.card:hover .port,.card.ghost .port,.card.sel .port{opacity:1}
+.card .port:hover{transform:scale(1.3);background:var(--plan)}
+.card.sys{border:2px dashed var(--gc);border-radius:14px;min-height:110px}
+.card.sys .nm{font-size:14px}
 .card.droppable{box-shadow:0 0 0 3px var(--plan),var(--stack)}
 #stage.droppable{outline:3px dashed var(--plan);outline-offset:-6px}
 .design{position:relative;display:block;width:100%;height:96px;margin-top:6px;overflow:hidden;
@@ -464,7 +470,7 @@ var MAPWIRES={uses:1,informed:1,acts:1,contains:1,starts:1,writes:1,reads:1,lead
 function isInside(k){ return isWiring(k)||!!MAPWIRES[k]; }
 function headOf(k){ return (KINDS[k]||{}).head||"from"; }
 var CARDCLASS={file:"file",module:"mod",feature:"feat",page:"page",component:"comp",
-  design:"design",shell:"comp",store:"store",trigger:"trig",loose:"loose"};
+  design:"design",shell:"comp",store:"store",trigger:"trig",loose:"loose",system:"sys"};
 
 var KEY="codegraph."+(GRAPH.root||"x");
 function save(k,v){ try{ localStorage.setItem(KEY+"."+k,JSON.stringify(v)); }catch(e){} }
@@ -823,6 +829,7 @@ function show(key){
     if(n.files&&n.files.length) fileList(el,hd,n);
     if(n.kind==="store"||n.kind==="trigger") fieldList(el,n);
     if(n.kind==="page") pageSketching(el,n);
+    wireDots(el,n);
     canvas.appendChild(el); cardEls[n.id]=el;
     hgt[n.id]=el.offsetHeight;
     if(n.files&&!folded[n.id]) measureRows(n.id);
@@ -1294,7 +1301,8 @@ function drawPanel(){
     h+='<p class="note">In system <b>'+esc(n.system||"none")+'</b></p>';
     if(!n.ghost) h+=chips("Says it uses",n.uses,"No modules named.");
   }
-  if(sketchingHere()&&(n.draft||n.kind==="page"&&sketch.designs[n.id])) h+=sketchPanel(n);
+  if(sketchingHere()&&(n.draft||n.kind==="page"&&sketch.designs[n.id]||
+     sketch.wires.some(function(w){ return w.from===n.id||w.to===n.id; }))) h+=sketchPanel(n);
   else if(n.plan){
     h+='<h3>'+(n.ghost?"Planned":"Plan asks for more")+' \u00b7 '+esc(n.plan)+'</h3>';
     if(n.about) h+='<p class="note">'+esc(n.about)+'</p>';
@@ -1513,7 +1521,7 @@ function drag(el,n){
   }
   stage.addEventListener("pointerdown",function(ev){
     if(ev.target.closest(".card")||ev.target.closest("#panel")||ev.target.closest("#legend")||
-       ev.target.closest("#corner")||ev.target.closest("#sketchbar")) return;
+       ev.target.closest("#corner")||ev.target.closest("#sketchbar")||ev.target.closest("#ctx")) return;
     stopZoom();
     id=ev.pointerId; sx=ev.clientX; sy=ev.clientY; px=panX; py=panY;
     boxing=ev.shiftKey;
@@ -1619,14 +1627,20 @@ document.addEventListener("keydown",function(ev){
    click on empty space makes a new module, feature or page where it was
    clicked, flies in to it, and the card opens for typing: its name and, in
    plain words, what it is for. A page can take a design from Claude Design (a
-   screen, or a page of HTML), picked from a file or dropped on it. On the
-   pages view a page's amber dot drags out a link to another page. Send
+   screen, or a page of HTML), picked from a file or dropped on it. A system
+   is a box that says in plain words what its features should be, for the
+   agent to work out; features may be drawn in it too. Every card has a dot
+   on each side: dragged onto another card it draws the wire the rules allow
+   between the two, or says why there is none. Send
    writes the drawing to plans/ as a plan and asks the agent to correct it;
    Build it builds it. Until it is sent the drawing is kept in this browser,
    so the page reloading after a turn does not lose it. */
 var DESIGN_EXT={".png":1,".jpg":1,".jpeg":1,".gif":1,".webp":1,".svg":1,".html":1};
 var DESIGN_MAX=8000000;
-var DRAWN={module:"module",feature:"feature",page:"page"};
+// the words a plan uses for each wire, and the map's own name for it
+var WIRE_KIND={"uses":"uses","informed by":"informed","acts on":"acts","contains":"contains",
+  "writes":"writes","reads":"reads","leads to":"leads","imports":"import"};
+var WIREABLE={module:1,feature:1,page:1,component:1,store:1};
 var sketch=null, sketchForm=null, sketchErr="", editing=null;
 // a repo with no links between pages yet has not been told how one is drawn
 if(MODS&&!KINDS.leads) KINDS.leads={label:"leads to",hue:330,dash:"",width:1.5,head:"to"};
@@ -1687,6 +1701,11 @@ function fillDesigns(root){
    card where it was made (or, on the view it was not made on, in a column of
    its own on the right), drawn links dashed, designs on their pages */
 function drawnLabel(c){ return c.name||"new "+c.kind; }
+function systemOf(c){
+  var box=c.in&&sketch.cards[c.in];
+  return box?(box.name||"new system"):c.system||"";
+}
+function wireWord(w){ return w.kind||"leads to"; }
 function sketchView(){
   Object.keys(BASE).forEach(function(k){
     var v=VIEWS[k];
@@ -1699,13 +1718,17 @@ function sketchView(){
     Object.keys(sketch.cards).forEach(function(id){
       var c=sketch.cards[id];
       if(k==="pages"&&c.kind!=="page") return;
+      var sys=systemOf(c);
       v.nodes.push({id:id,label:drawnLabel(c),kind:c.kind,ghost:true,draft:true,plan:"sketch",left:[],
-        about:c.about||"",route:c.route||"",system:c.system||"",
-        dir:c.kind==="page"?(c.route||"new page"):c.kind==="feature"&&c.system?"new feature in "+c.system:"new "+c.kind,
-        group:c.group||"(drawn)",at:(c.at||{})[k],size:1.5,files:[],sketched:sketch.designs[id]});
+        about:c.about||"",route:c.route||"",system:sys,
+        dir:c.kind==="page"?(c.route||"new page"):c.kind==="feature"&&sys?"new feature in "+sys:"new "+c.kind,
+        group:c.group||"(drawn)",at:(c.at||{})[k],size:c.kind==="system"?2:1.5,files:[],sketched:sketch.designs[id]});
     });
-    if(k==="pages") sketch.wires.forEach(function(w){
-      v.edges.push({from:w.from,to:w.to,kind:"leads",plan:"sketch",names:[],why:[],via:[],bad:[]});
+    var here={};
+    v.nodes.forEach(function(n){ here[n.id]=1; });
+    sketch.wires.forEach(function(w){
+      if(here[w.from]&&here[w.to]) v.edges.push({from:w.from,to:w.to,kind:WIRE_KIND[wireWord(w)]||"import",
+        plan:"sketch",names:[],why:[],via:[],bad:[]});
     });
   });
 }
@@ -1727,8 +1750,8 @@ function drawSketchBar(){
     nw+(nw===1?" link":" links")+" · "+nd+(nd===1?" design":" designs")+'</span>'+
     '<button class="act sm" id="sk-send">Send</button>'+
     '<button class="sm" id="sk-drop">Discard</button>'+
-    '<span class="hint">Right-click empty space for another card; double-click a new card to edit it.'+
-    (cur==="pages"?' Drag a page’s amber dot onto another page to say it leads there.':'')+'</span>';
+    '<span class="hint">Right-click empty space for another card or a system; double-click a new card to edit it. '+
+    'Drag the dot on a card’s side onto another card to wire them.</span>';
   bar.querySelector("#sk-send").addEventListener("click",function(){ openSketchForm("send"); });
   var drop=bar.querySelector("#sk-drop");
   drop.addEventListener("click",function(){
@@ -1776,9 +1799,10 @@ function frameAt(p){
   });
   return hit;
 }
-function newCard(kind,p,design){
+function newCard(kind,p,design,inside){
   if(!sketch) sketch=blank();
   var id="draft:"+(sketch.next++), c={kind:kind,name:"",about:"",at:{}};
+  if(inside) c.in=inside;
   c.at[cur]={x:Math.round(p.x-CW*0.75),y:Math.round(p.y-24)};
   var f=cur==="map"&&frameAt(p);
   if(kind==="feature"&&f&&f.within){ c.system=f.id.replace(/^system:/,""); c.group=f.id; }
@@ -1832,6 +1856,10 @@ stage.addEventListener("contextmenu",function(ev){
   var card=ev.target.closest(".card"), id=card&&card.getAttribute("data-id"), n=id&&nodes[id];
   if(n&&n.draft){
     var items=[["Edit",function(){ editCard(id,true); },"E"]];
+    if(n.kind==="system") items.unshift(["New feature in "+n.label,function(){
+      var k=Object.keys(sketch.cards).filter(function(o){ return sketch.cards[o].in===id; }).length;
+      newCard("feature",{x:pos[id].x+CW*0.75+k%2*(CW*1.5+GAP),y:pos[id].y+hgt[id]+44+Math.floor(k/2)*96},null,id);
+    },"F"]);
     if(n.kind==="page") items.push(["Import a design…",function(){ pickDesign(function(d){ giveDesign(id,d); }); },"I"]);
     items.push(["Remove",function(){ removeCard(id); },"R"]);
     openMenu(ev,items); return;
@@ -1841,16 +1869,17 @@ stage.addEventListener("contextmenu",function(ev){
     return;
   }
   var p=canvasAt(ev), f=cur==="map"&&frameAt(p);
-  var at=f?(f.within?"features":f.id):"", kinds=cur==="pages"?["page"]:["module","feature","page"];
+  var at=f?(f.within?"features":f.id):"", kinds=cur==="pages"?["page"]:["module","feature","page","system"];
   kinds.sort(function(a,b){ return (at===b+"s")-(at===a+"s"); });
   var items=kinds.map(function(k){
     var label="New "+k+(k==="feature"&&f&&f.within?" in "+f.id.replace(/^system:/,""):"");
-    return [label,function(){ newCard(k,p); },k[0].toUpperCase()];
+    return [label,function(){ newCard(k,p); },k==="system"?"S":k[0].toUpperCase()];
   });
   items.push(["New page from a design…",function(){ pickDesign(function(d){ newCard("page",p,d); }); },"D"]);
   openMenu(ev,items);
 });
 function removeCard(id){
+  Object.keys(sketch.cards).forEach(function(o){ if(sketch.cards[o].in===id) delete sketch.cards[o].in; });
   delete sketch.cards[id]; delete sketch.designs[id];
   sketch.wires=sketch.wires.filter(function(w){ return w.from!==id&&w.to!==id; });
   if(editing===id) editing=null;
@@ -1882,9 +1911,12 @@ function editCard(id,fly){
   var d=sketch.designs[id];
   el.classList.add("editing");
   var ed=document.createElement("div"); ed.className="cedit";
-  ed.innerHTML='<div class="ck">new '+esc(c.kind)+(c.system?" in "+esc(c.system):"")+'</div>'+
+  var sys=systemOf(c);
+  ed.innerHTML='<div class="ck">new '+esc(c.kind)+(sys?" in "+esc(sys):"")+'</div>'+
     '<input class="cname" type="text" spellcheck="false" placeholder="its name" value="'+esc(c.name||"")+'">'+
-    '<textarea class="cabout" placeholder="What is it for? Say it in your own words.">'+esc(c.about||"")+'</textarea>'+
+    '<textarea class="cabout" placeholder="'+(c.kind==="system"?
+      "What should its features do? List them loosely; the agent works out each one.":
+      "What is it for? Say it in your own words.")+'">'+esc(c.about||"")+'</textarea>'+
     (c.kind==="page"?'<input class="croute" type="text" spellcheck="false" placeholder="/route, if you know it" value="'+
       esc(c.route||"")+'">'+(d?designHtml(d):"")+
       '<button class="sm cimport" type="button">'+(d?"Change the design…":"Import a design…")+'</button>':"")+
@@ -1930,6 +1962,7 @@ function doneCard(id){
   if(!c.name&&!c.about&&!sketch.designs[id]){ removeCard(id); return; }
   c.name=slug(c.name||c.about.split(/\s+/).slice(0,3).join(" "))||c.kind;
   var taken=nodes[c.kind+":"+c.name]&&!nodes[c.kind+":"+c.name].draft||
+    c.kind==="system"&&frames.some(function(f){ return f.id==="system:"+c.name; })||
     Object.keys(sketch.cards).some(function(o){ return o!==id&&sketch.cards[o].kind===c.kind&&sketch.cards[o].name===c.name; });
   if(taken){
     toast("There is a "+c.kind+" called "+c.name+" already: give this one another name");
@@ -1939,12 +1972,44 @@ function doneCard(id){
   editing=null; redrawSketch(id);
 }
 
-function addLink(a,b){
+/* the wire the rules allow between two cards, whichever way it was dragged:
+   a module dragged onto a feature is still the feature using the module.
+   Only a page leading to a page keeps the way it was drawn. */
+function wireBetween(a,b){
+  var ka=nodes[a].kind, kb=nodes[b].kind, t=(MODS&&MODS.wiring)||[];
+  function find(x,y){ return t.filter(function(w){ return w[0]===x&&w[1]===y; })[0]; }
+  var w=find(ka,kb), from=a, to=b;
+  if(!w){ w=find(kb,ka); from=b; to=a; }
+  if(!w) return null;
+  var word=w[2], store=nodes[to];
+  // a module writes the store it owns, and reads any other
+  if(word==="writes"&&store.owner&&store.owner!=="module:"&&store.owner!==from) word="reads";
+  return {from:from,to:to,kind:word};
+}
+function addWire(a,b){
+  var w=wireBetween(a,b);
+  if(!w){
+    var ka=nodes[a].kind, kb=nodes[b].kind;
+    toast("No wire between a "+ka+" and a "+kb+": "+(ka==="feature"&&kb==="feature"
+      ?"a feature never calls another; share the work through a module"
+      :ka==="store"||kb==="store"?"only a module reaches a store"
+      :"the rules have no wire for it"));
+    return;
+  }
   if(!sketch) sketch=blank();
-  var had=sketch.wires.some(function(w){ return w.from===a&&w.to===b; })||
-    (BASE.pages.edges.some(function(e){ return e.from===a&&e.to===b&&e.kind==="leads"; }));
-  if(had){ toast(nodes[a].label+" already leads to "+nodes[b].label); return; }
-  sketch.wires.push({from:a,to:b}); redrawSketch(a);
+  var had=sketch.wires.some(function(x){ return x.from===w.from&&x.to===w.to; })||
+    edges.some(function(e){ return e.from===w.from&&e.to===w.to&&e.kind===WIRE_KIND[w.kind]; });
+  if(had){ toast(nodes[w.from].label+" already "+w.kind+" "+nodes[w.to].label); return; }
+  sketch.wires.push(w); redrawSketch(a);
+}
+function wireDots(el,n){
+  if(!drawsHere()||!WIREABLE[n.kind]) return;
+  ["left","right"].forEach(function(side){
+    var dot=document.createElement("span"); dot.className="port "+side;
+    dot.title="Drag onto another card to wire them";
+    dot.addEventListener("pointerdown",function(ev){ ev.stopPropagation(); ev.preventDefault(); wireFrom(n.id,side,ev); });
+    el.appendChild(dot);
+  });
 }
 function readDesign(file,then){
   var ext=extOf(file.name);
@@ -1972,28 +2037,23 @@ function pageSketching(el,n){
     ev.preventDefault(); ev.stopPropagation(); el.classList.remove("droppable");
     readDesign(ev.dataTransfer.files[0],function(design){ giveDesign(n.id,design); });
   });
-  if(cur!=="pages") return;
-  var dot=document.createElement("span"); dot.className="link";
-  dot.title="Drag onto another page: this page leads there";
-  dot.addEventListener("pointerdown",function(ev){ ev.stopPropagation(); ev.preventDefault(); linkFrom(n.id,ev); });
-  el.appendChild(dot);
 }
-function linkFrom(id,ev){
+function wireFrom(id,side,ev){
   var line=document.createElementNS(NS,"path");
   line.setAttribute("class","wire planned"); line.setAttribute("stroke","var(--plan)");
   line.setAttribute("stroke-width","2.6"); line.setAttribute("stroke-dasharray","9 6");
   gWires.appendChild(line);
-  var a={x:pos[id].x+cw(id), y:pos[id].y+hgt[id]/2};
+  var a={x:pos[id].x+(side==="left"?0:cw(id)), y:pos[id].y+hgt[id]/2}, out=side==="left"?-1:1;
   function move(e){
     var b=canvasAt(e), k=Math.max(40,Math.abs(b.x-a.x)/2);
-    line.setAttribute("d","M"+a.x+" "+a.y+" C"+(a.x+k)+" "+a.y+" "+(b.x-k)+" "+b.y+" "+b.x+" "+b.y);
+    line.setAttribute("d","M"+a.x+" "+a.y+" C"+(a.x+out*k)+" "+a.y+" "+(b.x-out*k)+" "+b.y+" "+b.x+" "+b.y);
   }
   function up(e){
     window.removeEventListener("pointermove",move); window.removeEventListener("pointerup",up);
     if(line.parentNode) line.parentNode.removeChild(line);
     var hit=document.elementFromPoint(e.clientX,e.clientY), card=hit&&hit.closest(".card");
     var to=card&&card.getAttribute("data-id");
-    if(to&&to!==id&&nodes[to]&&nodes[to].kind==="page") addLink(id,to);
+    if(to&&to!==id&&nodes[to]) addWire(id,to);
   }
   window.addEventListener("pointermove",move); window.addEventListener("pointerup",up); move(ev);
 }
@@ -2024,7 +2084,7 @@ function sketchPanel(n){
   else if(n.kind==="page") h+='<p class="note">Right-click this page, or drop a screen or an HTML file on it, to give it a design.</p>';
   (sketch?sketch.wires:[]).forEach(function(w,i){
     if(w.from!==n.id&&w.to!==n.id) return;
-    h+='<div class="drawn"><span>'+esc(nodes[w.from]?nodes[w.from].label:w.from)+" leads to "+
+    h+='<div class="drawn"><span>'+esc(nodes[w.from]?nodes[w.from].label:w.from)+" "+esc(wireWord(w))+" "+
       esc(nodes[w.to]?nodes[w.to].label:w.to)+'</span><button class="sm" data-unlink="'+i+'">×</button></div>';
   });
   if(c) h+='<div class="acts"><button class="sm" data-uncard="1">Remove this '+esc(c.kind)+'</button></div>';
@@ -2054,7 +2114,7 @@ function sendSketch(v){
     ids[id]=s.kind+":"+c.name;
     if(s.about) c.about=s.about;
     if(s.route) c.route=s.route;
-    if(s.system) c.system=s.system;
+    if(systemOf(s)) c.system=systemOf(s);
     cards[id]=c;
   });
   Object.keys(sketch.designs).forEach(function(id){
@@ -2065,7 +2125,7 @@ function sendSketch(v){
   });
   var plan={ask:v.ask, drawn:true,
     cards:Object.keys(cards).map(function(id){ return cards[id]; }),
-    wires:sketch.wires.map(function(w){ return {from:ids[w.from]||w.from,kind:"leads to",to:ids[w.to]||w.to}; })};
+    wires:sketch.wires.map(function(w){ return {from:ids[w.from]||w.from,kind:wireWord(w),to:ids[w.to]||w.to}; })};
   fetch(LIVE.plan,{method:"POST",headers:{"Content-Type":"application/json"},
                    body:JSON.stringify({name:name,plan:plan,designs:designs})})
     .then(function(r){ return r.json().then(function(b){ return {ok:r.ok,body:b}; }); })

@@ -4,7 +4,7 @@ from __future__ import annotations
 from collections import defaultdict
 
 from modules.layout import place_by_file, place_inside, place_map, size_cards
-from modules.planning import compare, read_plans
+from modules.planning import compare, drawable_wires, read_plans
 from modules.rules import UI_KINDS, relation
 from modules.source import EXTERNAL, OUTSIDE
 
@@ -200,6 +200,7 @@ def map_views(root: Path, graph: dict, r: Reading, source: str = "tags") -> dict
                               cards[cid]["group"], cid)
 
     return {"source": source, "top": top, "views": views, "plans": plans,
+            "wiring": [list(w) for w in drawable_wires()],
             "mismatches": [str(m) for m in r.mismatches],
             "unknown": [str(u) for u in r.unknown]}
 
@@ -245,6 +246,8 @@ def _ghosts(plans: list) -> tuple:
 
 
 def _ghost_group(c: dict) -> str:
+    if c["kind"] == "system":           # a box of its own among the features
+        return "system:" + c["name"]
     if c["kind"] == "feature":
         return "system:" + (c.get("system") or "?")
     if c["kind"] in UI_KINDS:
