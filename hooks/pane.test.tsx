@@ -59,6 +59,9 @@ const SUMMARY = {
   },
 }
 
+// The rules block this copy of codegraph writes, and a repo's CLAUDE.md that holds it.
+const BLOCK = '<!-- codegraph:start -->\nBuild in three layers.\n<!-- codegraph:end -->\n'
+
 const PANE = {
   plugin: 'codegraph',
   component: 'Pane',
@@ -73,7 +76,10 @@ const PANE = {
   },
 } as const
 
-function engine(on: any, surface: string, said: { filled: string; draft: string; all?: string[]; ran?: string[][]; root?: () => string }) {
+function engine(on: any, surface: string, said: {
+  filled: string; draft: string; all?: string[]; ran?: string[][]; root?: () => string
+  rules?: string | null // the repo's CLAUDE.md: set up with BLOCK unless said, null for none
+}) {
   // Nothing sits beneath the plugin: each hook here stands for the engine.
   on('command.register', () => ({ value: { command: 'codegraph' } }))
   on('tool.register', () => ({ value: {} }))
@@ -83,6 +89,18 @@ function engine(on: any, surface: string, said: { filled: string; draft: string;
   on('process.run', (_: any, e: any) => {
     said.ran?.push([...e.argv])
     return { value: { exitCode: 0, stdout: e.argv.includes('--summary') ? JSON.stringify(SUMMARY) : 'Python 3.12.0', stderr: '' } }
+  })
+  const file = (path: string) => {
+    if (path.endsWith('/skills/setup/CONTEXT-BLOCK.md')) return BLOCK
+    const rules = said.rules === undefined ? `# The app\n\n${BLOCK}` : said.rules
+    return path.endsWith('/CLAUDE.md') ? rules : null
+  }
+  on('fs.exists', (_: any, e: any) => ({ value: file(e.path) !== null }))
+  on('fs.read', (_: any, e: any) => ({ value: file(e.path) ?? '' }))
+  // where the mod leaves the row above the chat box, the engine draws its own
+  on('ui.render', { component: 'AbovePrompt' }, ($: any, e: any) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text>engine</Text>
   })
   on('prompt.read', () => ({ value: { text: said.draft, cursor: 0 } }))
   on('prompt.fill', (_: any, e: any) => {
@@ -159,6 +177,7 @@ test('/codegraph serves the live map, opens it in a browser tab, and its presses
     yield { stream: 'stdout', text: '{"ready": "http://127.0.0.1:7333/s3cret/"}\n{"ask": "Build a new' }
     yield { stream: 'stdout', text: ' feature: "}\n' }
     yield { stream: 'stdout', text: '{"ask": "/codegraph:fix all 2 mismatches, worst first, one commit each"}\n' }
+    await new Promise(() => undefined) // serves until stopped
   } as any)
   on('mcp.call', (_: any, e: any) => {
     opened.push(e)
@@ -221,6 +240,45 @@ test('a button above the chat box opens the live map, with no message to send', 
   expect((await band.find({ type: 'Text', text: /2 mismatches/ }))?.text).toBeTruthy()
   await band.press({ key: 'open-map' })
   expect(opened[0]).toMatchObject({ tool: 'preview_start', args: { url: 'http://127.0.0.1:7333/s3cret/' } })
+  await band.unmount()
+})
+
+function mountBand($: any) {
+  return $.ui.mount({
+    plugin: 'codegraph', component: 'AbovePrompt', surface: 'desktop',
+    props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 80, scroll: { offset: 0, bodyRows: 10 } },
+  } as any)
+}
+
+test('a repo not set up for codegraph shows nothing of it, and runs no program', async ($, on) => {
+  const ran: string[][] = []
+  engine(on, 'desktop', { filled: '', draft: '', ran, rules: '# The app\n' })
+
+  await $.session.start({ cwd: '/repo', surface: 'desktop', isInteractive: true })
+  const band = await mountBand($)
+  expect(await band.find({ type: 'Text', text: /Codegraph/ })).toBeUndefined()
+  await band.unmount()
+
+  const checked: any = await $.tool.call({ tool: 'mcp__codegraph__check' } as any)
+  expect(JSON.stringify(checked)).toContain('/codegraph:setup')
+  const mapped: any = await $.tool.call({ tool: 'mcp__codegraph__map' } as any)
+  expect(JSON.stringify(mapped)).toContain('/codegraph:setup')
+  expect(ran.filter(argv => argv.includes('--summary') || argv.includes('--check'))).toEqual([])
+})
+
+test('a repo whose rules are older than this codegraph says setup updates them', async ($, on) => {
+  engine(on, 'desktop', {
+    filled: '', draft: '',
+    rules: '# The app\n\n<!-- codegraph:start -->\nThe old rules.\n<!-- codegraph:end -->\n',
+  })
+
+  await $.session.start({ cwd: '/repo', surface: 'desktop', isInteractive: true })
+  const band = await mountBand($)
+  for (let i = 0; i < 50 && !(await band.find({ type: 'Text', text: /mismatches/ })); i++) {
+    await new Promise(r => (globalThis as any).setTimeout(r, 10))
+  }
+  expect((await band.find({ type: 'Text', text: /rules out of date/ }))?.text).toContain('/codegraph:setup updates them')
+  expect((await band.find({ type: 'Text', text: /2 mismatches/ }))?.text).toBeTruthy()
   await band.unmount()
 })
 

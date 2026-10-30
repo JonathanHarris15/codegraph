@@ -1,9 +1,10 @@
 # codegraph: module installing
-"""A repo turns codegraph on for everyone who opens it by naming its
-marketplace and enabling the plugin in `.claude/settings.json`, which is
-committed. The marketplace lists the plugin by a relative path, so Claude
-Code loads it from the marketplace's own copy once the person trusts the
-folder: nobody runs an install of their own.
+"""Codegraph is turned on by naming its marketplace and enabling the plugin
+in a Claude settings file: once in a person's own settings, for every project
+they open, and in each repo's committed `.claude/settings.json`, for everyone
+who opens that repo. The marketplace lists the plugin by a relative path, so
+Claude Code loads it from the marketplace's own copy: nobody runs an install
+of their own. Both name the same plugin, so a person who has both has one.
 
 The rules go between the codegraph markers in the repo's `CLAUDE.md` (or
 `AGENTS.md`, where the repo keeps its agent rules there), the same block
@@ -11,6 +12,7 @@ setup writes, so every agent there builds in the three layers."""
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -32,15 +34,26 @@ def install_in(root: Path) -> Installed:
     """Turn codegraph on in the repo at root. Keeps everything the repo's
     files already say; changes nothing that is already right."""
     done = Installed()
-    _settings(root, done)
+    _settings(root / ".claude/settings.json", ".claude/settings.json", done)
     _rules(root, done)
     _ignore(root, done)
     return done
 
 
-def _settings(root: Path, done: Installed) -> None:
-    rel = ".claude/settings.json"
-    path = root / rel
+def install_for_profile(path: Path | None = None) -> Installed:
+    """Turn codegraph on in the person's own Claude settings, for every
+    project they open: those at path, else the ones Claude Code reads
+    (`CLAUDE_CONFIG_DIR`, else `~/.claude`). Keeps every other setting."""
+    if path is None:
+        path = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude") / "settings.json"
+    done = Installed()
+    _settings(path, str(path), done)
+    return done
+
+
+def _settings(path: Path, rel: str, done: Installed) -> None:
+    """Name the marketplace, unless the settings already name one by that
+    name (a fork, or a copy in a folder), and turn the plugin on."""
     settings: dict = {}
     if path.exists():
         try:
@@ -52,8 +65,8 @@ def _settings(root: Path, done: Installed) -> None:
             done.problems.append("{} does not hold an object: left as it is".format(rel))
             return
     want = json.loads(json.dumps(settings))
-    want.setdefault("extraKnownMarketplaces", {})[MARKETPLACE] = {
-        "source": {"source": "github", "repo": REPO}, "autoUpdate": True}
+    want.setdefault("extraKnownMarketplaces", {}).setdefault(MARKETPLACE, {
+        "source": {"source": "github", "repo": REPO}, "autoUpdate": True})
     want.setdefault("enabledPlugins", {})[PLUGIN] = True
     if want != settings:
         path.parent.mkdir(parents=True, exist_ok=True)

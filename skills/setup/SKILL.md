@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Set a repo up for codegraph. Tags every source file, writes the architecture rules into the repo's CLAUDE.md, turns the plugin on for everyone who opens the repo, and hands back a ranked list of mismatches to fix.
+description: Set a repo up for codegraph, or update one already set up. Tags every source file, writes the architecture rules into the repo's CLAUDE.md, turns the plugin on for everyone who opens the repo, and hands back a ranked list of mismatches to fix.
 disable-model-invocation: true
 ---
 
@@ -9,6 +9,8 @@ disable-model-invocation: true
 Brings one repo, fresh or long-lived, under codegraph (docs/adr/0004 in the codegraph plugin). Setup changes no behaviour: it writes tags (comments), the repo's context block, a `.gitignore` line and the repo's plugin settings. Moving and rewriting code is the fix skill's job, one change at a time.
 
 The program is `codegraph.py`, two folders above this skill's base directory. Call that path `CG` below and run it with Python 3.10 or newer. It reads Python on its own; TypeScript and JavaScript need `pip install tree-sitter tree-sitter-typescript tree-sitter-javascript`. If the repo has such files and the import fails, ask before installing.
+
+A repo is already set up when its `CLAUDE.md` or `AGENTS.md` holds the codegraph block (`<!-- codegraph:start -->`). Running setup there is an **update**: follow [Updating](#updating) instead of the steps below.
 
 ## Steps
 
@@ -39,3 +41,13 @@ The program is `codegraph.py`, two folders above this skill's base directory. Ca
    5. tests faking the repo's own code.
 
    Tell the person how many of each, the three to fix first and why, that `/codegraph` shows the map beside the chat, and that `/codegraph:fix` fixes the next one.
+
+## Updating
+
+A newer codegraph may write newer rules, and code written since setup may have no tags. The map's row above the chat box says `rules out of date` when the block is older than this copy's.
+
+1. **Branch.** The working tree must be clean; if it is not, stop and ask. Create a branch `codegraph-update`.
+2. **Turn codegraph on again.** Run `python CG . --install`. It replaces the block with this copy's and leaves everything else in those files as it was. Read the block's diff, so you can say in a line what changed in the rules.
+3. **Tag what is new.** Run `python CG . --draft`: it tags only files with no tag. Correct each of those by judgment, as in step 3 above. Leave the tags that were there alone; changing them is a fix.
+4. **Commit** on the branch: `Update codegraph`. If nothing changed, say so and delete the branch.
+5. **Report** as in step 6 above, after a line on what changed in the rules and how many files were newly tagged.
