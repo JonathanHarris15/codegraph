@@ -1,5 +1,5 @@
 # codegraph: module planning
-# codegraph: front door compare, design_file, drawable_wires, left_behind, read_plans, write_plan
+# codegraph: front door compare, design_file, designs_in, drawable_wires, left_behind, read_plans, write_plan
 """Reads and writes the plans waiting in `plans/`, and holds each against the map read from the code."""
 
-from .plans import compare, design_file, drawable_wires, left_behind, read_plans, write_plan
+from .plans import compare, design_file, designs_in, drawable_wires, left_behind, read_plans, write_plan

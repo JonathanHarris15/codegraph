@@ -21,6 +21,13 @@ a screen or a page of HTML, kept beside the plan in `plans/<name>/` and
 deleted with it. A system card names a collection of features and says in
 plain words what they should be, for the agent to work out; it is built once
 a feature on the map sits in it.
+
+A plan drawn on the map keeps the drawing as the person left it, under
+`drawing`. The agent then revises the cards and wires in place, says why in
+`comments` (`{"on": card id, or "from kind to" for a wire, "by": "agent",
+"text": ...}`), and sets `reviewed`; the map shows what it added, struck out
+and reworded against the drawing, as suggestions. The person's own comments
+ride along the same way, `by` the person.
 """
 from __future__ import annotations
 
@@ -31,6 +38,7 @@ import re
 from pathlib import Path
 
 from modules.rules import relation
+from modules.source import DESIGNS as DESIGN_FOLDER
 
 PLANS = "plans"
 CARD_KINDS = ("module", "feature", "page", "component", "store", "system")
@@ -109,6 +117,9 @@ def write_plan(root: Path, name: str, plan: dict, designs: dict) -> str:
         (folder / name).mkdir(parents=True, exist_ok=True)
         for file, raw in files.items():
             (folder / name / file).write_bytes(raw)
+    if plan.get("drawn") and "drawing" not in plan:
+        # what the person drew, kept whole, for the agent's revision to be read against
+        plan = dict(plan, drawing={"cards": plan.get("cards") or [], "wires": plan.get("wires") or []})
     folder.mkdir(exist_ok=True)
     (folder / (name + ".json")).write_text(json.dumps(plan, indent=1) + "\n", encoding="utf-8")
     return "{}/{}.json".format(PLANS, name)
@@ -136,13 +147,27 @@ def drawable_wires() -> list:
     return out
 
 
+def designs_in(root: Path) -> list:
+    """The pages exported from Claude Design into the repo's `designs/`
+    folder, for a page to take: each picture or page of HTML in it, and each
+    folder in it with an index.html, by name."""
+    folder = Path(root) / DESIGN_FOLDER
+    out = []
+    for path in sorted(folder.iterdir()) if folder.is_dir() else []:
+        page = path / "index.html" if path.is_dir() else path
+        if page.is_file() and page.suffix.lower() in DESIGNS:
+            out.append({"file": page.relative_to(root).as_posix(), "name": path.stem,
+                        "type": "text/html" if page.suffix.lower() == ".html" else "image"})
+    return out
+
+
 def design_file(root: Path, rel: str) -> tuple | None:
-    """(bytes, media type) of a design kept beside a plan, or None for
-    anything else: a design is only ever served from inside `plans/`."""
-    folder = (Path(root) / PLANS).resolve()
+    """(bytes, media type) of a design, or None for anything else: a design
+    is only ever served from inside `plans/` or `designs/`."""
     path = (Path(root) / str(rel)).resolve()
     kind = DESIGNS.get(path.suffix.lower())
-    if not kind or folder not in path.parents or not path.is_file():
+    inside = any((Path(root) / f).resolve() in path.parents for f in (PLANS, DESIGN_FOLDER))
+    if not kind or not inside or not path.is_file():
         return None
     return path.read_bytes(), kind
 
@@ -159,7 +184,7 @@ def _norm(s: str) -> str:
 
 def _compare(p: dict, nodes: list, edges: list) -> dict:
     out = {"name": p["name"], "file": p["file"], "ask": "", "cards": [], "wires": [],
-           "problems": [], "built": False}
+           "problems": [], "built": False, "struck": [], "struck_wires": [], "comments": []}
     if p.get("designs"):
         out["designs"] = p["designs"]
     if p.get("error"):
@@ -196,8 +221,9 @@ def _compare(p: dict, nodes: list, edges: list) -> dict:
         w = {"from": str(raw.get("from", "")), "to": str(raw.get("to", "")),
              "kind": WIRE_WORDS.get(word, word),
              "problems": []}
-        if "carries" in raw:
-            w["carries"] = raw["carries"]
+        for k in ("carries", "about"):
+            if k in raw:
+                w[k] = raw[k]
         wires.append(w)
 
     for w in wires:
@@ -211,7 +237,48 @@ def _compare(p: dict, nodes: list, edges: list) -> dict:
 
     out["cards"], out["wires"] = cards, wires
     out["built"] = all(c["built"] for c in cards) and all(w["built"] for w in wires)
+    out["comments"] = [{"on": str(c.get("on", "")), "by": str(c.get("by", "person")), "text": str(c.get("text", ""))}
+                       for c in data.get("comments") or [] if isinstance(c, dict) and c.get("text")]
+    if data.get("reviewed") and isinstance(data.get("drawing"), dict):
+        _review(out, data["drawing"])
     return out
+
+
+# what the agent may reword on a card the person drew, to be shown struck and inserted
+REWORDED = ("about", "system", "route")
+
+
+def _wire_key(w: dict) -> tuple:
+    word = _norm(w.get("kind", ""))
+    return str(w.get("from", "")), WIRE_WORDS.get(word, word), str(w.get("to", ""))
+
+
+def _review(out: dict, drawing: dict) -> None:
+    """Mark the agent's revision against the person's drawing: each card and
+    wire it added, each card it reworded and what it said before, and what
+    of the drawing it struck out."""
+    drawn = {}
+    for raw in drawing.get("cards") or []:
+        if isinstance(raw, dict):
+            drawn["{}:{}".format(raw.get("kind", ""), raw.get("name", ""))] = raw
+    for c in out["cards"]:
+        before = drawn.get(c["id"])
+        if before is None:
+            c["change"] = "added"
+            continue
+        was = {k: before.get(k, "") for k in REWORDED if (before.get(k) or "") != (c.get(k) or "")}
+        c["change"] = "changed" if was else ""
+        if was:
+            c["was"] = was
+    kept = {c["id"] for c in out["cards"]}
+    out["struck"] = [{"id": i, "kind": str(r.get("kind", "")), "name": str(r.get("name", "")),
+                      "about": str(r.get("about", ""))} for i, r in drawn.items() if i not in kept]
+    drawn_wires = {_wire_key(w): w for w in drawing.get("wires") or [] if isinstance(w, dict)}
+    for w in out["wires"]:
+        w["change"] = "" if (w["from"], w["kind"], w["to"]) in drawn_wires else "added"
+    now = {(w["from"], w["kind"], w["to"]) for w in out["wires"]}
+    out["struck_wires"] = [{"from": a, "kind": k, "to": b, "about": str(w.get("about", ""))}
+                           for (a, k, b), w in drawn_wires.items() if (a, k, b) not in now]
 
 
 def _wire_rules(w: dict, kind_of, planned: dict, on_map: dict) -> list:

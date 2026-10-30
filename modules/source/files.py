@@ -10,6 +10,9 @@ SKIP_DIRS = {
     ".mypy_cache", ".pytest_cache", ".ruff_cache", ".tox", ".eggs",
     "build", "dist", "site-packages", ".idea", ".vscode",
 }
+# The folder at a repo's root that holds pages exported from Claude Design:
+# pictures and pages of HTML, scripts and all, that the program never runs.
+DESIGNS = "designs"
 
 
 # --------------------------------------------------------------------- model
@@ -79,7 +82,7 @@ def discover(root: Path, hidden: bool = False,
     for path in sorted(p for p in root.rglob("*") if p.suffix in suffixes and p.is_file()):
         rel = path.relative_to(root)
         parts = rel.parts[:-1]
-        if any(p in SKIP_DIRS for p in parts):
+        if any(p in SKIP_DIRS for p in parts) or parts[:1] == (DESIGNS,):
             continue
         if not hidden and any(p.startswith(".") for p in parts):
             continue

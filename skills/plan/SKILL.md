@@ -41,19 +41,21 @@ A plan is a change waiting in `plans/<name>.json` at the repo root. The live map
    - `program`, `roles`, `takes` and `gives` go in wherever you know them. The map shows them; codegraph cannot check them against the code yet.
    - A feature's `triggers` are `schedule <when>`, `event <name>` or `command <name>`. A person starts a feature through an `acts on` wire from a page instead.
    - A store names its owning module; only the owner writes it.
-   - A page's `design` is a screen or a page of HTML kept in `plans/<name>/`. A person drops these on the map; you rarely write one yourself.
+   - A page's `design` is a page exported from Claude Design into `designs/` at the repo's root (a picture, an HTML file, or a folder with an index.html), or one dropped on the map and kept in `plans/<name>/`. Name it by its path; never copy it.
    - `{"kind": "system", "name": "billing", "about": "..."}` names a new system and says what its features should be. It is built once a feature on the map sits in it, so a plan with one also holds the features, each with `"system": "billing"`.
 4. **Correct it.** Read the map again: each plan lists its `problems`. Fix every one. Where a problem comes from what the person asked for (a page that saves straight to a store), correct the plan to the right shape and remember to tell them why.
 5. **Show it.** Open the map with `mcp__codegraph__open`. Say in a few lines what the plan adds and changes, and anything you corrected. Build nothing until the person approves: they press **Build it**, or say so.
 
 ## Checking a sketched plan
 
-A person drew this one on the map: new modules, features and pages, each with a few words on what it is for, which page leads to which, and designs dropped on pages. It says `"drawn": true`. They said what they want and where pages go and what they look like, not how the code does it. A card's name is a first guess from what they typed: rename it to the repo's words where it reads wrong.
+A person drew this one on the map: new modules, features, pages, stores and systems, each with a few words on what it is for, wires between cards (some with a note on what they are for), designs picked from `designs/`, and comments, `by` the person, asking questions or making suggestions. It says `"drawn": true`, and `drawing` holds it exactly as they left it. They said what they want and where pages go and what they look like, not how the code does it. A card's name is a first guess from what they typed: rename it to the repo's words where it reads wrong.
 
-1. **Read** the plan, its `ask`, every design in `plans/<name>/` (look at the pictures; read the HTML), and the map.
+1. **Read** the plan, its `ask`, its comments, every design it names (in `designs/` or `plans/<name>/`: look at the pictures; read the HTML), and the map.
 2. **Fill in what a sketch leaves out.** A drawn system says in plain words what its features should do: write a feature card for each one it describes, in that system, with its trigger and the modules it uses; keep any feature the person drew in it, and fold what they described into those rather than doubling them. A drawn wire is the one the rules allow between those two kinds of card; keep it. A drawn feature needs its trigger and the modules it uses; a drawn module needs its front door and any store it keeps; work them out from what the card says it is for. A page whose design has a form or a button that does something needs the feature it acts on, and the modules that feature uses: add those cards and wires, named in the repo's words. A page with no route gets one in the style of the others. A page nothing leads to needs a way in; say so rather than guess where.
-3. **Correct it** as in step 4 above, and keep what the person drew: change their cards and links only where they break a rule, and say why.
-4. **Show it** as in step 5 above, saying what you added and what you changed.
+3. **Correct it** as in step 4 above, and keep what the person drew: change their cards and links only where they break a rule or you think they are wrong, and say why.
+4. **Write your revision over `cards` and `wires`; never touch `drawing`.** The map reads one against the other and shows the person what you added, struck out and reworded, the way a document shows suggestions. Strike a card or wire by leaving it out; reword a card by changing its `about` or `system`. Set `"reviewed": true`.
+5. **Say why in comments.** Add `{"on": "<card id>", "by": "agent", "text": "..."}` to `comments` for every card you added, struck or reworded, and `{"on": "<from> <wire words> <to>", ...}` for a wire. Answer each of the person's comments with one of yours on the same card. Keep their comments as they are. Where you think they are wrong, say so plainly and let them decide: they can keep their version.
+6. **Show it** as in step 5 above, saying in a few lines what you changed and why.
 
 ## Building a plan
 

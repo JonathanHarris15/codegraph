@@ -249,8 +249,11 @@ _Avoid_: renders, includes
 A change a person or an agent wants made, drawn on the map before it is
 built: the cards and wires to add or change, each card with a few lines of
 plain words saying what it is for, and for a page, a design: a screen or a
-page of HTML it should look like. It waits as a file in `plans/`, its designs
-beside it. A person can write one by sketching on the map, or an agent can.
+page of HTML it should look like, exported from Claude Design into
+`designs/`. It waits as a file in `plans/`. A person can draw one on the map,
+or an agent can write one. A drawn plan keeps the drawing as the person left
+it; the agent's revision is read against it, and both sides say why in
+comments.
 _Rule_: a plan is a request, not a declaration (docs/adr/0008). The map draws
 what of it is not built yet as ghosts; once the map read from the code has
 every card and wire in it, the plan is deleted, and a plan left behind after

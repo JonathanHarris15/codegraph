@@ -254,6 +254,13 @@ class WhatIsNotSource(Repo):
         rels = self.git_repo(SMALL_APP, "public/\n")
         self.assertEqual(rels, ["app.py"])
 
+    def test_the_designs_folder_at_the_root_is_not_code(self):
+        # Claude Design exports land in designs/, scripts and all; a folder of
+        # that name deeper in the program is the program's own
+        tree(self.root, {"app.py": "x = 1\n", "designs/home/app.js": "render()\n",
+                         "src/designs/button.py": "y = 2\n"})
+        self.assertEqual(sorted(f.rel for f in files_in(self.root)), ["app.py", "src/designs/button.py"])
+
     def test_a_generated_file_that_was_committed_stays(self):
         # Checked in is checked in: it ships, so it is part of the program
         # whoever wrote it.

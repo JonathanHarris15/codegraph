@@ -182,6 +182,10 @@ logging. They crowd the map and the agent reads code at that depth anyway.
   its features should do, for the agent to work out. Every card has a dot on
   each side to drag a wire from; the map picks the wire the rules allow, or
   refuses. The + buttons that only filled the chat box are gone.
+- New cards take their place in the box for their kind, stores included;
+  designs come from a `designs/` folder in the repo. A person can comment on
+  any card and write a note on any wire. The agent's revision of a drawing is
+  shown on the same map as suggestions against it, with its comments.
 
 ## What I need from you
 

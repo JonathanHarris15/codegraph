@@ -94,18 +94,32 @@ the plan is deleted: the check reports a built plan still in `plans/` as a
 mismatch. The map is only ever read from the code.
 
 You can also draw a plan yourself. Right-click empty space on the map or the
-**Pages** view and pick a new module, feature, page or system: the card appears where
-you clicked, the view flies in to it, and you type in the card itself, its
-name and in plain words what it is for (Enter moves on, Esc is done). A
-feature made inside a system's box joins that system. A new system says in
-plain words what its features should do, and the agent works each one out;
-right-click it to draw a feature in it yourself. A page can take a
-design from Claude Design: **New page from a design…**, or drop a screen or
-an HTML file onto a page, or onto empty space for a new page. Every card
+**Pages** view and pick a new module, feature, page, store or system: the
+card takes its place in the box for its kind (modules, features, pages,
+outside + stores), the view flies in to it, and you type in the card itself,
+its name and in plain words what it is for (Enter moves on, Esc is done).
+Drag a card by its edge or its top. Drag a new feature into a system's box
+to say it belongs there; one made by right-clicking inside a system starts
+there. A new system says in plain words what its features should do, and the
+agent works each one out; right-click it to draw a feature in it yourself.
+
+A page can take a design from Claude Design. Export the page into `designs/`
+at the root of the repo (an HTML file, a picture, or a folder with an
+index.html); **Pick a design…** on a page shows every design there as it
+looks. codegraph never reads `designs/` as code. Every card
 has a dot on each side: drag it onto another card and the map draws the wire
 the rules allow between them (a feature uses a module, a page acts on a
 feature, a page leads to a page), whichever way you dragged, or says why
-there is none.
+there is none. Write a few words on a wire as you draw it, if you like, to
+say what you imagine it carries. Every card also has a comment button: ask a
+question or make a suggestion, and it goes with the drawing.
+
+When the agent has checked a drawing, the map shows its revision against what
+you drew, like suggested edits in a document: what it added in teal, what it
+struck out crossed through in red, reworded text with the old words struck
+and the new ones underlined, and a comment on each change saying why. Press
+**Keep mine** where you disagree, **Ask why**, or reply in a card's comments;
+**Build it** when you are happy.
 Zoom out and carry on; double-click a new card to edit it, right-click it to
 remove it. **Send** writes the drawing to `plans/`, designs beside it in
 `plans/<name>/`, and asks the agent to check it: it fills in what the cards

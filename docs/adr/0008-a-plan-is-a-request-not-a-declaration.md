@@ -35,10 +35,17 @@ does not hold them against the code until codegraph can read them there.
 
 ## Consequences
 
-A page's design (a screen, or a page of HTML from Claude Design) lives beside
-its plan in `plans/<name>/` and goes when the plan does. Codegraph cannot tell
+A page's design (a screen, or a page of HTML from Claude Design) lives in the
+repo's `designs/` folder, which codegraph never reads as code, and a plan
+names it there; one dropped on the map instead lives beside its plan in
+`plans/<name>/` and goes when the plan does. Codegraph cannot tell
 when a page looks like a picture, so a design stays on its card, unbuilt,
 until the agent judges the page matches it and takes it off.
+
+A plan drawn on the map keeps the drawing as the person left it. The agent
+revises the plan's cards and wires and says why in comments; the map shows
+the revision against the drawing as suggestions, and the person keeps what
+they want of theirs. The drawing goes with the plan.
 
 The check reads plans too, so it builds the map to compare them against.
 A plan's words for wires are the map's own (CONTEXT.md, Wires), written from

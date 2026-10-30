@@ -12,7 +12,7 @@
   --bg:#eceef3; --grid:#dfe3ea; --surface:#fff; --surface-2:#f6f7fa;
   --ink:#121820; --muted:#5d6878; --hair:#ced5e0; --hair-soft:#e3e8f0;
   --accent:#2f5fe0; --on-accent:#fff;
-  --w-import:#8c97a8; --w-lazy:#9aa5b6; --breach:#cf3434; --plan:#b86e00;
+  --w-import:#8c97a8; --w-lazy:#9aa5b6; --breach:#cf3434; --plan:#b86e00; --agent:#0b7d8c;
   --sat:58%; --lig:38%;
   --font-ui:ui-sans-serif,system-ui,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
   --font-mono:ui-monospace,'Cascadia Mono','JetBrains Mono',Consolas,'Liberation Mono',monospace;
@@ -22,7 +22,7 @@
   --bg:#0d1117; --grid:#161d26; --surface:#161d26; --surface-2:#1c2531;
   --ink:#e4ebf4; --muted:#8c98a9; --hair:#2b3644; --hair-soft:#222c38;
   --accent:#6f9bff; --on-accent:#0d1117;
-  --w-import:#6d7a8c; --w-lazy:#5c6878; --breach:#ff6e6e; --plan:#f2a93b;
+  --w-import:#6d7a8c; --w-lazy:#5c6878; --breach:#ff6e6e; --plan:#f2a93b; --agent:#4cc9da;
   --sat:62%; --lig:68%;
   color-scheme:dark;
 }}
@@ -30,7 +30,7 @@
   --bg:#0d1117; --grid:#161d26; --surface:#161d26; --surface-2:#1c2531;
   --ink:#e4ebf4; --muted:#8c98a9; --hair:#2b3644; --hair-soft:#222c38;
   --accent:#6f9bff; --on-accent:#0d1117;
-  --w-import:#6d7a8c; --w-lazy:#5c6878; --breach:#ff6e6e; --plan:#f2a93b;
+  --w-import:#6d7a8c; --w-lazy:#5c6878; --breach:#ff6e6e; --plan:#f2a93b; --agent:#4cc9da;
   --sat:62%; --lig:68%;
   color-scheme:dark;
 }
@@ -272,7 +272,9 @@ button.sm{font-size:11px;padding:2px 8px}
   padding:6px 9px;border-radius:6px;font-size:12px}
 #ctx button:hover,#ctx button:focus{background:var(--surface-2);outline:none}
 #ctx kbd{font-family:var(--font-mono);font-size:10px;color:var(--muted)}
-.card.editing{cursor:auto;z-index:5}
+.card.editing{z-index:5}
+.cedit .ck{cursor:grab;padding:2px 0 3px;margin:-2px 0 0}
+.cedit .crow{cursor:grab}
 .cedit{display:flex;flex-direction:column;gap:6px}
 .cedit .ck{font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--plan)}
 .cedit input,.cedit textarea{font:inherit;font-family:var(--font-ui);font-size:12px;color:var(--ink);
@@ -330,6 +332,84 @@ path.wire.faint{opacity:.08}
 .card .port:hover{transform:scale(1.3);background:var(--plan)}
 .card.sys{border:2px dashed var(--gc);border-radius:14px;min-height:110px}
 .card.sys .nm{font-size:14px}
+/* the agent's revision of a drawing, read like suggestions in a document */
+.card.suggested.ghost{border-color:var(--agent);border-left-color:var(--agent);
+  background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--agent) 18%,var(--surface)) 0 9px,
+    color-mix(in srgb,var(--agent) 6%,var(--surface)) 9px 18px);
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--agent) 25%,transparent)}
+.card.suggested .ptag{background:var(--agent)}
+.card.suggested .nm::before{color:var(--agent)}
+.card.struck{opacity:.62;border-color:var(--breach)!important;box-shadow:none!important;
+  background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--breach) 10%,var(--surface)) 0 9px,var(--surface) 9px 18px)!important}
+.card.struck .nm,.card.struck .dir{text-decoration:line-through;text-decoration-color:var(--breach)}
+.card.struck .ptag{background:var(--breach)}
+.card.struck .nm::before{content:"− "!important;color:var(--breach)!important}
+.card.reworded .ptag{background:linear-gradient(90deg,var(--plan),var(--agent))}
+del{color:var(--breach);text-decoration:line-through;background:color-mix(in srgb,var(--breach) 12%,transparent)}
+ins{color:var(--agent);text-decoration:underline;text-decoration-color:var(--agent);
+  background:color-mix(in srgb,var(--agent) 14%,transparent)}
+#panel .note.gone{text-decoration:line-through;opacity:.7}
+path.wire.struck{opacity:.55}
+/* a comment button on every card, and the comments it opens */
+.card .cbtn{position:absolute;top:-9px;right:14px;display:flex;align-items:center;gap:2px;height:20px;
+  padding:0 5px;border-radius:10px;border:1px solid var(--hair);background:var(--surface);color:var(--muted);
+  cursor:pointer;opacity:0;transition:opacity .12s;z-index:3}
+.card .cbtn svg{width:12px;height:12px;fill:currentColor}
+.card .cbtn b{font-size:10px;font-family:var(--font-mono)}
+.card:hover .cbtn,.card .cbtn.has{opacity:1}
+.card .cbtn.has{color:var(--plan);border-color:var(--plan)}
+.card .cbtn.agent{color:var(--agent);border-color:var(--agent)}
+#cpop{position:absolute;z-index:25;width:288px;display:flex;flex-direction:column;gap:8px;padding:10px 12px;
+  background:var(--surface);border:1px solid var(--hair);border-left:4px solid var(--plan);border-radius:10px;
+  box-shadow:0 10px 30px rgba(0,0,0,.25)}
+#cpop .chead{display:flex;align-items:center;gap:6px}
+#cpop .chead b{font-size:13px}
+#cpop .chead span{font-family:var(--font-mono);font-size:10px;color:var(--muted);flex:1}
+#cpop .clist{display:flex;flex-direction:column;gap:6px;max-height:220px;overflow:auto}
+#cpop .none{margin:0;font-size:11px;color:var(--muted)}
+#cpop textarea{font:inherit;font-size:12px;min-height:56px;resize:vertical;color:var(--ink);background:var(--surface-2);
+  border:1px solid var(--hair);border-radius:6px;padding:6px 8px}
+#cpop textarea:focus{outline:2px solid var(--plan);outline-offset:-1px}
+#cpop .crow{display:flex;align-items:center;gap:8px}
+#cpop .crow span{font-size:10px;color:var(--muted)}
+.cmt{position:relative;font-size:11.5px;line-height:1.45;padding:6px 8px;border-radius:7px;
+  background:color-mix(in srgb,var(--plan) 10%,var(--surface-2));border-left:3px solid var(--plan)}
+.cmt.agent{background:color-mix(in srgb,var(--agent) 10%,var(--surface-2));border-left-color:var(--agent)}
+.cmt.wire{background:var(--surface-2);border-left-color:var(--muted)}
+.cmt.gone{text-decoration:line-through;opacity:.7}
+.cmt span{display:block;font-family:var(--font-mono);font-size:9.5px;color:var(--muted);margin-bottom:2px}
+.cmt em{display:block;font-style:normal;margin-top:3px}
+.cmt i{display:block;font-style:normal;color:var(--muted)}
+.cmt button{position:absolute;top:4px;right:4px}
+#panel .drawn i{display:block;font-style:normal;color:var(--muted);font-family:var(--font-ui)}
+#wnote{position:absolute;z-index:25;width:300px;display:flex;flex-direction:column;gap:5px;padding:8px 10px;
+  background:var(--surface);border:1px solid var(--hair);border-left:4px solid var(--plan);border-radius:9px;
+  box-shadow:0 8px 24px rgba(0,0,0,.22)}
+#wnote .wk{font-family:var(--font-mono);font-size:10px;color:var(--muted)}
+#wnote .wk b{color:var(--plan)}
+#wnote input{font:inherit;font-size:12px;color:var(--ink);background:var(--surface-2);border:1px solid var(--hair);
+  border-radius:6px;padding:5px 7px}
+#wnote input:focus{outline:2px solid var(--plan);outline-offset:-1px}
+#wnote span{font-size:9.5px;color:var(--muted)}
+#gallery{position:absolute;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;
+  background:color-mix(in srgb,var(--bg,#000) 55%,transparent);backdrop-filter:blur(3px)}
+#gallery .gbox{width:min(880px,calc(100% - 48px));max-height:calc(100% - 64px);display:flex;flex-direction:column;
+  background:var(--surface);border:1px solid var(--hair);border-top:4px solid var(--plan);border-radius:12px;
+  box-shadow:0 18px 50px rgba(0,0,0,.35);overflow:hidden}
+#gallery .ghead{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 18px 10px}
+#gallery h2{margin:0;font-size:16px}
+#gallery .ghead p{margin:4px 0 0;font-size:11.5px;color:var(--muted)}
+#gallery .ggrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px;
+  padding:6px 18px 18px;overflow:auto}
+#gallery .gtile{display:flex;flex-direction:column;gap:3px;padding:8px;text-align:left;border:1px solid var(--hair);
+  border-radius:9px;background:var(--surface-2);cursor:pointer;transition:border-color .12s,box-shadow .12s,transform .12s}
+#gallery .gtile:hover,#gallery .gtile:focus{border-color:var(--plan);outline:none;
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--plan) 30%,transparent);transform:translateY(-1px)}
+#gallery .gtile .design{height:132px;margin:0 0 4px;background:#fff}
+#gallery .gname{font-weight:700;font-size:12.5px;color:var(--ink)}
+#gallery .gfile{font-family:var(--font-mono);font-size:9.5px;color:var(--muted)}
+#gallery .gempty{padding:10px 18px 22px;font-size:12px;line-height:1.55;color:var(--muted)}
+#gallery .gempty b{color:var(--ink)}
 .card.droppable{box-shadow:0 0 0 3px var(--plan),var(--stack)}
 #stage.droppable{outline:3px dashed var(--plan);outline-offset:-6px}
 .design{position:relative;display:block;width:100%;height:96px;margin-top:6px;overflow:hidden;
@@ -507,6 +587,8 @@ function marker(id,fill){
 Object.keys(KINDS).forEach(function(k){ marker(k,kcolor(k)); });
 marker("breach","var(--breach)");
 marker("plan","var(--plan)");
+marker("agent","var(--agent)");
+marker("struck","var(--breach)");
 svg.appendChild(defs);
 var gWires=document.createElementNS(NS,"g"); svg.appendChild(gWires);
 
@@ -633,7 +715,7 @@ function layout(){
   var cols={}, total={}, tall={}, top={}, tiers=[], colW=[], blocks=!!V.blocks;
   base={}; colX={};
   order.forEach(function(n){
-    if(n.draft) return;                // drawn by hand: placed below, not stacked
+    if(n.draft&&n.at) return;          // drawn here and dragged: kept where it was put
     var k=(n.tier===undefined?1:n.tier)+"|"+n.col;
     (cols[k]=cols[k]||[]).push(n);
     colW[n.col]=Math.max(colW[n.col]||0,cw(n.id));
@@ -668,15 +750,7 @@ function layout(){
     (cols["1|"+c]||[]).forEach(function(n){ foot=Math.max(foot,base[n.id].y+hgt[n.id]); });
     place(k,foot?foot+TIERGAP:top[Number(k.split("|")[0])]);
   });
-  // a card drawn here sits where it was made; on the other view, in a column
-  // of its own to the right
-  var right=0, spot=blocks?2*HEADY:HEADY;
-  order.forEach(function(n){ if(!n.draft) right=Math.max(right,base[n.id].x+cw(n.id)); });
-  order.forEach(function(n){
-    if(!n.draft) return;
-    if(n.at) base[n.id]={x:n.at.x,y:n.at.y};
-    else { base[n.id]={x:right+COLGAP,y:spot}; spot+=hgt[n.id]+GAP; }
-  });
+  order.forEach(function(n){ if(n.draft&&n.at) base[n.id]={x:n.at.x,y:n.at.y}; });
   pos={};
   order.forEach(function(n){
     var m=moved[n.id];
@@ -762,7 +836,8 @@ function show(key){
   edges=V.edges.filter(function(e){ return nodes[e.from]&&nodes[e.to]; })
     .map(function(e,i){ return {i:i,from:e.from,to:e.to,kind:e.kind,
                                 names:e.names||[],why:e.why||[],via:e.via||[],
-                                plan:e.plan||"",carries:e.carries||"",
+                                plan:e.plan||"",carries:e.carries||"",about:e.about||"",
+                                change:e.change||"",struck:!!e.struck,comments:e.comments||[],
                                 bad:(e.bad||[]).concat((e.why||[]).length&&!(e.bad||[]).length?["rule"]:[])}; });
   out={}; inn={};
   order.forEach(function(n){ out[n.id]=[]; inn[n.id]=[]; });
@@ -806,7 +881,8 @@ function show(key){
     el.className="card "+(CARDCLASS[n.kind]||"ext")+(n.start?" start":"")+
       (n.kind==="trigger"&&n.dir!=="schedule"?" "+n.dir:"")+
       (VIEWS[n.id]&&n.id!==cur?" opens":"")+(folded[n.id]?" folded":"")+(FLAG[n.id]?" flagged":"")+
-      (n.ghost?" ghost":n.plan?" planned":"");
+      (n.ghost?" ghost":n.plan?" planned":"")+(n.struck?" struck":"")+
+      (n.change==="added"?" suggested":n.change==="changed"?" reworded":"");
     el.style.setProperty("--gc",gcolor(n.group));
     el.tabIndex=0; el.setAttribute("role","button"); el.setAttribute("data-id",n.id);
     var hd=document.createElement("div"); hd.className="hd";
@@ -823,14 +899,18 @@ function show(key){
     } else { el.appendChild(hd); el.appendChild(dir); el.appendChild(foot); }
     if(n.plan){
       var pt=document.createElement("div"); pt.className="ptag";
-      pt.textContent=n.draft?"DRAWN \u00b7 NOT SENT":n.ghost?"PLANNED \u00b7 "+n.plan:"PLAN \u00b7 "+n.left.length+" left";
+      pt.textContent=n.draft?"DRAWN \u00b7 NOT SENT":n.struck?"STRUCK \u00b7 "+n.plan:
+        n.change==="added"?"SUGGESTED \u00b7 "+n.plan:n.change==="changed"?"REWORDED \u00b7 "+n.plan:
+        n.ghost?"PLANNED \u00b7 "+n.plan:"PLAN \u00b7 "+n.left.length+" left";
       if(n.ghost) dir.textContent=n.about||n.dir;
+      if(n.was&&n.was.about!==undefined) dir.innerHTML=wordDiff(n.was.about,n.about||"");
       el.appendChild(pt);
     }
     if(n.files&&n.files.length) fileList(el,hd,n);
     if(n.kind==="store"||n.kind==="trigger") fieldList(el,n);
     if(n.kind==="page") pageSketching(el,n);
     wireDots(el,n);
+    commentButton(el,n);
     canvas.appendChild(el); cardEls[n.id]=el;
     hgt[n.id]=el.offsetHeight;
     if(n.files&&!folded[n.id]) measureRows(n.id);
@@ -855,16 +935,20 @@ function show(key){
     var d=KINDS[e.kind]||KINDS["import"], bad=e.bad.length>0;
     function strand(){
       var p=document.createElementNS(NS,"path");
-      p.setAttribute("class","wire"+(bad?" breach":"")+(e.plan?" planned":""));
-      p.setAttribute("stroke",bad?"var(--breach)":e.plan?"var(--plan)":kcolor(e.kind));
+      // the agent's revision of a drawing: what it added in its own colour,
+      // what it struck out dotted red
+      var hue=e.struck?"var(--breach)":e.change==="added"?"var(--agent)":bad?"var(--breach)":e.plan?"var(--plan)":kcolor(e.kind);
+      p.setAttribute("class","wire"+(bad?" breach":"")+(e.plan?" planned":"")+(e.struck?" struck":"")+
+        (e.change==="added"?" suggested":""));
+      p.setAttribute("stroke",hue);
       p.setAttribute("stroke-width",String(d.width));
-      if(d.dash||e.plan) p.setAttribute("stroke-dasharray",e.plan?"9 6":d.dash);
-      p.setAttribute("opacity",bad?"0.95":isWiring(e.kind)?"0.6":"0.9");
+      if(d.dash||e.plan) p.setAttribute("stroke-dasharray",e.struck?"3 6":e.plan?"9 6":d.dash);
+      p.setAttribute("opacity",e.struck?"0.6":bad?"0.95":isWiring(e.kind)?"0.6":"0.9");
       p.addEventListener("transitionend",landed);
       gWires.appendChild(p);
       return p;
     }
-    e.head="url(#ar-"+(bad?"breach":e.plan?"plan":e.kind)+")";
+    e.head="url(#ar-"+(e.struck?"struck":e.change==="added"?"agent":bad?"breach":e.plan?"plan":e.kind)+")";
     e.at=headOf(e.kind);
     wireEls[e.i]=strand();
     // one thread per file on the importing card that pulls this wire in
@@ -1302,11 +1386,18 @@ function drawPanel(){
     h+='<p class="note">In system <b>'+esc(n.system||"none")+'</b></p>';
     if(!n.ghost) h+=chips("Says it uses",n.uses,"No modules named.");
   }
-  if(sketchingHere()&&(n.draft||n.kind==="page"&&sketch.designs[n.id]||
+  if(sketchingHere()&&(n.draft||n.kind==="page"&&sketch.designs[n.id]||(sketch.notes||{})[n.id]||
      sketch.wires.some(function(w){ return w.from===n.id||w.to===n.id; }))) h+=sketchPanel(n);
   else if(n.plan){
-    h+='<h3>'+(n.ghost?"Planned":"Plan asks for more")+' \u00b7 '+esc(n.plan)+'</h3>';
-    if(n.about) h+='<p class="note">'+esc(n.about)+'</p>';
+    h+='<h3>'+(n.struck?"Struck out by the agent":n.change==="added"?"Suggested by the agent":
+      n.change==="changed"?"Reworded by the agent":n.ghost?"Planned":"Plan asks for more")+' \u00b7 '+esc(n.plan)+'</h3>';
+    if(n.was&&n.was.about!==undefined) h+='<p class="note diff">'+wordDiff(n.was.about,n.about||"")+'</p>';
+    else if(n.about) h+='<p class="note'+(n.struck?' gone':'')+'">'+esc(n.about)+'</p>';
+    if(n.was&&n.was.system!==undefined) h+='<p class="note diff">system <del>'+esc(n.was.system||"none")+
+      '</del> <ins>'+esc(n.system||"none")+'</ins></p>';
+    h+=commentsHtml(n);
+    if(LIVE&&(n.struck||n.change==="changed")) h+='<div class="acts"><button class="sm" data-keep="1">Keep mine</button>'+
+      '<button class="sm" data-why="1">Ask why</button></div>';
     [["program",n.program],["takes",n.takes],["gives",n.gives],["roles",(n.roles||[]).join(", ")],
      ["started by",(n.triggers||[]).join("; ")]].forEach(function(f){
       if(f[1]) h+='<div class="fact"><span>'+f[0]+'</span>'+esc(f[1])+'</div>';
@@ -1319,8 +1410,10 @@ function drawPanel(){
       '<p class="note"><a href="'+esc(LIVE.design+n.design)+'" target="_blank" rel="noopener">Open the design</a></p>';
     if(!n.ghost&&n.left.length) h+='<ul class="left">'+n.left.map(function(l){ return '<li>'+esc(l)+'</li>'; }).join("")+'</ul>';
     (n.problems||[]).forEach(function(w){ h+='<div class="why">'+esc(w)+'</div>'; });
-    if(LIVE) h+='<div class="acts"><button class="act sm" data-build="'+esc(n.plan)+'">Build plan '+esc(n.plan)+'</button></div>';
+    if(LIVE&&!n.struck) h+='<div class="acts"><button class="act sm" data-build="'+esc(n.plan)+'">Build plan '+esc(n.plan)+'</button></div>';
   }
+  else h+=commentsHtml(n);
+  h+=wireNotesHtml(n);
   if(n.kind==="page") h+='<p class="note">'+(n.start?"Start page at ":"At ")+'<b>'+esc(n.route||"no route")+'</b></p>';
   if(n.kind==="store"||n.kind==="trigger"){
     h+=chips(n.kind==="store"?"Shape":"Carries",n.fields,n.kind==="store"?
@@ -1335,7 +1428,8 @@ function drawPanel(){
     vis.sort(function(a,b){ return a[key]<b[key]?-1:1; }).forEach(function(e){
       var o=nodes[e[key]];
       var tag = e.kind==="lazy" ? "lazy"
-              : e.kind==="import" ? "" : ((KINDS[e.kind]||{}).label||e.kind)+(e.plan?" \u00b7 planned":"");
+              : e.kind==="import" ? "" : ((KINDS[e.kind]||{}).label||e.kind)+(e.struck?" \u00b7 struck":
+                e.change==="added"?" \u00b7 suggested":e.plan?" \u00b7 planned":"");
       s+='<li><button data-go="'+esc(o.id)+'">'+
          '<span class="dot" style="background:'+
            (e.bad.length?"var(--breach)":isWiring(e.kind)?gcolor(o.group):kcolor(e.kind))+'"></span>'+
@@ -1371,6 +1465,14 @@ function drawPanel(){
     document.getElementById("ask-card").addEventListener("click",function(){ send(aboutCard(n)); });
     var fx=document.getElementById("fix-card");
     if(fx) fx.addEventListener("click",function(){ send(fixMany(mine,"mismatches in "+n.kind+" "+n.label)); });
+    var keep=panel.querySelector("[data-keep]");
+    if(keep) keep.addEventListener("click",function(){
+      send("In plan "+n.plan+", keep my "+n.kind+" "+n.label+" as I drew it"+(n.struck?", not struck out":"")+": ");
+    });
+    var why=panel.querySelector("[data-why]");
+    if(why) why.addEventListener("click",function(){
+      send("In plan "+n.plan+", why did you "+(n.struck?"strike out":"reword")+" my "+n.kind+" "+n.label+"? ");
+    });
     Array.prototype.forEach.call(panel.querySelectorAll("[data-build]"),function(b){
       b.addEventListener("click",function(){ send(buildPlan(b.getAttribute("data-build"))); });
     });
@@ -1430,10 +1532,12 @@ function focus(id){
 var picked={};
 function pickedIds(){ return Object.keys(picked).filter(function(k){ return picked[k]; }); }
 
+// what in a card being typed in takes the pointer itself; the rest drags it
+var FIELDS=".cedit input,.cedit textarea,.cedit button";
 function drag(el,n){
   var id=null,sx,sy,went=false,hit=null,from={};
   el.addEventListener("pointerdown",function(ev){
-    if(ev.target.closest(".cedit")){ ev.stopPropagation(); return; }
+    if(ev.target.closest(FIELDS)){ ev.stopPropagation(); return; }
     if(ev.button!==0&&ev.pointerType==="mouse") return;
     ev.stopPropagation(); id=ev.pointerId; went=false; hit=ev.target;
     sx=ev.clientX; sy=ev.clientY;
@@ -1458,16 +1562,30 @@ function drag(el,n){
     if(id===null||ev.pointerId!==id) return;
     id=null;
     if(went){
+      var into=null;
       Object.keys(from).forEach(function(k){
         var c=nodes[k]&&nodes[k].draft&&sketch&&sketch.cards[k];
-        if(c){ c.at=c.at||{}; c.at[cur]=pos[k]; nodes[k].at=pos[k]; }
-        else moved[k]=pos[k];
+        if(!c){ moved[k]=pos[k]; return; }
+        var f=cur==="map"&&c.kind==="feature"&&
+          frameAt({x:pos[k].x+cw(k)/2,y:pos[k].y+Math.min(hgt[k],60)/2},k);
+        if(f&&(f.within||f.id==="features")){
+          // into a system, or loose among the features: it takes its place in the box
+          if(f.within) joinBox(c,f.id); else { delete c.system; delete c.in; }
+          delete (c.at||{})[cur]; into=k;
+        } else { c.at=c.at||{}; c.at[cur]=pos[k]; nodes[k].at=pos[k]; }
       });
-      save(posKey(),moved); keepSketch(); return;
+      save(posKey(),moved); keepSketch();
+      if(into){
+        var keepOpen=editing===into;
+        redrawSketch(into,keepOpen?function(){ editCard(into,false); }:null);
+        toast(sketch.cards[into].system||sketch.cards[into].in?"Put in "+systemOf(sketch.cards[into]):"Taken out of its system");
+      }
+      return;
     }
     if(ev.shiftKey){ picked[n.id]=!picked[n.id]; render(); return; }
     // a click lands on the fold toggle, a file in the list, or the card itself
     var file=hit&&hit.closest("[data-file]");
+    if(editing===n.id) return;                 // a click on a card being typed in is not a pick
     if(hit&&hit.closest(".fold")) toggleFold(n.id);
     else if(file){
       var fid=file.getAttribute("data-file");
@@ -1489,8 +1607,8 @@ function drag(el,n){
   });
   // a double click goes into a module, or opens a card drawn here for typing
   el.addEventListener("dblclick",function(ev){
-    if(ev.target.closest(".cedit")) return;
-    if(n.draft) editCard(n.id,true);
+    if(ev.target.closest(FIELDS)) return;
+    if(n.draft&&editing!==n.id) editCard(n.id,true);
     else if(VIEWS[n.id]&&n.id!==cur) open(n.id);
   });
   el.addEventListener("keydown",function(ev){
@@ -1660,7 +1778,8 @@ function drawsHere(){ return canSketch()&&(cur==="map"||cur==="pages"); }
 function sketchingHere(){ return !!sketch&&drawsHere(); }
 function blank(){ return {cards:{},wires:[],designs:{},next:1}; }
 function sketchSize(){
-  return sketch?Object.keys(sketch.cards).length+sketch.wires.length+Object.keys(sketch.designs).length:0;
+  return sketch?Object.keys(sketch.cards).length+sketch.wires.length+Object.keys(sketch.designs).length+
+    Object.keys(sketch.notes||{}).length:0;
 }
 // a new project has no pages yet, and drawing them is how it gets some
 if(canSketch()&&!VIEWS.pages){
@@ -1669,7 +1788,8 @@ if(canSketch()&&!VIEWS.pages){
 }
 var BASE={};
 ["map","pages"].forEach(function(k){
-  if(VIEWS[k]) BASE[k]={nodes:VIEWS[k].nodes.slice(),edges:VIEWS[k].edges.slice()};
+  if(VIEWS[k]) BASE[k]={nodes:VIEWS[k].nodes.slice(),edges:VIEWS[k].edges.slice(),
+                       blocks:(VIEWS[k].blocks||null)&&VIEWS[k].blocks.slice()};
 });
 function keepSketch(){
   try{
@@ -1684,7 +1804,9 @@ function designType(path){ return /\.html$/i.test(path)?"text/html":"image"; }
    script. A served page of HTML is fetched and handed to its frame whole,
    the same way as one not sent yet, so the two draw alike. */
 function designHtml(d,cls){
-  var at=d.url||d.data;
+  // one from designs/ is served from the repo; one dropped here travels as data
+  var at=d.url||(d.ref&&LIVE?LIVE.design+d.ref:d.data);
+  if(d.ref&&!d.url) d={type:d.type,url:at};
   return '<div class="design'+(cls?" "+cls:"")+'">'+(d.type==="text/html"
     ? '<iframe sandbox="" tabindex="-1" title="design" '+(d.url?'data-html="':'src="')+esc(at)+'"></iframe>'
     : '<img alt="design" src="'+esc(at)+'">')+'</div>';
@@ -1707,23 +1829,53 @@ function systemOf(c){
   return box?(box.name||"new system"):c.system||"";
 }
 function wireWord(w){ return w.kind||"leads to"; }
+/* where a new card sits until it is dragged: in the box for its kind, at the
+   foot of the column there; a feature at the foot of its system, a feature
+   drawn in a drawn system just under that system's card */
+var BLOCK_OF={module:"modules",feature:"features",system:"features",page:"pages",component:"pages",store:"reach"};
+function groupOf(c,id,base){
+  if(c.kind==="system") return "drawn:"+id;
+  if(c.in&&sketch.cards[c.in]) return "drawn:"+c.in;
+  if(c.system&&base.some(function(n){ return n.group==="system:"+c.system; })) return "system:"+c.system;
+  return "(drawn)";
+}
+function slot(k,c,id,i,base){
+  var cols=base.map(function(n){ return n.col||0; }), last=cols.length?Math.max.apply(null,cols):0;
+  if(k!=="map") return {col:last,row:1000+i};
+  var block=BLOCK_OF[c.kind]||"pages", group=groupOf(c,id,base);
+  var mine=base.filter(function(n){ return n.group===group; });
+  var kin=mine.length?mine:base.filter(function(n){ return n.block===block; });
+  var at=kin.length?Math.max.apply(null,kin.map(function(n){ return n.col; })):last+1;
+  var down=kin.filter(function(n){ return n.col===at; }).map(function(n){ return n.row; });
+  return {block:block,group:group,col:at,tier:kin.length?kin[0].tier:block==="reach"?0:1,
+          row:(mine.length&&down.length?Math.max.apply(null,down)+0.5:1000)+i*0.01};
+}
 function sketchView(){
   Object.keys(BASE).forEach(function(k){
     var v=VIEWS[k];
+    if(BASE[k].blocks) v.blocks=BASE[k].blocks.slice();
     v.nodes=BASE[k].nodes.map(function(n){
       var d=sketch&&sketch.designs[n.id];
       return d?Object.assign({},n,{sketched:d}):n;
     });
     v.edges=BASE[k].edges.slice();
     if(!sketch) return;
-    Object.keys(sketch.cards).forEach(function(id){
+    var ids=Object.keys(sketch.cards), placed={};
+    // systems first, so a feature drawn in one can sit under it
+    ids.sort(function(a,b){ return (sketch.cards[b].kind==="system")-(sketch.cards[a].kind==="system"); });
+    ids.forEach(function(id,i){
       var c=sketch.cards[id];
       if(k==="pages"&&c.kind!=="page") return;
-      var sys=systemOf(c);
-      v.nodes.push({id:id,label:drawnLabel(c),kind:c.kind,ghost:true,draft:true,plan:"sketch",left:[],
-        about:c.about||"",route:c.route||"",system:sys,
-        dir:c.kind==="page"?(c.route||"new page"):c.kind==="feature"&&sys?"new feature in "+sys:"new "+c.kind,
-        group:c.group||"(drawn)",at:(c.at||{})[k],size:c.kind==="system"?2:1.5,files:[],sketched:sketch.designs[id]});
+      var sys=systemOf(c), at=slot(k,c,id,i,BASE[k].nodes);
+      if(k==="map"&&c.in&&placed[c.in]) at=Object.assign({},placed[c.in],{row:placed[c.in].row+0.001*(i+1)});
+      placed[id]=at;
+      if(k==="map"&&c.kind==="system"&&v.blocks)
+        v.blocks.push({id:"drawn:"+id,label:drawnLabel(c),within:"features"});
+      v.nodes.push(Object.assign({id:id,label:drawnLabel(c),kind:c.kind,ghost:true,draft:true,plan:"sketch",left:[],
+        about:c.about||"",system:sys,
+        dir:c.kind==="page"?"new page":c.kind==="feature"&&sys?"new feature in "+sys:"new "+c.kind,
+        group:at.group||"(drawn)",at:(c.at||{})[k],size:1.5,files:[],fields:[],sketched:sketch.designs[id]},
+        {block:at.block,tier:at.tier,col:at.col,row:at.row}));
     });
     var here={};
     v.nodes.forEach(function(n){ here[n.id]=1; });
@@ -1751,7 +1903,7 @@ function drawSketchBar(){
     nw+(nw===1?" link":" links")+" · "+nd+(nd===1?" design":" designs")+'</span>'+
     '<button class="act sm" id="sk-send">Send</button>'+
     '<button class="sm" id="sk-drop">Discard</button>'+
-    '<span class="hint">Right-click empty space for another card or a system; double-click a new card to edit it. '+
+    '<span class="hint">Right-click empty space for another card or a system; drag a card by its edge or top; double-click a new card to edit it. '+
     'Drag the dot on a card’s side onto another card to wire them.</span>';
   bar.querySelector("#sk-send").addEventListener("click",function(){ openSketchForm("send"); });
   var drop=bar.querySelector("#sk-drop");
@@ -1791,22 +1943,33 @@ function canvasAt(e){
   var r=stage.getBoundingClientRect();
   return {x:(e.clientX-r.left-panX)/scale, y:(e.clientY-r.top-panY)/scale};
 }
-// the block or system box a point on the map falls in, if any
-function frameAt(p){
+// the block or system box a point on the map falls in, if any, leaving out
+// the card being dragged, which the box would otherwise stretch to hold
+function frameAt(p,skip){
   var hit=null;
   frames.forEach(function(f){
-    var el=f.el, x=el.offsetLeft, y=el.offsetTop;
-    if(p.x>=x&&p.x<=x+el.offsetWidth&&p.y>=y&&p.y<=y+el.offsetHeight&&(!hit||f.within)) hit=f;
+    var x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity,PAD=16;
+    order.forEach(function(n){
+      if(n.id===skip||!(f.within?n.group===f.id:n.block===f.id)) return;
+      x0=Math.min(x0,pos[n.id].x); y0=Math.min(y0,pos[n.id].y);
+      x1=Math.max(x1,pos[n.id].x+cw(n.id)); y1=Math.max(y1,pos[n.id].y+hgt[n.id]);
+    });
+    if(p.x>=x0-PAD&&p.x<=x1+PAD&&p.y>=y0-PAD-18&&p.y<=y1+PAD&&(!hit||f.within)) hit=f;
   });
   return hit;
+}
+// a drawn feature put in a system's box: a real system by name, a drawn one by card
+function joinBox(c,box){
+  delete c.system; delete c.in;
+  if(/^system:/.test(box)) c.system=box.slice(7);
+  else if(/^drawn:/.test(box)) c.in=box.slice(6);
 }
 function newCard(kind,p,design,inside){
   if(!sketch) sketch=blank();
   var id="draft:"+(sketch.next++), c={kind:kind,name:"",about:"",at:{}};
   if(inside) c.in=inside;
-  c.at[cur]={x:Math.round(p.x-CW*0.75),y:Math.round(p.y-24)};
-  var f=cur==="map"&&frameAt(p);
-  if(kind==="feature"&&f&&f.within){ c.system=f.id.replace(/^system:/,""); c.group=f.id; }
+  var f=p&&cur==="map"&&frameAt(p);
+  if(kind==="feature"&&f&&f.within) joinBox(c,f.id);
   if(design){ sketch.designs[id]=design; c.name=slug(design.name); }
   sketch.cards[id]=c;
   redrawSketch(null,function(){ editCard(id,true); });
@@ -1836,13 +1999,36 @@ function openMenu(e,items){
   menu.querySelector("button").focus();
 }
 document.addEventListener("pointerdown",function(ev){ if(menu&&!ev.target.closest("#ctx")) closeMenu(); },true);
-var picker=document.createElement("input");
-picker.type="file"; picker.accept=Object.keys(DESIGN_EXT).join(","); picker.hidden=true;
-document.body.appendChild(picker);
+/* the designs a page may take: every page exported from Claude Design into
+   designs/ at the repo's root, shown as they look, to pick one from */
+var gallery=null;
+function closeGallery(){ if(gallery&&gallery.parentNode) gallery.parentNode.removeChild(gallery); gallery=null; }
 function pickDesign(then){
-  picker.value="";
-  picker.onchange=function(){ if(picker.files[0]) readDesign(picker.files[0],then); };
-  picker.click();
+  closeGallery();
+  var list=(MODS&&MODS.designs)||[];
+  gallery=document.createElement("div"); gallery.id="gallery";
+  gallery.innerHTML='<div class="gbox" role="dialog" aria-label="Pick a design">'+
+    '<div class="ghead"><div><h2>Pick a design</h2><p>Pages exported from Claude Design into <b>designs/</b> in this repo</p></div>'+
+    '<button class="close" aria-label="Close">×</button></div>'+
+    (list.length?'<div class="ggrid">'+list.map(function(d,i){
+      return '<button class="gtile" data-i="'+i+'">'+designHtml({ref:d.file,type:d.type})+
+        '<span class="gname">'+esc(d.name)+'</span><span class="gfile">'+esc(d.file)+'</span></button>';
+    }).join("")+'</div>'
+    :'<div class="gempty"><b>No designs yet.</b><p>Export a page from Claude Design and save it in '+
+      '<b>designs/</b> at the root of this repo: an HTML file, a picture, or a folder with an index.html. '+
+      'Then press <b>Reload</b>.</p></div>')+'</div>';
+  gallery.addEventListener("pointerdown",function(ev){ ev.stopPropagation(); if(ev.target===gallery) closeGallery(); });
+  gallery.addEventListener("wheel",function(ev){ ev.stopPropagation(); });
+  gallery.addEventListener("keydown",function(ev){ if(ev.key==="Escape"){ ev.stopPropagation(); closeGallery(); } });
+  gallery.querySelector(".close").addEventListener("click",closeGallery);
+  Array.prototype.forEach.call(gallery.querySelectorAll(".gtile"),function(b){
+    b.addEventListener("click",function(){
+      var d=list[+b.getAttribute("data-i")];
+      closeGallery(); then({ref:d.file,type:d.type,name:d.name});
+    });
+  });
+  stage.appendChild(gallery); fillDesigns(gallery);
+  (gallery.querySelector(".gtile")||gallery.querySelector(".close")).focus();
 }
 function giveDesign(id,design){
   if(!sketch) sketch=blank();
@@ -1857,29 +2043,28 @@ stage.addEventListener("contextmenu",function(ev){
   var card=ev.target.closest(".card"), id=card&&card.getAttribute("data-id"), n=id&&nodes[id];
   if(n&&n.draft){
     var items=[["Edit",function(){ editCard(id,true); },"E"]];
-    if(n.kind==="system") items.unshift(["New feature in "+n.label,function(){
-      var k=Object.keys(sketch.cards).filter(function(o){ return sketch.cards[o].in===id; }).length;
-      newCard("feature",{x:pos[id].x+CW*0.75+k%2*(CW*1.5+GAP),y:pos[id].y+hgt[id]+44+Math.floor(k/2)*96},null,id);
-    },"F"]);
-    if(n.kind==="page") items.push(["Import a design…",function(){ pickDesign(function(d){ giveDesign(id,d); }); },"I"]);
+    if(n.kind==="system") items.unshift(["New feature in "+n.label,function(){ newCard("feature",null,null,id); },"F"]);
+    if(n.kind==="page") items.push(["Pick a design…",function(){ pickDesign(function(d){ giveDesign(id,d); }); },"I"]);
     items.push(["Remove",function(){ removeCard(id); },"R"]);
     openMenu(ev,items); return;
   }
   if(n){
-    if(n.kind==="page") openMenu(ev,[["Import a design…",function(){ pickDesign(function(d){ giveDesign(id,d); }); },"I"]]);
+    if(n.kind==="page") openMenu(ev,[["Pick a design…",function(){ pickDesign(function(d){ giveDesign(id,d); }); },"I"]]);
     return;
   }
   var p=canvasAt(ev), f=cur==="map"&&frameAt(p);
-  var at=f?(f.within?"features":f.id):"", kinds=cur==="pages"?["page"]:["module","feature","page","system"];
-  kinds.sort(function(a,b){ return (at===b+"s")-(at===a+"s"); });
+  var at=f?(f.within?"features":f.id):"", kinds=cur==="pages"?["page"]:["module","feature","page","store","system"];
+  kinds.sort(function(a,b){ return (at===BLOCK_OF[b])-(at===BLOCK_OF[a]); });
+  var KEYS={module:"M",feature:"F",page:"P",store:"T",system:"S"};
   var items=kinds.map(function(k){
-    var label="New "+k+(k==="feature"&&f&&f.within?" in "+f.id.replace(/^system:/,""):"");
-    return [label,function(){ newCard(k,p); },k==="system"?"S":k[0].toUpperCase()];
+    var label="New "+k+(k==="feature"&&f&&f.within?" in "+f.el.querySelector("span").textContent:"");
+    return [label,function(){ newCard(k,p); },KEYS[k]];
   });
   items.push(["New page from a design…",function(){ pickDesign(function(d){ newCard("page",p,d); }); },"D"]);
   openMenu(ev,items);
 });
 function removeCard(id){
+  if(sketch.notes) delete sketch.notes[id];
   Object.keys(sketch.cards).forEach(function(o){ if(sketch.cards[o].in===id) delete sketch.cards[o].in; });
   delete sketch.cards[id]; delete sketch.designs[id];
   sketch.wires=sketch.wires.filter(function(w){ return w.from!==id&&w.to!==id; });
@@ -1917,10 +2102,10 @@ function editCard(id,fly){
     '<input class="cname" type="text" spellcheck="false" placeholder="its name" value="'+esc(c.name||"")+'">'+
     '<textarea class="cabout" placeholder="'+(c.kind==="system"?
       "What should its features do? List them loosely; the agent works out each one.":
+      c.kind==="store"?"What does it keep? Name the fields loosely; the agent works out its shape.":
       "What is it for? Say it in your own words.")+'">'+esc(c.about||"")+'</textarea>'+
-    (c.kind==="page"?'<input class="croute" type="text" spellcheck="false" placeholder="/route, if you know it" value="'+
-      esc(c.route||"")+'">'+(d?designHtml(d):"")+
-      '<button class="sm cimport" type="button">'+(d?"Change the design…":"Import a design…")+'</button>':"")+
+    (c.kind==="page"?(d?designHtml(d):"")+
+      '<button class="sm cimport" type="button">'+(d?"Change the design…":"Pick a design…")+'</button>':"")+
     '<div class="crow"><button class="act sm cdone" type="button">Done</button>'+
     '<span>Enter: next · Esc: done</span></div>';
   // the card's own face goes while it is typed in; Done puts it back
@@ -2002,7 +2187,32 @@ function addWire(a,b){
     edges.some(function(e){ return e.from===w.from&&e.to===w.to&&e.kind===WIRE_KIND[w.kind]; });
   if(had){ toast(nodes[w.from].label+" already "+w.kind+" "+nodes[w.to].label); return; }
   sketch.wires.push(w); redrawSketch(a);
+  wireNote(sketch.wires.length-1);
 }
+/* a few words on a wire just drawn, if the person wants: what they imagine
+   it carries or is for. Enter keeps it, Esc leaves it blank. */
+function wireNote(i){
+  var w=sketch.wires[i], a=cardEls[w.from], b=cardEls[w.to];
+  if(!a||!b) return;
+  closeNote();
+  var r=stage.getBoundingClientRect(), ra=a.getBoundingClientRect(), rb=b.getBoundingClientRect();
+  var x=(ra.left+ra.width/2+rb.left+rb.width/2)/2-r.left, y=(ra.top+ra.height/2+rb.top+rb.height/2)/2-r.top;
+  note=document.createElement("div"); note.id="wnote";
+  note.innerHTML='<div class="wk">'+esc(nodes[w.from].label)+' <b>'+esc(w.kind)+'</b> '+esc(nodes[w.to].label)+'</div>'+
+    '<input type="text" placeholder="What is this wire for? (optional)" value="'+esc(w.about||"")+'">'+
+    '<span>Enter: keep · Esc: skip</span>';
+  note.style.left=Math.max(8,Math.min(x-150,r.width-316))+"px"; note.style.top=Math.max(8,Math.min(y-30,r.height-90))+"px";
+  var inp=note.querySelector("input");
+  inp.addEventListener("keydown",function(ev){
+    ev.stopPropagation();
+    if(ev.key==="Enter"){ w.about=inp.value.trim(); keepSketch(); closeNote(); redrawSketch(w.from); }
+    if(ev.key==="Escape") closeNote();
+  });
+  note.addEventListener("pointerdown",function(ev){ ev.stopPropagation(); });
+  stage.appendChild(note); inp.focus();
+}
+var note=null;
+function closeNote(){ if(note&&note.parentNode) note.parentNode.removeChild(note); note=null; }
 function wireDots(el,n){
   if(!drawsHere()||!WIREABLE[n.kind]) return;
   ["left","right"].forEach(function(side){
@@ -2019,6 +2229,108 @@ function readDesign(file,then){
   var r=new FileReader();
   r.onload=function(){ then({ext:ext,type:ext===".html"?"text/html":"image",data:r.result,name:file.name}); };
   r.readAsDataURL(file);
+}
+/* a comment button on every card: the person's questions and suggestions,
+   kept with the drawing and sent with it, and what the agent said back on a
+   plan it reviewed. A comment on a plan already sent goes to the agent in the
+   chat box. */
+function cardComments(n){
+  var mine=((sketch&&sketch.notes)||{})[n.id]||[];
+  return (n.comments||[]).concat(mine.map(function(t){ return {by:"person",text:t,drawn:true}; }));
+}
+function commentButton(el,n){
+  if(!LIVE||!drawsHere()) return;
+  var all=cardComments(n), b=document.createElement("button");
+  b.className="cbtn"+(all.length?" has":"")+(all.some(function(c){ return c.by==="agent"; })?" agent":"");
+  b.title=all.length?all.length+(all.length===1?" comment":" comments"):"Comment on this card";
+  b.innerHTML='<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h9A1.5 1.5 0 0 1 14 3.5v6A1.5 1.5 0 0 1 12.5 11H7l-3.2 2.6V11H3.5A1.5 1.5 0 0 1 2 9.5z"/></svg>'+
+    (all.length?'<b>'+all.length+'</b>':'');
+  b.addEventListener("pointerdown",function(ev){ ev.stopPropagation(); });
+  b.addEventListener("click",function(ev){ ev.stopPropagation(); openComments(n.id); });
+  el.appendChild(b);
+}
+function commentsHtml(n){
+  var all=cardComments(n);
+  if(!all.length) return "";
+  return '<h3>Comments</h3>'+all.map(function(c){
+    return '<div class="cmt '+(c.by==="agent"?"agent":"person")+'"><span>'+(c.by==="agent"?"Agent":"You")+'</span>'+esc(c.text)+'</div>';
+  }).join("");
+}
+function wireNotesHtml(n){
+  var said=edges.filter(function(e){ return (e.from===n.id||e.to===n.id)&&(e.about||e.comments.length||e.struck||e.change); });
+  if(!said.length) return "";
+  return '<h3>On its wires</h3>'+said.map(function(e){
+    return '<div class="cmt wire'+(e.struck?' gone':'')+'"><span>'+esc(nodes[e.from].label)+' '+esc(((KINDS[e.kind]||{}).label)||e.kind)+' '+
+      esc(nodes[e.to].label)+(e.struck?' · struck':e.change==="added"?' · suggested':'')+'</span>'+
+      (e.about?esc(e.about):'')+e.comments.map(function(c){ return '<em>'+(c.by==="agent"?"Agent: ":"You: ")+esc(c.text)+'</em>'; }).join("")+'</div>';
+  }).join("");
+}
+var cpop=null;
+function closeComments(){ if(cpop&&cpop.parentNode) cpop.parentNode.removeChild(cpop); cpop=null; }
+function openComments(id){
+  closeComments();
+  var n=nodes[id], el=cardEls[id], r=stage.getBoundingClientRect(), rc=el.getBoundingClientRect();
+  // a card in a plan already sent, or one its comments are on, talks to the agent
+  var sent=n.plan&&n.plan!=="sketch"&&!n.draft?n.plan:((n.comments||[])[0]||{}).plan||"";
+  cpop=document.createElement("div"); cpop.id="cpop";
+  cpop.innerHTML='<div class="chead"><b>'+esc(n.label)+'</b><span>'+esc(n.kind)+'</span><button class="close" aria-label="Close">×</button></div>'+
+    '<div class="clist">'+(cardComments(n).map(function(c,i){
+      return '<div class="cmt '+(c.by==="agent"?"agent":"person")+'"><span>'+(c.by==="agent"?"Agent":"You")+
+        (c.plan?' · '+esc(c.plan):'')+'</span>'+esc(c.text)+
+        (c.drawn?'<button class="sm" data-unsay="'+(i-(n.comments||[]).length)+'">×</button>':'')+'</div>';
+    }).join("")||'<p class="none">No comments yet.</p>')+'</div>'+
+    '<textarea placeholder="'+(sent?"Reply to the agent about this card…":"Ask a question or suggest something…")+'"></textarea>'+
+    '<div class="crow"><button class="act sm">'+(sent?"Send to the agent":"Comment")+'</button>'+
+    '<span>'+(sent?"Goes to the chat box":"Sent with the drawing")+'</span></div>';
+  cpop.style.left=Math.min(rc.right-r.left+10,r.width-300)+"px";
+  cpop.style.top=Math.max(8,Math.min(rc.top-r.top,r.height-300))+"px";
+  cpop.addEventListener("pointerdown",function(ev){ ev.stopPropagation(); });
+  cpop.addEventListener("wheel",function(ev){ ev.stopPropagation(); });
+  cpop.addEventListener("keydown",function(ev){
+    ev.stopPropagation();
+    if(ev.key==="Escape") closeComments();
+    if(ev.key==="Enter"&&(ev.metaKey||ev.ctrlKey)) add();
+  });
+  cpop.querySelector(".close").addEventListener("click",closeComments);
+  var ta=cpop.querySelector("textarea");
+  function add(){
+    var t=ta.value.trim();
+    if(!t) return;
+    if(sent){ send("On "+n.kind+" "+n.label+" in plan "+sent+": "+t); closeComments(); return; }
+    if(!sketch) sketch=blank();
+    sketch.notes=sketch.notes||{};
+    (sketch.notes[id]=sketch.notes[id]||[]).push(t);
+    closeComments(); redrawSketch(id,function(){ openComments(id); });
+  }
+  cpop.querySelector(".crow button").addEventListener("click",add);
+  Array.prototype.forEach.call(cpop.querySelectorAll("[data-unsay]"),function(b){
+    b.addEventListener("click",function(){
+      sketch.notes[id].splice(+b.getAttribute("data-unsay"),1);
+      if(!sketch.notes[id].length) delete sketch.notes[id];
+      closeComments(); redrawSketch(id,function(){ openComments(id); });
+    });
+  });
+  stage.appendChild(cpop); ta.focus();
+}
+document.addEventListener("pointerdown",function(ev){
+  if(cpop&&!ev.target.closest("#cpop")&&!ev.target.closest(".cbtn")) closeComments();
+  if(note&&!ev.target.closest("#wnote")) closeNote();
+},true);
+/* a change shown the way a document shows a suggestion: the words taken out
+   struck through, the words put in underlined */
+function wordDiff(a,b){
+  var x=String(a||"").split(/(\s+)/), y=String(b||"").split(/(\s+)/), m=x.length, n=y.length, L=[];
+  for(var i=0;i<=m;i++){ L.push(new Array(n+1).fill(0)); }
+  for(i=m-1;i>=0;i--) for(var j=n-1;j>=0;j--) L[i][j]=x[i]===y[j]?L[i+1][j+1]+1:Math.max(L[i+1][j],L[i][j+1]);
+  var out="", del="", ins="";
+  function flush(){ if(del) out+="<del>"+esc(del)+"</del>"; if(ins) out+="<ins>"+esc(ins)+"</ins>"; del=ins=""; }
+  for(i=0,j=0;i<m||j<n;){
+    if(i<m&&j<n&&x[i]===y[j]){ flush(); out+=esc(x[i]); i++; j++; }
+    else if(j<n&&(i>=m||L[i][j+1]>=L[i+1][j])){ ins+=y[j]; j++; }
+    else { del+=x[i]; i++; }
+  }
+  flush();
+  return out;
 }
 function hasFiles(ev){ return ev.dataTransfer&&Array.prototype.indexOf.call(ev.dataTransfer.types||[],"Files")>=0; }
 /* each page card: the design it has; where a person draws, a place to drop
@@ -2086,7 +2398,9 @@ function sketchPanel(n){
   (sketch?sketch.wires:[]).forEach(function(w,i){
     if(w.from!==n.id&&w.to!==n.id) return;
     h+='<div class="drawn"><span>'+esc(nodes[w.from]?nodes[w.from].label:w.from)+" "+esc(wireWord(w))+" "+
-      esc(nodes[w.to]?nodes[w.to].label:w.to)+'</span><button class="sm" data-unlink="'+i+'">×</button></div>';
+      esc(nodes[w.to]?nodes[w.to].label:w.to)+(w.about?'<i>'+esc(w.about)+'</i>':'')+'</span>'+
+      '<button class="sm" data-wnote="'+i+'" title="Say what this wire is for">✎</button>'+
+      '<button class="sm" data-unlink="'+i+'">×</button></div>';
   });
   if(c) h+='<div class="acts"><button class="sm" data-uncard="1">Remove this '+esc(c.kind)+'</button></div>';
   return h;
@@ -2095,6 +2409,9 @@ function bindSketchPanel(n){
   if(!sketchingHere()) return;
   var ed=panel.querySelector("[data-edit]");
   if(ed) ed.addEventListener("click",function(){ editCard(n.id,true); });
+  Array.prototype.forEach.call(panel.querySelectorAll("[data-wnote]"),function(b){
+    b.addEventListener("click",function(){ wireNote(+b.getAttribute("data-wnote")); });
+  });
   Array.prototype.forEach.call(panel.querySelectorAll("[data-unlink]"),function(b){
     b.addEventListener("click",function(){ sketch.wires.splice(+b.getAttribute("data-unlink"),1); redrawSketch(n.id); });
   });
@@ -2120,13 +2437,27 @@ function sendSketch(v){
   });
   Object.keys(sketch.designs).forEach(function(id){
     var d=sketch.designs[id], label=cards[id]?cards[id].name:id.replace(/^page:/,""), file=slug(label)+d.ext;
-    designs[file]=d.data;
     cards[id]=cards[id]||{kind:"page",name:label};
+    if(d.ref){ cards[id].design=d.ref; return; }
+    designs[file]=d.data;
     cards[id].design="plans/"+name+"/"+file;
   });
-  var plan={ask:v.ask, drawn:true,
+  // a store drawn here is owned by the module drawn writing it
+  sketch.wires.forEach(function(w){
+    if(wireWord(w)==="writes"&&cards[w.to]&&cards[w.to].kind==="store")
+      cards[w.to].owner=(ids[w.from]||w.from).replace(/^module:/,"");
+  });
+  var comments=[];
+  Object.keys(sketch.notes||{}).forEach(function(id){
+    sketch.notes[id].forEach(function(t){ comments.push({on:ids[id]||id,by:"person",text:t}); });
+  });
+  var plan={ask:v.ask, drawn:true, comments:comments,
     cards:Object.keys(cards).map(function(id){ return cards[id]; }),
-    wires:sketch.wires.map(function(w){ return {from:ids[w.from]||w.from,kind:wireWord(w),to:ids[w.to]||w.to}; })};
+    wires:sketch.wires.map(function(w){
+      var o={from:ids[w.from]||w.from,kind:wireWord(w),to:ids[w.to]||w.to};
+      if(w.about) o.about=w.about;
+      return o;
+    })};
   fetch(LIVE.plan,{method:"POST",headers:{"Content-Type":"application/json"},
                    body:JSON.stringify({name:name,plan:plan,designs:designs})})
     .then(function(r){ return r.json().then(function(b){ return {ok:r.ok,body:b}; }); })

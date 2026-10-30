@@ -357,6 +357,34 @@ class MapViews(Folder):
         self.assertIn({"id": "system:billing", "label": "billing", "within": "features"},
                       [{k: b[k] for k in ("id", "label", "within") if k in b} for b in view["blocks"]])
 
+    def test_a_reviewed_drawing_shows_the_agents_changes_and_comments(self):
+        tree(self.root, {"plans/billing.json": json.dumps({
+            "drawn": True, "reviewed": True,
+            "drawing": {"cards": [{"kind": "module", "name": "dunning", "about": "Sends chasers"},
+                                  {"kind": "page", "name": "owed", "about": "Who owes"}],
+                        "wires": [{"from": "page:owed", "kind": "informed by", "to": "module:dunning"}]},
+            "cards": [{"kind": "page", "name": "owed", "about": "Who owes what, and since when"},
+                      {"kind": "module", "name": "billing"}],
+            "wires": [{"from": "page:owed", "kind": "informed by", "to": "module:billing"}],
+            "comments": [{"on": "module:dunning", "by": "agent", "text": "Fold this into billing"},
+                         {"on": "page:owed informed by module:billing", "by": "agent", "text": "Moved here"}]})})
+        g = build(self.root, reading=read_map(self.root))
+        view = g["map"]["views"]["map"]
+        nodes = {n["id"]: n for n in view["nodes"]}
+        self.assertEqual((nodes["module:billing"]["change"], nodes["page:owed"]["was"]),
+                         ("added", {"about": "Who owes"}))
+        self.assertTrue(nodes["module:dunning"]["struck"])
+        self.assertEqual(nodes["module:dunning"]["comments"],
+                         [{"by": "agent", "text": "Fold this into billing", "plan": "billing"}])
+        wires = {(e["from"], e["to"]): e for e in view["edges"] if e.get("plan")}
+        self.assertTrue(wires[("page:owed", "module:dunning")]["struck"])
+        self.assertEqual(wires[("page:owed", "module:billing")]["comments"][0]["text"], "Moved here")
+
+    def test_the_map_lists_the_designs_a_page_may_take(self):
+        tree(self.root, {"designs/invoices.html": "<h1>Invoices</h1>"})
+        g = build(self.root, reading=read_map(self.root))
+        self.assertEqual([d["file"] for d in g["map"]["designs"]], ["designs/invoices.html"])
+
     def test_the_map_says_which_wires_a_person_may_draw(self):
         g = build(self.root, reading=read_map(self.root))
         self.assertIn(["feature", "module", "uses"], g["map"]["wiring"])

@@ -4,7 +4,7 @@ from __future__ import annotations
 from collections import defaultdict
 
 from modules.layout import place_by_file, place_inside, place_map, size_cards
-from modules.planning import compare, drawable_wires, read_plans
+from modules.planning import compare, designs_in, drawable_wires, read_plans
 from modules.rules import UI_KINDS, relation
 from modules.source import EXTERNAL, OUTSIDE
 
@@ -177,7 +177,7 @@ def map_views(root: Path, graph: dict, r: Reading, source: str = "tags") -> dict
     keep = lambda c: c not in (TESTS_CARD, TOOLING_CARD)
     views = {"map": view("Map", "units", sorted(on_map), card, keep)}
     plans = compare(read_plans(root), views["map"]["nodes"], views["map"]["edges"])
-    ghosts, planned, notes = _ghosts(plans)
+    ghosts, planned, notes = _ghosts(plans, set(cards))
     if ghosts or planned:
         views["map"] = view("Map", "units", sorted(on_map) + sorted(ghosts), card, keep,
                             extra=(ghosts, planned))
@@ -191,6 +191,7 @@ def map_views(root: Path, graph: dict, r: Reading, source: str = "tags") -> dict
         for n in (v or {}).get("nodes", []):
             if n["id"] in notes and not n.get("ghost"):
                 n.update(notes[n["id"]])
+        _pin_comments(v, plans)
     for cid in on_map:
         own = cards[cid]["files"]
         if own:
@@ -200,7 +201,7 @@ def map_views(root: Path, graph: dict, r: Reading, source: str = "tags") -> dict
                               cards[cid]["group"], cid)
 
     return {"source": source, "top": top, "views": views, "plans": plans,
-            "wiring": [list(w) for w in drawable_wires()],
+            "wiring": [list(w) for w in drawable_wires()], "designs": designs_in(root),
             "mismatches": [str(m) for m in r.mismatches],
             "unknown": [str(u) for u in r.unknown]}
 
@@ -211,8 +212,10 @@ def map_views(root: Path, graph: dict, r: Reading, source: str = "tags") -> dict
 # the map lacks becomes a ghost card, a wire it lacks a ghost wire, and a card
 # it has but short of what was asked carries what is left to build.
 
-def _ghosts(plans: list) -> tuple:
-    """({id: ghost card}, [ghost wire], {id: what a real card is still asked for})."""
+def _ghosts(plans: list, real: set = frozenset()) -> tuple:
+    """({id: ghost card}, [ghost wire], {id: what a real card is still asked for}).
+    Where the agent has revised a drawing, what it struck out of the drawing
+    is drawn too, struck, so the two can be read against each other."""
     ghosts: dict = {}
     notes: dict = {}
     wires: list = []
@@ -221,7 +224,7 @@ def _ghosts(plans: list) -> tuple:
             if c["built"] or c["id"] in ghosts or c["id"] in notes:
                 continue
             said = {k: c[k] for k in ("about", "program", "takes", "gives", "roles", "triggers",
-                                      "problems", "design") if c.get(k)}
+                                      "problems", "design", "change", "was") if c.get(k)}
             if c["left"] != ["not on the map yet"]:
                 notes[c["id"]] = dict(said, plan=p["name"], left=c["left"])
                 continue
@@ -237,12 +240,45 @@ def _ghosts(plans: list) -> tuple:
                          if c["kind"] == "store" else "",
                 "fields": ["{}: {}".format(k, v) if v else k
                            for k, v in (c.get("fields") or {}).items()]})
+        for s in p.get("struck") or []:
+            if s["id"] in ghosts or s["id"] in real:
+                continue
+            ghosts[s["id"]] = {"id": s["id"], "label": s["name"], "kind": s["kind"], "ghost": True,
+                               "struck": True, "plan": p["name"], "left": [], "about": s["about"],
+                               "group": _ghost_group(s), "dir": "struck out · " + p["name"], "lines": 0,
+                               "files": [], "door": [], "doors": [], "system": "", "route": "",
+                               "start": False, "uses": [], "stores": [], "reads": [], "owner": "",
+                               "fields": []}
         for w in p["wires"]:
             if not w["built"]:
                 wires.append({"from": w["from"], "to": w["to"], "kind": w["kind"], "names": [],
                               "bad": [], "via": [], "why": list(w["problems"]), "plan": p["name"],
-                              "carries": w.get("carries", "")})
+                              "carries": w.get("carries", ""), "about": w.get("about", ""),
+                              "change": w.get("change", "")})
+        for w in p.get("struck_wires") or []:
+            wires.append({"from": w["from"], "to": w["to"], "kind": w["kind"], "names": [], "bad": [],
+                          "via": [], "why": [], "plan": p["name"], "struck": True,
+                          "about": w.get("about", "")})
     return ghosts, wires, notes
+
+
+def _pin_comments(view: dict | None, plans: list) -> None:
+    """Each comment in a plan, on the card or wire it is about: a wire's is
+    on `from <words> to`, so its first and last words find it."""
+    if not view:
+        return
+    nodes = {n["id"]: n for n in view["nodes"]}
+    for p in plans:
+        for c in p.get("comments") or []:
+            said = {"by": c["by"], "text": c["text"], "plan": p["name"]}
+            on = c["on"].split()
+            if len(on) == 1 and on[0] in nodes:
+                nodes[on[0]].setdefault("comments", []).append(said)
+            elif len(on) > 1:
+                for e in view["edges"]:
+                    if e["from"] == on[0] and e["to"] == on[-1] and not e.get("struck"):
+                        e.setdefault("comments", []).append(said)
+                        break
 
 
 def _ghost_group(c: dict) -> str:

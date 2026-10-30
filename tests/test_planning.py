@@ -7,7 +7,8 @@ import unittest
 
 import base64
 
-from modules.planning import compare, design_file, drawable_wires, left_behind, read_plans, write_plan
+from modules.planning import (compare, design_file, designs_in, drawable_wires, left_behind, read_plans,
+                              write_plan)
 from tests.helpers import Folder, tree
 
 
@@ -195,6 +196,44 @@ class Writing(Folder):
         self.assertEqual(p["cards"][0]["design"], "plans/rota-pages/rota.png")
         self.assertEqual(p["designs"], "plans/rota-pages/")
 
+    def test_a_drawn_plan_keeps_the_drawing_as_the_person_left_it(self):
+        drawn = {"ask": "Billing", "drawn": True,
+                 "cards": [{"kind": "feature", "name": "chase", "system": "billing", "about": "Chase late payers"}],
+                 "wires": [{"from": "feature:chase", "kind": "uses", "to": "module:mail", "about": "to email them"}],
+                 "comments": [{"on": "feature:chase", "by": "person", "text": "Weekly or monthly?"}]}
+        write_plan(self.root, "billing", drawn, {})
+        kept = json.loads((self.root / "plans/billing.json").read_text(encoding="utf-8"))
+        self.assertEqual(kept["drawing"], {"cards": drawn["cards"], "wires": drawn["wires"]})
+
+    def test_a_reviewed_plan_says_what_the_agent_changed_in_the_drawing(self):
+        drawing = {"cards": [{"kind": "feature", "name": "chase", "system": "billing", "about": "Chase late payers"},
+                             {"kind": "module", "name": "dunning", "about": "Sends the chasers"}],
+                   "wires": [{"from": "feature:chase", "kind": "uses", "to": "module:dunning"}]}
+        tree(self.root, {"plans/billing.json": json.dumps({
+            "drawn": True, "reviewed": True, "drawing": drawing,
+            "cards": [{"kind": "feature", "name": "chase", "system": "billing",
+                       "about": "Chase late payers every Monday", "triggers": ["schedule every Monday"]},
+                      {"kind": "page", "name": "owed", "about": "Who owes what"}],
+            "wires": [{"from": "feature:chase", "kind": "uses", "to": "module:mail"}],
+            "comments": [{"on": "module:dunning", "by": "agent", "text": "mail already sends email"},
+                         {"on": "feature:chase", "by": "person", "text": "Weekly or monthly?"}]})})
+        p = compare(read_plans(self.root), MAP_NODES, MAP_EDGES)[0]
+        cards = {c["id"]: c for c in p["cards"]}
+        self.assertEqual((cards["feature:chase"]["change"], cards["feature:chase"]["was"]),
+                         ("changed", {"about": "Chase late payers"}))
+        self.assertEqual(cards["page:owed"]["change"], "added")
+        self.assertEqual([c["id"] for c in p["struck"]], ["module:dunning"])
+        self.assertEqual([w["change"] for w in p["wires"]], ["added"])
+        self.assertEqual([(w["from"], w["to"]) for w in p["struck_wires"]], [("feature:chase", "module:dunning")])
+        self.assertEqual([c["by"] for c in p["comments"]], ["agent", "person"])
+
+    def test_a_drawing_not_yet_reviewed_shows_no_changes(self):
+        tree(self.root, {"plans/billing.json": json.dumps({
+            "drawn": True, "drawing": {"cards": [{"kind": "module", "name": "dunning"}], "wires": []},
+            "cards": [{"kind": "module", "name": "dunning"}]})})
+        p = compare(read_plans(self.root), MAP_NODES, MAP_EDGES)[0]
+        self.assertEqual((p["cards"][0].get("change"), p["struck"]), (None, []))
+
     def test_a_name_or_a_file_that_could_land_elsewhere_is_refused(self):
         for name in ("../x", "Rota Pages", "", "a/b"):
             with self.assertRaises(ValueError):
@@ -220,6 +259,20 @@ class Writing(Folder):
         tree(self.root, {"secret.png": "x", "plans/notes.txt": "x"})
         for rel in ("secret.png", "plans/../secret.png", "plans/notes.txt", "plans/rota/none.png"):
             self.assertIsNone(design_file(self.root, rel), rel)
+
+    def test_the_designs_folder_holds_the_pages_exported_from_claude_design(self):
+        tree(self.root, {"designs/invoices.html": "<h1>Invoices</h1>", "designs/home.png": "x",
+                         "designs/rota/index.html": "<h1>Rota</h1>", "designs/rota/app.js": "x",
+                         "designs/notes.txt": "x"})
+        self.assertEqual(designs_in(self.root), [
+            {"file": "designs/home.png", "name": "home", "type": "image"},
+            {"file": "designs/invoices.html", "name": "invoices", "type": "text/html"},
+            {"file": "designs/rota/index.html", "name": "rota", "type": "text/html"}])
+        self.assertEqual(design_file(self.root, "designs/invoices.html"), (b"<h1>Invoices</h1>", "text/html"))
+        self.assertIsNone(design_file(self.root, "designs/../secret.png"))
+
+    def test_no_designs_folder_is_no_designs(self):
+        self.assertEqual(designs_in(self.root), [])
 
 
 if __name__ == "__main__":
