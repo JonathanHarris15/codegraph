@@ -50,6 +50,17 @@ class CommandLine(Folder):
         self.assertIn("_open", bad.stdout)
         self.assertIn("not on its front door", bad.stdout)
 
+    def test_install_turns_the_plugin_on_then_says_it_is_on(self):
+        first = self.run_it("--install")
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+        self.assertIn("wrote .claude/settings.json", first.stdout)
+        settings = json.loads((self.root / ".claude/settings.json").read_text(encoding="utf-8"))
+        self.assertIs(settings["enabledPlugins"]["codegraph@codegraph"], True)
+
+        again = self.run_it("--install")
+        self.assertEqual(again.returncode, 0)
+        self.assertIn("already on here", again.stdout)
+
     def test_the_page_and_the_summary(self):
         tree(self.root, {
             "engine/__init__.py": mod("engine", "Book") + "class Book: pass\n",

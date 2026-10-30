@@ -9,7 +9,7 @@ A way to build a codebase in three layers, and a tool that keeps it honest.
 - **UI** is how a person reaches features: pages, components, and the design
   system they are drawn with.
 
-Codegraph is set up *in* a repo, not pointed at it. Every source file says
+Codegraph is set up *in* a repo, not pointed at it (docs/adr/0010). Every source file says
 in a tag which of these it belongs to, and the code is the architecture:
 there is no separate document to keep up to date (docs/adr/0002). Codegraph
 reads what the code really does, checks it against the tags, and draws the
@@ -17,6 +17,20 @@ result as a map where every broken rule shows red. `CONTEXT.md` has the
 words.
 
 ## Install
+
+Give an agent this repository's link and ask it to install codegraph in your
+repo:
+
+```
+Install codegraph in this repo: https://github.com/JonathanHarris15/codegraph
+```
+
+It follows [INSTALL.md](INSTALL.md): it turns the plugin on in the repo's
+committed `.claude/settings.json`, writes the rules into its `CLAUDE.md`, and
+tags every file, on a branch. The next Claude Code session there loads the
+plugin by itself once the folder is trusted, and keeps it up to date; so does
+everyone else's who opens the repo. `python codegraph.py path/to/repo --install`
+does the first two on its own.
 
 The repo is a Claude Code plugin. Installing it gives you three things:
 
@@ -37,7 +51,7 @@ The repo is a Claude Code plugin. Installing it gives you three things:
   `/codegraph:plan` puts a change on the map as a plan before it is built,
   and `/codegraph:open` opens the live map.
 
-To install it for every project, add this folder as a marketplace (the repo
+To install it for every project instead, add this folder as a marketplace (the repo
 lists itself in `.claude-plugin/marketplace.json`), then install from it:
 
 ```
@@ -205,6 +219,7 @@ program that only tests reach.
 | `-o FILE` | where to write the page (default `codegraph.html`) |
 | `--check` | read the code against its tags; exit 1 on a mismatch |
 | `--draft` | write a first tag into every file that has none |
+| `--install` | turn codegraph on in the repo: the plugin in `.claude/settings.json`, the rules in `CLAUDE.md`, `.codegraph/` in `.gitignore` |
 | `--summary` | print what the pane shows, as JSON |
 | `--serve` | serve the live map on this machine; print each request it sends, one JSON line each |
 | `--port N` | the port `--serve` uses (default: any free one) |
@@ -374,9 +389,10 @@ Codegraph is set up on itself, in the same three layers it asks of others.
 
 - `modules/`: source (reads each file and what it imports and reaches),
   tags, shapes, rules (the check's reading), planning (plans held against the map),
-  drafting, layout, drawing, web (serves the live map).
+  drafting, installing (turns codegraph on in a repo), layout, drawing,
+  web (serves the live map).
   Each folder's `__init__.py` is its front door.
-- `features/`: check, draw-map, browse-map and draft-tags, each a few lines that call
+- `features/`: check, draw-map, browse-map, draft-tags and install, each a few lines that call
   modules.
 - the UI: `codegraph.py`, the command line, and `hooks/register.tsx`, the
   pane. Both are start pages.

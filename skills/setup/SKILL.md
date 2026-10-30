@@ -1,12 +1,12 @@
 ---
 name: setup
-description: Set a repo up for codegraph. Tags every source file, writes the architecture rules into the repo's CLAUDE.md, and hands back a ranked list of mismatches to fix.
+description: Set a repo up for codegraph. Tags every source file, writes the architecture rules into the repo's CLAUDE.md, turns the plugin on for everyone who opens the repo, and hands back a ranked list of mismatches to fix.
 disable-model-invocation: true
 ---
 
 # Codegraph setup
 
-Brings one repo, fresh or long-lived, under codegraph (docs/adr/0004 in the codegraph plugin). Setup changes no behaviour: it writes tags (comments), the repo's context block and a `.gitignore` line. Moving and rewriting code is the fix skill's job, one change at a time.
+Brings one repo, fresh or long-lived, under codegraph (docs/adr/0004 in the codegraph plugin). Setup changes no behaviour: it writes tags (comments), the repo's context block, a `.gitignore` line and the repo's plugin settings. Moving and rewriting code is the fix skill's job, one change at a time.
 
 The program is `codegraph.py`, two folders above this skill's base directory. Call that path `CG` below and run it with Python 3.10 or newer. It reads Python on its own; TypeScript and JavaScript need `pip install tree-sitter tree-sitter-typescript tree-sitter-javascript`. If the repo has such files and the import fails, ask before installing.
 
@@ -27,13 +27,11 @@ The program is `codegraph.py`, two folders above this skill's base directory. Ca
 
    Done when every file's tag is one you would defend. The mismatches left are then the code's to fix, not the tags': a door narrowed to what should cross will show red where other code reaches past it, and that red is correct.
 
-4. **Context block.** Put the block in [CONTEXT-BLOCK.md](CONTEXT-BLOCK.md) into the repo's `CLAUDE.md`, between its `<!-- codegraph:start -->` and `<!-- codegraph:end -->` markers: replace an existing block, else append it, else create the file. Use `AGENTS.md` instead if the repo keeps its agent rules there.
+4. **Turn codegraph on.** Run `python CG . --install`. It puts the block in [CONTEXT-BLOCK.md](CONTEXT-BLOCK.md) into the repo's `CLAUDE.md` between its codegraph markers (or `AGENTS.md`, where the repo keeps its agent rules there), adds `.codegraph/` to `.gitignore`, and turns the codegraph plugin on in `.claude/settings.json` for everyone who opens the repo. It keeps whatever those files already say.
 
-5. **Ignore the drawn map.** Add `.codegraph/` to `.gitignore`.
+5. **Commit** on the branch: `Set up codegraph: tag every file`.
 
-6. **Commit** on the branch: `Set up codegraph: tag every file`.
-
-7. **Report.** Run `python CG . --check` and group the mismatches, worst first:
+6. **Report.** Run `python CG . --check` and group the mismatches, worst first:
    1. layers broken: a module calling a feature or the UI, a feature or page reaching a store or an outside connection, a feature calling a feature, a page or component doing a feature's work (the check's findings and the ones you wrote down in step 3);
    2. front doors crossed;
    3. stores with no schema, readers undeclared;
