@@ -195,7 +195,9 @@ path.wire.drawing{marker-end:none;marker-start:none}
 /* each top box's own controls, in its top right: a grip that drags the box
    and every card in it, and a button that lays its cards out again */
 .frame .ftools{position:absolute;top:2px;right:6px;display:flex;gap:2px;pointer-events:auto;
-  transform:scale(max(1,var(--unzoom,1)));transform-origin:top right}  /* never smaller than at full size */
+  transform:scale(clamp(1,var(--unzoom,1),var(--fit,1)));transform-origin:top right}
+/* zoomed out, they grow back toward full size, but only as far as the strip
+   above the box's cards or inner boxes leaves room: --fit, set as it is drawn */
 .frame .ftools button{display:flex;align-items:center;justify-content:center;width:22px;height:20px;
   padding:0;border-radius:10px;border:1px solid transparent;background:none;color:var(--muted);
   cursor:pointer;opacity:.6;transition:opacity .12s}
@@ -673,6 +675,9 @@ function box(el,holds,outer){
   });
   el.style.left=(x0-PAD)+"px"; el.style.top=(y0-PAD-HEAD)+"px";
   el.style.width=(x1-x0+2*PAD)+"px"; el.style.height=(y1-y0+2*PAD+HEAD)+"px";
+  // the strip above what the box holds, less an inner box's own head and room
+  var strip=PAD+HEAD-(outer?16+18:0), tools=el.querySelector(".ftools");
+  if(tools) el.style.setProperty("--fit",Math.max(1,(strip-6)/tools.offsetHeight));
 }
 function drawFrame(){
   if(frame) box(frame,function(n){ return n.own; });
@@ -707,7 +712,7 @@ function boxTools(f){
   grip.title="Drag to move this box and its cards"; grip.setAttribute("aria-label",grip.title);
   var tidy=document.createElement("button"); tidy.className="tidy"; tidy.innerHTML=TIDY;
   tidy.title="Tidy the cards in this box"; tidy.setAttribute("aria-label",tidy.title);
-  tools.appendChild(grip); tools.appendChild(tidy); f.el.appendChild(tools);
+  tools.appendChild(tidy); tools.appendChild(grip); f.el.appendChild(tools);   // the grip in the corner
 
   var id=null, sx, sy, from={};
   grip.addEventListener("pointerdown",function(ev){
