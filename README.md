@@ -23,9 +23,9 @@ The repo is a Claude Code plugin. Installing it gives you three things:
 - the **live map** in a browser tab inside Claude Code: `/codegraph` opens
   it, or `/codegraph:open` in the desktop app, whose slash menu lists only
   skills. It is the whole page below, served on this machine alone, and it
-  talks back: **Fix** on any mismatch, **Fix all**, **Ask about it** on any card, and
-  **+ Feature**, **+ Module**, **+ Page** each fill the chat box with the
-  prompt, ready to send. **Show** finds a mismatch's card on the map, a red
+  talks back: **Fix** on any mismatch, **Fix all** and **Ask about it** on any card
+  each fill the chat box with the prompt, ready to send, and a right click
+  draws something new (below). **Show** finds a mismatch's card on the map, a red
   dot marks every card that has one, and the list folds away. After every
   turn the page reads the code again and redraws, keeping your place.
   Where no browser tab can open, `/codegraph-pane` shows a smaller map in a
@@ -93,13 +93,18 @@ code has but short of what was asked says what is left. Once nothing is left,
 the plan is deleted: the check reports a built plan still in `plans/` as a
 mismatch. The map is only ever read from the code.
 
-You can also sketch a plan yourself. On the **Pages** view, **Sketch a change**
-lets you add pages, drag a page's amber dot onto another to say it leads
-there, and drop a screen or an HTML file from Claude Design onto a page to
-give it a design, or onto empty space to start a new page from it. **Send**
-writes the sketch to `plans/`, designs beside it in `plans/<name>/`, and asks
-the agent to check it: it fills in the features the pages need, corrects
-what breaks a rule, and tells you before it builds. Where links sit on each
+You can also draw a plan yourself. Right-click empty space on the map or the
+**Pages** view and pick a new module, feature or page: the card appears where
+you clicked, the view flies in to it, and you type in the card itself, its
+name and in plain words what it is for (Enter moves on, Esc is done). A
+feature made inside a system's box joins that system. A page can take a
+design from Claude Design: **New page from a design…**, or drop a screen or
+an HTML file onto a page, or onto empty space for a new page. On the
+**Pages** view, drag a page's amber dot onto another to say it leads there.
+Zoom out and carry on; double-click a new card to edit it, right-click it to
+remove it. **Send** writes the drawing to `plans/`, designs beside it in
+`plans/<name>/`, and asks the agent to check it: it fills in what the cards
+need, corrects what breaks a rule, and tells you before it builds. Where links sit on each
 page is the agent's call; you only say where a person can go. Designs are
 shown boxed in: an HTML design may not run a script.
 

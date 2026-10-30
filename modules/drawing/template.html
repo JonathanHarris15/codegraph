@@ -264,7 +264,25 @@ button.act:hover{filter:brightness(1.08);border-color:transparent}
 button.sm{font-size:11px;padding:2px 8px}
 .card.flagged::after{content:"";position:absolute;top:7px;right:7px;width:8px;height:8px;
   border-radius:50%;background:var(--breach);box-shadow:0 0 0 2px var(--surface)}
-#make{display:flex;gap:6px}
+#make{display:flex;gap:6px;align-items:center}
+#make .how{font-size:11px;color:var(--muted)}
+#ctx{position:absolute;z-index:20;min-width:190px;display:flex;flex-direction:column;padding:4px;
+  background:var(--surface);border:1px solid var(--hair);border-radius:9px;box-shadow:0 8px 24px rgba(10,20,40,.18)}
+#ctx button{display:flex;justify-content:space-between;gap:12px;border:0;background:none;text-align:left;
+  padding:6px 9px;border-radius:6px;font-size:12px}
+#ctx button:hover,#ctx button:focus{background:var(--surface-2);outline:none}
+#ctx kbd{font-family:var(--font-mono);font-size:10px;color:var(--muted)}
+.card.editing{cursor:auto;z-index:5}
+.cedit{display:flex;flex-direction:column;gap:6px}
+.cedit .ck{font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--plan)}
+.cedit input,.cedit textarea{font:inherit;font-family:var(--font-ui);font-size:12px;color:var(--ink);
+  background:var(--surface);border:1px solid var(--hair);border-radius:6px;padding:5px 7px;width:100%;box-sizing:border-box}
+.cedit .cname{font-weight:700;font-size:13px}
+.cedit textarea{min-height:60px;resize:none;line-height:1.4}
+.cedit input:focus,.cedit textarea:focus{outline:2px solid var(--plan);outline-offset:-1px}
+.cedit .crow{display:flex;align-items:center;gap:8px}
+.cedit .crow span{font-size:9.5px;color:var(--muted)}
+.cedit .design{margin-top:0}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);
   color:var(--surface);padding:8px 14px;border-radius:8px;font-size:12px;opacity:0;
   transition:opacity .2s;pointer-events:none;z-index:50}
@@ -608,6 +626,7 @@ function layout(){
   var cols={}, total={}, tall={}, top={}, tiers=[], colW=[], blocks=!!V.blocks;
   base={}; colX={};
   order.forEach(function(n){
+    if(n.draft) return;                // drawn by hand: placed below, not stacked
     var k=(n.tier===undefined?1:n.tier)+"|"+n.col;
     (cols[k]=cols[k]||[]).push(n);
     colW[n.col]=Math.max(colW[n.col]||0,cw(n.id));
@@ -641,6 +660,15 @@ function layout(){
     var c=k.split("|")[1], foot=0;
     (cols["1|"+c]||[]).forEach(function(n){ foot=Math.max(foot,base[n.id].y+hgt[n.id]); });
     place(k,foot?foot+TIERGAP:top[Number(k.split("|")[0])]);
+  });
+  // a card drawn here sits where it was made; on the other view, in a column
+  // of its own to the right
+  var right=0, spot=blocks?2*HEADY:HEADY;
+  order.forEach(function(n){ if(!n.draft) right=Math.max(right,base[n.id].x+cw(n.id)); });
+  order.forEach(function(n){
+    if(!n.draft) return;
+    if(n.at) base[n.id]={x:n.at.x,y:n.at.y};
+    else { base[n.id]={x:right+COLGAP,y:spot}; spot+=hgt[n.id]+GAP; }
   });
   pos={};
   order.forEach(function(n){
@@ -719,6 +747,7 @@ function toggleFold(id){
 }
 
 function show(key){
+  editing=null;
   V=VIEWS[key]; cur=key; selected=null; hovered=null; query=""; qbox.value=""; picked={};
   shownWires={};
   nodes={}; order=V.nodes.slice();
@@ -787,7 +816,7 @@ function show(key){
     } else { el.appendChild(hd); el.appendChild(dir); el.appendChild(foot); }
     if(n.plan){
       var pt=document.createElement("div"); pt.className="ptag";
-      pt.textContent=n.ghost?"PLANNED \u00b7 "+n.plan:"PLAN \u00b7 "+n.left.length+" left";
+      pt.textContent=n.draft?"DRAWN \u00b7 NOT SENT":n.ghost?"PLANNED \u00b7 "+n.plan:"PLAN \u00b7 "+n.left.length+" left";
       if(n.ghost) dir.textContent=n.about||n.dir;
       el.appendChild(pt);
     }
@@ -1265,7 +1294,7 @@ function drawPanel(){
     h+='<p class="note">In system <b>'+esc(n.system||"none")+'</b></p>';
     if(!n.ghost) h+=chips("Says it uses",n.uses,"No modules named.");
   }
-  if(sketchingHere()&&n.kind==="page") h+=sketchPanel(n);
+  if(sketchingHere()&&(n.draft||n.kind==="page"&&sketch.designs[n.id])) h+=sketchPanel(n);
   else if(n.plan){
     h+='<h3>'+(n.ghost?"Planned":"Plan asks for more")+' \u00b7 '+esc(n.plan)+'</h3>';
     if(n.about) h+='<p class="note">'+esc(n.about)+'</p>';
@@ -1395,6 +1424,7 @@ function pickedIds(){ return Object.keys(picked).filter(function(k){ return pick
 function drag(el,n){
   var id=null,sx,sy,went=false,hit=null,from={};
   el.addEventListener("pointerdown",function(ev){
+    if(ev.target.closest(".cedit")){ ev.stopPropagation(); return; }
     if(ev.button!==0&&ev.pointerType==="mouse") return;
     ev.stopPropagation(); id=ev.pointerId; went=false; hit=ev.target;
     sx=ev.clientX; sy=ev.clientY;
@@ -1419,8 +1449,12 @@ function drag(el,n){
     if(id===null||ev.pointerId!==id) return;
     id=null;
     if(went){
-      Object.keys(from).forEach(function(k){ moved[k]=pos[k]; });
-      save(posKey(),moved); return;
+      Object.keys(from).forEach(function(k){
+        var c=nodes[k]&&nodes[k].draft&&sketch&&sketch.cards[k];
+        if(c){ c.at=c.at||{}; c.at[cur]=pos[k]; nodes[k].at=pos[k]; }
+        else moved[k]=pos[k];
+      });
+      save(posKey(),moved); keepSketch(); return;
     }
     if(ev.shiftKey){ picked[n.id]=!picked[n.id]; render(); return; }
     // a click lands on the fold toggle, a file in the list, or the card itself
@@ -1444,9 +1478,14 @@ function drag(el,n){
     if(hovered!==n.id) return;
     hovered=null; lightWires();
   });
-  // a double click goes into a module
-  el.addEventListener("dblclick",function(){ if(VIEWS[n.id]&&n.id!==cur) open(n.id); });
+  // a double click goes into a module, or opens a card drawn here for typing
+  el.addEventListener("dblclick",function(ev){
+    if(ev.target.closest(".cedit")) return;
+    if(n.draft) editCard(n.id,true);
+    else if(VIEWS[n.id]&&n.id!==cur) open(n.id);
+  });
   el.addEventListener("keydown",function(ev){
+    if(ev.target!==el) return;
     if(ev.key==="Enter"||ev.key===" "){ ev.preventDefault(); select(selected===n.id?null:n.id); }
   });
 }
@@ -1526,17 +1565,18 @@ stage.addEventListener("wheel",function(ev){
 function fit(){
   var r=stage.getBoundingClientRect(), b=extent();
   stopZoom();
-  scale=zoomTo=Math.max(MINZ,Math.min(1.4,Math.min((r.width-48)/(b.w+40),(r.height-48)/(b.h+40))));
-  panX=(r.width-(b.w+40)*scale)/2; panY=(r.height-(b.h+40)*scale)/2; applyView();
+  var bar=document.getElementById("sketchbar"), under=bar.hidden?0:bar.offsetHeight+12;
+  scale=zoomTo=Math.max(MINZ,Math.min(1.4,Math.min((r.width-48)/(b.w+40),(r.height-48-under)/(b.h+40))));
+  panX=(r.width-(b.w+40)*scale)/2; panY=under+(r.height-under-(b.h+40)*scale)/2; applyView();
 }
 function openView(){
   var r=stage.getBoundingClientRect(), b=extent();
   stopZoom();
-  if(V.blocks){                    // the map is laid out to fit, so show all of it
-    scale=zoomTo=Math.max(MINZ,Math.min(1,(r.width-24)/(b.w+40),(r.height-24)/(b.h+40)));
-    panX=(r.width-(b.w+40)*scale)/2; panY=12; applyView(); return;
-  }
   var bar=document.getElementById("sketchbar"), under=bar.hidden?0:bar.offsetHeight+12;
+  if(V.blocks){                    // the map is laid out to fit, so show all of it
+    scale=zoomTo=Math.max(MINZ,Math.min(1,(r.width-24)/(b.w+40),(r.height-24-under)/(b.h+40)));
+    panX=(r.width-(b.w+40)*scale)/2; panY=12+under; applyView(); return;
+  }
   scale=zoomTo=Math.max(0.4,Math.min(1,(r.height-56-under)/(b.h+40)));
   panX=22; panY=18+under; applyView();
 }
@@ -1575,30 +1615,52 @@ document.addEventListener("keydown",function(ev){
 });
 
 /* ---------------------------------------------------------- sketching
-   On the pages view a person can sketch a change by hand: new pages, links
-   between pages, and a design (a screen, or a page of HTML) dropped on any
-   page. Send writes the sketch to plans/ as a plan and asks the agent to
-   correct it; Build it builds it. Until it is sent the sketch is kept in
-   this browser, so the page reloading after a turn does not lose it. */
+   On the map and the pages view a person draws a change by hand. A right
+   click on empty space makes a new module, feature or page where it was
+   clicked, flies in to it, and the card opens for typing: its name and, in
+   plain words, what it is for. A page can take a design from Claude Design (a
+   screen, or a page of HTML), picked from a file or dropped on it. On the
+   pages view a page's amber dot drags out a link to another page. Send
+   writes the drawing to plans/ as a plan and asks the agent to correct it;
+   Build it builds it. Until it is sent the drawing is kept in this browser,
+   so the page reloading after a turn does not lose it. */
 var DESIGN_EXT={".png":1,".jpg":1,".jpeg":1,".gif":1,".webp":1,".svg":1,".html":1};
 var DESIGN_MAX=8000000;
-var sketch=null, sketchForm=null, sketchErr="";
+var DRAWN={module:"module",feature:"feature",page:"page"};
+var sketch=null, sketchForm=null, sketchErr="", editing=null;
 // a repo with no links between pages yet has not been told how one is drawn
 if(MODS&&!KINDS.leads) KINDS.leads={label:"leads to",hue:330,dash:"",width:1.5,head:"to"};
 try{ sketch=JSON.parse(localStorage.getItem(KEY+".sketch")||"null"); }catch(e){ sketch=null; }
+// a drawing kept by an older page held only pages
+if(sketch&&sketch.pages&&!sketch.cards){
+  sketch.cards={};
+  Object.keys(sketch.pages).forEach(function(id){
+    var p=sketch.pages[id];
+    sketch.cards[id]={kind:"page",name:p.name,route:p.route||"",about:p.about||"",at:{}};
+  });
+  delete sketch.pages;
+}
 function canSketch(){ return !!(LIVE&&LIVE.plan&&MODS); }
-function sketchingHere(){ return !!sketch&&cur==="pages"; }
-// a new project has no pages yet, and sketching them is how it gets some
+function drawsHere(){ return canSketch()&&(cur==="map"||cur==="pages"); }
+function sketchingHere(){ return !!sketch&&drawsHere(); }
+function blank(){ return {cards:{},wires:[],designs:{},next:1}; }
+function sketchSize(){
+  return sketch?Object.keys(sketch.cards).length+sketch.wires.length+Object.keys(sketch.designs).length:0;
+}
+// a new project has no pages yet, and drawing them is how it gets some
 if(canSketch()&&!VIEWS.pages){
   VIEWS.pages={title:"Pages",unit:"pages",nodes:[],edges:[],columns:[],groups:[]};
   TOP.splice(TOP.indexOf("files"),0,"pages");
 }
-var BASEPAGES=VIEWS.pages?{nodes:VIEWS.pages.nodes.slice(),edges:VIEWS.pages.edges.slice()}:null;
+var BASE={};
+["map","pages"].forEach(function(k){
+  if(VIEWS[k]) BASE[k]={nodes:VIEWS[k].nodes.slice(),edges:VIEWS[k].edges.slice()};
+});
 function keepSketch(){
   try{
-    if(sketch) localStorage.setItem(KEY+".sketch",JSON.stringify(sketch));
+    if(sketch&&sketchSize()) localStorage.setItem(KEY+".sketch",JSON.stringify(sketch));
     else localStorage.removeItem(KEY+".sketch");
-  }catch(e){ toast("This sketch is too big to keep if the page reloads: send it soon"); }
+  }catch(e){ toast("This drawing is too big to keep if the page reloads: send it soon"); }
 }
 function slug(s){ return String(s).toLowerCase().replace(/\.[a-z0-9]+$/,"").replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,""); }
 function extOf(name){ var m=/\.[a-z0-9]+$/.exec(String(name).toLowerCase()); return m?m[0]:""; }
@@ -1621,65 +1683,57 @@ function fillDesigns(root){
       .then(function(t){ designText[url]=t; fr.srcdoc=t; }).catch(function(){});
   });
 }
-/* the pages view, with what is sketched laid over it: new pages in a column
-   of their own on the right, drawn links dashed, designs on their pages */
+/* the map and the pages view, with what is drawn laid over them: each new
+   card where it was made (or, on the view it was not made on, in a column of
+   its own on the right), drawn links dashed, designs on their pages */
+function drawnLabel(c){ return c.name||"new "+c.kind; }
 function sketchView(){
-  if(!BASEPAGES) return;
-  var v=VIEWS.pages, right=-1, row=0;
-  v.nodes=BASEPAGES.nodes.map(function(n){
-    right=Math.max(right,n.col||0);
-    var d=sketch&&sketch.designs[n.id];
-    return d?Object.assign({},n,{sketched:d}):n;
-  });
-  v.edges=BASEPAGES.edges.slice();
-  if(!sketch) return;
-  Object.keys(sketch.pages).forEach(function(id){
-    var p=sketch.pages[id];
-    v.nodes.push({id:id,label:p.name,kind:"page",ghost:true,draft:true,plan:"sketch",left:[],
-      about:p.about||"",route:p.route||"",dir:p.route||"new page",group:"(ui)",
-      col:right+1,row:row++,size:1,files:[],sketched:sketch.designs[id]});
-  });
-  sketch.wires.forEach(function(w){
-    v.edges.push({from:w.from,to:w.to,kind:"leads",plan:"sketch",names:[],why:[],via:[],bad:[]});
+  Object.keys(BASE).forEach(function(k){
+    var v=VIEWS[k];
+    v.nodes=BASE[k].nodes.map(function(n){
+      var d=sketch&&sketch.designs[n.id];
+      return d?Object.assign({},n,{sketched:d}):n;
+    });
+    v.edges=BASE[k].edges.slice();
+    if(!sketch) return;
+    Object.keys(sketch.cards).forEach(function(id){
+      var c=sketch.cards[id];
+      if(k==="pages"&&c.kind!=="page") return;
+      v.nodes.push({id:id,label:drawnLabel(c),kind:c.kind,ghost:true,draft:true,plan:"sketch",left:[],
+        about:c.about||"",route:c.route||"",system:c.system||"",
+        dir:c.kind==="page"?(c.route||"new page"):c.kind==="feature"&&c.system?"new feature in "+c.system:"new "+c.kind,
+        group:c.group||"(drawn)",at:(c.at||{})[k],size:1.5,files:[],sketched:sketch.designs[id]});
+    });
+    if(k==="pages") sketch.wires.forEach(function(w){
+      v.edges.push({from:w.from,to:w.to,kind:"leads",plan:"sketch",names:[],why:[],via:[],bad:[]});
+    });
   });
 }
 sketchView();
-function redrawSketch(pick){
+function redrawSketch(pick,then){
   keepSketch(); sketchView();
-  if(cur!=="pages"){ open("pages"); return; }
   var s=scale,x=panX,y=panY;
-  show("pages");
+  show(drawsHere()?cur:"pages");
   scale=zoomTo=s; panX=x; panY=y; applyView();
   if(pick&&nodes[pick]) select(pick);
-}
-function startSketch(){
-  if(!sketch){ sketch={pages:{},wires:[],designs:{}}; }
-  sketchForm=null; redrawSketch();
+  if(then) then();
 }
 function drawSketchBar(){
   var bar=document.getElementById("sketchbar");
-  if(!canSketch()||cur!=="pages"){ bar.hidden=true; return; }
+  if(!sketchingHere()||!sketchSize()){ bar.hidden=true; return; }
   bar.hidden=false;
-  if(!sketch){
-    bar.innerHTML='<button class="act sm" id="sk-start">Sketch a change</button>'+
-      '<span class="hint">Add pages, draw where each leads, and drop designs from Claude Design on them.</span>';
-    bar.querySelector("#sk-start").addEventListener("click",startSketch);
-    return;
-  }
-  var np=Object.keys(sketch.pages).length, nw=sketch.wires.length, nd=Object.keys(sketch.designs).length;
-  bar.innerHTML='<b>Sketching</b><span class="tally">'+np+(np===1?" new page":" new pages")+" · "+
+  var nc=Object.keys(sketch.cards).length, nw=sketch.wires.length, nd=Object.keys(sketch.designs).length;
+  bar.innerHTML='<b>Drawing</b><span class="tally">'+nc+(nc===1?" new card":" new cards")+" · "+
     nw+(nw===1?" link":" links")+" · "+nd+(nd===1?" design":" designs")+'</span>'+
-    '<button class="sm" id="sk-page">+ Page</button>'+
-    '<button class="act sm" id="sk-send"'+(np+nw+nd?'':' disabled')+'>Send</button>'+
+    '<button class="act sm" id="sk-send">Send</button>'+
     '<button class="sm" id="sk-drop">Discard</button>'+
-    '<span class="hint">Drag a page’s amber dot onto another page to say it leads there. '+
-    'Drop a screen or an HTML file on a page to give it a design, or on empty space for a new page.</span>';
-  bar.querySelector("#sk-page").addEventListener("click",function(){ openSketchForm("page"); });
+    '<span class="hint">Right-click empty space for another card; double-click a new card to edit it.'+
+    (cur==="pages"?' Drag a page’s amber dot onto another page to say it leads there.':'')+'</span>';
   bar.querySelector("#sk-send").addEventListener("click",function(){ openSketchForm("send"); });
   var drop=bar.querySelector("#sk-drop");
   drop.addEventListener("click",function(){
     if(drop.textContent!=="Sure?"){ drop.textContent="Sure?"; return; }
-    sketch=null; sketchForm=null; redrawSketch();
+    sketch=null; sketchForm=null; editing=null; redrawSketch();
   });
 }
 function openSketchForm(kind,more){
@@ -1687,24 +1741,15 @@ function openSketchForm(kind,more){
   selected=null; render(); drawSketchForm();
 }
 function drawSketchForm(){
-  var f=sketchForm, h='<div class="phead"><h2>'+(f.kind==="page"?"New page":"Send the sketch")+
-    '</h2><span class="spacer"></span><button class="close" id="p-close" aria-label="Close">×</button></div>';
-  if(f.kind==="page"){
-    h+='<p class="note">A place a person can land. Say what it is for in your own words; the agent works out the rest.</p>'+
-      '<form id="sk-form"><label>name<input type="text" name="name" required value="'+esc(f.more.name||"")+'"></label>'+
-      '<label>route, if you know it<input type="text" name="route" placeholder="/rota"></label>'+
-      '<label>what it is for<textarea name="about"></textarea></label>'+
-      (f.more.design?designHtml(f.more.design):'')+
-      '<button class="act sm" type="submit">Add page</button></form>';
-  } else {
-    var names=Object.keys(sketch.pages).map(function(id){ return sketch.pages[id].name; });
-    h+='<p class="note">Writes the sketch to <b>plans/</b> and puts a request in the chat box: the agent checks it '+
-      'against the rules, corrects what breaks them, and tells you before building anything.</p>'+
-      '<form id="sk-form"><label>plan name<input type="text" name="name" required value="'+
-      esc(slug(names.join("-")||"page-flow").slice(0,40))+'"></label>'+
-      '<label>what this change is for<textarea name="ask"></textarea></label>'+
-      '<button class="act sm" type="submit">Send</button></form>';
-  }
+  var h='<div class="phead"><h2>Send the drawing</h2><span class="spacer"></span>'+
+    '<button class="close" id="p-close" aria-label="Close">×</button></div>';
+  var names=Object.keys(sketch.cards).map(function(id){ return sketch.cards[id].name; }).filter(Boolean);
+  h+='<p class="note">Writes the drawing to <b>plans/</b> and puts a request in the chat box: the agent checks it '+
+    'against the rules, corrects what breaks them, and tells you before building anything.</p>'+
+    '<form id="sk-form"><label>plan name<input type="text" name="name" required value="'+
+    esc(slug(names.join("-")||"drawn-change").slice(0,40))+'"></label>'+
+    '<label>what this change is for<textarea name="ask"></textarea></label>'+
+    '<button class="act sm" type="submit">Send</button></form>';
   if(sketchErr) h+='<p class="err">'+esc(sketchErr)+'</p>';
   panel.innerHTML=h; panel.hidden=false; panel.classList.remove("listing");
   panel.querySelector("#p-close").addEventListener("click",function(){ sketchForm=null; panel.hidden=true; });
@@ -1712,21 +1757,192 @@ function drawSketchForm(){
   form.addEventListener("submit",function(ev){
     ev.preventDefault();
     var v={}; Array.prototype.forEach.call(form.elements,function(el){ if(el.name) v[el.name]=el.value.trim(); });
-    if(f.kind==="page") addPage(v,f.more.design); else sendSketch(v);
+    sendSketch(v);
   });
   var first=form.querySelector("input"); if(first) first.focus();
 }
-function addPage(v,design){
-  var name=slug(v.name), id="page:"+name;
-  sketchErr=!name?"Give the page a name.":nodes[id]||sketch.pages[id]?"There is a page called "+name+" already.":"";
-  if(sketchErr){ drawSketchForm(); return; }
-  sketch.pages[id]={name:name,route:v.route,about:v.about};
-  if(design) sketch.designs[id]=design;
-  sketchForm=null; redrawSketch(id);
+
+/* ---- making a card: where the right click landed, and what it sits in */
+function canvasAt(e){
+  var r=stage.getBoundingClientRect();
+  return {x:(e.clientX-r.left-panX)/scale, y:(e.clientY-r.top-panY)/scale};
 }
+// the block or system box a point on the map falls in, if any
+function frameAt(p){
+  var hit=null;
+  frames.forEach(function(f){
+    var el=f.el, x=el.offsetLeft, y=el.offsetTop;
+    if(p.x>=x&&p.x<=x+el.offsetWidth&&p.y>=y&&p.y<=y+el.offsetHeight&&(!hit||f.within)) hit=f;
+  });
+  return hit;
+}
+function newCard(kind,p,design){
+  if(!sketch) sketch=blank();
+  var id="draft:"+(sketch.next++), c={kind:kind,name:"",about:"",at:{}};
+  c.at[cur]={x:Math.round(p.x-CW*0.75),y:Math.round(p.y-24)};
+  var f=cur==="map"&&frameAt(p);
+  if(kind==="feature"&&f&&f.within){ c.system=f.id.replace(/^system:/,""); c.group=f.id; }
+  if(design){ sketch.designs[id]=design; c.name=slug(design.name); }
+  sketch.cards[id]=c;
+  redrawSketch(null,function(){ editCard(id,true); });
+}
+/* what a right click offers: on empty space, a new card of each kind, first
+   the kind whose box it landed in; on a card drawn here, its edits */
+var menu=null;
+function closeMenu(){ if(menu&&menu.parentNode) menu.parentNode.removeChild(menu); menu=null; }
+function openMenu(e,items){
+  closeMenu();
+  menu=document.createElement("div"); menu.id="ctx"; menu.setAttribute("role","menu");
+  items.forEach(function(it,i){
+    var b=document.createElement("button"); b.setAttribute("role","menuitem");
+    b.innerHTML=esc(it[0])+(it[2]?'<kbd>'+esc(it[2])+'</kbd>':"");
+    b.addEventListener("click",function(){ closeMenu(); it[1](); });
+    menu.appendChild(b);
+  });
+  menu.addEventListener("keydown",function(ev){
+    if(ev.key==="Escape"){ ev.stopPropagation(); closeMenu(); return; }
+    var k=items.filter(function(it){ return it[2]&&it[2].toLowerCase()===ev.key.toLowerCase(); })[0];
+    if(k){ ev.preventDefault(); closeMenu(); k[1](); }
+  });
+  var r=stage.getBoundingClientRect();
+  menu.style.left=Math.min(e.clientX-r.left,r.width-200)+"px";
+  menu.style.top=Math.min(e.clientY-r.top,r.height-40*items.length-10)+"px";
+  stage.appendChild(menu);
+  menu.querySelector("button").focus();
+}
+document.addEventListener("pointerdown",function(ev){ if(menu&&!ev.target.closest("#ctx")) closeMenu(); },true);
+var picker=document.createElement("input");
+picker.type="file"; picker.accept=Object.keys(DESIGN_EXT).join(","); picker.hidden=true;
+document.body.appendChild(picker);
+function pickDesign(then){
+  picker.value="";
+  picker.onchange=function(){ if(picker.files[0]) readDesign(picker.files[0],then); };
+  picker.click();
+}
+function giveDesign(id,design){
+  if(!sketch) sketch=blank();
+  sketch.designs[id]=design;
+  if(sketch.cards[id]&&!sketch.cards[id].name) sketch.cards[id].name=slug(design.name);
+  redrawSketch(id,editing===id?function(){ editCard(id,false); }:null);
+}
+stage.addEventListener("contextmenu",function(ev){
+  if(!drawsHere()||ev.target.closest("#panel")||ev.target.closest("#sketchbar")||
+     ev.target.closest("#legend")||ev.target.closest("#corner")||ev.target.closest(".cedit")) return;
+  ev.preventDefault();
+  var card=ev.target.closest(".card"), id=card&&card.getAttribute("data-id"), n=id&&nodes[id];
+  if(n&&n.draft){
+    var items=[["Edit",function(){ editCard(id,true); },"E"]];
+    if(n.kind==="page") items.push(["Import a design…",function(){ pickDesign(function(d){ giveDesign(id,d); }); },"I"]);
+    items.push(["Remove",function(){ removeCard(id); },"R"]);
+    openMenu(ev,items); return;
+  }
+  if(n){
+    if(n.kind==="page") openMenu(ev,[["Import a design…",function(){ pickDesign(function(d){ giveDesign(id,d); }); },"I"]]);
+    return;
+  }
+  var p=canvasAt(ev), f=cur==="map"&&frameAt(p);
+  var at=f?(f.within?"features":f.id):"", kinds=cur==="pages"?["page"]:["module","feature","page"];
+  kinds.sort(function(a,b){ return (at===b+"s")-(at===a+"s"); });
+  var items=kinds.map(function(k){
+    var label="New "+k+(k==="feature"&&f&&f.within?" in "+f.id.replace(/^system:/,""):"");
+    return [label,function(){ newCard(k,p); },k[0].toUpperCase()];
+  });
+  items.push(["New page from a design…",function(){ pickDesign(function(d){ newCard("page",p,d); }); },"D"]);
+  openMenu(ev,items);
+});
+function removeCard(id){
+  delete sketch.cards[id]; delete sketch.designs[id];
+  sketch.wires=sketch.wires.filter(function(w){ return w.from!==id&&w.to!==id; });
+  if(editing===id) editing=null;
+  redrawSketch();
+}
+
+/* ---- typing in a card: the card opens where it sits, and the view flies in */
+function flyTo(id,then){
+  var el=cardEls[id];
+  if(!el){ if(then) then(); return; }
+  var r=stage.getBoundingClientRect(), w=cw(id), h=hgt[id], p=pos[id];
+  var bar=document.getElementById("sketchbar"), under=bar.hidden?0:bar.offsetHeight+12;
+  var s1=Math.max(Math.min(scale,2.2),Math.min(2.2,(r.width*0.45)/w,(r.height*0.6-under)/h));
+  var cx=p.x+w/2, cy=p.y+h/2, s0=scale, sx=panX+cx*s0, sy=panY+cy*s0;
+  var tx=r.width/2-(panel.hidden?0:panel.offsetWidth/2), ty=under+(r.height-under)/2;
+  var t0=performance.now(), MS=FOLD_MS?420:0;
+  stopZoom();
+  (function step(now){
+    var t=MS?Math.min(1,(now-t0)/MS):1, k=t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+    scale=s0+(s1-s0)*k;
+    panX=sx+(tx-sx)*k-cx*scale; panY=sy+(ty-sy)*k-cy*scale; applyView();
+    if(t<1) requestAnimationFrame(step); else { zoomTo=scale; if(then) then(); }
+  })(t0);
+}
+function editCard(id,fly){
+  var c=sketch&&sketch.cards[id], el=cardEls[id];
+  if(!c||!el) return;
+  editing=id; select(null);
+  var d=sketch.designs[id];
+  el.classList.add("editing");
+  var ed=document.createElement("div"); ed.className="cedit";
+  ed.innerHTML='<div class="ck">new '+esc(c.kind)+(c.system?" in "+esc(c.system):"")+'</div>'+
+    '<input class="cname" type="text" spellcheck="false" placeholder="its name" value="'+esc(c.name||"")+'">'+
+    '<textarea class="cabout" placeholder="What is it for? Say it in your own words.">'+esc(c.about||"")+'</textarea>'+
+    (c.kind==="page"?'<input class="croute" type="text" spellcheck="false" placeholder="/route, if you know it" value="'+
+      esc(c.route||"")+'">'+(d?designHtml(d):"")+
+      '<button class="sm cimport" type="button">'+(d?"Change the design…":"Import a design…")+'</button>':"")+
+    '<div class="crow"><button class="act sm cdone" type="button">Done</button>'+
+    '<span>Enter: next · Esc: done</span></div>';
+  // the card's own face goes while it is typed in; Done puts it back
+  Array.prototype.forEach.call(el.children,function(ch){ ch.style.display="none"; });
+  el.appendChild(ed); fillDesigns(ed);
+  var name=ed.querySelector(".cname"), about=ed.querySelector(".cabout"), route=ed.querySelector(".croute");
+  function keep(){
+    c.name=name.value.trim(); c.about=about.value.trim();
+    if(route) c.route=route.value.trim();
+    keepSketch();
+  }
+  function grow(){ about.style.height="auto"; about.style.height=Math.max(60,about.scrollHeight)+"px"; hgt[id]=el.offsetHeight; render(); }
+  [name,about,route].forEach(function(f){ if(f) f.addEventListener("input",function(){ keep(); if(f===about) grow(); }); });
+  ed.addEventListener("keydown",function(ev){
+    ev.stopPropagation();
+    if(ev.key==="Escape"||(ev.key==="Enter"&&(ev.metaKey||ev.ctrlKey))){ ev.preventDefault(); doneCard(id); return; }
+    if(ev.key==="Enter"&&ev.target!==about){
+      ev.preventDefault();
+      var next=ev.target===name?about:null;
+      if(next) next.focus(); else doneCard(id);
+    }
+  });
+  ed.querySelector(".cdone").addEventListener("click",function(){ doneCard(id); });
+  var imp=ed.querySelector(".cimport");
+  if(imp) imp.addEventListener("click",function(){ keep(); pickDesign(function(dd){ giveDesign(id,dd); }); });
+  hgt[id]=el.offsetHeight; render();
+  if(fly) flyTo(id,function(){ (c.name?about:name).focus(); });
+  else (c.name?about:name).focus();
+}
+/* Done: a card with nothing said goes; one with no name is named from its
+   first words; a name another card has is sent back to be changed */
+function doneCard(id){
+  var c=sketch&&sketch.cards[id];
+  if(!c){ editing=null; return; }
+  var ed=cardEls[id]&&cardEls[id].querySelector(".cedit");
+  if(ed){
+    c.name=ed.querySelector(".cname").value.trim(); c.about=ed.querySelector(".cabout").value.trim();
+    var r=ed.querySelector(".croute"); if(r) c.route=r.value.trim();
+  }
+  if(!c.name&&!c.about&&!sketch.designs[id]){ removeCard(id); return; }
+  c.name=slug(c.name||c.about.split(/\s+/).slice(0,3).join(" "))||c.kind;
+  var taken=nodes[c.kind+":"+c.name]&&!nodes[c.kind+":"+c.name].draft||
+    Object.keys(sketch.cards).some(function(o){ return o!==id&&sketch.cards[o].kind===c.kind&&sketch.cards[o].name===c.name; });
+  if(taken){
+    toast("There is a "+c.kind+" called "+c.name+" already: give this one another name");
+    if(ed){ var nm=ed.querySelector(".cname"); nm.value=c.name; nm.focus(); nm.select(); }
+    return;
+  }
+  editing=null; redrawSketch(id);
+}
+
 function addLink(a,b){
+  if(!sketch) sketch=blank();
   var had=sketch.wires.some(function(w){ return w.from===a&&w.to===b; })||
-    (BASEPAGES.edges.some(function(e){ return e.from===a&&e.to===b&&e.kind==="leads"; }));
+    (BASE.pages.edges.some(function(e){ return e.from===a&&e.to===b&&e.kind==="leads"; }));
   if(had){ toast(nodes[a].label+" already leads to "+nodes[b].label); return; }
   sketch.wires.push({from:a,to:b}); redrawSketch(a);
 }
@@ -1739,12 +1955,13 @@ function readDesign(file,then){
   r.readAsDataURL(file);
 }
 function hasFiles(ev){ return ev.dataTransfer&&Array.prototype.indexOf.call(ev.dataTransfer.types||[],"Files")>=0; }
-/* each page card, while sketching here: a dot to drag a link from, and a
-   place to drop a design. Every page shows the design it has. */
+/* each page card: the design it has; where a person draws, a place to drop
+   one, and on the pages view a dot to drag a link from. A card drawn here
+   opens for typing on a double click. */
 function pageSketching(el,n){
   var d=n.sketched||(n.design&&LIVE?{url:LIVE.design+n.design,type:designType(n.design)}:null);
   if(d){ el.insertAdjacentHTML("beforeend",designHtml(d)); fillDesigns(el); }
-  if(!canSketch()||cur!=="pages") return;
+  if(!drawsHere()) return;
   el.addEventListener("dragover",function(ev){
     if(!hasFiles(ev)) return;
     ev.preventDefault(); ev.stopPropagation(); el.classList.add("droppable");
@@ -1753,12 +1970,9 @@ function pageSketching(el,n){
   el.addEventListener("drop",function(ev){
     if(!hasFiles(ev)) return;
     ev.preventDefault(); ev.stopPropagation(); el.classList.remove("droppable");
-    readDesign(ev.dataTransfer.files[0],function(design){
-      if(!sketch) sketch={pages:{},wires:[],designs:{}};
-      sketch.designs[n.id]=design; redrawSketch(n.id);
-    });
+    readDesign(ev.dataTransfer.files[0],function(design){ giveDesign(n.id,design); });
   });
-  if(!sketch) return;
+  if(cur!=="pages") return;
   var dot=document.createElement("span"); dot.className="link";
   dot.title="Drag onto another page: this page leads there";
   dot.addEventListener("pointerdown",function(ev){ ev.stopPropagation(); ev.preventDefault(); linkFrom(n.id,ev); });
@@ -1770,9 +1984,8 @@ function linkFrom(id,ev){
   line.setAttribute("stroke-width","2.6"); line.setAttribute("stroke-dasharray","9 6");
   gWires.appendChild(line);
   var a={x:pos[id].x+cw(id), y:pos[id].y+hgt[id]/2};
-  function at(e){ var r=stage.getBoundingClientRect(); return {x:(e.clientX-r.left-panX)/scale, y:(e.clientY-r.top-panY)/scale}; }
   function move(e){
-    var b=at(e), k=Math.max(40,Math.abs(b.x-a.x)/2);
+    var b=canvasAt(e), k=Math.max(40,Math.abs(b.x-a.x)/2);
     line.setAttribute("d","M"+a.x+" "+a.y+" C"+(a.x+k)+" "+a.y+" "+(b.x-k)+" "+b.y+" "+b.x+" "+b.y);
   }
   function up(e){
@@ -1784,90 +1997,81 @@ function linkFrom(id,ev){
   }
   window.addEventListener("pointermove",move); window.addEventListener("pointerup",up); move(ev);
 }
-// a design dropped on empty space is a new page, named after its file
+// a design dropped on empty space is a new page there, named after its file
 stage.addEventListener("dragover",function(ev){
-  if(!canSketch()||cur!=="pages"||!hasFiles(ev)) return;
+  if(!drawsHere()||!hasFiles(ev)) return;
   ev.preventDefault(); stage.classList.add("droppable");
 });
 stage.addEventListener("dragleave",function(ev){ if(ev.target===stage) stage.classList.remove("droppable"); });
 stage.addEventListener("drop",function(ev){
   stage.classList.remove("droppable");
-  if(!canSketch()||cur!=="pages"||!hasFiles(ev)) return;
+  if(!drawsHere()||!hasFiles(ev)) return;
   ev.preventDefault();
-  readDesign(ev.dataTransfer.files[0],function(design){
-    if(!sketch){ sketch={pages:{},wires:[],designs:{}}; redrawSketch(); }
-    openSketchForm("page",{name:slug(design.name),design:design});
-  });
+  var p=canvasAt(ev);
+  readDesign(ev.dataTransfer.files[0],function(design){ newCard("page",p,design); });
 });
-/* what the panel says about a page while sketching: its design, the links
-   drawn from it, and for a new page what it is for */
+/* what the panel says about a card drawn here, or a page given a design:
+   its design, the links drawn from it, and the ways to change it */
 function sketchPanel(n){
-  var h='<h3>Sketched</h3>', p=sketch.pages[n.id];
-  if(p){
-    h+='<form id="sk-edit"><label>route<input type="text" name="route" value="'+esc(p.route||"")+'"></label>'+
-      '<label>what it is for<textarea name="about">'+esc(p.about||"")+'</textarea></label>'+
-      '<button class="sm" type="submit">Save</button></form>';
+  var h='<h3>Drawn here, not sent</h3>', c=sketch&&sketch.cards[n.id];
+  if(c){
+    if(c.about) h+='<p class="note">'+esc(c.about)+'</p>';
+    h+='<div class="acts"><button class="sm" data-edit="1">Edit in the card</button></div>';
   }
-  var d=sketch.designs[n.id];
+  var d=sketch&&sketch.designs[n.id];
   if(d) h+=designHtml(d,"big")+'<div class="drawn"><span>'+esc(d.name||"design")+'</span>'+
     '<button class="sm" data-undesign="1">Remove design</button></div>';
-  else h+='<p class="note">Drop a screen or an HTML file on this page to give it a design.</p>';
-  sketch.wires.forEach(function(w,i){
+  else if(n.kind==="page") h+='<p class="note">Right-click this page, or drop a screen or an HTML file on it, to give it a design.</p>';
+  (sketch?sketch.wires:[]).forEach(function(w,i){
     if(w.from!==n.id&&w.to!==n.id) return;
     h+='<div class="drawn"><span>'+esc(nodes[w.from]?nodes[w.from].label:w.from)+" leads to "+
       esc(nodes[w.to]?nodes[w.to].label:w.to)+'</span><button class="sm" data-unlink="'+i+'">×</button></div>';
   });
-  if(p) h+='<div class="acts"><button class="sm" data-unpage="1">Remove this page</button></div>';
+  if(c) h+='<div class="acts"><button class="sm" data-uncard="1">Remove this '+esc(c.kind)+'</button></div>';
   return h;
 }
 function bindSketchPanel(n){
-  if(!sketchingHere()||n.kind!=="page") return;
-  var form=panel.querySelector("#sk-edit");
-  if(form) form.addEventListener("submit",function(ev){
-    ev.preventDefault();
-    sketch.pages[n.id].route=form.elements.route.value.trim();
-    sketch.pages[n.id].about=form.elements.about.value.trim();
-    redrawSketch(n.id);
-  });
+  if(!sketchingHere()) return;
+  var ed=panel.querySelector("[data-edit]");
+  if(ed) ed.addEventListener("click",function(){ editCard(n.id,true); });
   Array.prototype.forEach.call(panel.querySelectorAll("[data-unlink]"),function(b){
     b.addEventListener("click",function(){ sketch.wires.splice(+b.getAttribute("data-unlink"),1); redrawSketch(n.id); });
   });
   var un=panel.querySelector("[data-undesign]");
   if(un) un.addEventListener("click",function(){ delete sketch.designs[n.id]; redrawSketch(n.id); });
-  var gone=panel.querySelector("[data-unpage]");
-  if(gone) gone.addEventListener("click",function(){
-    delete sketch.pages[n.id]; delete sketch.designs[n.id];
-    sketch.wires=sketch.wires.filter(function(w){ return w.from!==n.id&&w.to!==n.id; });
-    redrawSketch();
-  });
+  var gone=panel.querySelector("[data-uncard]");
+  if(gone) gone.addEventListener("click",function(){ removeCard(n.id); });
 }
-/* the sketch as a plan: pages, leads-to wires, and each design as a file
-   kept beside the plan */
+/* the drawing as a plan: its cards, leads-to wires, and each design as a
+   file kept beside the plan */
 function sendSketch(v){
   var name=slug(v.name);
   if(!name){ sketchErr="Give the plan a name."; drawSketchForm(); return; }
-  var cards={}, designs={};
-  Object.keys(sketch.pages).forEach(function(id){
-    var p=sketch.pages[id], c={kind:"page",name:p.name};
-    if(p.route) c.route=p.route;
-    if(p.about) c.about=p.about;
+  if(editing) doneCard(editing);
+  var cards={}, designs={}, ids={};
+  Object.keys(sketch.cards).forEach(function(id){
+    var s=sketch.cards[id], c={kind:s.kind,name:s.name||s.kind};
+    ids[id]=s.kind+":"+c.name;
+    if(s.about) c.about=s.about;
+    if(s.route) c.route=s.route;
+    if(s.system) c.system=s.system;
     cards[id]=c;
   });
   Object.keys(sketch.designs).forEach(function(id){
-    var d=sketch.designs[id], file=slug(id.slice(5))+d.ext;
+    var d=sketch.designs[id], label=cards[id]?cards[id].name:id.replace(/^page:/,""), file=slug(label)+d.ext;
     designs[file]=d.data;
-    cards[id]=cards[id]||{kind:"page",name:id.slice(5)};
+    cards[id]=cards[id]||{kind:"page",name:label};
     cards[id].design="plans/"+name+"/"+file;
   });
   var plan={ask:v.ask, drawn:true,
     cards:Object.keys(cards).map(function(id){ return cards[id]; }),
-    wires:sketch.wires.map(function(w){ return {from:w.from,kind:"leads to",to:w.to}; })};
+    wires:sketch.wires.map(function(w){ return {from:ids[w.from]||w.from,kind:"leads to",to:ids[w.to]||w.to}; })};
   fetch(LIVE.plan,{method:"POST",headers:{"Content-Type":"application/json"},
                    body:JSON.stringify({name:name,plan:plan,designs:designs})})
     .then(function(r){ return r.json().then(function(b){ return {ok:r.ok,body:b}; }); })
     .then(function(a){
       if(!a.ok){ sketchErr=a.body.error||"Claude Code did not take it"; drawSketchForm(); return; }
-      sketch=null; sketchForm=null; keepSketch(); panel.hidden=true;
+      sketch=null; sketchForm=null; editing=null; panel.hidden=true; redrawSketch();
       send("/codegraph:plan review "+name);
       fetch(LIVE.refresh,{method:"POST"}).catch(function(){});
     })
@@ -1888,12 +2092,11 @@ function sendSketch(v){
    map changes, keeping the card the person had picked */
 if(LIVE){
   var make=document.getElementById("make");
-  [["+ Feature","Build a new feature: "],["+ Module","Add a new module: "],["+ Page","Add a new page: "]]
-    .forEach(function(b){
-      var el=document.createElement("button"); el.textContent=b[0];
-      el.addEventListener("click",function(){ send(b[1]); });
-      make.appendChild(el);
-    });
+  if(canSketch()){
+    var how=document.createElement("span"); how.className="how";
+    how.textContent="Right-click the map to add a card";
+    make.appendChild(how);
+  }
   var again=document.createElement("button"); again.textContent="↻ Reload";
   again.title="Read the code again, with codegraph as it is now";
   again.addEventListener("click",function(){

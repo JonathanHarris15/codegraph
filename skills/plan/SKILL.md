@@ -47,11 +47,11 @@ A plan is a change waiting in `plans/<name>.json` at the repo root. The live map
 
 ## Checking a sketched plan
 
-A person drew this one on the map's pages view: new pages, which page leads to which, and designs dropped on pages. It says `"drawn": true`. They said where pages go and what they look like, not how the code does it.
+A person drew this one on the map: new modules, features and pages, each with a few words on what it is for, which page leads to which, and designs dropped on pages. It says `"drawn": true`. They said what they want and where pages go and what they look like, not how the code does it. A card's name is a first guess from what they typed: rename it to the repo's words where it reads wrong.
 
 1. **Read** the plan, its `ask`, every design in `plans/<name>/` (look at the pictures; read the HTML), and the map.
-2. **Fill in what a sketch leaves out.** A page whose design has a form or a button that does something needs the feature it acts on, and the modules that feature uses: add those cards and wires, named in the repo's words. A page with no route gets one in the style of the others. A page nothing leads to needs a way in; say so rather than guess where.
-3. **Correct it** as in step 4 above, and keep what the person drew: change their pages and links only where they break a rule, and say why.
+2. **Fill in what a sketch leaves out.** A drawn feature needs its trigger and the modules it uses; a drawn module needs its front door and any store it keeps; work them out from what the card says it is for. A page whose design has a form or a button that does something needs the feature it acts on, and the modules that feature uses: add those cards and wires, named in the repo's words. A page with no route gets one in the style of the others. A page nothing leads to needs a way in; say so rather than guess where.
+3. **Correct it** as in step 4 above, and keep what the person drew: change their cards and links only where they break a rule, and say why.
 4. **Show it** as in step 5 above, saying what you added and what you changed.
 
 ## Building a plan

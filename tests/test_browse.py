@@ -56,3 +56,20 @@ class LiveMap(Folder):
         self.post("refresh", {})
         self.assertIn('"plan": "next"', self.get())
 
+
+    def test_cards_drawn_by_hand_come_back_as_ghosts_with_their_design(self):
+        # what the map sends after a right click made a module, a feature
+        # inside a system's box, and a page from a Claude Design file
+        page = "data:text/html;base64,PGgxPkludm9pY2VzPC9oMT4="
+        self.post("plan", {"name": "invoices", "designs": {"invoices.html": page}, "plan": {
+            "ask": "Invoices", "drawn": True,
+            "cards": [{"kind": "module", "name": "billing", "about": "Keeps invoices"},
+                      {"kind": "feature", "name": "remind", "system": "money", "about": "Monthly reminders"},
+                      {"kind": "page", "name": "invoices", "about": "Every invoice",
+                       "design": "plans/invoices/invoices.html"}],
+            "wires": [{"from": "page:invoices", "kind": "leads to", "to": "page:invoices"}]}})
+        self.assertTrue((self.root / "plans/invoices/invoices.html").exists())
+        self.post("refresh", {})
+        drawn = self.get()
+        for card in ('"module:billing"', '"feature:remind"', '"page:invoices"', '"Monthly reminders"'):
+            self.assertIn(card, drawn)

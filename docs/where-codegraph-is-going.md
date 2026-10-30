@@ -26,9 +26,9 @@ Build that one piece, and the rest are surfaces on it.
   features, pages in bands, with typed wires), the pages (where a person can
   go, from the start page), and the files. Double-click a card to see its own
   files. It redraws itself after every turn.
-- **A thin line back to the agent.** Buttons on the map — Fix, Ask about it,
-  + Feature, + Module, + Page — fill the chat box with a sentence. That is the
-  whole of the "talk to the agent" side today.
+- **A thin line back to the agent.** Buttons on the map — Fix, Ask about it —
+  fill the chat box with a sentence, and a person can draw a plan on it (see
+  Decided).
 
 What it is not yet:
 
@@ -175,6 +175,11 @@ logging. They crowd the map and the agent reads code at that depth anyway.
   person sketches pages, links and designs, and sends the sketch as a plan.
   The one page file is now large; step 3 is where a build step pays for
   itself.
+- Step 3 has begun, still without a build step: a right click on the map or
+  the pages view makes a module, feature or page where it lands, flies in to
+  it, and the person types what it is for in the card itself; a page takes a
+  design from Claude Design. The + buttons that only filled the chat box are
+  gone. Wires other than leads-to are not drawn by hand yet.
 
 ## What I need from you
 
