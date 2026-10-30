@@ -192,6 +192,17 @@ path.wire.drawing{marker-end:none;marker-start:none}
 .frame span{position:absolute;top:5px;left:12px;white-space:nowrap;font-family:var(--font-mono);font-size:11px;
   font-weight:700;letter-spacing:.04em;color:var(--gc)}
 .frame{transition:background-color .18s,border-width .18s}
+/* each top box's own controls, in its top right: a grip that drags the box
+   and every card in it, and a button that lays its cards out again */
+.frame .ftools{position:absolute;top:2px;right:6px;display:flex;gap:2px;pointer-events:auto;
+  transform:scale(max(1,var(--unzoom,1)));transform-origin:top right}  /* never smaller than at full size */
+.frame .ftools button{display:flex;align-items:center;justify-content:center;width:22px;height:20px;
+  padding:0;border-radius:10px;border:1px solid transparent;background:none;color:var(--muted);
+  cursor:pointer;opacity:.6;transition:opacity .12s}
+.frame .ftools button svg{width:12px;height:12px;fill:currentColor}
+.frame .ftools button:hover{opacity:1;border-color:var(--hair);background:var(--surface);color:var(--ink)}
+.frame .ftools .grip{cursor:grab}
+.frame.moving .ftools .grip{cursor:grabbing;opacity:1}
 .frame.taking{border-width:2px;background:color-mix(in srgb,var(--gc) 10%,transparent)}
 .card.lifted{z-index:6;cursor:grabbing;box-shadow:0 10px 26px rgba(10,20,40,.22),var(--stack)}
 .dropslot{position:absolute;border:1.5px dashed var(--gc);border-radius:7px;pointer-events:none;
@@ -678,6 +689,75 @@ function drawFrame(){
   el.style.setProperty("--gc",lift.into&&lift.into.within?gcolor(lift.into.id):"var(--muted)");
 }
 
+/* A top box's grip and tidy button. The grip carries every card in the box
+   by the same amount, and each keeps its new place as a dragged card does.
+   Tidy lays the box's cards out again, the box keeping its top left corner
+   where it now is; a box never moved goes back to following the layout. */
+var GRIP='<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="5.5" cy="3.5" r="1.4"/><circle cx="10.5" cy="3.5" r="1.4"/>'+
+  '<circle cx="5.5" cy="8" r="1.4"/><circle cx="10.5" cy="8" r="1.4"/><circle cx="5.5" cy="12.5" r="1.4"/><circle cx="10.5" cy="12.5" r="1.4"/></svg>';
+var TIDY='<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/>'+
+  '<rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>';
+function boxCards(f){
+  return order.filter(function(n){ return f.within?n.group===f.id:n.block===f.id; })
+              .map(function(n){ return n.id; }).filter(function(k){ return pos[k]; });
+}
+function boxTools(f){
+  var tools=document.createElement("div"); tools.className="ftools";
+  var grip=document.createElement("button"); grip.className="grip"; grip.innerHTML=GRIP;
+  grip.title="Drag to move this box and its cards"; grip.setAttribute("aria-label",grip.title);
+  var tidy=document.createElement("button"); tidy.className="tidy"; tidy.innerHTML=TIDY;
+  tidy.title="Tidy the cards in this box"; tidy.setAttribute("aria-label",tidy.title);
+  tools.appendChild(grip); tools.appendChild(tidy); f.el.appendChild(tools);
+
+  var id=null, sx, sy, from={};
+  grip.addEventListener("pointerdown",function(ev){
+    if(ev.button!==0&&ev.pointerType==="mouse") return;
+    ev.stopPropagation(); ev.preventDefault();
+    id=ev.pointerId; sx=ev.clientX; sy=ev.clientY; from={};
+    boxCards(f).forEach(function(k){ from[k]={x:pos[k].x,y:pos[k].y}; });
+    f.el.classList.add("moving"); grip.setPointerCapture(id);
+  });
+  grip.addEventListener("pointermove",function(ev){
+    if(id===null||ev.pointerId!==id) return;
+    var dx=(ev.clientX-sx)/scale, dy=(ev.clientY-sy)/scale;
+    Object.keys(from).forEach(function(k){
+      pos[k]={x:Math.round(from[k].x+dx),y:Math.round(from[k].y+dy)};
+    });
+    render();
+  });
+  function done(ev){
+    if(id===null||ev.pointerId!==id) return;
+    id=null; f.el.classList.remove("moving");
+    Object.keys(from).forEach(function(k){ moved[k]=pos[k]; });
+    save(posKey(),moved);
+  }
+  grip.addEventListener("pointerup",done);
+  grip.addEventListener("pointercancel",done);
+  tidy.addEventListener("pointerdown",function(ev){ ev.stopPropagation(); });
+  tidy.addEventListener("click",function(ev){ ev.stopPropagation(); tidyBox(f); });
+}
+function tidyBox(f){
+  var ids=boxCards(f);
+  if(!ids.length) return;
+  var was={};
+  Object.keys(pos).forEach(function(k){ was[k]={x:pos[k].x,y:pos[k].y}; });
+  ids.forEach(function(k){ delete moved[k]; });
+  layout();                                   // where each card sits by the layout alone
+  var corner=function(at){
+    return ids.reduce(function(c,k){ return {x:Math.min(c.x,at[k].x),y:Math.min(c.y,at[k].y)}; },
+                      {x:Infinity,y:Infinity});
+  };
+  var now=corner(was), laid=corner(base), dx=now.x-laid.x, dy=now.y-laid.y, stays=Math.abs(dx)+Math.abs(dy)>=1;
+  var to={};
+  Object.keys(pos).forEach(function(k){ to[k]=pos[k]; pos[k]=was[k]; });
+  ids.forEach(function(k){
+    to[k]={x:Math.round(base[k].x+(stays?dx:0)),y:Math.round(base[k].y+(stays?dy:0))};
+    if(stays) moved[k]=to[k];
+  });
+  save(posKey(),moved);
+  render(); glideTo(to);
+}
+
 /* While a drawn feature is dragged on the map, the boxes show where it would
    go: the box it leaves closes around the rest, the box under it opens a gap
    for it, and every card between slides aside. lift is that drag: the card,
@@ -1003,7 +1083,9 @@ function show(key){
     var tag=document.createElement("span"); tag.textContent=b.label;
     el.appendChild(tag);
     canvas.insertBefore(el,svg);
-    return {id:b.id, el:el, within:b.within};
+    var f={id:b.id, el:el, within:b.within};
+    if(!b.within) boxTools(f);
+    return f;
   });
 
   cardEls={}; hgt={}; wid={};
@@ -1389,6 +1471,7 @@ function applyView(){
   clearTimeout(settle);
   settle=setTimeout(function(){ canvas.classList.remove("moving"); },160);
   canvas.style.transform="translate("+panX+"px,"+panY+"px) scale("+scale+")";
+  canvas.style.setProperty("--unzoom",1/scale);
   var g=24*scale;
   stage.style.backgroundSize=g+"px "+g+"px";
   stage.style.backgroundPosition=panX+"px "+panY+"px";
