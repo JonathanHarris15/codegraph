@@ -89,6 +89,12 @@ class Served(unittest.TestCase):
         status, _ = self.call("plan", {"name": "rota"}, origin="https://evil.example")
         self.assertEqual((status, self.planned), (403, []))
 
+    def test_a_second_server_cannot_take_a_port_already_served(self):
+        # on Windows a port shared is answered by whichever server it picks,
+        # so a page would reach a server that does not know its secret
+        with self.assertRaises(OSError):
+            Server(page=str, on_ask=print, on_refresh=print, port=self.server.server_address[1])
+
     def test_a_design_is_served_boxed_in(self):
         url = self.server.url + "design/plans/a/a.html"
         with urllib.request.urlopen(url, timeout=5) as r:

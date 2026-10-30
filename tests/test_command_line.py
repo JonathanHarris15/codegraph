@@ -4,6 +4,7 @@ them, then draw the page and the pane's summary."""
 from __future__ import annotations
 
 import json
+import socket
 import subprocess
 import sys
 import unittest
@@ -81,6 +82,17 @@ class CommandLine(Folder):
         req = urllib.request.Request(url + "ask", data=b'{"text": "/codegraph:fix all"}', method="POST")
         urllib.request.urlopen(req, timeout=10).close()
         self.assertEqual(json.loads(child.stdout.readline()), {"ask": "/codegraph:fix all"})
+
+    def test_serve_on_a_port_already_served_says_so(self):
+        tree(self.root, {"engine/__init__.py": mod("engine", "Book") + "class Book: pass\n"})
+        held = socket.socket()
+        held.bind(("127.0.0.1", 0))
+        held.listen()
+        self.addCleanup(held.close)
+        ran = self.run_it("--serve", "--port", str(held.getsockname()[1]))
+        self.assertEqual(ran.returncode, 2)
+        self.assertIn("port {} is taken".format(held.getsockname()[1]), ran.stderr)
+        self.assertNotIn("Traceback", ran.stderr)
 
 
 if __name__ == "__main__":

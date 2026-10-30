@@ -26,6 +26,7 @@ library. Standard library is dropped; third-party becomes a card only with
 from __future__ import annotations
 
 import argparse
+import errno
 import json
 from collections import defaultdict
 from pathlib import Path
@@ -74,8 +75,13 @@ def main(argv: list[str] | None = None) -> int:
         ap.error(str(root) + " is not a folder")
 
     if args.serve:
-        server = browse(root, port=args.port, hidden=args.hidden,
-                        say=lambda line: print(line, flush=True))
+        try:
+            server = browse(root, port=args.port, hidden=args.hidden,
+                            say=lambda line: print(line, flush=True))
+        except OSError as e:
+            if e.errno != errno.EADDRINUSE:
+                raise
+            ap.exit(2, "codegraph: port {} is taken: another server is on it\n".format(args.port))
         try:
             server.serve_forever()
         except KeyboardInterrupt:

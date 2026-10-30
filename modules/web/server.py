@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import json
 import secrets
+import socket
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote, urlsplit
@@ -32,6 +34,14 @@ class Server(ThreadingHTTPServer):
     and `design(path)` gives a design's (bytes, media type), or None."""
 
     daemon_threads = True
+    # Windows lets a second server take a port already served, and then
+    # either may answer; a port held by another server is refused instead.
+    allow_reuse_address = sys.platform != "win32"
+
+    def server_bind(self) -> None:
+        if sys.platform == "win32":
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
 
     def __init__(self, page, on_ask, on_refresh, port: int = 0, on_plan=None, design=None):
         super().__init__(("127.0.0.1", port), _Handler)
