@@ -52,11 +52,29 @@ class Previews(Folder):
         tree(self.root, {"app/home.tsx": "export default 1\n"})
         home = self.root / "app" / "home.tsx"
         self.shot("a", url="/", taken="2026-10-29T10:00:00+00:00")
+        pages = [page("page:home", "/", [home])]
+        self.assertFalse(previews_of(self.root, pages)["page:home"]["stale"])
+        home.write_text("export default 2\n", encoding="utf-8")
+        self.assertTrue(previews_of(self.root, pages)["page:home"]["stale"])
+
+    def test_a_file_git_rewrote_without_changing_it_is_not_a_change(self):
+        # a commit, a checkout or a branch switch writes files afresh, with a
+        # new time and the same words
+        tree(self.root, {"app/home.tsx": "export default 1\n"})
+        home = self.root / "app" / "home.tsx"
+        self.shot("a", url="/", taken="2026-10-29T10:00:00+00:00")
         os.utime(home, (time.time(), time.time()))
-        found = previews_of(self.root, [page("page:home", "/", [home])])
-        self.assertTrue(found["page:home"]["stale"])
-        os.utime(home, (0, 0))
         self.assertFalse(previews_of(self.root, [page("page:home", "/", [home])])["page:home"]["stale"])
+
+    def test_a_new_picture_of_a_page_is_fresh_again(self):
+        tree(self.root, {"app/home.tsx": "export default 1\n"})
+        home = self.root / "app" / "home.tsx"
+        pages = [page("page:home", "/", [home])]
+        self.shot("a", url="/", taken="2026-10-29T10:00:00+00:00")
+        previews_of(self.root, pages)
+        home.write_text("export default 2\n", encoding="utf-8")
+        self.shot("a", url="/", taken="2026-10-30T10:00:00+00:00")
+        self.assertFalse(previews_of(self.root, pages)["page:home"]["stale"])
 
     def test_no_pictures_no_previews(self):
         self.assertEqual(previews_of(self.root, [page("page:home", "/")]), {})

@@ -397,8 +397,10 @@ class MapViews(Folder):
             nodes = {n["id"]: n for n in g["map"]["views"][view]["nodes"]}
             self.assertEqual(nodes["page:about"]["preview"],
                              {"picture": ".codegraph/shots/about.png", "url": "/about",
-                              "taken": "2001-01-01T00:00:00Z", "stale": True})
+                              "taken": "2001-01-01T00:00:00Z", "stale": False})
             self.assertNotIn("preview", nodes["page:home"])
+        tree(self.root, {"ui/about.py": "# codegraph: page about at /about\nfrom ui.button import b\nx = 1\n"})
+        g = build(self.root, reading=read_map(self.root))
         about = next(p for p in summary(g)["pages"] if p["id"] == "page:about")
         self.assertEqual((about["preview"]["taken"], about["preview"]["stale"]),
                          ("2001-01-01T00:00:00Z", True))

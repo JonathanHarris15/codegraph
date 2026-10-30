@@ -1,6 +1,7 @@
 # codegraph: module previews
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,24 +15,36 @@ from modules.rules import route_matches
 #    "page": the page's name, where its route cannot be read}.
 # The picture may be anywhere in the repo, as Cypress keeps its own.
 SHOTS = Path(".codegraph") / "shots"
+# What each page's files held when codegraph first saw a picture of it, kept
+# beside the pictures: a picture is stale once its page holds something else.
+# Times will not do: a commit, a checkout or a branch switch writes files
+# afresh, with a new time and the same words.
+SEEN = Path(".codegraph") / "previews-seen.json"
 PICTURES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
 
 
 def previews_of(root: Path, pages: list) -> dict:
     """{page id: its newest picture}, for pages given as {id, name, route,
     files}: the picture's path, the address it was taken at, when, and
-    whether it is stale, its page's files changed since."""
+    whether it is stale: its page's files hold something other than they did
+    when codegraph first saw the picture. A page changed between the test
+    and that first look goes unnoticed; the map is read again after every
+    turn, so that is seldom long."""
     newest: dict = {}
     for shot in _shots(root):
         hit = _page_of(shot, pages)
         if hit and (hit["id"] not in newest or shot["at"] > newest[hit["id"]]["at"]):
             newest[hit["id"]] = dict(shot, page=hit)
-    out = {}
+    seen = _read_seen(root)
+    kept, out = {}, {}
     for pid, s in newest.items():
-        changed = max((Path(f).stat().st_mtime for f in s["page"]["files"] if Path(f).is_file()),
-                      default=0)
+        key = "{} {}".format(s["picture"], s["taken"])
+        now = _fingerprint(s["page"]["files"])
+        kept[key] = then = seen.get(key) or now
         out[pid] = {"picture": s["picture"], "url": s["url"], "taken": s["taken"],
-                    "stale": changed > s["at"]}
+                    "stale": now != then}
+    if kept != seen:
+        _write_seen(root, kept)
     return out
 
 
@@ -42,6 +55,34 @@ def preview_file(root: Path, rel: str) -> tuple | None:
         return None
     path = Path(root) / rel
     return path.read_bytes(), PICTURES[path.suffix.lower()]
+
+
+def _fingerprint(files: list) -> str:
+    """What a page's files hold, as one short string; line endings aside, as
+    git may write them either way."""
+    digest = hashlib.sha1()
+    for f in sorted(str(f) for f in files):
+        try:
+            digest.update(Path(f).read_bytes().replace(b"\r\n", b"\n"))
+        except OSError:
+            digest.update(b"gone")
+        digest.update(b"\0")
+    return digest.hexdigest()[:16]
+
+
+def _read_seen(root: Path) -> dict:
+    try:
+        seen = json.loads((Path(root) / SEEN).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return seen if isinstance(seen, dict) else {}
+
+
+def _write_seen(root: Path, seen: dict) -> None:
+    try:
+        (Path(root) / SEEN).write_text(json.dumps(seen, indent=1, sort_keys=True), encoding="utf-8")
+    except OSError:
+        pass                      # a folder it cannot write to just sees afresh next time
 
 
 def _shots(root: Path) -> list:
