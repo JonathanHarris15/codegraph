@@ -50,7 +50,8 @@ What a module lets other components use. Nothing else of it is theirs.
 _Avoid_: API, interface, exports, public surface
 
 **Store**:
-One kind of thing kept in a database container, owned by one module.
+One kind of thing kept in a container that keeps things, a database or files
+on disk, and owned by one module.
 _Avoid_: table, collection, model, entity
 
 **Feature**:

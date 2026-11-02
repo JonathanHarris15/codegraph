@@ -26,9 +26,11 @@ like a database.
 A set-up repo carries two things: one config file at its root, and tags in
 its files.
 
-### The config: `codegraph.json`
+### The config: `codegraph.config.json`
 
-It holds only what no single file can say.
+It holds only what no single file can say. It is not called
+`codegraph.json`: the legacy codegraph once used that name for a file setup
+now deletes, and the two must never be mistaken for each other.
 
 ```json
 {
@@ -51,11 +53,14 @@ It holds only what no single file can say.
   stays put when the project is renamed in the app.
 - **containers** names each container, its kind, a line saying what it is
   for, and the folders its code lives in. A kind is a few plain words:
-  browser app, server, desktop app, database, function, command-line tool.
-  A container with no code here, such as a database, has no folders.
+  browser app, server, desktop app, database, files on disk, function,
+  command-line tool. A container with no code here, such as a database, has
+  no folders.
 
-Every tagged file sits under exactly one container's folders; one that sits
-under none, or two, is a mismatch.
+Every file tagged as part of a component sits under exactly one container's
+folders; one that sits under none, or two, is a mismatch. Tests and tooling
+are the exception: they often live in their own folders, like `test/` or
+`cypress/`, and a test belongs to whatever it tests.
 
 ### Tags
 
@@ -83,8 +88,10 @@ tag.
   may use.
 - **uses** on a feature names the modules it gets its power from.
 - **store** goes on the schema that defines what is kept, in the module that
-  owns it, and names the database container it lives in.
-- **start page** marks where a person lands.
+  owns it, and names the container it is kept in: a database, or files on
+  disk.
+- **at** on a page gives its address where it has one; a desktop app's pages
+  may have none. **start page** marks where a person lands.
 - **test**, **fakes**, **shape of** and **tooling** carry over from legacy
   unchanged.
 
@@ -127,7 +134,7 @@ legacy residue:
 | `feature X in S uses …` | `feature X uses …` (the repo is the system now) |
 | `page`, `start page` | the same |
 | `component X`, `design system` | `module X`, `module design-system` |
-| `store X as Y` | `store X in <database container>` |
+| `store X as Y` | `store X in <container it is kept in>` |
 | `test`, `fakes`, `shape of`, `tooling` | the same |
 
 ## Considered options
