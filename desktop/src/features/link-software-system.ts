@@ -1,8 +1,8 @@
-// codegraph: feature link-codebase in workspace
+// codegraph: feature link-software-system in workspace
 // codegraph: uses projects, repo, machine
 import { askForFolder } from '../modules/machine/index.js'
-import { addCodebase } from '../modules/projects/index.js'
-import { folderName, isRepo, isSetUp, readCodebase } from '../modules/repo/index.js'
+import { addSoftwareSystem } from '../modules/projects/index.js'
+import { folderName, isRepo, isSetUp, readSoftwareSystem } from '../modules/repo/index.js'
 
 export type Linked = {
   ok: boolean
@@ -16,8 +16,8 @@ export type Linked = {
 }
 
 /** Puts a repo already on this computer into a project. A folder git does
- *  not track is refused: a codebase in a project is a tracked repo. */
-export const linkCodebase = async (projectId: string, path?: string): Promise<Linked> => {
+ *  not track is refused: a software system in a project is a tracked repo. */
+export const linkSoftwareSystem = async (projectId: string, path?: string): Promise<Linked> => {
   const folder = path && path.length > 0 ? path : await askForFolder()
   if (!folder) return { ok: false, cancelled: true }
 
@@ -30,8 +30,8 @@ export const linkCodebase = async (projectId: string, path?: string): Promise<Li
     }
   }
 
-  const facts = await readCodebase(folder)
-  const added = addCodebase(projectId, {
+  const facts = await readSoftwareSystem(folder)
+  const added = addSoftwareSystem(projectId, {
     name: folderName(folder),
     path: folder,
     remote: facts.remote,

@@ -23,7 +23,7 @@ export const closeYard = (yard: Yard): void => {
 }
 
 /** A repo on this computer, set up for codegraph as far as it is told to be. */
-export const aCodebase = (
+export const aSoftwareSystem = (
   yard: Yard,
   name: string,
   { setUp = false, remote = '' } = {},

@@ -1,10 +1,10 @@
 // codegraph: module projects
-// codegraph: front door useFolder, listProjects, addProject, renameProject, addCodebase, removeCodebase, knownRemotes, Project, Codebase, Workspace
-import { type Codebase, type Project } from './schema.js'
+// codegraph: front door useFolder, listProjects, addProject, renameProject, addSoftwareSystem, removeSoftwareSystem, knownRemotes, Project, SoftwareSystem, Workspace
+import { type SoftwareSystem, type Project } from './schema.js'
 import { newId, read, useFolder, write } from './store.js'
 
 export { useFolder }
-export type { Codebase, Project, Workspace } from './schema.js'
+export type { SoftwareSystem, Project, Workspace } from './schema.js'
 
 export const listProjects = (): Project[] => read().projects
 
@@ -14,7 +14,7 @@ export const addProject = (name: string): Project => {
     id: newId(),
     name: name.trim() || 'Untitled project',
     createdAt: new Date().toISOString(),
-    codebases: [],
+    systems: [],
   }
   workspace.projects.push(project)
   write(workspace)
@@ -29,34 +29,34 @@ export const renameProject = (id: string, name: string): void => {
   write(workspace)
 }
 
-export const addCodebase = (
+export const addSoftwareSystem = (
   projectId: string,
-  codebase: Omit<Codebase, 'id'>,
-): Codebase => {
+  system: Omit<SoftwareSystem, 'id'>,
+): SoftwareSystem => {
   const workspace = read()
   const project = workspace.projects.find((p) => p.id === projectId)
   if (!project) throw new Error('no project with that id')
-  const already = project.codebases.find(
-    (c) => (codebase.path && c.path === codebase.path) || (codebase.remote && c.remote === codebase.remote),
+  const already = project.systems.find(
+    (c) => (system.path && c.path === system.path) || (system.remote && c.remote === system.remote),
   )
   if (already) return already
-  const added: Codebase = { id: newId(), ...codebase }
-  project.codebases.push(added)
+  const added: SoftwareSystem = { id: newId(), ...system }
+  project.systems.push(added)
   write(workspace)
   return added
 }
 
-export const removeCodebase = (projectId: string, codebaseId: string): void => {
+export const removeSoftwareSystem = (projectId: string, systemId: string): void => {
   const workspace = read()
   const project = workspace.projects.find((p) => p.id === projectId)
   if (!project) return
-  project.codebases = project.codebases.filter((c) => c.id !== codebaseId)
+  project.systems = project.systems.filter((c) => c.id !== systemId)
   write(workspace)
 }
 
 /** Every GitHub repo this computer already has in a project, as owner/name. */
 export const knownRemotes = (): string[] =>
   read()
-    .projects.flatMap((p) => p.codebases)
+    .projects.flatMap((p) => p.systems)
     .map((c) => c.remote)
     .filter((r) => r.length > 0)

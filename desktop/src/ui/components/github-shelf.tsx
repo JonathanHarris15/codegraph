@@ -1,6 +1,6 @@
 // codegraph: component github-shelf
 import { useState } from 'react'
-import type { CloudView } from '../../features/list-github-codebases.js'
+import type { CloudView } from '../../features/list-github-software-systems.js'
 import { Badge, Button, Card, Field } from '../design-system/kit.js'
 
 export const GithubShelf = ({
@@ -59,8 +59,8 @@ export const GithubShelf = ({
     )
   }
 
-  const elsewhere = cloud.codebases.filter((codebase) => !codebase.here)
-  const already = cloud.codebases.length - elsewhere.length
+  const elsewhere = cloud.systems.filter((system) => !system.here)
+  const already = cloud.systems.length - elsewhere.length
 
   return (
     <div className="ds-section">
@@ -79,7 +79,7 @@ export const GithubShelf = ({
 
       {cloud.problem ? <div className="ds-problem">{cloud.problem}</div> : null}
 
-      {cloud.codebases.length === 0 && !cloud.problem ? (
+      {cloud.systems.length === 0 && !cloud.problem ? (
         <div className="ds-hint">
           None of the repos you can reach are set up for codegraph yet.
         </div>
@@ -92,14 +92,14 @@ export const GithubShelf = ({
             {already > 0 ? ` · ${already} already in a project here` : ''}
           </div>
           <div className="ds-grid">
-            {elsewhere.map((codebase) => (
-              <Card key={codebase.fullName} quiet>
+            {elsewhere.map((system) => (
+              <Card key={system.fullName} quiet>
                 <div className="ds-card-top" style={{ marginBottom: 6 }}>
-                  <div className="ds-card-name">{codebase.name}</div>
+                  <div className="ds-card-name">{system.name}</div>
                   <Badge>not on this computer</Badge>
                 </div>
-                <div className="ds-mono">{codebase.fullName}</div>
-                {codebase.private ? (
+                <div className="ds-mono">{system.fullName}</div>
+                {system.private ? (
                   <div className="ds-hint" style={{ marginTop: 6 }}>
                     private
                   </div>

@@ -1,14 +1,14 @@
 // codegraph: test module projects
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
-  addCodebase,
+  addSoftwareSystem,
   addProject,
   knownRemotes,
   listProjects,
-  removeCodebase,
+  removeSoftwareSystem,
   renameProject,
   useFolder,
 } from '../src/modules/projects/index.js'
@@ -34,31 +34,39 @@ describe('the projects a computer remembers', () => {
     expect(listProjects().map((p) => p.name)).toEqual(['Mosaic Manager'])
   })
 
+  it('reads a file an older app wrote, when software systems were codebases', () => {
+    const old = { version: 1, projects: [{ id: 'p', name: 'Mosaic', createdAt: '', codebases: [{ id: 's', name: 'web', path: '/w', remote: '' }] }] }
+    writeFileSync(join(folder, 'projects.json'), JSON.stringify(old))
+    expect(listProjects()[0]?.systems.map((s) => s.name)).toEqual(['web'])
+    addSoftwareSystem('p', { name: 'api', path: '/a', remote: '' })
+    expect(listProjects()[0]?.systems.map((s) => s.name)).toEqual(['web', 'api'])
+  })
+
   it('names an unnamed project rather than keeping a blank', () => {
     expect(addProject('   ').name).toBe('Untitled project')
   })
 
-  it('holds more than one codebase under one project', () => {
+  it('holds more than one software system under one project', () => {
     const project = addProject('Mosaic')
-    addCodebase(project.id, { name: 'web', path: '/tmp/web', remote: 'me/web' })
-    addCodebase(project.id, { name: 'api', path: '/tmp/api', remote: 'me/api' })
+    addSoftwareSystem(project.id, { name: 'web', path: '/tmp/web', remote: 'me/web' })
+    addSoftwareSystem(project.id, { name: 'api', path: '/tmp/api', remote: 'me/api' })
     const [kept] = listProjects()
-    expect(kept?.codebases.map((c) => c.name)).toEqual(['web', 'api'])
+    expect(kept?.systems.map((c) => c.name)).toEqual(['web', 'api'])
   })
 
   it('does not link the same folder twice', () => {
     const project = addProject('Mosaic')
-    const first = addCodebase(project.id, { name: 'web', path: '/tmp/web', remote: '' })
-    const again = addCodebase(project.id, { name: 'web', path: '/tmp/web', remote: '' })
+    const first = addSoftwareSystem(project.id, { name: 'web', path: '/tmp/web', remote: '' })
+    const again = addSoftwareSystem(project.id, { name: 'web', path: '/tmp/web', remote: '' })
     expect(again.id).toBe(first.id)
-    expect(listProjects()[0]?.codebases).toHaveLength(1)
+    expect(listProjects()[0]?.systems).toHaveLength(1)
   })
 
-  it('forgets a codebase it is told to drop', () => {
+  it('forgets a software system it is told to drop', () => {
     const project = addProject('Mosaic')
-    const codebase = addCodebase(project.id, { name: 'web', path: '/tmp/web', remote: '' })
-    removeCodebase(project.id, codebase.id)
-    expect(listProjects()[0]?.codebases).toEqual([])
+    const system = addSoftwareSystem(project.id, { name: 'web', path: '/tmp/web', remote: '' })
+    removeSoftwareSystem(project.id, system.id)
+    expect(listProjects()[0]?.systems).toEqual([])
   })
 
   it('renames a project', () => {
@@ -70,13 +78,13 @@ describe('the projects a computer remembers', () => {
   it('lists every GitHub repo it already holds', () => {
     const one = addProject('One')
     const two = addProject('Two')
-    addCodebase(one.id, { name: 'web', path: '/tmp/web', remote: 'me/web' })
-    addCodebase(two.id, { name: 'api', path: '/tmp/api', remote: 'me/api' })
-    addCodebase(two.id, { name: 'local', path: '/tmp/local', remote: '' })
+    addSoftwareSystem(one.id, { name: 'web', path: '/tmp/web', remote: 'me/web' })
+    addSoftwareSystem(two.id, { name: 'api', path: '/tmp/api', remote: 'me/api' })
+    addSoftwareSystem(two.id, { name: 'local', path: '/tmp/local', remote: '' })
     expect(knownRemotes().sort()).toEqual(['me/api', 'me/web'])
   })
 
-  it('refuses a codebase for a project that is not there', () => {
-    expect(() => addCodebase('nobody', { name: 'web', path: '/tmp/web', remote: '' })).toThrow()
+  it('refuses a software system for a project that is not there', () => {
+    expect(() => addSoftwareSystem('nobody', { name: 'web', path: '/tmp/web', remote: '' })).toThrow()
   })
 })

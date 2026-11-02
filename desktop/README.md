@@ -3,9 +3,9 @@
 The app you open. One screen: your projects as a grid of cards.
 
 A **project** is a piece of work — "Mosaic Manager", not "the api repo" — and
-it holds one or more **codebases**. A codebase is a repo on this computer that
+it holds one or more **systems**. A software system is a repo on this computer that
 git tracks and that codegraph is turned on inside. Each card says, for each
-codebase:
+system:
 
 - **codegraph on**, with how many of its files carry tags — or **needs setup**,
   and hovering says what is missing.

@@ -41,8 +41,17 @@ _Avoid_: source, implementation
 
 **Module**:
 A component that does real work behind a small front door. Only a module
-touches stored data or anything outside its container.
-_Avoid_: service, library, helper, util
+touches stored data or anything outside its container. A part that more than
+one page shows, and the design system, are modules too.
+_Avoid_: service, library, helper, util, widget
+
+**Front door**:
+What a module lets other components use. Nothing else of it is theirs.
+_Avoid_: API, interface, exports, public surface
+
+**Store**:
+One kind of thing kept in a database container, owned by one module.
+_Avoid_: table, collection, model, entity
 
 **Feature**:
 A component for one thing a person, a schedule or an event asks the software

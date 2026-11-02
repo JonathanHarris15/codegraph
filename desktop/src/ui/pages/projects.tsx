@@ -1,6 +1,6 @@
 // codegraph: start page projects at /
 import { useCallback, useEffect, useState } from 'react'
-import type { CloudView } from '../../features/list-github-codebases.js'
+import type { CloudView } from '../../features/list-github-software-systems.js'
 import type { ProjectView } from '../../features/list-projects.js'
 import { Button, Card, Field, Sheet } from '../design-system/kit.js'
 import { GithubShelf } from '../components/github-shelf.js'
@@ -21,7 +21,7 @@ export const ProjectsPage = () => {
   }, [])
 
   const loadCloud = useCallback(async (): Promise<void> => {
-    setCloud(await window.codegraph.listGithubCodebases())
+    setCloud(await window.codegraph.listGithubSoftwareSystems())
   }, [])
 
   useEffect(() => {
@@ -39,7 +39,7 @@ export const ProjectsPage = () => {
   const link = async (projectId: string): Promise<void> => {
     setLinking(projectId)
     setNote('')
-    const linked = await window.codegraph.linkCodebase(projectId)
+    const linked = await window.codegraph.linkSoftwareSystem(projectId)
     if (linked.problem) setNote(linked.problem)
     else if (linked.ok && linked.needsSetup)
       setNote(
@@ -78,7 +78,7 @@ export const ProjectsPage = () => {
         <div>
           <h1 className="ds-title">Projects</h1>
           <div className="ds-sub">
-            A project holds the codebases you work on together. Each one is a git repo with
+            A project holds the software systems you work on together. Each one is a git repo with
             codegraph turned on.
           </div>
         </div>

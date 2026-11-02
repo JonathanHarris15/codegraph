@@ -2,7 +2,7 @@
 // codegraph: store projects as Workspace
 
 /** One repo that belongs to a project. */
-export type Codebase = {
+export type SoftwareSystem = {
   id: string
   /** What it is called: the folder's name, or the GitHub repo's name. */
   name: string
@@ -12,18 +12,18 @@ export type Codebase = {
   remote: string
 }
 
-/** A piece of work with one or more codebases under it. */
+/** A piece of work with one or more software systems under it. */
 export type Project = {
   id: string
   name: string
   createdAt: string
-  codebases: Codebase[]
+  systems: SoftwareSystem[]
 }
 
 /** Everything this computer remembers about the person's projects. */
 export type Workspace = {
-  version: 1
+  version: 2
   projects: Project[]
 }
 
-export const emptyWorkspace = (): Workspace => ({ version: 1, projects: [] })
+export const emptyWorkspace = (): Workspace => ({ version: 2, projects: [] })

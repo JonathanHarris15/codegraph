@@ -13,11 +13,11 @@ and shown.
 
 The app speaks the new words and the rules every repo will carry are written.
 
-- **CG-0.1** Commit the glossary and ADRs 0002–0007.
-- **CG-0.2** Rename codebase to software system through the app: the store,
+- **CG-0.1** Commit the glossary and ADRs 0002–0007. (done)
+- **CG-0.2** (done) Rename codebase to software system through the app: the store,
   the features, the page. The projects file on disk is read in both shapes
   so nothing is lost.
-- **CG-0.3** Write the tag rules and the codegraph config as ADR 0008: what a
+- **CG-0.3** Write the tag rules and the codegraph config as ADR 0008 (done): what a
   tag says at each level, how a wire's kind and phrase are written beside the
   call, how a repo names its projects (ADR 0006). Every repo will carry
   these, so they are fixed before anything reads them.

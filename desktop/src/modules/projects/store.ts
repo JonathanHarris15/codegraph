@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { emptyWorkspace, type Workspace } from './schema.js'
+import { emptyWorkspace, type Project, type Workspace } from './schema.js'
 
 let folder = ''
 
@@ -16,10 +16,20 @@ const file = (): string => {
   return join(folder, 'projects.json')
 }
 
+/** A project as an older app may have written it: before version 2 its
+ *  software systems were kept under `codebases`. */
+type Stored = Omit<Project, 'systems'> & { systems?: Project['systems']; codebases?: Project['systems'] }
+
+const upgrade = ({ codebases, systems, ...project }: Stored): Project => ({
+  ...project,
+  systems: systems ?? codebases ?? [],
+})
+
 export const read = (): Workspace => {
   try {
-    const raw = JSON.parse(readFileSync(file(), 'utf8')) as Partial<Workspace>
-    return { version: 1, projects: Array.isArray(raw.projects) ? raw.projects : [] }
+    const raw = JSON.parse(readFileSync(file(), 'utf8')) as { projects?: unknown }
+    const projects = Array.isArray(raw.projects) ? (raw.projects as Stored[]) : []
+    return { version: 2, projects: projects.map(upgrade) }
   } catch {
     return emptyWorkspace()
   }

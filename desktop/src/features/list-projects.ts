@@ -1,7 +1,7 @@
 // codegraph: feature list-projects in workspace
 // codegraph: uses projects, repo
 import { listProjects as stored } from '../modules/projects/index.js'
-import { isSetUp, readCodebase, type RepoFacts } from '../modules/repo/index.js'
+import { isSetUp, readSoftwareSystem, type RepoFacts } from '../modules/repo/index.js'
 
 /** How a working copy stands against the copy on GitHub. */
 export type Cloud =
@@ -14,7 +14,7 @@ export type Cloud =
   | 'untracked'
   | 'missing'
 
-export type CodebaseView = {
+export type SoftwareSystemView = {
   id: string
   name: string
   path: string
@@ -43,7 +43,7 @@ export type ProjectView = {
   id: string
   name: string
   createdAt: string
-  codebases: CodebaseView[]
+  systems: SoftwareSystemView[]
 }
 
 export const cloudOf = (facts: RepoFacts): Cloud => {
@@ -57,7 +57,7 @@ export const cloudOf = (facts: RepoFacts): Cloud => {
   return 'level'
 }
 
-/** Every project with the live state of each codebase under it. Ask it to
+/** Every project with the live state of each software system under it. Ask it to
  *  fetch first and it asks GitHub what it has before answering. */
 export const listProjects = async (fetchFirst = false): Promise<ProjectView[]> =>
   Promise.all(
@@ -65,14 +65,14 @@ export const listProjects = async (fetchFirst = false): Promise<ProjectView[]> =
       id: project.id,
       name: project.name,
       createdAt: project.createdAt,
-      codebases: await Promise.all(
-        project.codebases.map(async (codebase) => {
-          const facts = await readCodebase(codebase.path, fetchFirst)
+      systems: await Promise.all(
+        project.systems.map(async (system) => {
+          const facts = await readSoftwareSystem(system.path, fetchFirst)
           return {
-            id: codebase.id,
-            name: codebase.name,
-            path: codebase.path,
-            remote: codebase.remote || facts.remote,
+            id: system.id,
+            name: system.name,
+            path: system.path,
+            remote: system.remote || facts.remote,
             present: facts.present,
             tracked: facts.tracked,
             dirty: facts.dirty,

@@ -57,12 +57,12 @@ const theWindowsPicker: Chooser = async () => {
   const window = desk.BrowserWindow.getFocusedWindow()
   const picked = window
     ? await desk.dialog.showOpenDialog(window, {
-        title: 'Pick a codebase',
+        title: 'Pick a software system',
         properties: ['openDirectory'],
         buttonLabel: 'Link this repo',
       })
     : await desk.dialog.showOpenDialog({
-        title: 'Pick a codebase',
+        title: 'Pick a software system',
         properties: ['openDirectory'],
         buttonLabel: 'Link this repo',
       })

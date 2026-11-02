@@ -1,5 +1,5 @@
 // codegraph: module repo
-// codegraph: front door isRepo, remoteName, mainLineRef, isSetUp, readCodebase, folderName, RepoFacts, SetupFacts
+// codegraph: front door isRepo, remoteName, mainLineRef, isSetUp, readSoftwareSystem, folderName, RepoFacts, SetupFacts
 import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
 import { isRepo, mainLineRef, readGit, remoteName, type GitFacts } from './git.js'
@@ -25,7 +25,7 @@ export type RepoFacts = GitFacts &
 
 export const folderName = (path: string): string => basename(path.replace(/[\\/]+$/, ''))
 
-export const readCodebase = async (path: string, fetchFirst = false): Promise<RepoFacts> => {
+export const readSoftwareSystem = async (path: string, fetchFirst = false): Promise<RepoFacts> => {
   const present = path.length > 0 && existsSync(path)
   const here = present ? path : ''
   const facts = await readGit(here, fetchFirst)

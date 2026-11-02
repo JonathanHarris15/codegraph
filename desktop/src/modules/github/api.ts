@@ -78,7 +78,7 @@ export const listRepos = async (token: string, pages = 3): Promise<GithubRepo[]>
 /** Asked once per repo per run; a repo's answer only changes when it is pushed to. */
 const seen = new Map<string, boolean>()
 
-/** A repo is a codegraph codebase when its committed Claude settings name
+/** A repo is a codegraph software system when its committed Claude settings name
  *  codegraph, which is what setting a repo up writes. */
 export const isCodegraph = async (token: string, repo: GithubRepo): Promise<boolean> => {
   const key = `${repo.fullName}@${repo.pushedAt}`

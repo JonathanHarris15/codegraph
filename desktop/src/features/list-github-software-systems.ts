@@ -1,4 +1,4 @@
-// codegraph: feature list-github-codebases in workspace
+// codegraph: feature list-github-software-systems in workspace
 // codegraph: uses github, projects
 import {
   GithubRefused,
@@ -9,7 +9,7 @@ import {
 } from '../modules/github/index.js'
 import { knownRemotes } from '../modules/projects/index.js'
 
-export type CloudCodebase = {
+export type CloudSoftwareSystem = {
   fullName: string
   name: string
   owner: string
@@ -26,18 +26,18 @@ export type CloudView = {
   /** The token sits in the operating system's keystore, not in plain text. */
   tokenSafe: boolean
   problem?: string
-  codebases: CloudCodebase[]
+  systems: CloudSoftwareSystem[]
 }
 
-/** The codegraph codebases the signed-in person can reach on GitHub, saying
+/** The codegraph software systems the signed-in person can reach on GitHub, saying
  *  which are already on this computer and which are not. */
-export const listGithubCodebases = async (): Promise<CloudView> => {
+export const listGithubSoftwareSystems = async (): Promise<CloudView> => {
   const token = savedToken()
   const quiet: CloudView = {
     signedIn: false,
     account: '',
     tokenSafe: tokenIsSafe(),
-    codebases: [],
+    systems: [],
   }
   if (!token) return quiet
 
@@ -48,7 +48,7 @@ export const listGithubCodebases = async (): Promise<CloudView> => {
       signedIn: true,
       account,
       tokenSafe: tokenIsSafe(),
-      codebases: repos.map((repo) => ({
+      systems: repos.map((repo) => ({
         fullName: repo.fullName,
         name: repo.name,
         owner: repo.owner,

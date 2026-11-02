@@ -61,7 +61,7 @@ describe('the projects screen in the real app', () => {
     await page.getByRole('button', { name: 'Make it' }).click()
 
     expect(await shown(page.getByText('Mosaic Manager'))).toContain('Mosaic Manager')
-    expect(await shown(page.getByText('no codebases yet'))).toContain('no codebases yet')
+    expect(await shown(page.getByText('no software systems yet'))).toContain('no software systems yet')
     expect(await shown(page.getByRole('button', { name: 'Link a repo' }))).toBe('Link a repo')
   }, 30_000)
 

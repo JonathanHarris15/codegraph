@@ -1,7 +1,7 @@
 // codegraph: test feature connect-github
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connectGithub } from '../src/features/connect-github.js'
-import { listGithubCodebases } from '../src/features/list-github-codebases.js'
+import { listGithubSoftwareSystems } from '../src/features/list-github-software-systems.js'
 import { signOutGithub } from '../src/features/sign-out-github.js'
 import { useFolder as useGithubFolder } from '../src/modules/github/index.js'
 import { useFolder as useProjectsFolder } from '../src/modules/projects/index.js'
@@ -32,7 +32,7 @@ describe('signing in to GitHub', () => {
     const connected = await connectGithub('ghp_good')
     expect(connected.ok).toBe(true)
     expect(connected.account).toBe('jono')
-    expect((await listGithubCodebases()).signedIn).toBe(true)
+    expect((await listGithubSoftwareSystems()).signedIn).toBe(true)
   })
 
   it('throws away a token GitHub refuses, and says why', async () => {
@@ -40,7 +40,7 @@ describe('signing in to GitHub', () => {
     const connected = await connectGithub('ghp_bad')
     expect(connected.ok).toBe(false)
     expect(connected.problem).toMatch(/did not accept/)
-    expect((await listGithubCodebases()).signedIn).toBe(false)
+    expect((await listGithubSoftwareSystems()).signedIn).toBe(false)
   })
 
   it('says so when the token cannot see private repos', async () => {
@@ -54,6 +54,6 @@ describe('signing in to GitHub', () => {
     githubAnswers({ '/user': { status: 200, body: { login: 'jono' } } })
     await connectGithub('ghp_good')
     await signOutGithub()
-    expect((await listGithubCodebases()).signedIn).toBe(false)
+    expect((await listGithubSoftwareSystems()).signedIn).toBe(false)
   })
 })
