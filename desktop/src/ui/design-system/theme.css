@@ -266,5 +266,5 @@ h3 {
   font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
   font-size: 12px;
   color: var(--ink-faint);
-  word-break: break-all;
+  overflow-wrap: break-word;
 }
