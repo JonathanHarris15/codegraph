@@ -407,8 +407,7 @@ Codegraph is set up on itself, in the same three layers it asks of others.
   modules.
 - the UI: `codegraph.py`, the command line, and `hooks/register.tsx`, the
   pane. Both are start pages.
-- `tests/`: one file per module or feature, and `indie-stack`, a real app
-  to try codegraph on (below).
+- `tests/`: one file per module or feature.
 
 ## Tests
 
@@ -430,44 +429,14 @@ claude plugin test .
 
 ## A real repo to try it on
 
-`tests/indie-stack` is a small notes app (sign up, log in, write and delete
-notes) built on Remix, Prisma and SQLite, from Remix's archived Indie Stack
-(MIT). It is set up for codegraph and kept clean: every file tagged, the
-pages' forms handed to features, `0 mismatches`. It has its own `CLAUDE.md`
-with codegraph's block in it, so codegraph's own check leaves it out
-(docs/adr/0009) and pointing codegraph at it reads it as a repo of its own.
-`tests/test_example.py` keeps it clean: a change to codegraph that misreads
-a real app fails there.
-
-Read it, draw it, or serve the live map of it:
+The notes app that used to live in `tests/indie-stack` now sits beside this
+repo as `indie-stack`, its own repo. Point codegraph at it from here:
 
 ```
-python codegraph.py tests/indie-stack --check
-python codegraph.py tests/indie-stack --serve
+python codegraph.py ../../indie-stack --check
+python codegraph.py ../../indie-stack --serve
 ```
 
-To run the app and its tests once (Node 18 or newer):
-
-```
-cd tests/indie-stack
-npm install
-copy .env.example .env      # cp on macOS
-npm run setup
-npm run test:e2e:run
-```
-
-The click-through tests take a picture of every page they open, so the live
-map shows each page as it looks.
-
-For a full try, a plan, a sketch, a build, start Claude Code inside it with
-this folder as the plugin, so it runs the working copy rather than the
-installed one:
-
-```
-cd tests/indie-stack
-claude --plugin-dir ../..
-```
-
-What a try turns up that codegraph gets wrong is a fix to codegraph, made
-here with a test. A change to the app itself is kept only if the app stays
-clean: run the check and `tests/test_example.py` before committing it.
+It carries the old codegraph's block in its `CLAUDE.md` and the old tags on
+its files. What setting a repo up for codegraph means is being written
+again, so neither is a claim about the new one.

@@ -24,6 +24,6 @@ How to work here:
 To clean up what the map already shows red, use the `codegraph:fix` skill. When someone describes something new to build, or hands over a ticket, use `codegraph:plan` to put it on the map as a plan they approve before you build it; a plan waits in `plans/` and is deleted once it is built.
 <!-- codegraph:end -->
 
-## Trying codegraph for real
+## The app this was tried against
 
-`tests/indie-stack` is a small real app (Remix, Prisma, SQLite), set up for codegraph and kept clean, for trying codegraph end to end: setup, the map, plans, sketches, builds. Develop codegraph against it, not only against codegraph itself: point codegraph at it (`python codegraph.py tests/indie-stack --check`, `--serve`), or start a session inside it with `claude --plugin-dir ../..`. It has its own `CLAUDE.md`, so codegraph's own check leaves it out (docs/adr/0009). What a try turns up that codegraph gets wrong is a fix to codegraph, made here with a test. A change to the app is kept only if `python codegraph.py tests/indie-stack --check` stays at 0 mismatches and `tests/test_example.py` passes.
+The notes app that lived in `tests/indie-stack` has moved out to its own repo beside this one, `../../indie-stack`, where the new codegraph is being worked out. Nothing here depends on it any more: `tests/test_example.py`, which kept it clean, went with it. Point codegraph at it by path to try something: `python codegraph.py ../../indie-stack --check`.
