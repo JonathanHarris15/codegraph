@@ -31,21 +31,25 @@ The map is first proven on a small repo the tests build by hand. Indie-stack
 shows as "not set up" until checkpoint 2 sets it up; tagging it by hand now
 would only be setup done badly.
 
-- **CG-1.1** The reader, in TypeScript (ADR 0005): reads the tags and config
+- **CG-1.1** (done) The reader, in TypeScript (ADR 0005): reads the tags and config
   of a repo at a point (the live folder, a branch or a commit, ADR 0003) and
   returns its containers, components, code and wires. Uses the legacy Python
   as a guide, not a source.
-- **CG-1.2** Reading a project: its software systems, their wires to each
+- **CG-1.2** (done) Reading a project: its software systems, their wires to each
   other and to shallow software systems.
-- **CG-1.3** The canvas: cards and wires at each level, tunnelling by zoom,
+- **CG-1.3** (done) The canvas: cards and wires at each level, tunnelling by zoom,
   passing through levels with one card (ADR 0002).
-- **CG-1.4** The page map: pages as cards with leads-to wires, and an empty
+- **CG-1.4** (done) The page map: pages as cards with leads-to wires, and an empty
   frame where the screenshot will go.
-- **CG-1.5** Branch and commit switcher on the canvas.
-- **CG-1.6** Open a project from the grid onto its own canvas.
+- **CG-1.5** (done) Branch and commit switcher on the canvas.
+- **CG-1.6** (done) Open a project from the grid onto its own canvas.
 
 **Try it:** open the test project, zoom to a component, switch to an older
-commit and watch the map change.
+commit and watch the map change. The click-through test does exactly this;
+set `CODEGRAPH_PICTURES` to a folder to keep a picture of each step.
+
+Still rough: wires can pass behind cards, and only TypeScript and
+JavaScript are read for names and imports.
 
 ## Checkpoint 2: Setup through the MCP
 

@@ -87,3 +87,80 @@ export const codegraphSettings = {
     ).toString('base64'),
   },
 }
+
+const put = (root: string, files: Record<string, string>): void => {
+  for (const [path, text] of Object.entries(files)) {
+    const full = join(root, path)
+    mkdirSync(join(full, '..'), { recursive: true })
+    writeFileSync(full, text)
+  }
+}
+
+/** A small notes app set up for the new codegraph (ADR 0008), written by
+ *  hand: a browser app and a database, a page that leads to another, and a
+ *  call out to a mailer. Main has it; a branch adds a search page. */
+export const aMappedRepo = (yard: Yard, name = 'notes'): string => {
+  const path = join(yard.path, name)
+  mkdirSync(path, { recursive: true })
+  git(path, 'init', '--initial-branch=main')
+  git(path, 'config', 'user.email', 'test@example.com')
+  git(path, 'config', 'user.name', 'Test')
+  put(path, {
+    'codegraph.config.json': JSON.stringify({
+      projects: ['notes-app'],
+      containers: {
+        web: { kind: 'browser app', says: 'Where people keep their notes', folders: ['app'] },
+        db: { kind: 'database', says: 'Keeps every note' },
+      },
+    }),
+    'tsconfig.json': '{\n  // comments are allowed here\n  "compilerOptions": { "paths": { "~/*": ["./app/*"] } }\n}\n',
+    'app/modules/notes.ts': [
+      '// codegraph: module notes',
+      '// codegraph: front door saveNote, listNotes, Note',
+      '// codegraph: store notes in db',
+      'export type Note = { id: string; text: string }',
+      'export const saveNote = (text: string): Note => ({ id: "1", text })',
+      'export const listNotes = (): Note[] => []',
+      '',
+    ].join('\n'),
+    'app/features/write-note.ts': [
+      '// codegraph: feature write-note uses notes',
+      "import { saveNote } from '~/modules/notes' // codegraph: wire keeps the note",
+      'export const writeNote = (text: string) => saveNote(text)',
+      '',
+    ].join('\n'),
+    'app/pages/notes.tsx': [
+      '// codegraph: start page notes at /',
+      "import { listNotes } from '../modules/notes.js' // codegraph: wire lists the notes",
+      'export function NotesPage() {',
+      "  return <a href=\"/notes/new\">{listNotes().length}</a>",
+      '}',
+      '',
+    ].join('\n'),
+    'app/pages/new-note.tsx': [
+      '// codegraph: page new-note at /notes/new',
+      "import { writeNote } from '../features/write-note' // codegraph: wire saves what was typed",
+      'export function NewNotePage() {',
+      "  fetch('https://mail.example') // codegraph: wire to mailer: tells the owner",
+      "  return <button onClick={() => writeNote('hi')}>Save</button>",
+      '}',
+      '',
+    ].join('\n'),
+    'app/triggers/nightly.ts': [
+      '// codegraph: trigger nightly-tidy schedule',
+      "import { writeNote } from '../features/write-note'",
+      "export const tidy = () => writeNote('')",
+      '',
+    ].join('\n'),
+    'test/write-note.test.ts': "// codegraph: test feature write-note\nexport const nothing = 0\n",
+  })
+  git(path, 'add', '-A')
+  git(path, 'commit', '-m', 'notes')
+
+  git(path, 'checkout', '-q', '-b', 'add-search')
+  put(path, { 'app/pages/search.tsx': '// codegraph: page search at /search\nexport const Search = () => null\n' })
+  git(path, 'add', '-A')
+  git(path, 'commit', '-m', 'add a search page')
+  git(path, 'checkout', '-q', 'main')
+  return path
+}

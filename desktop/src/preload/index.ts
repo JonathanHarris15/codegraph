@@ -4,6 +4,8 @@ import type { Connected } from '../features/connect-github.js'
 import type { CloudView } from '../features/list-github-software-systems.js'
 import type { ProjectView } from '../features/list-projects.js'
 import type { Linked } from '../features/link-software-system.js'
+import type { MapShown } from '../features/show-map.js'
+import type { Point } from '../modules/reader/index.js'
 
 /** What the window may ask for: one call per feature, nothing else. */
 export type Api = {
@@ -13,6 +15,8 @@ export type Api = {
   connectGithub: (token: string) => Promise<Connected>
   signOutGithub: () => Promise<void>
   listGithubSoftwareSystems: () => Promise<CloudView>
+  showMap: (projectId: string, points?: Record<string, Point>) => Promise<MapShown>
+  listPoints: (projectId: string, systemId: string) => Promise<Point[]>
 }
 
 const api: Api = {
@@ -22,6 +26,8 @@ const api: Api = {
   connectGithub: (token) => ipcRenderer.invoke('github:connect', token),
   signOutGithub: () => ipcRenderer.invoke('github:signOut'),
   listGithubSoftwareSystems: () => ipcRenderer.invoke('github:list'),
+  showMap: (projectId, points = {}) => ipcRenderer.invoke('map:show', projectId, points),
+  listPoints: (projectId, systemId) => ipcRenderer.invoke('map:points', projectId, systemId),
 }
 
 contextBridge.exposeInMainWorld('codegraph', api)

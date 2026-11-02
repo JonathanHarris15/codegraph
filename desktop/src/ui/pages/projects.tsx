@@ -6,7 +6,7 @@ import { Button, Card, Field, Sheet } from '../design-system/kit.js'
 import { GithubShelf } from '../components/github-shelf.js'
 import { ProjectCard } from '../components/project-card.js'
 
-export const ProjectsPage = () => {
+export const ProjectsPage = ({ onOpen }: { onOpen: (projectId: string) => void }) => {
   const [projects, setProjects] = useState<ProjectView[] | null>(null)
   const [cloud, setCloud] = useState<CloudView | null>(null)
   const [naming, setNaming] = useState(false)
@@ -124,6 +124,7 @@ export const ProjectsPage = () => {
               key={project.id}
               project={project}
               onLink={(id) => void link(id)}
+              onOpen={onOpen}
               linking={linking === project.id}
             />
           ))}

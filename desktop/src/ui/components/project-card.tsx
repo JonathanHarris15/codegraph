@@ -9,10 +9,12 @@ const countWords = (many: number): string =>
 export const ProjectCard = ({
   project,
   onLink,
+  onOpen,
   linking,
 }: {
   project: ProjectView
   onLink: (projectId: string) => void
+  onOpen: (projectId: string) => void
   linking: boolean
 }) => (
   <Card>
@@ -21,9 +23,21 @@ export const ProjectCard = ({
         <div className="ds-card-name">{project.name}</div>
         <div className="ds-hint">{countWords(project.systems.length)}</div>
       </div>
-      <Button onClick={() => onLink(project.id)} disabled={linking}>
-        {linking ? 'Linking…' : 'Link a repo'}
-      </Button>
+      <div className="ds-row">
+        <Button onClick={() => onLink(project.id)} disabled={linking}>
+          {linking ? 'Linking…' : 'Link a repo'}
+        </Button>
+        <a
+          className="ds-button ds-button--loud"
+          href={`/projects/${project.id}`}
+          onClick={(event) => {
+            event.preventDefault()
+            onOpen(project.id)
+          }}
+        >
+          Open map
+        </a>
+      </div>
     </div>
 
     {project.systems.length === 0 ? (

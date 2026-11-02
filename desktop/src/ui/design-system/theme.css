@@ -99,6 +99,9 @@ h3 {
 }
 
 .ds-button {
+  display: inline-block;
+  text-decoration: none;
+  line-height: inherit;
   background: var(--raised-high);
   color: var(--ink);
   border: 1px solid var(--edge-bright);
@@ -267,4 +270,296 @@ h3 {
   font-size: 12px;
   color: var(--ink-faint);
   overflow-wrap: break-word;
+}
+
+/* The canvas: one project's map, zoomed through level by level. */
+.map-page {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.map-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--edge);
+  background: var(--raised);
+  z-index: 2;
+}
+
+.map-trail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.map-trail-gap {
+  color: var(--ink-faint);
+  margin: 0 4px;
+}
+
+.map-trail-link,
+.map-trail-here {
+  border: 0;
+  background: none;
+  padding: 2px 4px;
+  border-radius: 6px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.map-trail-link:hover {
+  color: var(--ink);
+  background: var(--raised-high);
+}
+
+.map-trail-here {
+  color: var(--ink);
+  font-weight: 600;
+  cursor: default;
+}
+
+.map-bar-end {
+  margin-left: auto;
+}
+
+.map-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.map-picker .ds-input {
+  width: auto;
+  max-width: 360px;
+  padding: 6px 10px;
+}
+
+.map-frame-area {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  cursor: grab;
+  background-color: var(--page);
+  background-image: radial-gradient(var(--edge) 1px, transparent 1px);
+  background-size: 22px 22px;
+  touch-action: none;
+}
+
+.map-frame-area:active {
+  cursor: grabbing;
+}
+
+.map-world {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+}
+
+.map-world--moving {
+  transition:
+    transform 320ms cubic-bezier(0.3, 0.1, 0.2, 1),
+    opacity 320ms ease;
+}
+
+.map-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--ink-soft);
+  padding: 24px;
+  text-align: center;
+}
+
+.map-card {
+  position: absolute;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--raised);
+  border: 1px solid var(--edge-bright);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  cursor: default;
+}
+
+.map-card[role='button'] {
+  cursor: zoom-in;
+}
+
+.map-card[role='button']:hover,
+.map-card[role='button']:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.map-card--bare {
+  border-style: dashed;
+  background: transparent;
+  box-shadow: none;
+}
+
+.map-kind {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+}
+
+.map-name {
+  font-size: 16px;
+  font-weight: 600;
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+
+.map-says {
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  margin-top: 4px;
+}
+
+.map-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.map-chip {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--raised-high);
+  color: var(--ink-soft);
+}
+
+.map-more {
+  color: var(--ink-faint);
+}
+
+.map-names {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font: 12px/18px ui-monospace, 'Cascadia Code', Consolas, monospace;
+  color: var(--ink-soft);
+}
+
+/* One colour per kind of component, so a level reads at a glance. */
+.map-kind--page { border-top: 3px solid var(--accent); }
+.map-kind--feature { border-top: 3px solid var(--good); }
+.map-kind--module { border-top: 3px solid var(--warn); }
+.map-kind--trigger { border-top: 3px solid var(--bad); }
+.map-kind--database,
+.map-kind--files-on-disk { border-radius: 26px; }
+
+/* A page on the page map: a window frame waiting for its screenshot. */
+.map-frame {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+.map-frame-bar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  background: var(--raised-high);
+  border-bottom: 1px solid var(--edge);
+}
+
+.map-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--edge-bright);
+}
+
+.map-frame-at {
+  margin-left: 6px;
+  font: 11px ui-monospace, 'Cascadia Code', Consolas, monospace;
+  color: var(--ink-soft);
+}
+
+.map-shot {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  color: var(--ink-faint);
+  background: repeating-linear-gradient(-45deg, transparent 0 10px, rgba(255, 255, 255, 0.02) 10px 20px);
+}
+
+.map-frame-name {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--edge);
+}
+
+.map-frame-name .map-name {
+  font-size: 14px;
+  margin: 0;
+}
+
+.map-wires {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.map-wire path {
+  fill: none;
+  stroke: var(--ink-faint);
+  stroke-width: 1.6;
+}
+
+.map-wire--leads-to path {
+  stroke-dasharray: 5 4;
+}
+
+.map-head {
+  fill: var(--ink-faint);
+}
+
+.map-wire text {
+  paint-order: stroke;
+  stroke: var(--page);
+  stroke-width: 4px;
+}
+
+.map-wire-kind {
+  font-size: 10px;
+  fill: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.map-wire-words {
+  font-size: 12px;
+  fill: var(--ink-soft);
+}
+
+.map-problems {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  max-width: 520px;
+  padding: 8px 12px;
+  border-radius: var(--radius-small);
+  background: var(--raised);
+  border: 1px solid var(--edge);
+  color: var(--ink-soft);
+  font-size: 12.5px;
 }

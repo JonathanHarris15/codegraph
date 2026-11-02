@@ -1,7 +1,11 @@
 # codegraph desktop
 
-The codegraph app. The words are in `CONTEXT.md`; the decisions it inherits
-are in `../legacy/docs/adr/`.
+The codegraph app. The words are in `CONTEXT.md`; its decisions are in
+`docs/adr/`, and the plan it is being built to is `docs/plan.md`.
+
+This app's own files still carry the legacy tags and are checked by the
+legacy check until it is set up for the new codegraph (plan, checkpoint 5).
+The repos it reads use the new tags in ADR 0008.
 
 ## Architecture
 
@@ -10,7 +14,9 @@ which one it belongs to. The code is the architecture.
 
 - **Modules** (`src/modules/`) do the real work behind a small front door.
   Only a module touches a store or an outside connection — the projects file
-  on disk, git, the GitHub API, the keystore, the folder picker. A module
+  on disk, git, the GitHub API, the keystore, the folder picker. The
+  `reader` module reads another repo's code and tags into its map, at any
+  point in its history (ADRs 0003, 0008). A module
   never calls a feature or the UI. Outside things are handed in by the shell
   (`useFolder`, `useVault`, `useChooser`) so a test can run the module for
   real without Electron.
