@@ -1,10 +1,7 @@
 // codegraph: module repo
-import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { promisify } from 'node:util'
-
-const run = promisify(execFile)
+import { git } from './run.js'
 
 /** What git says about one working copy. */
 export type GitFacts = {
@@ -18,25 +15,24 @@ export type GitFacts = {
   behind: number
 }
 
-const git = async (cwd: string, args: string[], seconds = 20): Promise<string> => {
-  try {
-    const { stdout } = await run('git', args, {
-      cwd,
-      windowsHide: true,
-      timeout: seconds * 1000,
-    })
-    return stdout.trim()
-  } catch {
-    return ''
-  }
-}
-
 export const isRepo = (path: string): boolean => path.length > 0 && existsSync(join(path, '.git'))
 
 /** github.com/owner/name, however the remote is written, else ''. */
 export const remoteName = (url: string): string => {
   const match = url.match(/github\.com[:/]+([^/]+)\/(.+?)(?:\.git)?$/i)
   return match ? `${match[1]}/${match[2]}` : ''
+}
+
+/** The ref to read a repo-level question against: the main line, not
+ *  whatever branch is checked out. GitHub's own idea of it first, then the
+ *  usual names, and '' where the repo has no commits at all. */
+export const mainLineRef = async (path: string): Promise<string> => {
+  const pointed = await git(path, ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'])
+  if (pointed) return pointed.replace('refs/remotes/', '')
+  for (const ref of ['origin/main', 'origin/master', 'main', 'master']) {
+    if (await git(path, ['rev-parse', '--verify', '--quiet', ref])) return ref
+  }
+  return ''
 }
 
 export const readGit = async (path: string, fetchFirst = false): Promise<GitFacts> => {

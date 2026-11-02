@@ -1,80 +1,64 @@
 // codegraph: module repo
-import { readFileSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { git } from './run.js'
 
-/** How far codegraph is turned on in one working copy. */
+/** How far codegraph is turned on in a repo, read at one point in its
+ *  history. Whether a repo is set up is a question about the repo, so it is
+ *  asked of the main line, not of whichever branch is checked out. */
 export type SetupFacts = {
-  /** The repo's own .claude/settings.json names codegraph, so it loads for everyone. */
+  /** The repo's committed .claude/settings.json names codegraph, so it loads
+   *  for everyone who opens the repo. */
   toolsOn: boolean
   /** Its CLAUDE.md carries the codegraph rules. */
   rulesWritten: boolean
   /** How many source files carry a codegraph tag. */
   taggedFiles: number
-  /** How many source files were looked at. */
+  /** How many source files there are to tag. */
   sourceFiles: number
 }
 
-const SKIP = new Set([
-  '.git',
-  'node_modules',
-  'dist',
-  'out',
-  'build',
-  '.venv',
-  'venv',
-  '__pycache__',
-  '.next',
-  '.codegraph',
-])
 const SOURCE = /\.(ts|tsx|js|jsx|mjs|cjs|py|rb|go|rs|java|kt|cs|php|svelte|vue)$/i
-const LOOK_AT = 600
 
-const text = (path: string): string => {
-  try {
-    return readFileSync(path, 'utf8')
-  } catch {
-    return ''
-  }
+export const noSetup: SetupFacts = {
+  toolsOn: false,
+  rulesWritten: false,
+  taggedFiles: 0,
+  sourceFiles: 0,
 }
 
-const sourceFilesUnder = (root: string): string[] => {
-  const found: string[] = []
-  const walk = (dir: string): void => {
-    if (found.length >= LOOK_AT) return
-    let entries
-    try {
-      entries = readdirSync(dir, { withFileTypes: true })
-    } catch {
-      return
-    }
-    for (const entry of entries) {
-      if (found.length >= LOOK_AT) return
-      if (SKIP.has(entry.name)) continue
-      const path = join(dir, entry.name)
-      if (entry.isDirectory()) {
-        if (entry.name.startsWith('.') && entry.name !== '.claude') continue
-        walk(path)
-      } else if (SOURCE.test(entry.name)) found.push(path)
-    }
-  }
-  walk(root)
-  return found
-}
+const lines = (text: string): string[] => (text ? text.split(/\r?\n/) : [])
 
-const carriesTag = (path: string): boolean =>
-  text(path)
-    .split(/\r?\n/, 30)
-    .some((line) => /codegraph:/.test(line))
+/** Reads a repo as it stands at one ref — only what git tracks there, so
+ *  node_modules and other untracked clutter never counts. */
+export const readSetupAt = async (path: string, ref: string): Promise<SetupFacts> => {
+  if (!path || !ref) return noSetup
 
-export const readSetup = (path: string): SetupFacts => {
-  if (!path) return { toolsOn: false, rulesWritten: false, taggedFiles: 0, sourceFiles: 0 }
-  const settings = text(join(path, '.claude', 'settings.json'))
-  const rules = text(join(path, 'CLAUDE.md'))
-  const files = sourceFilesUnder(path)
+  const [settings, rules] = await Promise.all([
+    git(path, ['show', `${ref}:.claude/settings.json`]),
+    git(path, ['show', `${ref}:CLAUDE.md`]),
+  ])
+  const toolsOn = /codegraph/i.test(settings)
+  const rulesWritten = /codegraph/i.test(rules)
+
+  // Counting tags means reading the whole tree, which is slow on a big repo.
+  // A repo missing the plugin or the rules is not set up whatever the tags
+  // say, so there is nothing to learn by counting them.
+  if (!toolsOn || !rulesWritten) return { ...noSetup, toolsOn, rulesWritten }
+
+  const [tagged, listed] = await Promise.all([
+    git(path, ['grep', '--files-with-matches', '-I', 'codegraph:', ref]),
+    git(path, ['ls-tree', '-r', '--name-only', ref]),
+  ])
+
   return {
-    toolsOn: /codegraph/i.test(settings),
-    rulesWritten: /codegraph/i.test(rules),
-    taggedFiles: files.filter(carriesTag).length,
-    sourceFiles: files.length,
+    toolsOn,
+    rulesWritten,
+    taggedFiles: lines(tagged)
+      .map((line) => line.slice(line.indexOf(':') + 1))
+      .filter((file) => SOURCE.test(file)).length,
+    sourceFiles: lines(listed).filter((file) => SOURCE.test(file)).length,
   }
 }
+
+/** Codegraph is turned on here: the plugin, the rules, and tags on the code. */
+export const isSetUp = (facts: SetupFacts): boolean =>
+  facts.toolsOn && facts.rulesWritten && facts.taggedFiles > 0

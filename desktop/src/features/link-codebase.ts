@@ -2,7 +2,7 @@
 // codegraph: uses projects, repo, machine
 import { askForFolder } from '../modules/machine/index.js'
 import { addCodebase } from '../modules/projects/index.js'
-import { folderName, isRepo, readCodebase } from '../modules/repo/index.js'
+import { folderName, isRepo, isSetUp, readCodebase } from '../modules/repo/index.js'
 
 export type Linked = {
   ok: boolean
@@ -36,6 +36,5 @@ export const linkCodebase = async (projectId: string, path?: string): Promise<Li
     path: folder,
     remote: facts.remote,
   })
-  const setUp = facts.toolsOn && facts.rulesWritten && facts.taggedFiles > 0
-  return { ok: true, needsSetup: !setUp, name: added.name }
+  return { ok: true, needsSetup: !isSetUp(facts) && !facts.setUpHere, name: added.name }
 }

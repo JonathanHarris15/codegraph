@@ -40,7 +40,6 @@ export const ProjectsPage = () => {
     setLinking(projectId)
     setNote('')
     const linked = await window.codegraph.linkCodebase(projectId)
-    setLinking('')
     if (linked.problem) setNote(linked.problem)
     else if (linked.ok && linked.needsSetup)
       setNote(
@@ -50,6 +49,7 @@ export const ProjectsPage = () => {
       await load()
       await loadCloud()
     }
+    setLinking('')
   }
 
   const refresh = async (): Promise<void> => {

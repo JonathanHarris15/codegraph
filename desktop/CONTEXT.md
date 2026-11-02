@@ -24,9 +24,24 @@ _Avoid_: repo (say repo for the thing on GitHub), project, package
 Codegraph is turned on inside a codebase: the plugin is named in the repo's
 own committed Claude settings, the codegraph rules are in its `CLAUDE.md`,
 and its files carry tags.
-_Rule_: all three, or it is **needs setup**. The app only reports this; it is
-`/codegraph:setup` inside the repo that does it.
+_Rule_: all three, or it is **needs setup**. It is a fact about the repo, so
+it is read on the **main line**, never on whichever branch is checked out
+(docs/adr/0001). The app only reports this; it is `/codegraph:setup` inside
+the repo that does it.
 _Avoid_: installed, configured, initialised
+
+**Main line**:
+The branch a repo's work comes back to: what `origin/HEAD` points at, else
+`origin/main`, `origin/master`, `main`, `master`.
+_Rule_: every repo-level question is read against it. A repo with no commits
+has none, and reads as not set up.
+_Avoid_: default branch (say main line), trunk, master
+
+**Set up on this branch only**:
+The branch checked out here has all three parts and the main line does not —
+what a setup that has been committed but not merged looks like.
+_Rule_: a merge away from set up, and the card says so rather than calling it
+needs setup.
 
 **Linking**:
 Putting a repo already on this computer into a project. The person points at

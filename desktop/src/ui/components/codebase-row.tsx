@@ -29,8 +29,33 @@ const missingBits = (codebase: CodebaseView): string => {
   const missing: string[] = []
   if (!codebase.toolsOn) missing.push('the plugin is not on in this repo')
   if (!codebase.rulesWritten) missing.push('CLAUDE.md has no codegraph rules')
-  if (codebase.taggedFiles === 0) missing.push('no file carries a tag')
-  return missing.join('; ')
+  if (codebase.toolsOn && codebase.rulesWritten) missing.push('no file carries a tag')
+  const on = codebase.mainLine || 'the main line'
+  return `On ${on}: ${missing.join('; ')}`
+}
+
+const SetupBadge = ({ codebase }: { codebase: CodebaseView }) => {
+  if (codebase.setUp)
+    return (
+      <Badge tone="good">
+        codegraph on · {codebase.taggedFiles}/{codebase.sourceFiles} tagged
+      </Badge>
+    )
+  if (codebase.setUpHere)
+    return (
+      <span
+        title={`Codegraph is on in ${codebase.branch} but not yet on ${
+          codebase.mainLine || 'the main line'
+        }. Merge it and the repo is set up.`}
+      >
+        <Badge tone="warn">set up on this branch only</Badge>
+      </span>
+    )
+  return (
+    <span title={missingBits(codebase)}>
+      <Badge tone="warn">needs setup</Badge>
+    </span>
+  )
 }
 
 export const CodebaseRow = ({ codebase }: { codebase: CodebaseView }) => {
@@ -50,15 +75,7 @@ export const CodebaseRow = ({ codebase }: { codebase: CodebaseView }) => {
         {codebase.branch ? <span className="ds-mono">{codebase.branch}</span> : null}
       </div>
       <div className="ds-row" style={{ flexWrap: 'wrap', gap: 6 }}>
-        {codebase.setUp ? (
-          <Badge tone="good">
-            codegraph on · {codebase.taggedFiles}/{codebase.sourceFiles} tagged
-          </Badge>
-        ) : (
-          <span title={missingBits(codebase)}>
-            <Badge tone="warn">needs setup</Badge>
-          </span>
-        )}
+        <SetupBadge codebase={codebase} />
         <Badge tone={cloud.tone}>{cloud.words}</Badge>
         {codebase.dirty ? <Badge>uncommitted changes</Badge> : null}
       </div>

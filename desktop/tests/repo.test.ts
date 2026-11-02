@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { folderName, isRepo, readCodebase, remoteName } from '../src/modules/repo/index.js'
+import { folderName, isRepo, isSetUp, readCodebase, remoteName } from '../src/modules/repo/index.js'
 
 const git = (cwd: string, ...args: string[]): string =>
   execFileSync('git', args, { cwd, encoding: 'utf8', windowsHide: true }).trim()
@@ -94,23 +94,84 @@ describe('reading a working copy', () => {
     expect(facts.tracked).toBe(false)
   })
 
-  it('reads how far codegraph is turned on', async () => {
+  it('says codegraph is not turned on, and does not bother counting tags', async () => {
     const bare = await readCodebase(work)
     expect(bare.toolsOn).toBe(false)
     expect(bare.rulesWritten).toBe(false)
-    expect(bare.taggedFiles).toBe(1)
+    expect(bare.taggedFiles).toBe(0)
+  })
+})
 
-    mkdirSync(join(work, '.claude'), { recursive: true })
+/** Setting a repo up happens on a branch and is merged, so the app has to
+ *  say something sensible at each step. */
+describe('setup is the repo’s, not the branch’s', () => {
+  const turnOn = (clone: string): void => {
+    mkdirSync(join(clone, '.claude'), { recursive: true })
     writeFileSync(
-      join(work, '.claude', 'settings.json'),
+      join(clone, '.claude', 'settings.json'),
       JSON.stringify({ enabledPlugins: { 'codegraph@codegraph': true } }),
     )
-    writeFileSync(join(work, 'CLAUDE.md'), '# repo\n\nThis repo follows the codegraph rules.\n')
+    writeFileSync(join(clone, 'CLAUDE.md'), '# repo\n\nThis repo follows the codegraph rules.\n')
+    git(clone, 'add', '-A')
+    git(clone, 'commit', '-m', 'turn codegraph on')
+  }
 
-    const set = await readCodebase(work)
-    expect(set.toolsOn).toBe(true)
-    expect(set.rulesWritten).toBe(true)
-    expect(set.taggedFiles).toBeGreaterThan(0)
+  it('says the main line is what it reads against', async () => {
+    const facts = await readCodebase(work)
+    expect(facts.mainLine).toBe('main')
+  })
+
+  it('does not count a setup that is only in the working copy', async () => {
+    mkdirSync(join(work, '.claude'), { recursive: true })
+    writeFileSync(join(work, '.claude', 'settings.json'), '{"enabledPlugins":{"codegraph":true}}')
+
+    const facts = await readCodebase(work)
+    expect(facts.toolsOn).toBe(false)
+    expect(facts.setUpHere).toBe(false)
+
+    rmSync(join(work, '.claude'), { recursive: true, force: true })
+  })
+
+  it('says it is set up on this branch only, before the branch is merged', async () => {
+    git(work, 'checkout', '-q', '-b', 'turn-codegraph-on')
+    turnOn(work)
+
+    const facts = await readCodebase(work)
+    expect(facts.branch).toBe('turn-codegraph-on')
+    expect(facts.setUpHere).toBe(true)
+    expect(facts.toolsOn).toBe(false)
+    expect(isSetUp(facts)).toBe(false)
+  })
+
+  it('says the repo is set up once the branch is merged and pushed', async () => {
+    git(work, 'checkout', '-q', 'main')
+    git(work, 'pull', '-q', '--rebase')
+    git(work, 'merge', '-q', 'turn-codegraph-on')
+    git(work, 'push', '-q')
+
+    const facts = await readCodebase(work)
+    expect(isSetUp(facts)).toBe(true)
+    expect(facts.toolsOn).toBe(true)
+    expect(facts.rulesWritten).toBe(true)
+    expect(facts.taggedFiles).toBeGreaterThan(0)
+  })
+
+  it('counts only what git tracks, not loose files beside it', async () => {
+    const before = await readCodebase(work)
+    writeFileSync(join(work, 'scratch.ts'), '// codegraph: module scratch\n')
+    const after = await readCodebase(work)
+    expect(after.taggedFiles).toBe(before.taggedFiles)
+    expect(after.sourceFiles).toBe(before.sourceFiles)
+    rmSync(join(work, 'scratch.ts'))
+  })
+
+  it('still says the repo is set up from a branch that knows nothing about it', async () => {
+    git(work, 'checkout', '-q', '-b', 'older-work', 'HEAD~2')
+    const facts = await readCodebase(work)
+    expect(facts.branch).toBe('older-work')
+    expect(isSetUp(facts)).toBe(true)
+    expect(facts.setUpHere).toBe(false)
+    git(work, 'checkout', '-q', 'main')
   })
 })
 
