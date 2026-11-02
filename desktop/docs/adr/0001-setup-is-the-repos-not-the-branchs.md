@@ -4,7 +4,8 @@ Date: 2026-11-02
 
 ## Status
 
-Accepted.
+Superseded by 0003. The map now shows the code at whatever point is being
+looked at, so there is no separate, branch-free answer to keep.
 
 ## Context
 

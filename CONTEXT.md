@@ -5,9 +5,8 @@ repo no longer share one model:
 
 - `legacy/CONTEXT.md` — the plugin's model: systems, features, modules,
   stores, pages, tags, mismatches.
-- `desktop/CONTEXT.md` — the app's model: projects, codebases, setup, and
-  what it means to be behind the cloud.
+- `desktop/CONTEXT.md` — the new codegraph's model: projects, software
+  systems, containers, components and code, after C4.
 
-Words shared by both (a **codebase** is one repo; a **codebase is set up**
-when codegraph is turned on inside it) are defined in `desktop/CONTEXT.md`
-and used unchanged in `legacy/`.
+The two models do not share words. Where `legacy/` and `desktop/` use the same
+word, read it the way the folder you are in defines it.
