@@ -10,6 +10,7 @@ import { PointPicker } from '../components/point-picker.js'
 import { SketchEditor } from '../components/sketch-editor.js'
 import { SketchLibrary } from '../components/sketch-library.js'
 import { SuggestionBar } from '../components/suggestion-bar.js'
+import { Trail } from '../components/trail.js'
 
 const SAVE_AFTER_MS = 500
 
@@ -21,6 +22,7 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
   const [points, setPoints] = useState<Record<string, Point>>({})
   const [choices, setChoices] = useState<Point[]>([])
   const [problem, setProblem] = useState('')
+  const [showProblems, setShowProblems] = useState(false)
 
   const [library, setLibrary] = useState(false)
   const [sketches, setSketches] = useState<SketchListed[]>([])
@@ -133,6 +135,7 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
   const sketchTrail = sketch ? walk(sketch.root, sketchPath) : []
   const showing = sketch ? sketchTrail : trail
   const goTo = (i: number): void => (sketch ? setSketchPath(sketchPath.slice(0, i + 1)) : setPath(path.slice(0, i + 1)))
+  const problems = systemShown?.problems ?? []
 
   return (
     <div className="map-page">
@@ -154,82 +157,88 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
             onChange={(e) => changed({ ...sketch, name: e.target.value })}
           />
         ) : null}
-        <nav className="map-trail" aria-label="Where you are">
-          {showing.map((card, i) => (
-            <span key={card.id} className="map-trail-step">
-              {i > 0 ? <span className="map-trail-gap">›</span> : null}
-              <button
-                type="button"
-                className={i === showing.length - 1 ? 'map-trail-here' : 'map-trail-link'}
-                onClick={() => goTo(i)}
-              >
-                {card.name || 'Unnamed'}
-              </button>
-            </span>
-          ))}
-        </nav>
+        <Trail steps={showing.map((card) => ({ id: card.id, name: card.name, level: card.level }))} onGo={goTo} />
         <div className="map-bar-end">
           {!sketch && system && systemShown ? (
             <PointPicker system={system.name} points={choices} point={systemShown.point} onPick={(p) => void pickPoint(p)} />
+          ) : null}
+          {!sketch && problems.length > 0 ? (
+            <button type="button" className="map-count" onClick={() => setShowProblems(!showProblems)}>
+              {problems.length === 1
+                ? '1 thing in this repo the map could not place'
+                : `${problems.length} things in this repo the map could not place`}
+            </button>
           ) : null}
           <Button onClick={() => setLibrary(!library)}>Sketches{sketches.length ? ` (${sketches.length})` : ''}</Button>
         </div>
       </div>
 
-      {problem ? (
-        <div className="ds-empty">{problem}</div>
-      ) : sketch ? (
-        <SketchEditor
-          key={sketch.id}
-          sketch={sketch}
-          mockups={mockups}
-          path={sketchPath}
-          onPath={setSketchPath}
-          onChange={changed}
-          onAddMockup={(cardId) => void addMockup(cardId)}
-        />
-      ) : !shown ? (
-        <div className="ds-empty">Reading the code…</div>
-      ) : (
-        <MapCanvas root={shown.card} path={path} onPath={setPath} />
-      )}
+      <div className="map-body">
+        {problem ? (
+          <div className="ds-empty">{problem}</div>
+        ) : sketch ? (
+          <SketchEditor
+            key={sketch.id}
+            sketch={sketch}
+            mockups={mockups}
+            path={sketchPath}
+            onPath={setSketchPath}
+            onChange={changed}
+            onAddMockup={(cardId) => void addMockup(cardId)}
+          />
+        ) : !shown ? (
+          <div className="ds-empty">Reading the code…</div>
+        ) : (
+          <MapCanvas
+            root={shown.card}
+            path={path}
+            onPath={setPath}
+            onStartSketch={() => void startOne(true)}
+          />
+        )}
 
-      {library ? (
-        <SketchLibrary
-          sketches={sketches}
-          open={sketch?.id ?? ''}
-          onOpen={(id) => void openOne(id)}
-          onStartBlank={() => void startOne(false)}
-          onStartFromMap={() => void startOne(true)}
-          onDelete={(id) => void deleteOne(id)}
-          onClose={() => setLibrary(false)}
-        />
-      ) : null}
+        {!sketch && shown && trail.length === 1 ? (
+          <SuggestionBar
+            suggestions={shown.suggestions}
+            shallow={shown.card.children.filter((c) => c.kind === 'shallow software system')}
+            onAgree={(name, sameAs) =>
+              void window.codegraph.agreeShallowSystem(projectId, name, sameAs).then(() => load(points))
+            }
+          />
+        ) : null}
 
-      {!sketch && shown && trail.length === 1 ? (
-        <SuggestionBar
-          suggestions={shown.suggestions}
-          shallow={shown.card.children.filter((c) => c.kind === 'shallow software system')}
-          onAgree={(name, sameAs) =>
-            void window.codegraph.agreeShallowSystem(projectId, name, sameAs).then(() => load(points))
-          }
-        />
-      ) : null}
+        {!sketch && showProblems && problems.length > 0 ? (
+          <aside className="map-problems" aria-label="What the map could not place">
+            <div className="ds-row" style={{ justifyContent: 'space-between' }}>
+              <span className="ds-label">
+                {problems.length === 1
+                  ? '1 thing in this repo the map could not place'
+                  : `${problems.length} things in this repo the map could not place`}
+              </span>
+              <Button look="bare" onClick={() => setShowProblems(false)}>
+                Close
+              </Button>
+            </div>
+            <ul>
+              {problems.map((p) => (
+                <li key={p}>{p}</li>
+              ))}
+            </ul>
+          </aside>
+        ) : null}
 
-      {!sketch && systemShown && systemShown.problems.length > 0 ? (
-        <details className="map-problems">
-          <summary>
-            {systemShown.problems.length === 1
-              ? '1 thing in this repo the map could not place'
-              : `${systemShown.problems.length} things in this repo the map could not place`}
-          </summary>
-          <ul>
-            {systemShown.problems.map((p) => (
-              <li key={p}>{p}</li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
+        {library ? (
+          <SketchLibrary
+            sketches={sketches}
+            open={sketch?.id ?? ''}
+            onOpen={(id) => void openOne(id)}
+            onStartBlank={() => void startOne(false)}
+            onStartFromMap={() => void startOne(true)}
+            onDelete={(id) => void deleteOne(id)}
+            onClose={() => setLibrary(false)}
+          />
+        ) : null}
+      </div>
     </div>
   )
 }

@@ -1,6 +1,11 @@
 // codegraph: shell
 import { StrictMode, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
+import '@fontsource/ibm-plex-sans/400.css'
+import '@fontsource/ibm-plex-sans/500.css'
+import '@fontsource/ibm-plex-sans/600.css'
+import '@fontsource/ibm-plex-mono/400.css'
+import '@fontsource/ibm-plex-mono/500.css'
 import './design-system/theme.css'
 import { CanvasPage } from './pages/canvas.js'
 import { ProjectsPage } from './pages/projects.js'

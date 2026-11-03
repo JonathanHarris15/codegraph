@@ -2,23 +2,38 @@
 import type { ReactNode } from 'react'
 import './theme.css'
 
-type Tone = 'plain' | 'good' | 'warn' | 'bad'
+/** A state a badge can carry. Every one of them shows a word too, so none of
+ *  them leans on its colour. `warn` and `bad` are the old names for `waiting`
+ *  and `problem`. */
+type Tone = 'plain' | 'good' | 'waiting' | 'problem' | 'warn' | 'bad'
 
-export const Badge = ({ tone = 'plain', children }: { tone?: Tone; children: ReactNode }) => (
-  <span className={tone === 'plain' ? 'ds-badge' : `ds-badge ds-badge--${tone}`}>{children}</span>
-)
+const toneNow: Record<Tone, string> = {
+  plain: 'plain',
+  good: 'good',
+  waiting: 'waiting',
+  problem: 'problem',
+  warn: 'waiting',
+  bad: 'problem',
+}
+
+export const Badge = ({ tone = 'plain', children }: { tone?: Tone; children: ReactNode }) => {
+  const now = toneNow[tone]
+  return <span className={now === 'plain' ? 'ds-badge' : `ds-badge ds-badge--${now}`}>{children}</span>
+}
 
 export const Button = ({
   look = 'normal',
   onClick,
   disabled,
   title,
+  label,
   children,
 }: {
   look?: 'normal' | 'loud' | 'bare'
   onClick?: () => void
   disabled?: boolean
   title?: string
+  label?: string
   children: ReactNode
 }) => (
   <button
@@ -27,8 +42,38 @@ export const Button = ({
     onClick={onClick}
     disabled={disabled}
     title={title}
+    aria-label={label}
   >
     {children}
+  </button>
+)
+
+/** A tool in the rail: a glyph with its name under it, never a bare icon. */
+export const Tool = ({
+  name,
+  on,
+  hint,
+  more = false,
+  onPick,
+  children,
+}: {
+  name: string
+  on: boolean
+  hint?: string
+  more?: boolean
+  onPick: () => void
+  children: ReactNode
+}) => (
+  <button
+    type="button"
+    className={on ? 'ds-tool ds-tool--on' : 'ds-tool'}
+    aria-pressed={on}
+    title={hint}
+    onClick={onPick}
+  >
+    {children}
+    <span>{name}</span>
+    {more ? <span className="ds-tool-more" aria-hidden="true">›</span> : null}
   </button>
 )
 
@@ -47,6 +92,7 @@ export const Field = ({
   onChange,
   onEnter,
   password = false,
+  focus = false,
 }: {
   label: string
   value: string
@@ -54,6 +100,7 @@ export const Field = ({
   onChange: (value: string) => void
   onEnter?: () => void
   password?: boolean
+  focus?: boolean
 }) => (
   <label className="ds-field">
     <span className="ds-label">{label}</span>
@@ -61,12 +108,43 @@ export const Field = ({
       className="ds-input"
       type={password ? 'password' : 'text'}
       value={value}
+      autoFocus={focus}
       placeholder={placeholder}
       onChange={(event) => onChange(event.target.value)}
       onKeyDown={(event) => {
         if (event.key === 'Enter' && onEnter) onEnter()
       }}
     />
+  </label>
+)
+
+/** A short, flat list of words to pick from. Where the list groups, or a row
+ *  needs a second line, use a button and a panel instead. */
+export const Select = ({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  value: string
+  options: string[]
+  onChange: (value: string) => void
+}) => (
+  <label className="ds-field">
+    <span className="ds-label">{label}</span>
+    <select
+      className="ds-input"
+      aria-label={label}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    >
+      {options.map((option) => (
+        <option key={option} value={option}>
+          {option}
+        </option>
+      ))}
+    </select>
   </label>
 )
 

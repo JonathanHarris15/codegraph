@@ -13,14 +13,26 @@ export const levelInside: Record<Level, Level> = {
   code: 'code',
 }
 
-/** The kinds a card can be at each level, the usual first. */
+/** The kinds a card can be at each level, the usual first. A person is drawn
+ *  beside the software systems and never read from code, so it is only ever
+ *  on a sketch. */
 export const kindsAt: Record<Level, string[]> = {
   project: ['project'],
-  system: ['software system', 'shallow software system'],
+  system: ['software system', 'shallow software system', 'person'],
   container: ['web app', 'browser app', 'server', 'desktop app', 'mobile app', 'database', 'files on disk', 'function', 'command-line tool'],
   component: ['page', 'feature', 'module', 'trigger'],
   code: ['file'],
 }
+
+/** The kinds for one level, grouped the way the canvas lays them out, for
+ *  the Card tool to offer. A level with one group gives it no heading. */
+export const kindGroups = (level: Level): { name: string; kinds: string[] }[] =>
+  level === 'container'
+    ? [
+        { name: 'Runs', kinds: kindsAt.container.filter((kind) => !/database|files/.test(kind)) },
+        { name: 'Keeps', kinds: kindsAt.container.filter((kind) => /database|files/.test(kind)) },
+      ]
+    : [{ name: '', kinds: kindsAt[level] }]
 
 export const wireKinds = ['uses', 'acts on', 'shows', 'starts', 'keeps', 'leads to', 'calls']
 
@@ -65,10 +77,16 @@ const pinned = (card: SketchCard, arrangement: Arrangement): SketchCard => {
   }
 }
 
-/** A new card where the person clicked, centred on the click. */
-export const placeCard = (focus: SketchCard, at: { x: number; y: number }, arrangement: Arrangement): [SketchCard, string] => {
+/** A new card where the person clicked, centred on the click, of the kind
+ *  they picked from the Card tool. */
+export const placeCard = (
+  focus: SketchCard,
+  at: { x: number; y: number },
+  arrangement: Arrangement,
+  kind = '',
+): [SketchCard, string] => {
   const level = levelInside[focus.level]
-  const card = blankCard(newId(), '', level, kindsAt[level][0] ?? '')
+  const card = blankCard(newId(), '', level, kind || kindsAt[level][0] || '')
   const { w, h } = sizeOf(card)
   return [{ ...pinned(focus, arrangement), children: [...focus.children, { ...card, x: at.x - w / 2, y: at.y - h / 2 }] }, card.id]
 }

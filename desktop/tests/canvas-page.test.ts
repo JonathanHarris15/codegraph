@@ -75,7 +75,9 @@ describe('the canvas in the real app', () => {
     await page.getByRole('button', { name: 'Open notes' }).click()
     expect(await shown(page.getByRole('button', { name: 'Open web' }))).toContain('browser app')
     expect(await shown(page.getByLabel('db', { exact: true }))).toContain('database')
-    expect(await shown(page.locator('.map-wire-words'))).toBe('keeps notes')
+    // Opening notes keeps the project level around it, so its wires are on
+    // screen too: name the one we mean rather than taking the first.
+    expect(await shown(page.getByText('keeps notes'))).toBe('keeps notes')
     await settle()
     await picture('2-system')
   })
@@ -106,7 +108,8 @@ describe('the canvas in the real app', () => {
   })
 
   it('reads another branch when it is picked, without leaving the level', async () => {
-    await page.getByLabel('Where to read notes').selectOption('branch:add-search')
+    await page.getByLabel('Where to read notes').click()
+    await page.getByRole('button', { name: 'add-search' }).click()
     await page.getByRole('button', { name: 'Open web' }).click()
     expect(await shown(page.getByRole('button', { name: 'Open search' }))).toContain('/search')
     await settle()

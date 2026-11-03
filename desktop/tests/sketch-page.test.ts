@@ -42,7 +42,7 @@ const dragBetween = async (from: Locator, to: Locator): Promise<void> => {
   await page.mouse.up()
 }
 
-const tool = (name: string): Locator => page.getByRole('toolbar', { name: 'Drawing tools' }).getByRole('button', { name })
+const tool = (name: string): Locator => page.getByRole('toolbar', { name: 'Tools' }).getByRole('button', { name })
 
 beforeAll(async () => {
   yard = openYard('sketch')
@@ -96,7 +96,8 @@ describe('drawing a sketch in the real app', () => {
 
   it('moves the far card aside so the words have room, clear of both cards', async () => {
     await page.waitForTimeout(300)
-    const words = (await page.getByText('finds notes by their words').boundingBox())!
+    // The panel says the sentence too, so name the chip on the canvas.
+    const words = (await page.locator('.map-wire-words').boundingBox())!
     const notes = (await page.getByRole('button', { name: 'notes', exact: true }).boundingBox())!
     const search = (await page.getByRole('button', { name: 'search', exact: true }).boundingBox())!
     expect(words.x).toBeGreaterThan(notes.x + notes.width)
@@ -125,7 +126,7 @@ describe('drawing a sketch in the real app', () => {
   })
 
   it('tunnels into a card to draw what is inside it', async () => {
-    await tool('Select').click()
+    await tool('Pick').click()
     await page.getByRole('button', { name: 'notes', exact: true }).dblclick()
     expect(await shown(page.getByText('Nothing drawn here yet'))).toContain('Pick Card')
     expect(await shown(page.getByRole('navigation', { name: 'Where you are' }))).toContain('notes')
