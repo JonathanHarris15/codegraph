@@ -10,7 +10,7 @@ import { giveInstructions } from '../features/give-instructions.js'
 /** The codegraph MCP: how a person's own agent reaches codegraph (ADR 0004).
  *  Each tool hands straight to one feature. Run with `check [folder]` it is
  *  the check on its own, for a terminal or CI, failing when anything does
- *  not fit. */
+ *  not fit; `map [folder]` prints the map in words. */
 const here = (repo?: string): string => resolve(repo || process.cwd())
 const text = (words: string) => ({ content: [{ type: 'text' as const, text: words }] })
 
@@ -46,7 +46,9 @@ const serve = async (): Promise<void> => {
 }
 
 const [, , command, folder] = process.argv
-if (command === 'check') {
+if (command === 'map') {
+  process.stdout.write((await describeMap(here(folder))) + '\n')
+} else if (command === 'check') {
   const checked = await checkCode(here(folder))
   process.stdout.write(checked.words + '\n')
   process.exit(checked.clean ? 0 : 1)

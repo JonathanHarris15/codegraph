@@ -30,6 +30,11 @@ which one it belongs to. The code is the architecture.
   the window, the one bridge from the window to the features, and the root
   render. It holds no decisions.
 
+The codegraph MCP (`src/mcp/`) is a second way in: a program of its own,
+run under node, that an agent talks to. Each of its tools hands to one
+feature, like the bridge does for the window. Everything it tells an agent
+lives in the `instructions` module, as Markdown.
+
 Electron runs features in the main process, so every call from the page goes
 through `src/main/bridge.ts` — one channel per feature, nothing else in it.
 

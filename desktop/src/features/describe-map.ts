@@ -39,7 +39,11 @@ export const describeMap = async (repo: string, point: Point = live): Promise<st
   if (map.wires.length) {
     out.push('Wires:')
     for (const w of map.wires)
-      out.push(`  ${nameOf.get(w.from) ?? w.from} -> ${nameOf.get(w.to) ?? w.to} (${w.kind})${w.words ? `: ${w.words}` : ': NO WORDS'}`)
+      out.push(
+        `  ${nameOf.get(w.from) ?? w.from} -> ${nameOf.get(w.to) ?? w.to} (${w.kind})${
+          w.words ? `: ${w.words}` : w.kind === 'leads to' ? '' : ': NO WORDS'
+        }`,
+      )
     out.push('')
   }
   if (map.outside.length) {

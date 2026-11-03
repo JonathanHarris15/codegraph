@@ -50,6 +50,11 @@ export const readCode = (path: string, text: string): FileCode => {
   const walk = (node: ts.Node): void => {
     if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && /^\/[\w\-/:]*$/.test(node.text))
       code.addresses.push(node.text)
+    // An address built as it runs, `/notes/${id}`, stands for any value there.
+    if (ts.isTemplateExpression(node)) {
+      const built = node.head.text + node.templateSpans.map((span) => ':any' + span.literal.text).join('')
+      if (/^\/[\w\-/:]*$/.test(built)) code.addresses.push(built)
+    }
     node.forEachChild(walk)
   }
   walk(file)

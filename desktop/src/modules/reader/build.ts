@@ -218,14 +218,19 @@ export const readFacts = (point: Point, files: Map<string, string>): Facts => {
     map.wires.push({ from: wire.from, to: wire.to, kind: wire.kind, words: first ?? '' })
   }
 
-  // Pages lead to pages whose address they mention.
-  const pages = map.components.filter((c) => c.kind === 'page' && c.at)
+  // Pages lead to pages whose address they mention. An address a page has
+  // outright goes to that page alone, not to any whose pattern also fits it.
+  const pages = map.components.filter((c) => c.kind === 'page')
+  const addressed = pages.filter((c) => c.at)
+  const reachedBy = (address: string): Component[] => {
+    const exact = addressed.filter((p) => p.at === address || p.at === address.replace(/\/$/, ''))
+    return exact.length ? exact : addressed.filter((p) => routeMatches(p.at, address))
+  }
   for (const page of pages) {
     const mentioned = new Set(page.files.flatMap((f) => codeOf.get(f.path)?.addresses ?? []))
-    for (const other of pages) {
-      if (other === page || ![...mentioned].some((address) => routeMatches(other.at, address))) continue
-      map.wires.push({ from: page.id, to: other.id, kind: 'leads to', words: '' })
-    }
+    const reached = new Set([...mentioned].flatMap(reachedBy))
+    for (const other of reached)
+      if (other !== page) map.wires.push({ from: page.id, to: other.id, kind: 'leads to', words: '' })
   }
 
   return done()

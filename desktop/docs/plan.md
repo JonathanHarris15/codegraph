@@ -55,25 +55,34 @@ JavaScript are read for names and imports.
 
 Point your own agent at indie-stack and have it set up in one sweep.
 
-- **CG-2.1** The MCP server: a container of its own that serves the map, the
+- **CG-2.1** (done) The MCP server: a container of its own that serves the map, the
   check, and every instruction the agent needs (ADR 0004).
-- **CG-2.2** The check, in TypeScript: every file tagged, every wire has its
-  words, tags match the code. Runs from the MCP and in CI before merge.
-- **CG-2.3** The setup instructions: many sub-agents, one sweep; reshape the
+- **CG-2.2** (done, but for CI) The check, in TypeScript: every file tagged,
+  every wire has its words, tags match the code. Runs from the MCP and from a
+  terminal (`node out/main/mcp.js check`). CI before merge waits on CG-2.9.
+- **CG-2.3** (done) The setup instructions: many sub-agents, one sweep; reshape the
   code to fit the conventions; tag every file and write every wire's words;
   write the config naming its projects; tell the agent to change its own
   context file; carry over legacy tags whose meaning holds and delete the
   rest of the legacy residue (`CLAUDE.md` block, `.claude` plugin line,
   `plans/`, `.codegraph/`).
-- **CG-2.4** Screenshots: the UI tests take a picture of each page they walk
+- **CG-2.4** (done) Screenshots: the UI tests take a picture of each page they walk
   and the page map shows it.
-- **CG-2.5** Shallow software systems suggested from calls out of the code,
+- **CG-2.5** (done) Shallow software systems suggested from calls out of the code,
   shown only once a person agrees.
-- **CG-2.6** GitHub discovery reads the config, not the old plugin file
+- **CG-2.6** (done) GitHub discovery reads the config, not the old plugin file
   (ADR 0006).
-- **CG-2.7** Set up indie-stack for real, on a branch, and merge it.
+- **CG-2.7** Set up indie-stack for real, on a branch, and merge it. Done on
+  the `codegraph-setup` branch; waiting on Jonathan to merge.
+- **CG-2.8** Give each project in the app its short name, the one repos name
+  in their config (ADR 0008), and match repos to projects by it. Today the
+  app's project names happen to match.
+- **CG-2.9** Publish the MCP as a package, so another repo's CI can run the
+  check without this folder on the machine.
 
 **Try it:** indie-stack's whole map on the canvas, screenshots on its pages.
+The projects page shows the one command that connects Claude Code to the
+MCP; after that, "set this repo up for codegraph" is enough.
 
 ## Checkpoint 3: Sketches
 

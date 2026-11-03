@@ -72,6 +72,21 @@ describe('reading a set-up repo', () => {
     expect(wire(map, 'page:new-note', 'page:notes')).toBeUndefined()
   })
 
+  it('takes an address a page has outright over one that only fits a pattern', async () => {
+    mkdirSync(join(repo, 'app', 'pages'), { recursive: true })
+    writeFileSync(join(repo, 'app', 'pages', 'note.tsx'), '// codegraph: page note at /notes/:id\nexport const Note = () => null\n')
+    writeFileSync(
+      join(repo, 'app', 'pages', 'empty.tsx'),
+      '// codegraph: page empty\nexport const Empty = ({ id }: { id: string }) => <><a href="/notes/new">Write one</a><a href={`/notes/${id}`}>Open</a></>\n',
+    )
+    const now = await readMap(repo, live)
+    rmSync(join(repo, 'app', 'pages', 'note.tsx'))
+    rmSync(join(repo, 'app', 'pages', 'empty.tsx'))
+    expect(wire(now, 'page:notes', 'page:note')).toBeUndefined()
+    expect(wire(now, 'page:empty', 'page:new-note')).toMatchObject({ kind: 'leads to' })
+    expect(wire(now, 'page:empty', 'page:note')).toMatchObject({ kind: 'leads to' })
+  })
+
   it('notes calls out of the repo by the name they are aimed at', () => {
     expect(map.outside).toEqual([
       { from: 'web:module:notes', to: outsideId('mailer'), kind: 'calls', words: 'tells the owner' },
