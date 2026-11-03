@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { emptyWorkspace, type Project, type Workspace } from './schema.js'
+import { emptyWorkspace, shortNameOf, type Project, type Workspace } from './schema.js'
 
 let folder = ''
 
@@ -17,15 +17,17 @@ const file = (): string => {
 }
 
 /** A project as an older app may have written it: before version 2 its
- *  software systems were kept under `codebases`. */
-type Stored = Omit<Project, 'systems' | 'shallow'> & {
+ *  software systems were kept under `codebases`, and it had no short name. */
+type Stored = Omit<Project, 'systems' | 'shallow' | 'shortName'> & {
   systems?: Project['systems']
   codebases?: Project['systems']
   shallow?: Project['shallow']
+  shortName?: string
 }
 
-const upgrade = ({ codebases, systems, shallow, ...project }: Stored): Project => ({
+const upgrade = ({ codebases, systems, shallow, shortName, ...project }: Stored): Project => ({
   ...project,
+  shortName: shortName || shortNameOf(project.name),
   systems: systems ?? codebases ?? [],
   shallow: shallow ?? [],
 })

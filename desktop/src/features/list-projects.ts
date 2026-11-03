@@ -36,6 +36,8 @@ export type SoftwareSystemView = {
   configWritten: boolean
   /** The projects its config says it serves. */
   serves: string[]
+  /** Its config names the project it sits in, by the project's short name. */
+  namesThisProject: boolean
   taggedFiles: number
   sourceFiles: number
 }
@@ -43,6 +45,8 @@ export type SoftwareSystemView = {
 export type ProjectView = {
   id: string
   name: string
+  /** What its repos call it in their config. */
+  shortName: string
   createdAt: string
   systems: SoftwareSystemView[]
 }
@@ -65,6 +69,7 @@ export const listProjects = async (fetchFirst = false): Promise<ProjectView[]> =
     stored().map(async (project) => ({
       id: project.id,
       name: project.name,
+      shortName: project.shortName,
       createdAt: project.createdAt,
       systems: await Promise.all(
         project.systems.map(async (system) => {
@@ -86,6 +91,7 @@ export const listProjects = async (fetchFirst = false): Promise<ProjectView[]> =
             setUpHere: facts.setUpHere,
             configWritten: facts.configWritten,
             serves: facts.projects,
+            namesThisProject: facts.projects.includes(project.shortName),
             taggedFiles: facts.taggedFiles,
             sourceFiles: facts.sourceFiles,
           }

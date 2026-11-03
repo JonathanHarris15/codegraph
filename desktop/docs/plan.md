@@ -73,7 +73,7 @@ Point your own agent at indie-stack and have it set up in one sweep.
 - **CG-2.6** (done) GitHub discovery reads the config, not the old plugin file
   (ADR 0006).
 - **CG-2.7** (done) Set up indie-stack for real, on a branch, and merge it.
-- **CG-2.8** Give each project in the app its short name, the one repos name
+- **CG-2.8** (done) Give each project in the app its short name, the one repos name
   in their config (ADR 0008), and match repos to projects by it. Today the
   app's project names happen to match.
 - **CG-2.9** Publish the MCP as a package, so another repo's CI can run the

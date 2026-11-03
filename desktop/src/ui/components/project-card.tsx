@@ -21,7 +21,10 @@ export const ProjectCard = ({
     <div className="ds-card-top">
       <div>
         <div className="ds-card-name">{project.name}</div>
-        <div className="ds-hint">{countWords(project.systems.length)}</div>
+        <div className="ds-hint">
+          {countWords(project.systems.length)} · repos call it{' '}
+          <span className="ds-mono">{project.shortName}</span>
+        </div>
       </div>
       <div className="ds-row">
         <Button onClick={() => onLink(project.id)} disabled={linking}>
@@ -48,7 +51,7 @@ export const ProjectCard = ({
     ) : (
       <div className="ds-rows">
         {project.systems.map((system) => (
-          <SoftwareSystemRow key={system.id} system={system} />
+          <SoftwareSystemRow key={system.id} system={system} project={project.shortName} />
         ))}
       </div>
     )}

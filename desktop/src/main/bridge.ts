@@ -16,7 +16,9 @@ import type { Point } from '../modules/reader/index.js'
  *  one feature; nothing is done here but handing the call over. */
 export const openBridge = (): void => {
   ipcMain.handle('projects:list', (_event, fetchFirst: boolean) => listProjects(fetchFirst))
-  ipcMain.handle('projects:create', (_event, name: string) => createProject(name))
+  ipcMain.handle('projects:create', (_event, name: string, shortName?: string) =>
+    createProject(name, shortName),
+  )
   ipcMain.handle('system:link', (_event, projectId: string, path?: string) =>
     linkSoftwareSystem(projectId, path),
   )

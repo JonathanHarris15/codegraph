@@ -7,7 +7,7 @@ import {
   tokenIsSafe,
   whoAmI,
 } from '../modules/github/index.js'
-import { knownRemotes } from '../modules/projects/index.js'
+import { knownRemotes, listProjects } from '../modules/projects/index.js'
 
 export type CloudSoftwareSystem = {
   fullName: string
@@ -18,6 +18,10 @@ export type CloudSoftwareSystem = {
   cloneUrl: string
   /** The projects its config says it serves. */
   projects: string[]
+  /** Of those, the projects this computer has, by their names here. */
+  projectsHere: string[]
+  /** The short names this computer has no project for yet. */
+  projectsNew: string[]
   /** Already in one of this computer's projects. */
   here: boolean
 }
@@ -46,6 +50,7 @@ export const listGithubSoftwareSystems = async (): Promise<CloudView> => {
   try {
     const [account, repos] = await Promise.all([whoAmI(token), codegraphRepos(token)])
     const here = new Set(knownRemotes())
+    const projectNamed = new Map(listProjects().map((p) => [p.shortName, p.name]))
     return {
       signedIn: true,
       account,
@@ -58,6 +63,8 @@ export const listGithubSoftwareSystems = async (): Promise<CloudView> => {
         url: repo.url,
         cloneUrl: repo.cloneUrl,
         projects: repo.projects,
+        projectsHere: repo.projects.flatMap((short) => projectNamed.get(short) ?? []),
+        projectsNew: repo.projects.filter((short) => !projectNamed.has(short)),
         here: here.has(repo.fullName),
       })),
     }

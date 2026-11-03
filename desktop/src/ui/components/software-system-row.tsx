@@ -28,7 +28,15 @@ const cloudWords = (
 const missingBits = (system: SoftwareSystemView): string =>
   `${system.mainLine || 'The main line'} has no codegraph.config.json yet. Ask your agent to set this repo up with codegraph.`
 
-const SetupBadge = ({ system }: { system: SoftwareSystemView }) => {
+const SetupBadge = ({ system, project }: { system: SoftwareSystemView; project: string }) => {
+  if (system.setUp && !system.namesThisProject)
+    return (
+      <span
+        title={`Its codegraph.config.json does not list "${project}" in its projects. Add it there, so the repo says it serves this project.`}
+      >
+        <Badge tone="warn">does not name this project</Badge>
+      </span>
+    )
   if (system.setUp)
     return (
       <Badge tone="good">
@@ -52,7 +60,7 @@ const SetupBadge = ({ system }: { system: SoftwareSystemView }) => {
   )
 }
 
-export const SoftwareSystemRow = ({ system }: { system: SoftwareSystemView }) => {
+export const SoftwareSystemRow = ({ system, project }: { system: SoftwareSystemView; project: string }) => {
   const cloud = cloudWords(system)
   return (
     <div
@@ -69,7 +77,7 @@ export const SoftwareSystemRow = ({ system }: { system: SoftwareSystemView }) =>
         {system.branch ? <span className="ds-mono">{system.branch}</span> : null}
       </div>
       <div className="ds-row" style={{ flexWrap: 'wrap', gap: 6 }}>
-        <SetupBadge system={system} />
+        <SetupBadge system={system} project={project} />
         <Badge tone={cloud.tone}>{cloud.words}</Badge>
         {system.dirty ? <Badge>uncommitted changes</Badge> : null}
       </div>

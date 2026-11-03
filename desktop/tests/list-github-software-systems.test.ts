@@ -77,6 +77,22 @@ describe('the codegraph repos on GitHub', () => {
     expect((await listGithubSoftwareSystems()).systems[0]?.here).toBe(true)
   })
 
+  it('sorts the projects a repo names into ones here and ones not made yet', async () => {
+    githubAnswers({
+      '/user/repos': { status: 200, body: [aGithubRepo('me/web')] },
+      '/repos/me/web/contents/codegraph.config.json': codegraphConfig,
+      '/user': whoAmI,
+    })
+    await connectGithub('ghp_good')
+    expect((await listGithubSoftwareSystems()).systems[0]).toMatchObject({ projectsHere: [], projectsNew: ['mosaic'] })
+
+    await createProject('Mosaic')
+    expect((await listGithubSoftwareSystems()).systems[0]).toMatchObject({
+      projectsHere: ['Mosaic'],
+      projectsNew: [],
+    })
+  })
+
   it('says it could not reach GitHub rather than showing an empty shelf', async () => {
     githubAnswers({ '/user': whoAmI })
     await connectGithub('ghp_good')

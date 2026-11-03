@@ -24,6 +24,9 @@ export type ShallowSystem = {
 export type Project = {
   id: string
   name: string
+  /** What its repos call it in their codegraph config (ADR 0008). It stays
+   *  put when the project is renamed, so no repo has to change. */
+  shortName: string
   createdAt: string
   systems: SoftwareSystem[]
   shallow: ShallowSystem[]
@@ -34,5 +37,13 @@ export type Workspace = {
   version: 2
   projects: Project[]
 }
+
+/** A project's name as a repo writes it: lower case, words joined by hyphens. */
+export const shortNameOf = (name: string): string =>
+  name
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'project'
 
 export const emptyWorkspace = (): Workspace => ({ version: 2, projects: [] })

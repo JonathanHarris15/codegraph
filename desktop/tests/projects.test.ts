@@ -38,8 +38,28 @@ describe('the projects a computer remembers', () => {
     const old = { version: 1, projects: [{ id: 'p', name: 'Mosaic', createdAt: '', codebases: [{ id: 's', name: 'web', path: '/w', remote: '' }] }] }
     writeFileSync(join(folder, 'projects.json'), JSON.stringify(old))
     expect(listProjects()[0]?.systems.map((s) => s.name)).toEqual(['web'])
+    expect(listProjects()[0]?.shortName).toBe('mosaic')
     addSoftwareSystem('p', { name: 'api', path: '/a', remote: '' })
     expect(listProjects()[0]?.systems.map((s) => s.name)).toEqual(['web', 'api'])
+  })
+
+  it('gives a project a short name from its name, for repos to name it by', () => {
+    expect(addProject('Harris Appraisals').shortName).toBe('harris-appraisals')
+  })
+
+  it('takes a short name it is given', () => {
+    expect(addProject('Mosaic Manager', 'mosaic').shortName).toBe('mosaic')
+  })
+
+  it('keeps short names apart when two projects would share one', () => {
+    addProject('Mosaic')
+    expect(addProject('Mosaic').shortName).toBe('mosaic-2')
+  })
+
+  it('keeps the short name when the project is renamed, so its repos still name it', () => {
+    const project = addProject('Old')
+    renameProject(project.id, 'New')
+    expect(listProjects()[0]?.shortName).toBe('old')
   })
 
   it('names an unnamed project rather than keeping a blank', () => {

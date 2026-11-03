@@ -10,6 +10,11 @@ levels follow C4.
 The outermost thing: one or more software systems that people work on as one.
 _Avoid_: product, workspace, solution, portfolio
 
+**Short name**:
+What a project's repos call it, like `harris-appraisals`. It stays the same
+when the project is renamed, so no repo has to change.
+_Avoid_: slug, key, id, handle
+
 **Software system**:
 One repo, seen whole. It can serve more than one project, and it says in its
 own code which ones.

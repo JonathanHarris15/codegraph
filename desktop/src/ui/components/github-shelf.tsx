@@ -8,11 +8,14 @@ export const GithubShelf = ({
   busy,
   onConnect,
   onSignOut,
+  onMakeProject,
 }: {
   cloud: CloudView | null
   busy: boolean
   onConnect: (token: string) => Promise<string>
   onSignOut: () => void
+  /** Makes a project for a short name a repo names that this computer lacks. */
+  onMakeProject: (shortName: string) => void
 }) => {
   const [token, setToken] = useState('')
   const [problem, setProblem] = useState('')
@@ -99,11 +102,21 @@ export const GithubShelf = ({
                   <Badge>not on this computer</Badge>
                 </div>
                 <div className="ds-mono">{system.fullName}</div>
-                {system.projects.length ? (
+                {system.projectsHere.length ? (
                   <div className="ds-hint" style={{ marginTop: 6 }}>
-                    serves {system.projects.join(', ')}
+                    serves {system.projectsHere.join(', ')}
                   </div>
                 ) : null}
+                {system.projectsNew.map((short) => (
+                  <div key={short} className="ds-row" style={{ marginTop: 6, gap: 8 }}>
+                    <span className="ds-hint">
+                      serves <span className="ds-mono">{short}</span>, which is not a project here
+                    </span>
+                    <Button look="bare" onClick={() => onMakeProject(short)}>
+                      Make it
+                    </Button>
+                  </div>
+                ))}
                 {system.private ? (
                   <div className="ds-hint" style={{ marginTop: 6 }}>
                     private

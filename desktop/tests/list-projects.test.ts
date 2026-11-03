@@ -53,6 +53,15 @@ describe('the grid of projects', () => {
     expect(system?.taggedFiles).toBe(1)
   })
 
+  it('says whether a repo names the project it sits in', async () => {
+    const { id } = await createProject('Ready')
+    await linkSoftwareSystem(id, aSoftwareSystem(yard, 'ready', { setUp: true }))
+    await linkSoftwareSystem(id, aSoftwareSystem(yard, 'other', { setUp: true }))
+    const [project] = await listProjects()
+    expect(project?.shortName).toBe('ready')
+    expect(project?.systems.map((s) => s.namesThisProject)).toEqual([true, false])
+  })
+
   it('says a software system needs setting up when codegraph is not on in it', async () => {
     const { id } = await createProject('Mosaic')
     await linkSoftwareSystem(id, aSoftwareSystem(yard, 'plain'))

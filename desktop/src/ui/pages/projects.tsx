@@ -71,6 +71,12 @@ export const ProjectsPage = ({ onOpen }: { onOpen: (projectId: string) => void }
     return connected.problem ?? ''
   }
 
+  const makeFromGithub = async (shortName: string): Promise<void> => {
+    await window.codegraph.createProject(shortName, shortName)
+    await load()
+    await loadCloud()
+  }
+
   const signOut = async (): Promise<void> => {
     await window.codegraph.signOutGithub()
     await loadCloud()
@@ -140,6 +146,7 @@ export const ProjectsPage = ({ onOpen }: { onOpen: (projectId: string) => void }
         busy={busyWithGithub}
         onConnect={connect}
         onSignOut={() => void signOut()}
+        onMakeProject={(short) => void makeFromGithub(short)}
       />
 
       <AgentShelf connection={agent} />

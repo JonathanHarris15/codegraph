@@ -1,6 +1,6 @@
 // codegraph: module projects
 // codegraph: front door useFolder, listProjects, addProject, renameProject, addSoftwareSystem, removeSoftwareSystem, knownRemotes, addShallowSystem, Project, SoftwareSystem, ShallowSystem, Workspace
-import { type Project, type ShallowSystem, type SoftwareSystem } from './schema.js'
+import { shortNameOf, type Project, type ShallowSystem, type SoftwareSystem } from './schema.js'
 import { newId, read, useFolder, write } from './store.js'
 
 export { useFolder }
@@ -8,11 +8,19 @@ export type { Project, ShallowSystem, SoftwareSystem, Workspace } from './schema
 
 export const listProjects = (): Project[] => read().projects
 
-export const addProject = (name: string): Project => {
+/** Makes a project, with the short name it is given or one from its name,
+ *  never one another project already has. */
+export const addProject = (name: string, shortName = ''): Project => {
   const workspace = read()
+  const named = name.trim() || 'Untitled project'
+  const taken = new Set(workspace.projects.map((p) => p.shortName))
+  const wanted = shortNameOf(shortName || named)
+  let short = wanted
+  for (let n = 2; taken.has(short); n++) short = `${wanted}-${n}`
   const project: Project = {
     id: newId(),
-    name: name.trim() || 'Untitled project',
+    name: named,
+    shortName: short,
     createdAt: new Date().toISOString(),
     systems: [],
     shallow: [],
