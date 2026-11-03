@@ -68,9 +68,9 @@ const inFolder = (path: string, folder: string): boolean => folder === '' || pat
 /** The kind of a wire between two components, from which kinds they are. */
 const kindBetween = (from: ComponentKind, to: ComponentKind): WireKind =>
   from === 'page' && to === 'feature'
-    ? 'acts on'
+    ? 'asks'
     : from === 'page' && to === 'module'
-      ? 'shows'
+      ? 'reads'
       : from === 'trigger'
         ? 'starts'
         : 'uses'

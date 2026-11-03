@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { AgentConnection } from '../../features/connect-agent.js'
 import type { CloudView } from '../../features/list-github-software-systems.js'
 import type { ProjectView } from '../../features/list-projects.js'
-import { Button, Card, Field, Sheet } from '../design-system/kit.js'
+import { Button, Card, Field, Sheet, ThemeSwitch } from '../design-system/kit.js'
 import { AgentShelf } from '../components/agent-shelf.js'
 import { GithubShelf } from '../components/github-shelf.js'
 import { ProjectCard } from '../components/project-card.js'
@@ -93,6 +93,7 @@ export const ProjectsPage = ({ onOpen }: { onOpen: (projectId: string) => void }
           </div>
         </div>
         <div className="ds-row">
+          <ThemeSwitch />
           <Button onClick={() => void refresh()} disabled={refreshing}>
             {refreshing ? 'Checking GitHub…' : 'Refresh'}
           </Button>

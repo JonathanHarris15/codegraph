@@ -1,27 +1,46 @@
 // codegraph: component sketch-editor
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Sketch, SketchCard } from '../../modules/sketches/index.js'
+import { sentenceOf } from '../../modules/wording/index.js'
 import { Button, Field, Select } from '../design-system/kit.js'
+import { Glyph } from './kind-glyph.js'
 import { MapCanvas, walk } from './map-canvas.js'
 import {
   addWire,
+  align,
   changeAt,
   changeCard,
   changeNote,
   changeWire,
+  copyOf,
   kindsAt,
   makeRoom,
-  moveThing,
+  moveThings,
+  nudge,
+  paste,
   pick,
+  pinAll,
   placeCard,
   placeNote,
   remove,
+  retext,
+  rewire,
   wireKinds,
+  type Clip,
 } from './sketch-edits.js'
 
+/** What Copy last held, for as long as the window is open, so a person can
+ *  copy from one sketch, or one level, and paste into another. */
+let clipboard: Clip | null = null
+
+/** How long a run of the same change, like typing into one field, still
+ *  counts as one step to undo. */
+const ONE_STEP_MS = 900
+const HISTORY = 200
+
 /** Draws on a sketch: the canvas with its tools, and a panel for whatever is
- *  picked. Every change goes straight back to the page, which keeps it.
- *  Nothing here has a save button. */
+ *  picked. Every change goes straight back to the page, which keeps it, and
+ *  onto a history, so any of it can be undone. Nothing here has a save button. */
 export const SketchEditor = ({
   sketch,
   mockups,
@@ -37,23 +56,144 @@ export const SketchEditor = ({
   onChange: (sketch: Sketch) => void
   onAddMockup: (cardId: string) => void
 }) => {
-  const [selected, setSelected] = useState('')
+  const [selected, setSelected] = useState<string[]>([])
+  const past = useRef<Sketch[]>([])
+  const future = useRef<Sketch[]>([])
+  const last = useRef<{ step: string; at: number }>({ step: '', at: 0 })
+  const [, setTick] = useState(0)
+  /** The panel can be put away, to give the board the whole window. */
+  const [panel, setPanel] = useState(true)
 
-  const focus = walk(sketch.root, path).at(-1)!
-  const here = walk(sketch.root, path).map((c) => c.id)
-  const change = (next: (focus: SketchCard) => SketchCard): void =>
-    onChange({ ...sketch, root: changeAt(sketch.root, here, (f) => makeRoom(next(f))) })
-  const picked = pick(focus, selected)
+  const trail = walk(sketch.root, path)
+  const focus = trail.at(-1)!
+  const here = trail.map((c) => c.id)
 
-  /** A wire reads as a sentence: who acts, how, on what, and what for. The
-   *  panel shows it as it is written, so a person sees the whole thing. */
-  const sentence = (from: string, kind: string, to: string, words: string) => (
-    <div className="sketch-sentence">
-      {focus.children.find((c) => c.id === from)?.name || 'something'} <b>{kind}</b>{' '}
-      {focus.children.find((c) => c.id === to)?.name || 'something'}
-      {words ? ` — ${words}` : ' — …'}
-    </div>
+  // The latest sketch, for keys and handlers that outlive a render.
+  const now = useRef(sketch)
+  now.current = sketch
+
+  /** One change to the level being drawn, kept as a step to undo. A change
+   *  named the same as the last, soon after it, joins that step. */
+  const change = useCallback(
+    (next: (focus: SketchCard) => SketchCard, step = '', quiet = false): void => {
+      const was = now.current
+      const root = changeAt(was.root, here, (f) => makeRoom(next(f)))
+      const changed = { ...was, root }
+      if (!quiet) {
+        // 'join' joins whatever step came last, however long ago.
+        const joins =
+          step === 'join' || (step !== '' && last.current.step === step && Date.now() - last.current.at < ONE_STEP_MS)
+        if (!joins) {
+          past.current = [...past.current.slice(-HISTORY + 1), was]
+          future.current = []
+        }
+        last.current = { step, at: Date.now() }
+        setTick((n) => n + 1)
+      }
+      now.current = changed
+      onChange(changed)
+    },
+    [here.join('/'), onChange],
   )
+
+  const travel = useCallback(
+    (from: React.MutableRefObject<Sketch[]>, to: React.MutableRefObject<Sketch[]>): void => {
+      const back = from.current.at(-1)
+      if (!back) return
+      from.current = from.current.slice(0, -1)
+      to.current = [...to.current, now.current]
+      last.current = { step: '', at: 0 }
+      now.current = back
+      onChange(back)
+      setTick((n) => n + 1)
+    },
+    [onChange],
+  )
+  const undo = useCallback(() => travel(past, future), [travel])
+  const redo = useCallback(() => travel(future, past), [travel])
+
+  // Whatever is picked and has since gone, by undo or delete, is let go.
+  useEffect(() => {
+    const there = new Set([...focus.children.map((c) => c.id), ...focus.wires.map((w) => w.id), ...focus.notes.map((n) => n.id)])
+    if (selected.some((id) => !there.has(id))) setSelected(selected.filter((id) => there.has(id)))
+  }, [focus, selected])
+
+  useEffect(() => {
+    const typing = (target: EventTarget | null): boolean =>
+      target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement
+    const keys = (event: KeyboardEvent): void => {
+      if (typing(event.target)) return
+      const mod = event.ctrlKey || event.metaKey
+      const key = event.key.toLowerCase()
+      if (mod && key === 'z') {
+        event.preventDefault()
+        if (event.shiftKey) redo()
+        else undo()
+        return
+      }
+      if (mod && key === 'y') {
+        event.preventDefault()
+        redo()
+        return
+      }
+      if (mod && key === 'a') {
+        event.preventDefault()
+        setSelected([...focus.children.map((c) => c.id), ...focus.notes.map((n) => n.id)])
+        return
+      }
+      if (mod && (key === 'c' || key === 'x') && selected.length) {
+        event.preventDefault()
+        clipboard = copyOf(focus, selected)
+        if (key === 'x') {
+          change((f) => remove(f, selected))
+          setSelected([])
+        }
+        return
+      }
+      if (mod && key === 'v' && clipboard) {
+        event.preventDefault()
+        const held = clipboard
+        let ids: string[] = []
+        change((f) => {
+          const [next, made] = paste(f, held)
+          ids = made
+          return next
+        })
+        setSelected(ids)
+        return
+      }
+      if (mod && key === 'd' && selected.length) {
+        event.preventDefault()
+        const held = copyOf(focus, selected)
+        let ids: string[] = []
+        change((f) => {
+          const [next, made] = paste(f, held, 24)
+          ids = made
+          return next
+        })
+        setSelected(ids)
+        return
+      }
+      if ((event.key === 'Delete' || event.key === 'Backspace') && selected.length) {
+        event.preventDefault()
+        change((f) => remove(f, selected))
+        setSelected([])
+        return
+      }
+      const arrows: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }
+      const arrow = arrows[event.key]
+      if (arrow && selected.length && !mod) {
+        event.preventDefault()
+        const by = event.shiftKey ? 24 : 4
+        change((f) => nudge(f, selected, arrow[0] * by, arrow[1] * by), 'nudge')
+      }
+    }
+    window.addEventListener('keydown', keys)
+    return () => window.removeEventListener('keydown', keys)
+  }, [focus, selected, change, undo, redo])
+
+  const picked = selected.length === 1 ? pick(focus, selected[0]!) : null
+  const nameOf = (id: string): string => focus.children.find((c) => c.id === id)?.name || 'unnamed'
 
   return (
     <div className="sketch-area">
@@ -64,37 +204,112 @@ export const SketchEditor = ({
         drawing={{
           selected,
           mockups,
+          canUndo: past.current.length > 0,
+          canRedo: future.current.length > 0,
+          onUndo: undo,
+          onRedo: redo,
           onSelect: setSelected,
-          onPlace: (at, arrangement, kind) => {
-            const [next, id] = placeCard(focus, at, arrangement, kind)
-            change(() => next)
-            setSelected(id)
+          onPin: (arrangement) => change((f) => pinAll(f, arrangement), '', true),
+          onPlace: (at, kind, from) => {
+            let id = ''
+            change((f) => {
+              const [next, made] = placeCard(f, at, kind, from)
+              id = made
+              return next
+            })
+            return id
           },
-          onNote: (at, arrangement) => {
-            const [next, id] = placeNote(focus, at, arrangement)
-            change(() => next)
-            setSelected(id)
+          onNote: (at) => {
+            let id = ''
+            change((f) => {
+              const [next, made] = placeNote(f, at)
+              id = made
+              return next
+            })
+            return id
           },
-          onMove: (id, at, arrangement) => change((f) => moveThing(f, id, at, arrangement)),
+          onMove: (moves) => change((f) => moveThings(f, moves)),
           onWire: (from, to) => {
-            const [next, id] = addWire(focus, from, to)
-            change(() => next)
-            setSelected(id)
+            let id = ''
+            change((f) => {
+              const [next, made] = addWire(f, from, to)
+              id = made
+              return next
+            })
+            return id
           },
+          onRewire: (id, end, card) => change((f) => rewire(f, id, end, card)),
+          onText: (id, text, first) => change((f) => retext(f, id, text), first ? 'join' : ''),
+          onKind: (id, kind) =>
+            change((f) => (pick(f, id)?.kind === 'wire' ? changeWire(f, id, { kind }) : changeCard(f, id, { kind }))),
           onMockup: (id) => onAddMockup(id),
+          onRemove: (ids) => change((f) => remove(f, ids)),
+          onAlign: (ids, how) => change((f) => align(f, ids, how)),
         }}
       />
 
-      {picked ? (
-        <aside className="sketch-panel" aria-label="What is picked">
-          {picked.kind === 'card' ? (
+      {panel ? (
+      <aside className="sketch-panel" aria-label="What is picked">
+          <button type="button" className="sketch-panel-hide" aria-label="Hide this panel" title="Hide this panel" onClick={() => setPanel(false)}>
+            <Glyph of="close" size={14} />
+          </button>
+          {selected.length === 0 ? (
             <>
-              <div className="ds-label">A {picked.card.level === 'system' ? 'software system' : picked.card.level}</div>
+              <div className="sketch-panel-head">Nothing picked</div>
+              <div className="ds-hint">Pick a card, a wire or a note to change it here.</div>
+              <dl className="sketch-keys" aria-label="Ways to draw">
+                <dt>Add a card</dt>
+                <dd>Drag one in from the left, or double-click the board</dd>
+                <dt>Wire two cards</dt>
+                <dd>Drag from a dot on a card's side onto another</dd>
+                <dt>Wire to a new card</dt>
+                <dd>Drag from a dot and let go on empty board</dd>
+                <dt>Write on it</dt>
+                <dd>
+                  Double-click, or pick it and start typing; <kbd>Enter</kbd> to finish
+                </dd>
+                <dt>Pick many</dt>
+                <dd>Drag a box on the board, or <kbd>Shift</kbd>-click</dd>
+                <dt>Draw inside a card</dt>
+                <dd>The bar over it, or zoom into it</dd>
+                <dt>Move the board</dt>
+                <dd>
+                  Hold <kbd>Space</kbd> and drag, right-drag, or scroll with two fingers
+                </dd>
+                <dt>Zoom</dt>
+                <dd>
+                  <kbd>Ctrl</kbd> and the wheel, or <kbd>+</kbd> <kbd>−</kbd>; <kbd>0</kbd> fits
+                </dd>
+                <dt>Undo, redo</dt>
+                <dd>
+                  <kbd>Ctrl</kbd>+<kbd>Z</kbd>, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd>
+                </dd>
+                <dt>Copy, paste, duplicate</dt>
+                <dd>
+                  <kbd>Ctrl</kbd>+<kbd>C</kbd>, <kbd>V</kbd>, <kbd>D</kbd>
+                </dd>
+                <dt>Tools</dt>
+                <dd>
+                  <kbd>V</kbd> pick, <kbd>H</kbd> pan, <kbd>W</kbd> wire, <kbd>N</kbd> note, <kbd>C</kbd> cards
+                </dd>
+              </dl>
+            </>
+          ) : selected.length > 1 ? (
+            <>
+              <div className="sketch-panel-head">{selected.length} picked</div>
+              <div className="ds-hint">
+                Drag any of them to move them together. The bar over them lines them up or spaces them out.
+              </div>
+            </>
+          ) : picked?.kind === 'card' ? (
+            <>
+              <div className="sketch-panel-head">
+                {/^[aeiou]/.test(picked.card.kind) ? 'An' : 'A'} {picked.card.kind || picked.card.level}
+              </div>
               <Field
                 label="Name"
-                focus
                 value={picked.card.name}
-                onChange={(name) => change((f) => changeCard(f, picked.card.id, { name }))}
+                onChange={(name) => change((f) => changeCard(f, picked.card.id, { name }), `name:${picked.card.id}`)}
               />
               <Select
                 label="Kind"
@@ -102,69 +317,97 @@ export const SketchEditor = ({
                 options={[...new Set([picked.card.kind, ...kindsAt[picked.card.level]])].filter(Boolean)}
                 onChange={(kind) => change((f) => changeCard(f, picked.card.id, { kind }))}
               />
-              <Field
-                label="What it is for"
-                value={picked.card.says}
-                onChange={(says) => change((f) => changeCard(f, picked.card.id, { says }))}
-              />
+              <label className="ds-field">
+                <span className="ds-label">What it is for</span>
+                <textarea
+                  className="ds-input sketch-says"
+                  rows={3}
+                  placeholder="One line on the job it does"
+                  value={picked.card.says}
+                  onChange={(event) =>
+                    change((f) => changeCard(f, picked.card.id, { says: event.target.value }), `says:${picked.card.id}`)
+                  }
+                />
+              </label>
               {picked.card.kind === 'page' ? (
                 <>
                   <Field
                     label="Address"
                     placeholder="/notes/new"
                     value={picked.card.at}
-                    onChange={(at) => change((f) => changeCard(f, picked.card.id, { at }))}
+                    onChange={(at) => change((f) => changeCard(f, picked.card.id, { at }), `at:${picked.card.id}`)}
                   />
                   <Button onClick={() => onAddMockup(picked.card.id)}>
                     {picked.card.mockup ? 'Change the mockup' : 'Add a mockup'}
                   </Button>
                 </>
               ) : null}
-              <div className="ds-hint">Double-click the card to draw what is inside it.</div>
+              {picked.card.level !== 'code' ? (
+                <div className="ds-hint">
+                  To draw what is inside it, use the bar over the card, or zoom into it.
+                </div>
+              ) : null}
             </>
-          ) : picked.kind === 'wire' ? (
+          ) : picked?.kind === 'wire' ? (
             <>
-              <div className="ds-label">A wire</div>
-              {sentence(picked.wire.from, picked.wire.kind, picked.wire.to, picked.wire.words)}
+              <div className="sketch-panel-head">A wire</div>
+              <div className="sketch-sentence">
+                {sentenceOf(nameOf(picked.wire.from), picked.wire.kind, nameOf(picked.wire.to), picked.wire.words).map(
+                  (part, i) => (
+                    <span key={i} className={`map-said-${part.role}`}>
+                      {part.text}
+                    </span>
+                  ),
+                )}
+              </div>
               <Select
                 label="Kind"
                 value={picked.wire.kind}
-                options={wireKinds}
+                options={[...new Set([picked.wire.kind, ...wireKinds])]}
                 onChange={(kind) => change((f) => changeWire(f, picked.wire.id, { kind }))}
               />
               <Field
                 label="What it is for"
-                focus
                 placeholder="saves the note"
                 value={picked.wire.words}
-                onChange={(words) => change((f) => changeWire(f, picked.wire.id, { words }))}
+                onChange={(words) => change((f) => changeWire(f, picked.wire.id, { words }), `words:${picked.wire.id}`)}
               />
+              <div className="ds-hint">Write it as the code would: “saves the note”, “sends a receipt”.</div>
             </>
-          ) : (
+          ) : picked?.kind === 'note' ? (
             <>
-              <div className="ds-label">A note</div>
+              <div className="sketch-panel-head">A note</div>
               <textarea
                 className="ds-input sketch-note-text"
-                aria-label="Note"
-                autoFocus
+                aria-label="Note text"
                 rows={5}
                 value={picked.note.text}
-                onChange={(event) => change((f) => changeNote(f, picked.note.id, { text: event.target.value }))}
+                onChange={(event) =>
+                  change((f) => changeNote(f, picked.note.id, { text: event.target.value }), `note:${picked.note.id}`)
+                }
               />
             </>
-          )}
-          <hr className="sketch-rule" />
-          <Button
-            look="bare"
-            onClick={() => {
-              change((f) => remove(f, selected))
-              setSelected('')
-            }}
-          >
-            Take it off the sketch
-          </Button>
+          ) : null}
+          {selected.length > 0 ? (
+            <>
+              <hr className="sketch-rule" />
+              <Button
+                look="bare"
+                onClick={() => {
+                  change((f) => remove(f, selected))
+                  setSelected([])
+                }}
+              >
+                {selected.length > 1 ? `Take these ${selected.length} off the sketch` : 'Take it off the sketch'}
+              </Button>
+            </>
+          ) : null}
         </aside>
-      ) : null}
+      ) : (
+        <button type="button" className="sketch-panel-tab" aria-label="Show the panel" title="Show the panel" onClick={() => setPanel(true)}>
+          <Glyph of="more" size={16} />
+        </button>
+      )}
     </div>
   )
 }

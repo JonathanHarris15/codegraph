@@ -61,7 +61,20 @@ describe('the map of a project', () => {
       ['notes', 'mailer', 'calls', 'tells the owner'],
     ])
     expect(notes?.wires.map((w) => [named(notes, w.from), named(notes, w.to), w.kind])).toEqual([['web', 'db', 'keeps']])
-    expect(web?.wires.some((w) => w.kind === 'acts on' && w.words === 'saves what was typed')).toBe(true)
+    expect(web?.wires.some((w) => w.kind === 'asks' && w.words === 'saves what was typed')).toBe(true)
+  })
+
+  it('keeps where a wire really starts and ends when it is drawn a level up', async () => {
+    const shown = await showMap(await aProject(true))
+    const notes = child(shown.card, 'notes')
+    const keeps = notes?.wires.find((w) => w.kind === 'keeps')
+    // web keeps notes in db: drawn between the containers, but it is module
+    // notes, inside web, that does the keeping.
+    expect(keeps?.ends.map((end) => [end.from.split('/').pop(), end.to.split('/').pop()])).toEqual([
+      ['web:module:notes', 'container:db'],
+    ])
+    const calls = shown.card.wires[0]
+    expect(calls?.ends.map((end) => end.from.split('/').pop())).toEqual(['web:module:notes'])
   })
 
   it('holds back a call to something the project has no software system for, as a suggestion', async () => {

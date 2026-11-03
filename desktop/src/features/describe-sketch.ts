@@ -1,9 +1,10 @@
 // codegraph: feature describe-sketch in agent
-// codegraph: uses reader, projects, sketches
+// codegraph: uses reader, projects, sketches, wording
 // codegraph: command sketch
 import { listProjects } from '../modules/projects/index.js'
 import { live, readMap } from '../modules/reader/index.js'
 import { listSketches, mockupFile, readSketch, type SketchCard } from '../modules/sketches/index.js'
+import { sentenceOf } from '../modules/wording/index.js'
 
 /** One sketch in words an agent reads and works from: every level, each card
  *  with its kind and what it is for, every wire with its words, the notes,
@@ -39,7 +40,8 @@ export const describeSketch = async (repo: string, name: string, shortName = '')
       for (const wire of card.wires) {
         const from = byId.get(wire.from)
         const to = byId.get(wire.to)
-        if (from && to) out.push(`${pad}  ${named(from)} -> ${named(to)} (${wire.kind})${wire.words ? `: ${wire.words}` : ''}`)
+        if (from && to)
+          out.push(`${pad}  ${sentenceOf(named(from), wire.kind, named(to), wire.words).map((part) => part.text).join('')}`)
       }
       for (const note of card.notes) out.push(`${pad}  note: ${note.text}`)
     }

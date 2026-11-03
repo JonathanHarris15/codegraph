@@ -1,15 +1,28 @@
 // codegraph: component map-canvas
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent, type ReactElement } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent,
+  type ReactElement,
+  type RefObject,
+} from 'react'
+import { sentenceOf, type Said } from '../../modules/wording/index.js'
+import { CardPalette } from './card-palette.js'
+import { ContextBar, type Picking } from './context-bar.js'
 import { Glyph, KindGlyph, keeps, kindClass } from './kind-glyph.js'
 import {
   boundsOf,
   isFrame,
   layOut,
   OPEN_PAD,
+  sentenceWidth,
   sizeOf,
   spread,
   wirePath,
-  wordsWidth,
   type Box,
   type DrawnCard,
   type DrawnNote,
@@ -18,6 +31,8 @@ import {
   type Slots,
 } from './map-layout.js'
 import { Overview } from './overview.js'
+import { QuickAdd } from './quick-add.js'
+import { levelInside, type Alignment, type Arrangement } from './sketch-edits.js'
 import { ToolRail } from './tool-rail.js'
 import { ZoomBar } from './zoom-bar.js'
 
@@ -25,23 +40,36 @@ type View = { x: number; y: number; k: number }
 type Arrival = 'in' | 'out' | 'none'
 type Spot = { x: number; y: number }
 
-export type Tool = 'pick' | 'pan' | 'area' | 'card' | 'wire' | 'note' | 'mockup'
-
-/** Where every card on a level sits, so a level laid out by the canvas can be
- *  pinned down the moment a person moves or adds anything on it. */
-export type Arrangement = { id: string; x: number; y: number }[]
+export type Tool = 'pick' | 'pan' | 'area' | 'wire' | 'note'
 
 /** What a sketch hands the canvas so a person can draw on it. Left out, the
- *  canvas only shows. */
+ *  canvas only shows. Every change is in the level's own space, the space
+ *  the cards inside the card being looked at are laid out in. */
 export type Drawing = {
-  selected: string
+  selected: string[]
   mockups: Record<string, string>
-  onSelect: (id: string) => void
-  onPlace: (at: Spot, arrangement: Arrangement, kind: string) => void
-  onNote: (at: Spot, arrangement: Arrangement) => void
-  onMove: (id: string, at: Spot, arrangement: Arrangement) => void
-  onWire: (from: string, to: string) => void
+  canUndo: boolean
+  canRedo: boolean
+  onUndo: () => void
+  onRedo: () => void
+  onSelect: (ids: string[]) => void
+  /** Pins every card on a level where the canvas laid it out, so it stays. */
+  onPin: (arrangement: Arrangement) => void
+  /** A card of a kind, centred on a spot, wired from another card if given.
+   *  Hands back the new card's id. */
+  onPlace: (at: Spot, kind: string, from?: string) => string
+  onNote: (at: Spot) => string
+  onMove: (moves: Arrangement) => void
+  onWire: (from: string, to: string) => string
+  onRewire: (id: string, end: 'from' | 'to', card: string) => void
+  /** A card's name, a wire's words, or a note's words. Writing the first
+   *  words of something just made joins the step that made it, so one undo
+   *  takes the whole thing away. */
+  onText: (id: string, text: string, first?: boolean) => void
+  onKind: (id: string, kind: string) => void
   onMockup: (id: string) => void
+  onRemove: (ids: string[]) => void
+  onAlign: (ids: string[], how: Alignment) => void
 }
 
 const STEP_MS = 320
@@ -50,6 +78,30 @@ const STEP_MS = 320
  *  verb alone: a diagram cannot say eight things at once, so the card lists
  *  them instead. */
 const BUSY = 4
+
+/** How near, on the screen, an edge has to come to another to snap to it. */
+const SNAP_PX = 6
+/** The grid a card settles on when no edge is near. Half the dots' pitch. */
+const GRID = 12
+
+type Side = 'n' | 'e' | 's' | 'w'
+
+/** One thing being done with the pointer, from press to release. */
+type Gesture =
+  | { type: 'pan'; x: number; y: number; vx: number; vy: number; moved: boolean }
+  | { type: 'zoombox'; from: Spot }
+  | { type: 'select'; from: Spot; add: boolean; base: string[]; moved: boolean }
+  | { type: 'move'; ids: string[]; grab: Spot; starts: Map<string, Box>; moved: boolean; sx: number; sy: number }
+  | { type: 'connect'; from: string; side: Side | null; rewire?: { id: string; end: 'from' | 'to' }; moved: boolean }
+
+/** What a gesture under way is showing, before it lands. */
+type Live = {
+  marquee?: Box
+  picked?: string[]
+  moves?: Map<string, Spot>
+  guides?: { x: number[]; y: number[] }
+  line?: { from: Spot; to: Spot; target: string }
+}
 
 /** The card a path of ids leads to, and every card on the way. */
 export const walk = <C extends { id: string; children: C[] }>(root: C, path: string[]): C[] => {
@@ -87,6 +139,32 @@ const shallower = (trail: DrawnCard[], drawing: boolean): string[] => {
 
 const kindWords = (card: DrawnCard): string => card.kind || card.level
 
+const inBox = (at: Spot, box: Box): boolean => at.x >= box.x && at.x <= box.x + box.w && at.y >= box.y && at.y <= box.y + box.h
+const overlaps = (a: Box, b: Box): boolean => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
+
+/** The middle of one side of a box, where a wire drawn from it leaves. */
+const sideOf = (box: Box, side: Side): Spot =>
+  side === 'n'
+    ? { x: box.x + box.w / 2, y: box.y }
+    : side === 's'
+      ? { x: box.x + box.w / 2, y: box.y + box.h }
+      : side === 'e'
+        ? { x: box.x + box.w, y: box.y + box.h / 2 }
+        : { x: box.x, y: box.y + box.h / 2 }
+
+/** The side of a box that faces a spot. */
+const facing = (box: Box, at: Spot): Side => {
+  const dx = at.x - (box.x + box.w / 2)
+  const dy = at.y - (box.y + box.h / 2)
+  return Math.abs(dx) / box.w > Math.abs(dy) / box.h ? (dx > 0 ? 'e' : 'w') : dy > 0 ? 's' : 'n'
+}
+
+/** A gentle curve from one spot to another, leaving and arriving level. */
+const curve = (a: Spot, b: Spot): string => {
+  const bend = Math.max(30, Math.abs(b.x - a.x) / 2) * (b.x >= a.x ? 1 : -1)
+  return `M ${a.x} ${a.y} C ${a.x + bend} ${a.y}, ${b.x - bend} ${b.y}, ${b.x} ${b.y}`
+}
+
 const Inside = ({ card }: { card: DrawnCard }) => {
   if (card.level === 'code')
     return (
@@ -110,57 +188,67 @@ const Inside = ({ card }: { card: DrawnCard }) => {
   )
 }
 
+const SIDES: Side[] = ['n', 'e', 's', 'w']
+
 const CardFace = ({
   placed,
   picture,
   opens,
   selected,
   receded,
+  target,
+  handles,
+  drawing,
   onOpen,
   onPress,
-  onRelease,
-  onPeek,
+  onHandle,
+  onEdit,
 }: {
   placed: Placed
   picture: string
   opens: boolean
   selected: boolean
   receded: boolean
+  /** A wire being drawn would land here. */
+  target: boolean
+  /** Show the dots a wire can be drawn from. */
+  handles: boolean
+  drawing: boolean
   onOpen: () => void
   onPress?: (event: PointerEvent<HTMLDivElement>) => void
-  onRelease?: () => void
-  onPeek?: (id: string) => void
+  onHandle?: (side: Side, event: PointerEvent<HTMLSpanElement>) => void
+  onEdit?: () => void
 }) => {
   const { card, box } = placed
-  const drawing = Boolean(onPress)
   const classes = ['map-card', `map-card--${card.level}`, kindClass(card.kind)]
   if (keeps(card.kind)) classes.push('map-card--keeps')
   if (!card.setUp || card.kind === 'shallow software system') classes.push('map-card--bare')
+  if (card.kind === 'person') classes.push('map-card--person')
   if (isFrame(card)) classes.push('map-frame')
   if (selected) classes.push('map-card--selected')
   if (receded) classes.push('map-card--outside')
+  if (target) classes.push('map-card--target')
+  if (drawing) classes.push('map-card--drawn')
   return (
     <div
       className={classes.join(' ')}
+      data-card={card.id}
       style={{ left: box.x, top: box.y, width: box.w, height: box.h }}
       role={opens || drawing ? 'button' : undefined}
       aria-label={drawing ? card.name || 'Unnamed card' : opens ? `Open ${card.name}` : card.name}
       aria-pressed={drawing ? selected : undefined}
       tabIndex={opens || drawing ? 0 : undefined}
       onPointerDown={onPress}
-      onPointerUp={onRelease}
-      onPointerEnter={() => onPeek?.(card.id)}
-      onPointerLeave={() => onPeek?.('')}
       onClick={(event) => {
         event.stopPropagation()
         if (opens && !drawing) onOpen()
       }}
       onDoubleClick={(event) => {
         event.stopPropagation()
-        if (opens && drawing) onOpen()
+        if (drawing) onEdit?.()
       }}
       onKeyDown={(event) => {
-        if (opens && event.key === 'Enter') onOpen()
+        if (!drawing && opens && event.key === 'Enter') onOpen()
       }}
     >
       {isFrame(card) ? (
@@ -187,7 +275,7 @@ const CardFace = ({
                 <Glyph of="start" size={10} />
               </span>
             ) : null}
-            <span className="map-name">{card.name}</span>
+            <span className="map-name">{card.name || <span className="map-more">Unnamed</span>}</span>
           </div>
         </>
       ) : (
@@ -203,53 +291,92 @@ const CardFace = ({
           <Inside card={card} />
         </>
       )}
+      {handles && onHandle
+        ? SIDES.map((side) => (
+            <span
+              key={side}
+              className={`map-handle map-handle--${side}`}
+              title="Drag to wire it to another card"
+              onPointerDown={(event) => {
+                event.stopPropagation()
+                onHandle(side, event)
+              }}
+            />
+          ))
+        : null}
     </div>
   )
 }
 
-/** What a wire is for, as one chip at the middle of its own curve. */
+/** A wire read aloud, in a chip on its own curve: who acts, how, on what,
+ *  and what for. On a level too busy for that, the verb alone. */
 const Sentence = ({
-  wire,
+  said,
+  verb,
   at,
   small,
+  missing,
+  unfinished,
   selected,
   pickable,
-  sketch,
+  hidden,
+  measure,
   onPick,
+  onEdit,
 }: {
-  wire: DrawnWire
+  said: Said
+  verb: string
   at: Spot
   small: boolean
+  /** On the map, the code gave this wire no words: a problem to show. */
+  missing: boolean
+  /** On a sketch, nobody has said what this wire is for yet. */
+  unfinished: boolean
   selected: boolean
   pickable: boolean
-  /** On a sketch an empty wire is unfinished, not wrong. On the map the code
-   *  left no words, and that is a problem to show rather than hide. */
-  sketch: boolean
-  onPick: () => void
+  hidden: boolean
+  measure: (element: HTMLDivElement | null) => void
+  onPick: (event: PointerEvent<HTMLDivElement>) => void
+  onEdit: () => void
 }) => {
-  const missing = !sketch && !wire.words && wire.kind !== 'leads to'
   const classes = ['map-sentence']
+  if (small) classes.push('map-sentence--small')
   if (missing) classes.push('map-sentence--missing')
   if (selected) classes.push('map-sentence--selected')
   if (pickable) classes.push('map-sentence--pickable')
+  const words = said.map((part) => part.text).join('')
   return (
     <div
+      ref={measure}
       className={classes.join(' ')}
-      style={{ left: at.x, top: at.y }}
+      style={{ left: at.x, top: at.y, visibility: hidden ? 'hidden' : undefined }}
       role={pickable ? 'button' : undefined}
-      aria-label={`Wire ${wire.kind}${wire.words ? `: ${wire.words}` : ''}`}
+      aria-label={`Wire: ${words}`}
+      title={small ? words : undefined}
       onPointerDown={(event) => {
         if (!pickable) return
         event.stopPropagation()
-        onPick()
+        onPick(event)
+      }}
+      onDoubleClick={(event) => {
+        if (!pickable) return
+        event.stopPropagation()
+        onEdit()
       }}
     >
-      <span className="map-wire-kind">{wire.kind || 'wire'}</span>
-      {small ? null : wire.words ? (
-        <span className="map-wire-words">{wire.words}</span>
-      ) : missing ? (
-        <span className="map-wire-words">no words yet</span>
-      ) : null}
+      {small ? (
+        <span className="map-said-verb">{verb}</span>
+      ) : (
+        <span className="map-said">
+          {said.map((part, i) => (
+            <span key={i} className={`map-said-${part.role}`}>
+              {part.text}
+            </span>
+          ))}
+          {missing ? <span className="map-said-missing"> · no words yet</span> : null}
+          {unfinished ? <span className="map-said-missing map-said-ask"> · what for?</span> : null}
+        </span>
+      )}
     </div>
   )
 }
@@ -272,24 +399,33 @@ export const MapCanvas = ({
   const [moving, setMoving] = useState(false)
   const [faded, setFaded] = useState(false)
   const [tool, setTool] = useState<Tool>('pick')
-  const [kind, setKind] = useState('')
+  const [palette, setPalette] = useState(true)
+  /** A kind waiting to be placed with a click on the board. */
+  const [armed, setArmed] = useState('')
+  /** A kind picked up from the library, following the pointer. */
+  const [lifting, setLifting] = useState<{ kind: string; x: number; y: number; moved: boolean } | null>(null)
   const [shutOverview, setShutOverview] = useState(true)
-  const [peek, setPeek] = useState('')
-  const [marquee, setMarquee] = useState<Box | null>(null)
-  /** A card or note being dragged, and where it is now, before it lands. */
-  const [lifted, setLifted] = useState<{ id: string; at: Spot } | null>(null)
-  const [wireFrom, setWireFrom] = useState('')
+  const [hover, setHover] = useState('')
+  const [live, setLive] = useState<Live>({})
+  /** Words being written in place: a card's name, a wire's, or a note's. */
+  const [editing, setEditing] = useState<{ id: string; text: string; was: string; first?: boolean } | null>(null)
+  /** Asking what to put where a wire was dropped, or the board double-clicked. */
+  const [quick, setQuick] = useState<{ screen: Spot; inside: Spot; from: string } | null>(null)
+  const [sizes, setSizes] = useState<Record<string, { w: number; h: number }>>({})
+  const chips = useRef(new Map<string, HTMLDivElement>())
   const arrival = useRef<Arrival>('none')
   const fitK = useRef(1)
   const busy = useRef(false)
   const space = useRef(false)
-  const pan = useRef<{ x: number; y: number; vx: number; vy: number; moved: boolean } | null>(null)
-  const box = useRef<{ from: Spot } | null>(null)
-  const carry = useRef<{ id: string; grab: Spot; moved: boolean } | null>(null)
+  const gesture = useRef<Gesture | null>(null)
+  /** A pointer pressed on a card or a dot, held only once it starts to drag,
+   *  so a plain click or double-click still lands on what was pressed. */
+  const pending = useRef<number | null>(null)
   const dragged = useRef(false)
   const seen = useRef(view)
   seen.current = view
 
+  const selected = drawing?.selected ?? []
   const trail = useMemo(() => walk(root, path), [root, path])
   const focus = trail[trail.length - 1]!
   const parent = trail.length > 1 ? trail[trail.length - 2]! : null
@@ -301,6 +437,14 @@ export const MapCanvas = ({
     () => boundsOf([...inside.map((p) => p.box), ...notes.map((n) => ({ x: n.x, y: n.y, w: 180, h: 60 }))]),
     [inside, notes],
   )
+
+  // A sketch keeps every card where the canvas first showed it, so moving one
+  // never shuffles the rest.
+  useEffect(() => {
+    if (!drawing) return
+    if (focus.children.some((c) => c.x === undefined || c.y === undefined))
+      drawing.onPin(inside.map((p) => ({ id: p.card.id, x: Math.round(p.box.x), y: Math.round(p.box.y) })))
+  }, [drawing, focus, inside])
 
   // Opening a card leaves it where it is on its own level and grows it to
   // hold what is inside, so the cards around it and their wires stay in view.
@@ -318,9 +462,7 @@ export const MapCanvas = ({
   const openBox = around.find((p) => p.card.id === focus.id)?.box ?? null
   const shift = useMemo(
     () =>
-      openBox
-        ? { x: openBox.x + OPEN_PAD - insideBounds.x, y: openBox.y + OPEN_PAD - insideBounds.y }
-        : { x: 0, y: 0 },
+      openBox ? { x: openBox.x + OPEN_PAD - insideBounds.x, y: openBox.y + OPEN_PAD - insideBounds.y } : { x: 0, y: 0 },
     [openBox, insideBounds],
   )
 
@@ -328,17 +470,14 @@ export const MapCanvas = ({
     () => inside.map((p) => ({ ...p, box: { ...p.box, x: p.box.x + shift.x, y: p.box.y + shift.y } })),
     [inside, shift],
   )
-  const placed = useMemo(
-    () =>
-      lifted
-        ? laid.map((p) =>
-            p.card.id === lifted.id
-              ? { ...p, box: { ...p.box, x: lifted.at.x + shift.x, y: lifted.at.y + shift.y } }
-              : p,
-          )
-        : laid,
-    [laid, lifted, shift],
-  )
+  const placed = useMemo(() => {
+    const moves = live.moves
+    if (!moves) return laid
+    return laid.map((p) => {
+      const to = moves.get(p.card.id)
+      return to ? { ...p, box: { ...p.box, x: to.x + shift.x, y: to.y + shift.y } } : p
+    })
+  }, [laid, live.moves, shift])
   const outside = useMemo(() => around.filter((p) => p.card.id !== focus.id), [around, focus])
 
   const where = useMemo(() => {
@@ -347,74 +486,126 @@ export const MapCanvas = ({
     return all
   }, [placed, around])
 
-  const arrangement = (): Arrangement => inside.map((p) => ({ id: p.card.id, x: p.box.x, y: p.box.y }))
+  const nameOf = useMemo(() => {
+    const all = new Map<string, string>()
+    for (const p of [...placed, ...around]) all.set(p.card.id, p.card.name || 'unnamed')
+    return all
+  }, [placed, around])
 
-  // Wires into or out of one card share its side, spread out in the order
-  // of where their other ends sit, so they do not cross on the way in.
-  const slotsFor = (wires: DrawnWire[]) => {
-    const outs = new Map<string, string[]>()
-    const ins = new Map<string, string[]>()
-    const height = (id: string): number => where.get(id)?.y ?? 0
-    for (const wire of wires) {
-      outs.set(wire.from, [...(outs.get(wire.from) ?? []), wire.to])
-      ins.set(wire.to, [...(ins.get(wire.to) ?? []), wire.from])
-    }
-    for (const list of [...outs.values(), ...ins.values()]) list.sort((a, b) => height(a) - height(b))
-    const share = (ends: Map<string, string[]>, id: string, other: string): number => {
-      const list = ends.get(id) ?? []
-      return (list.indexOf(other) + 1) / (list.length + 1)
-    }
-    return {
-      slots: (from: string, to: string): Slots => ({ from: share(outs, from, to), to: share(ins, to, from) }),
-      inbound: (id: string): number => (ins.get(id) ?? []).length,
-    }
-  }
+  const noteBoxes = useMemo(
+    () =>
+      notes.map((note) => {
+        const to = live.moves?.get(note.id)
+        const at = to ?? note
+        return { note, box: { x: at.x + shift.x, y: at.y + shift.y, w: 180, h: 60 } }
+      }),
+    [notes, live.moves, shift],
+  )
 
-  /** Every wire on screen, with its curve, where its sentence sits, and
-   *  whether the card it reaches is too busy for words. */
+  /** Every wire on screen, with its curve, its sentence, and where that sits. */
   const shapes = useMemo(() => {
     const draw = (wires: DrawnWire[]) => {
-      const { slots, inbound } = slotsFor(wires)
-      const found = wires.flatMap((wire) => {
+      const outs = new Map<string, string[]>()
+      const ins = new Map<string, string[]>()
+      const height = (id: string): number => where.get(id)?.y ?? 0
+      for (const wire of wires) {
+        outs.set(wire.from, [...(outs.get(wire.from) ?? []), wire.to])
+        ins.set(wire.to, [...(ins.get(wire.to) ?? []), wire.from])
+      }
+      for (const list of [...outs.values(), ...ins.values()]) list.sort((a, b) => height(a) - height(b))
+      const share = (ends: Map<string, string[]>, id: string, other: string): number => {
+        const list = ends.get(id) ?? []
+        return (list.indexOf(other) + 1) / (list.length + 1)
+      }
+      const slots = (from: string, to: string): Slots => ({ from: share(outs, from, to), to: share(ins, to, from) })
+      return wires.flatMap((wire) => {
         const from = where.get(wire.from)
         const to = where.get(wire.to)
         if (!from || !to) return []
-        const shape = wirePath(from, to, slots(wire.from, wire.to))
-        return [{ wire, key: wire.id ?? `${wire.from}>${wire.to}>${wire.kind}`, shape, small: inbound(wire.to) > BUSY }]
+        const key = wire.id ?? `${wire.from}>${wire.to}>${wire.kind}`
+        return [
+          {
+            wire,
+            key,
+            shape: wirePath(from, to, slots(wire.from, wire.to), [...where.values()]),
+            small: (ins.get(wire.to) ?? []).length > BUSY,
+            said: sentenceOf(nameOf.get(wire.from) ?? '', wire.kind, nameOf.get(wire.to) ?? '', wire.words),
+          },
+        ]
       })
-      const spots = spread(
-        found.map((one) => ({
+    }
+    const inner = draw(focus.wires)
+    const outer = parent ? draw(parent.wires) : []
+    const all = [...outer, ...inner]
+    // Each sentence keeps clear of every card and of every other sentence,
+    // at the size it was really drawn.
+    const spots = spread(
+      all.map((one) => {
+        const size = sizes[one.key]
+        return {
           at: one.shape.at,
-          w: one.small ? 56 : wordsWidth(one.wire) - 48,
+          w: size?.w ?? (one.small ? 60 : sentenceWidth(one.wire)),
+          h: size?.h ?? 24,
           tail: one.shape.tail,
           head: one.shape.head,
-        })),
-        [...where.values()],
-      )
-      return found.map((one, i) => ({ ...one, at: spots[i]! }))
-    }
-    return { inner: draw(focus.wires), outer: parent ? draw(parent.wires) : [] }
-  }, [focus, parent, where])
+        }
+      }),
+      [...placed.map((p) => p.box), ...outside.map((p) => p.box), ...noteBoxes.map((n) => n.box)],
+    )
+    const at = all.map((one, i) => ({ ...one, at: spots[i]! }))
+    return { outer: at.slice(0, outer.length), inner: at.slice(outer.length) }
+  }, [focus, parent, where, nameOf, sizes, placed, outside, noteBoxes])
 
-  /** Where a wire from outside crosses the border of the card that is open. */
-  const ports = useMemo(
-    () =>
-      openBox
-        ? shapes.outer
-            .filter((one) => one.wire.to === focus.id || one.wire.from === focus.id)
-            .map((one) => {
-              const meets = one.wire.to === focus.id ? one.shape.head : one.shape.tail
-              return { key: one.key, verb: one.wire.kind, x: meets.x, y: meets.y }
-            })
-            .filter((port) => port.x >= openBox.x - 2 && port.x <= openBox.x + openBox.w + 2)
-        : [],
-    [shapes, openBox, focus],
-  )
+  // Sentences are measured as drawn, so the next layout keeps each one clear
+  // of the cards at its true size rather than a guess at it.
+  useLayoutEffect(() => {
+    let changed = false
+    const next: Record<string, { w: number; h: number }> = {}
+    for (const [key, element] of chips.current) {
+      const w = element.offsetWidth
+      const h = element.offsetHeight
+      next[key] = { w, h }
+      const was = sizes[key]
+      if (!was || Math.abs(was.w - w) > 1 || Math.abs(was.h - h) > 1) changed = true
+    }
+    if (changed) setSizes(next)
+  })
+
+  /** Where a wire from outside crosses the border of the card that is open,
+   *  and the card inside it the wire really reaches, to carry it through to. */
+  const ports = useMemo(() => {
+    if (!openBox) return []
+    // Every card drawn inside the open one, and everything inside those, by
+    // the card on this level that holds it.
+    const holder = new Map<string, string>()
+    const hold = (card: DrawnCard, top: string): void => {
+      holder.set(card.id, top)
+      for (const child of card.children) hold(child, top)
+    }
+    for (const child of focus.children) hold(child, child.id)
+    return shapes.outer
+      .filter((one) => one.wire.to === focus.id || one.wire.from === focus.id)
+      .map((one) => {
+        const into = one.wire.to === focus.id
+        const meets = into ? one.shape.head : one.shape.tail
+        const reached = [
+          ...new Set((one.wire.ends ?? []).map((end) => holder.get(into ? end.to : end.from)).filter((id): id is string => Boolean(id))),
+        ]
+        const through = reached.flatMap((id) => {
+          const box = where.get(id)
+          if (!box) return []
+          const to = sideOf(box, facing(box, meets))
+          return [{ id, d: into ? curve(meets, to) : curve(to, meets), into }]
+        })
+        return { key: one.key, verb: one.wire.kind, x: meets.x, y: meets.y, through }
+      })
+      .filter((port) => port.x >= openBox.x - 2 && port.x <= openBox.x + openBox.w + 2)
+  }, [shapes, openBox, focus, where])
 
   /** What reaches a busy card, listed beside it, because a wall of chips
    *  says nothing and a list says everything. */
   const pins = useMemo(() => {
-    const id = drawing?.selected || peek
+    const id = selected.length === 1 ? selected[0]! : hover
     if (!id) return null
     const rows = focus.wires.filter((wire) => wire.to === id)
     if (rows.length <= BUSY) return null
@@ -422,7 +613,7 @@ export const MapCanvas = ({
     const card = focus.children.find((c) => c.id === id)
     if (!at || !card) return null
     return { at, name: card.name, rows: rows.slice(0, 6), more: rows.length - 6 }
-  }, [drawing?.selected, peek, focus, where])
+  }, [selected, hover, focus, where])
 
   const fitted = useCallback((): View => {
     const el = frame.current
@@ -514,13 +705,15 @@ export const MapCanvas = ({
       const el = frame.current
       if (!at || !el || busy.current || !canOpen(card)) return
       busy.current = true
+      setEditing(null)
+      setQuick(null)
       const k = Math.min(el.clientWidth / at.w, el.clientHeight / at.h) * 0.9
       setMoving(true)
       setFaded(true)
       setView({ k, x: el.clientWidth / 2 - (at.x + at.w / 2) * k, y: el.clientHeight / 2 - (at.y + at.h / 2) * k })
       setTimeout(() => {
         arrival.current = 'in'
-        drawing?.onSelect('')
+        drawing?.onSelect([])
         const base = sideways ? trail.slice(0, -1) : trail
         onPath(deeper([...base, card], Boolean(drawing)))
       }, STEP_MS)
@@ -531,6 +724,8 @@ export const MapCanvas = ({
   const tunnelOut = useCallback((): void => {
     if (trail.length < 2 || busy.current) return
     busy.current = true
+    setEditing(null)
+    setQuick(null)
     setMoving(true)
     setFaded(true)
     setView((v) => {
@@ -544,7 +739,7 @@ export const MapCanvas = ({
     })
     setTimeout(() => {
       arrival.current = 'out'
-      drawing?.onSelect('')
+      drawing?.onSelect([])
       onPath(shallower(trail, Boolean(drawing)))
     }, STEP_MS)
   }, [trail, onPath, drawing])
@@ -553,14 +748,15 @@ export const MapCanvas = ({
     const el = frame.current
     if (!el) return
     setView((v) => {
-      const k = v.k * by
+      const k = Math.min(Math.max(v.k * by, 0.1), 4)
       const cx = el.clientWidth / 2
       const cy = el.clientHeight / 2
       return { k, x: cx - ((cx - v.x) / v.k) * k, y: cy - ((cy - v.y) / v.k) * k }
     })
   }, [])
 
-  // Zooming far enough into a card tunnels into it; far enough out tunnels out.
+  // Zooming far enough into a card tunnels into it; far enough out tunnels
+  // out. A trackpad's two fingers pan; pinching, or ctrl with the wheel, zooms.
   useEffect(() => {
     const el = frame.current
     if (!el) return
@@ -571,24 +767,25 @@ export const MapCanvas = ({
       const cx = event.clientX - rect.left
       const cy = event.clientY - rect.top
       const v = seen.current
-      // A trackpad scrolls to pan; the wheel, and ctrl or the meta key, zoom.
-      if (!event.ctrlKey && !event.metaKey && event.deltaMode === 0 && Math.abs(event.deltaY) < 16 && Math.abs(event.deltaX) > 0) {
-        setView({ ...v, x: v.x - event.deltaX, y: v.y - event.deltaY })
+      const trackpad = event.deltaMode === 0 && Math.abs(event.deltaY) < 50 && !Number.isInteger(event.deltaY * 2)
+      if (!event.ctrlKey && !event.metaKey && (event.shiftKey || (event.deltaMode === 0 && Math.abs(event.deltaX) > 0) || trackpad)) {
+        const dx = event.shiftKey && event.deltaX === 0 ? event.deltaY : event.deltaX
+        const dy = event.shiftKey && event.deltaX === 0 ? 0 : event.deltaY
+        setView({ ...v, x: v.x - dx, y: v.y - dy })
         return
       }
-      const k = v.k * Math.exp(-event.deltaY * 0.0015)
+      const k = Math.min(Math.max(v.k * Math.exp(-event.deltaY * 0.0015), 0.08), 5)
       const worldX = (cx - v.x) / v.k
       const worldY = (cy - v.y) / v.k
       if (k > fitK.current * 3) {
-        const under = placed.find(
-          (p) => worldX >= p.box.x && worldX <= p.box.x + p.box.w && worldY >= p.box.y && worldY <= p.box.y + p.box.h,
-        )
+        const under = placed.find((p) => inBox({ x: worldX, y: worldY }, p.box))
         if (under && canOpen(under.card)) tunnelIn(under.card)
         else setView({ k, x: cx - worldX * k, y: cy - worldY * k })
         return
       }
       if (k < fitK.current * 0.5) {
         if (trail.length > 1) tunnelOut()
+        else setView({ k, x: cx - worldX * k, y: cy - worldY * k })
         return
       }
       setView({ k, x: cx - worldX * k, y: cy - worldY * k })
@@ -597,16 +794,101 @@ export const MapCanvas = ({
     return () => el.removeEventListener('wheel', wheel)
   }, [placed, trail, tunnelIn, tunnelOut])
 
+  const startEditing = useCallback(
+    (id: string, seed?: string): void => {
+      if (!drawing) return
+      const card = focus.children.find((c) => c.id === id)
+      const wire = focus.wires.find((w) => w.id === id)
+      const note = notes.find((n) => n.id === id)
+      const was = card ? card.name : wire ? wire.words : note ? note.text : null
+      if (was === null) return
+      drawing.onSelect([id])
+      setEditing({ id, text: seed ?? was, was })
+    },
+    [drawing, focus, notes],
+  )
+
+  const finishEditing = useCallback(
+    (keep: boolean): void => {
+      if (!editing || !drawing) return
+      if (keep && editing.text !== editing.was) drawing.onText(editing.id, editing.text, editing.first)
+      setEditing(null)
+    },
+    [editing, drawing],
+  )
+
+  /** Writing starts once the press that made the thing has finished, or
+   *  the press would take the typing away from it as it lands. */
+  const writeSoon = (id: string): void => {
+    setTimeout(() => setEditing({ id, text: '', was: '', first: true }), 0)
+  }
+
+  /** A card put down, and then straight into writing its name. */
+  const placeAt = useCallback(
+    (at: Spot, kind: string, from = ''): void => {
+      if (!drawing) return
+      const id = drawing.onPlace(at, kind, from)
+      drawing.onSelect([id])
+      writeSoon(id)
+    },
+    [drawing],
+  )
+
+  const noteAt = useCallback(
+    (at: Spot): void => {
+      if (!drawing) return
+      const id = drawing.onNote(at)
+      drawing.onSelect([id])
+      writeSoon(id)
+    },
+    [drawing],
+  )
+
   useEffect(() => {
     const typing = (target: EventTarget | null): boolean =>
-      target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLSelectElement ||
+      target instanceof HTMLTextAreaElement ||
+      (target instanceof HTMLElement && target.isContentEditable)
     const down = (event: KeyboardEvent): void => {
-      if (event.key === ' ') space.current = true
+      if (event.key === ' ' && !typing(event.target)) {
+        space.current = true
+        return
+      }
       if (typing(event.target)) return
-      if (event.key === 'Escape' || (event.key === 'Backspace' && !drawing)) tunnelOut()
-      if (event.key === '0') fit()
-      if (event.key === '+' || event.key === '=') zoomBy(1.25)
-      if (event.key === '-') zoomBy(0.8)
+      const plain = !event.ctrlKey && !event.metaKey && !event.altKey
+      if (event.key === 'Escape') {
+        if (quick) setQuick(null)
+        else if (armed) setArmed('')
+        else if (tool !== 'pick') setTool('pick')
+        else if (selected.length) drawing?.onSelect([])
+        else tunnelOut()
+        return
+      }
+      if (!drawing && event.key === 'Backspace') tunnelOut()
+      if (event.key === '0' && plain) fit()
+      if ((event.key === '+' || event.key === '=') && plain) zoomBy(1.25)
+      if (event.key === '-' && plain) zoomBy(0.8)
+      if (!drawing || !plain) return
+      // With one thing picked, typing writes its words, the way a diagram
+      // tool lets you just start typing on a shape.
+      if (selected.length === 1 && (event.key === 'Enter' || event.key === 'F2')) {
+        event.preventDefault()
+        startEditing(selected[0]!)
+        return
+      }
+      if (selected.length === 1 && event.key.length === 1 && /\S/.test(event.key)) {
+        event.preventDefault()
+        startEditing(selected[0]!, event.key)
+        return
+      }
+      if (selected.length) return
+      const key = event.key.toLowerCase()
+      if (key === 'v') setTool('pick')
+      if (key === 'h') setTool('pan')
+      if (key === 'w') setTool('wire')
+      if (key === 'n') setTool('note')
+      if (key === 'c') setPalette((open) => !open)
     }
     const up = (event: KeyboardEvent): void => {
       if (event.key === ' ') space.current = false
@@ -617,171 +899,405 @@ export const MapCanvas = ({
       window.removeEventListener('keydown', down)
       window.removeEventListener('keyup', up)
     }
-  }, [tunnelOut, drawing, fit, zoomBy])
+  }, [tunnelOut, drawing, fit, zoomBy, quick, armed, tool, selected, startEditing])
 
   const worldOf = (event: { clientX: number; clientY: number }): Spot => {
     const rect = frame.current!.getBoundingClientRect()
     const v = seen.current
     return { x: (event.clientX - rect.left - v.x) / v.k, y: (event.clientY - rect.top - v.y) / v.k }
   }
+  /** A spot on the board, in the board's own pixels, kept far enough from its
+   *  edges that a menu opened there fits. */
+  const screenOf = (event: { clientX: number; clientY: number }): Spot => {
+    const rect = frame.current!.getBoundingClientRect()
+    const MENU_W = 248
+    const MENU_H = 380
+    return {
+      x: Math.max(8, Math.min(event.clientX - rect.left, rect.width - MENU_W)),
+      y: Math.max(8, Math.min(event.clientY - rect.top, rect.height - MENU_H)),
+    }
+  }
   /** The same spot, in the space the cards inside the open card are laid out in. */
-  const insideOf = (event: { clientX: number; clientY: number }): Spot => {
-    const at = worldOf(event)
-    return { x: at.x - shift.x, y: at.y - shift.y }
+  const insideOf = (at: Spot): Spot => ({ x: at.x - shift.x, y: at.y - shift.y })
+
+  const cardUnder = (at: Spot, not = ''): string =>
+    placed.find((p) => p.card.id !== not && inBox(at, p.box))?.card.id ?? ''
+
+  /** Holds on to the pointer once a press turns into a drag, and not
+   *  before, so a plain click still lands on what was clicked. */
+  const capture = (event: PointerEvent<HTMLElement>): void => {
+    pending.current = event.pointerId
   }
 
-  /** A card or note pressed with the Pick tool is picked up and carried. */
-  const pickUp = (id: string, at: Spot) => (event: PointerEvent<HTMLDivElement>): void => {
+  /** Pressing a card or a note on a sketch: picks it, and picks it up. */
+  const press = (id: string) => (event: PointerEvent<HTMLElement>): void => {
+    if (!drawing || event.button !== 0 || space.current || tool === 'pan') return
+    event.stopPropagation()
+    setQuick(null)
+    if (editing && editing.id !== id) finishEditing(true)
+    if (tool === 'wire' && focus.children.some((c) => c.id === id)) {
+      gesture.current = { type: 'connect', from: id, side: null, moved: false }
+      pending.current = event.pointerId
+      return
+    }
+    const add = event.shiftKey || event.ctrlKey || event.metaKey
+    let picked = selected
+    if (add) picked = selected.includes(id) ? selected.filter((one) => one !== id) : [...selected, id]
+    else if (!selected.includes(id)) picked = [id]
+    drawing.onSelect(picked)
+    if (!picked.includes(id)) return
+    const starts = new Map<string, Box>()
+    for (const p of laid) if (picked.includes(p.card.id)) starts.set(p.card.id, { ...p.box, x: p.box.x - shift.x, y: p.box.y - shift.y })
+    for (const n of notes) if (picked.includes(n.id)) starts.set(n.id, { x: n.x, y: n.y, w: 180, h: 60 })
+    gesture.current = { type: 'move', ids: picked, grab: worldOf(event), starts, moved: false, sx: event.clientX, sy: event.clientY }
+    pending.current = event.pointerId
+  }
+
+  const pressHandle = (id: string) => (side: Side, event: PointerEvent<HTMLSpanElement>): void => {
+    if (!drawing) return
+    setQuick(null)
+    gesture.current = { type: 'connect', from: id, side, moved: false }
+    pending.current = event.pointerId
+  }
+
+  /** Pressing one end of a picked wire, to point it at another card. */
+  const pressEnd = (wireId: string, end: 'from' | 'to', other: string) => (event: PointerEvent<SVGCircleElement>): void => {
     if (!drawing) return
     event.stopPropagation()
-    if (tool === 'wire') {
-      setWireFrom(id)
-      return
-    }
-    if (tool === 'mockup') {
-      drawing.onMockup(id)
-      setTool('pick')
-      return
-    }
-    drawing.onSelect(id)
-    if (tool !== 'pick') return
-    const spot = insideOf(event)
-    carry.current = { id, grab: { x: spot.x - at.x, y: spot.y - at.y }, moved: false }
-  }
-
-  const dropWire = (id: string) => (): void => {
-    if (!drawing || tool !== 'wire' || !wireFrom) return
-    if (wireFrom !== id) drawing.onWire(wireFrom, id)
-    setWireFrom('')
+    gesture.current = { type: 'connect', from: other, side: null, rewire: { id: wireId, end }, moved: false }
+    pending.current = event.pointerId
   }
 
   const down = (event: PointerEvent<HTMLDivElement>): void => {
-    if (tool === 'area' && !space.current) {
-      box.current = { from: worldOf(event) }
+    setQuick(null)
+    if (editing) finishEditing(true)
+    const panning = event.button === 1 || event.button === 2 || space.current || tool === 'pan'
+    if (panning) {
+      gesture.current = { type: 'pan', x: event.clientX, y: event.clientY, vx: view.x, vy: view.y, moved: false }
+      capture(event)
       return
     }
-    pan.current = { x: event.clientX, y: event.clientY, vx: view.x, vy: view.y, moved: false }
-  }
-  const move = (event: PointerEvent<HTMLDivElement>): void => {
-    const drawn = box.current
-    if (drawn) {
-      const at = worldOf(event)
-      setMarquee({
-        x: Math.min(drawn.from.x, at.x),
-        y: Math.min(drawn.from.y, at.y),
-        w: Math.abs(at.x - drawn.from.x),
-        h: Math.abs(at.y - drawn.from.y),
-      })
-      return
-    }
-    const held = carry.current
-    if (held) {
-      const spot = insideOf(event)
-      held.moved = true
-      setLifted({ id: held.id, at: { x: spot.x - held.grab.x, y: spot.y - held.grab.y } })
-      return
-    }
-    const panned = pan.current
-    if (!panned) return
-    const dx = event.clientX - panned.x
-    const dy = event.clientY - panned.y
-    if (!panned.moved && Math.hypot(dx, dy) < 4) return
-    panned.moved = true
-    setView((v) => ({ ...v, x: panned.vx + dx, y: panned.vy + dy }))
-  }
-  const up = (event: PointerEvent<HTMLDivElement>): void => {
-    const drawn = box.current
-    box.current = null
-    if (drawn && marquee && marquee.w > 20 && marquee.h > 20) {
-      const el = frame.current!
-      const k = Math.min(el.clientWidth / marquee.w, el.clientHeight / marquee.h, 4)
-      setView({
-        k,
-        x: el.clientWidth / 2 - (marquee.x + marquee.w / 2) * k,
-        y: el.clientHeight / 2 - (marquee.y + marquee.h / 2) * k,
-      })
-      setMarquee(null)
-      setTool('pick')
-      return
-    }
-    setMarquee(null)
-
-    const held = carry.current
-    carry.current = null
-    if (held && held.moved && lifted && drawing) {
-      drawing.onMove(held.id, lifted.at, arrangement())
-      setLifted(null)
+    if (event.button !== 0) return
+    if (drawing && armed) {
+      placeAt(insideOf(worldOf(event)), armed)
+      if (!event.shiftKey) setArmed('')
       dragged.current = true
       return
     }
-    setLifted(null)
-    const panned = pan.current
-    pan.current = null
-    setWireFrom('')
-    dragged.current = panned?.moved ?? false
-    // A press on the bare canvas with a drawing tool puts something there.
-    if (drawing && panned && !panned.moved && event.target === event.currentTarget) {
-      if (tool === 'card') {
-        drawing.onPlace(insideOf(event), arrangement(), kind)
-        setTool('pick')
-      } else if (tool === 'note') {
-        drawing.onNote(insideOf(event), arrangement())
-        setTool('pick')
-      } else drawing.onSelect('')
+    if (drawing && tool === 'note') {
+      noteAt(insideOf(worldOf(event)))
+      setTool('pick')
+      dragged.current = true
+      return
+    }
+    if (!drawing && tool === 'area') {
+      gesture.current = { type: 'zoombox', from: worldOf(event) }
+      capture(event)
+      return
+    }
+    if (drawing && tool === 'pick') {
+      const add = event.shiftKey || event.ctrlKey || event.metaKey
+      gesture.current = { type: 'select', from: worldOf(event), add, base: add ? selected : [], moved: false }
+      capture(event)
+      return
+    }
+    gesture.current = { type: 'pan', x: event.clientX, y: event.clientY, vx: view.x, vy: view.y, moved: false }
+    capture(event)
+  }
+
+  const move = (event: PointerEvent<HTMLDivElement>): void => {
+    const now = gesture.current
+    if (!now) return
+    const at = worldOf(event)
+    const hold = (): void => {
+      if (pending.current === null) return
+      try {
+        frame.current?.setPointerCapture(pending.current)
+      } catch {
+        // A pointer the browser will not hand over still works within the board.
+      }
+      pending.current = null
+    }
+    if (now.type === 'pan') {
+      const dx = event.clientX - now.x
+      const dy = event.clientY - now.y
+      if (!now.moved && Math.hypot(dx, dy) < 4) return
+      now.moved = true
+      hold()
+      setView((v) => ({ ...v, x: now.vx + dx, y: now.vy + dy }))
+      return
+    }
+    if (now.type === 'zoombox' || now.type === 'select') {
+      const box = { x: Math.min(now.from.x, at.x), y: Math.min(now.from.y, at.y), w: Math.abs(at.x - now.from.x), h: Math.abs(at.y - now.from.y) }
+      if (now.type === 'select') {
+        if (!now.moved && box.w * seen.current.k < 4 && box.h * seen.current.k < 4) return
+        now.moved = true
+        hold()
+        const caught = [
+          ...placed.filter((p) => overlaps(box, p.box)).map((p) => p.card.id),
+          ...noteBoxes.filter((n) => overlaps(box, n.box)).map((n) => n.note.id),
+        ]
+        setLive({ marquee: box, picked: [...new Set([...now.base, ...caught])] })
+      } else {
+        hold()
+        setLive({ marquee: box })
+      }
+      return
+    }
+    if (now.type === 'move') {
+      if (!now.moved && Math.hypot(event.clientX - now.sx, event.clientY - now.sy) < 3) return
+      now.moved = true
+      hold()
+      let dx = at.x - now.grab.x
+      let dy = at.y - now.grab.y
+      // The group lines up with cards that are staying put: an edge or a
+      // centre comes within a few pixels of another's and settles on it.
+      const group = boundsOf([...now.starts.values()].map((b) => ({ ...b, x: b.x + shift.x + dx, y: b.y + shift.y + dy })))
+      const still = placed.filter((p) => !now.ids.includes(p.card.id)).map((p) => p.box)
+      const near = SNAP_PX / seen.current.k
+      const lines = { x: [] as number[], y: [] as number[] }
+      const xs = [group.x, group.x + group.w / 2, group.x + group.w]
+      const ys = [group.y, group.y + group.h / 2, group.y + group.h]
+      let bestX: { by: number; line: number } | null = null
+      let bestY: { by: number; line: number } | null = null
+      for (const box of still) {
+        for (const x of [box.x, box.x + box.w / 2, box.x + box.w])
+          for (const mine of xs) if (Math.abs(x - mine) < near && (!bestX || Math.abs(x - mine) < Math.abs(bestX.by))) bestX = { by: x - mine, line: x }
+        for (const y of [box.y, box.y + box.h / 2, box.y + box.h])
+          for (const mine of ys) if (Math.abs(y - mine) < near && (!bestY || Math.abs(y - mine) < Math.abs(bestY.by))) bestY = { by: y - mine, line: y }
+      }
+      const first = [...now.starts.values()][0]!
+      if (bestX) {
+        dx += bestX.by
+        lines.x.push(bestX.line)
+      } else dx = Math.round((first.x + dx) / GRID) * GRID - first.x
+      if (bestY) {
+        dy += bestY.by
+        lines.y.push(bestY.line)
+      } else dy = Math.round((first.y + dy) / GRID) * GRID - first.y
+      const moves = new Map<string, Spot>()
+      for (const [id, box] of now.starts) moves.set(id, { x: box.x + dx, y: box.y + dy })
+      setLive({ moves, guides: lines })
+      return
+    }
+    if (now.type === 'connect') {
+      now.moved = true
+      hold()
+      const source = where.get(now.from)
+      if (!source) return
+      const target = cardUnder(at, now.from)
+      const targetBox = target ? where.get(target) : undefined
+      const from = now.side ? sideOf(source, now.side) : sideOf(source, facing(source, at))
+      const to = targetBox ? sideOf(targetBox, facing(targetBox, sideOf(source, 'e'))) : at
+      setLive({ line: { from, to, target } })
     }
   }
 
+  const up = (event: PointerEvent<HTMLDivElement>): void => {
+    const now = gesture.current
+    gesture.current = null
+    pending.current = null
+    const shown = live
+    setLive({})
+    if (!now) return
+    const at = worldOf(event)
+    if (now.type === 'pan') {
+      dragged.current = now.moved
+      return
+    }
+    if (now.type === 'zoombox') {
+      const box = shown.marquee
+      if (box && box.w > 20 && box.h > 20) {
+        const el = frame.current!
+        const k = Math.min(el.clientWidth / box.w, el.clientHeight / box.h, 4)
+        setView({ k, x: el.clientWidth / 2 - (box.x + box.w / 2) * k, y: el.clientHeight / 2 - (box.y + box.h / 2) * k })
+        setTool('pick')
+      }
+      return
+    }
+    if (now.type === 'select') {
+      if (now.moved) drawing?.onSelect(shown.picked ?? now.base)
+      else if (!now.add) drawing?.onSelect([])
+      dragged.current = now.moved
+      return
+    }
+    if (now.type === 'move') {
+      if (now.moved && shown.moves && drawing) {
+        drawing.onMove([...shown.moves].map(([id, spot]) => ({ id, x: spot.x, y: spot.y })))
+        dragged.current = true
+      }
+      return
+    }
+    if (now.type === 'connect' && drawing) {
+      dragged.current = true
+      if (!now.moved) return
+      const target = cardUnder(at, now.from)
+      if (now.rewire) {
+        if (target) drawing.onRewire(now.rewire.id, now.rewire.end, target)
+        return
+      }
+      if (target) {
+        const id = drawing.onWire(now.from, target)
+        drawing.onSelect([id])
+        return
+      }
+      // A wire let go on empty board asks what it reaches, and makes it.
+      setQuick({ screen: screenOf(event), inside: insideOf(at), from: now.from })
+    }
+  }
+
+  // A kind lifted from the library follows the pointer until it is let go.
+  useEffect(() => {
+    if (!lifting) return
+    const follow = (event: globalThis.PointerEvent): void =>
+      setLifting((was) =>
+        was ? { ...was, x: event.clientX, y: event.clientY, moved: was.moved || Math.hypot(event.clientX - was.x, event.clientY - was.y) > 4 } : was,
+      )
+    const drop = (event: globalThis.PointerEvent): void => {
+      const rect = frame.current?.getBoundingClientRect()
+      const was = lifting
+      setLifting(null)
+      if (!was || !rect) return
+      const over = event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom
+      if (over && (was.moved || Math.hypot(event.clientX - was.x, event.clientY - was.y) > 4)) {
+        placeAt(insideOf(worldOf(event)), was.kind)
+        setArmed('')
+      }
+    }
+    window.addEventListener('pointermove', follow)
+    window.addEventListener('pointerup', drop)
+    return () => {
+      window.removeEventListener('pointermove', follow)
+      window.removeEventListener('pointerup', drop)
+    }
+  }, [lifting, placeAt, shift])
+
   const empty = focus.children.length === 0 && notes.length === 0
   const screen: Box = {
-    x: (-view.x) / view.k,
-    y: (-view.y) / view.k,
+    x: -view.x / view.k,
+    y: -view.y / view.k,
     w: (frame.current?.clientWidth ?? 0) / view.k,
     h: (frame.current?.clientHeight ?? 0) / view.k,
   }
 
-  const wireGroup = (
-    list: typeof shapes.inner,
-    opts: { faint?: boolean } = {},
-  ): ReactElement[] =>
+  /** What is picked, and where its bar floats, on the screen. */
+  const picking = useMemo((): { what: Picking; box: Box } | null => {
+    if (!drawing || selected.length === 0 || editing || live.moves || live.marquee) return null
+    if (selected.length > 1) {
+      const boxes = [
+        ...placed.filter((p) => selected.includes(p.card.id)).map((p) => p.box),
+        ...noteBoxes.filter((n) => selected.includes(n.note.id)).map((n) => n.box),
+      ]
+      if (!boxes.length) return null
+      return {
+        what: { what: 'many', ids: selected, cards: placed.filter((p) => selected.includes(p.card.id)).length },
+        box: boundsOf(boxes),
+      }
+    }
+    const id = selected[0]!
+    const card = placed.find((p) => p.card.id === id)
+    if (card)
+      return {
+        what: {
+          what: 'card',
+          id,
+          kind: card.card.kind,
+          level: card.card.level,
+          page: card.card.kind === 'page',
+          opens: canOpen(card.card),
+        },
+        box: card.box,
+      }
+    const wire = shapes.inner.find((one) => one.wire.id === id)
+    if (wire) {
+      const size = sizes[wire.key] ?? { w: 160, h: 24 }
+      return { what: { what: 'wire', id, kind: wire.wire.kind }, box: { x: wire.at.x - size.w / 2, y: wire.at.y - size.h / 2, ...size } }
+    }
+    const note = noteBoxes.find((n) => n.note.id === id)
+    return note ? { what: { what: 'note', id }, box: note.box } : null
+  }, [drawing, selected, editing, live, placed, noteBoxes, shapes, sizes])
+
+  const wireGroup = (list: typeof shapes.inner, opts: { faint?: boolean } = {}): ReactElement[] =>
     list.map(({ wire, key, shape }) => (
       <g
         key={key}
         className={`map-wire map-wire--${wire.kind.replace(/\s+/g, '-')}${
-          drawing && wire.id && drawing.selected === wire.id ? ' map-wire--selected' : ''
+          drawing && wire.id && selected.includes(wire.id) ? ' map-wire--selected' : ''
         }${opts.faint ? ' map-wire--outside' : ''}`}
       >
         <path d={shape.d} markerEnd="url(#map-head)" />
+        {drawing && wire.id && !opts.faint ? (
+          <path
+            d={shape.d}
+            className="map-wire-hit"
+            onPointerDown={(event) => {
+              event.stopPropagation()
+              drawing.onSelect(event.shiftKey ? [...selected, wire.id!] : [wire.id!])
+            }}
+            onDoubleClick={(event) => {
+              event.stopPropagation()
+              startEditing(wire.id!)
+            }}
+          />
+        ) : null}
       </g>
     ))
+
+  const editingBox = editing ? where.get(editing.id) : undefined
+  const editingNote = editing ? noteBoxes.find((n) => n.note.id === editing.id) : undefined
+  const editingWire = editing ? shapes.inner.find((one) => one.wire.id === editing.id) : undefined
+  const pickedWire = drawing && selected.length === 1 ? shapes.inner.find((one) => one.wire.id === selected[0]) : undefined
+  const childLevel = levelInside[focus.level]
 
   return (
     <>
       <ToolRail
         tool={tool}
         sketch={Boolean(drawing)}
-        level={focus.level}
-        kind={kind}
-        onTool={setTool}
-        onKind={(one) => {
-          setKind(one)
-          setTool('card')
+        palette={palette}
+        canUndo={drawing?.canUndo ?? false}
+        canRedo={drawing?.canRedo ?? false}
+        onTool={(next) => {
+          setArmed('')
+          setTool(next)
         }}
+        onPalette={() => setPalette(!palette)}
+        onUndo={() => drawing?.onUndo()}
+        onRedo={() => drawing?.onRedo()}
         onStartSketch={() => onStartSketch?.()}
         onFit={fit}
         onOverview={() => setShutOverview(!shutOverview)}
       />
+      {drawing && palette && childLevel !== focus.level ? (
+        <CardPalette
+          level={childLevel}
+          armed={armed}
+          onArm={(kind) => {
+            setArmed(kind)
+            setTool('pick')
+          }}
+          onLift={(kind, event) => setLifting({ kind, x: event.clientX, y: event.clientY, moved: false })}
+          onClose={() => setPalette(false)}
+        />
+      ) : null}
       <div
         ref={frame}
-        className={`map-frame-area map-frame-area--${tool}`}
+        className={`map-frame-area map-frame-area--${armed ? 'card' : tool}${space.current ? ' map-frame-area--pan' : ''}`}
         onPointerDown={down}
         onPointerMove={move}
         onPointerUp={up}
-        onPointerLeave={() => {
-          pan.current = null
-          carry.current = null
-          box.current = null
-          setMarquee(null)
-          setLifted(null)
+        onPointerCancel={() => {
+          gesture.current = null
+          setLive({})
+        }}
+        onContextMenu={(event) => event.preventDefault()}
+        onScroll={(event) => {
+          event.currentTarget.scrollLeft = 0
+          event.currentTarget.scrollTop = 0
+        }}
+        onDoubleClick={(event) => {
+          if (!drawing || event.target !== event.currentTarget) return
+          setQuick({ screen: screenOf(event), inside: insideOf(worldOf(event)), from: '' })
         }}
         onClickCapture={(event) => {
           if (dragged.current) event.stopPropagation()
@@ -791,7 +1307,7 @@ export const MapCanvas = ({
         {empty ? (
           <div className="map-empty">
             {drawing
-              ? 'Nothing drawn here yet. Pick Card and click to place one.'
+              ? 'Nothing drawn here yet. Drag a card in from the left, or double-click anywhere to add one.'
               : focus.level === 'project'
                 ? 'Link a software system to see its map.'
                 : focus.setUp
@@ -808,9 +1324,35 @@ export const MapCanvas = ({
               <marker id="map-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                 <path d="M 0 0 L 10 5 L 0 10 z" className="map-head" />
               </marker>
+              <marker id="map-head-live" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" className="map-head-live" />
+              </marker>
             </defs>
             {wireGroup(shapes.outer, { faint: true })}
+            {ports.flatMap((port) =>
+              port.through.map((one) => (
+                <path
+                  key={`${port.key}>${one.id}`}
+                  d={one.d}
+                  className="map-through"
+                  markerEnd={one.into ? 'url(#map-head)' : undefined}
+                />
+              )),
+            )}
             {wireGroup(shapes.inner)}
+            {live.line ? (
+              <path d={curve(live.line.from, live.line.to)} className="map-wire-live" markerEnd="url(#map-head-live)" />
+            ) : null}
+            {live.guides
+              ? [
+                  ...live.guides.x.map((x) => (
+                    <line key={`x${x}`} x1={x} x2={x} y1={screen.y} y2={screen.y + screen.h} className="map-guide" />
+                  )),
+                  ...live.guides.y.map((y) => (
+                    <line key={`y${y}`} y1={y} y2={y} x1={screen.x} x2={screen.x + screen.w} className="map-guide" />
+                  )),
+                ]
+              : null}
           </svg>
 
           {/* The cards beside the one that is open stay in view, so you keep
@@ -823,6 +1365,9 @@ export const MapCanvas = ({
               opens={canOpen(p.card)}
               selected={false}
               receded
+              target={false}
+              handles={false}
+              drawing={false}
               onOpen={() => tunnelIn(p.card, true)}
             />
           ))}
@@ -835,7 +1380,7 @@ export const MapCanvas = ({
               <span className="map-lip">
                 <span className="map-kind-word">{kindWords(focus)}</span>
                 <span className="map-name" style={{ marginTop: 0 }}>
-                  {focus.name}
+                  {focus.name || 'Unnamed'}
                 </span>
               </span>
               {ports.map((port) => (
@@ -849,71 +1394,227 @@ export const MapCanvas = ({
             </div>
           ) : null}
 
-          {placed.map((p) => (
-            <CardFace
-              key={p.card.id}
-              placed={p}
-              picture={drawing?.mockups[p.card.id] ?? p.card.shot}
-              opens={canOpen(p.card)}
-              selected={drawing?.selected === p.card.id || wireFrom === p.card.id}
-              receded={false}
-              onOpen={() => tunnelIn(p.card)}
-              onPress={drawing ? pickUp(p.card.id, { x: p.box.x - shift.x, y: p.box.y - shift.y }) : undefined}
-              onRelease={drawing ? dropWire(p.card.id) : undefined}
-              onPeek={setPeek}
-            />
-          ))}
+          {placed.map((p) => {
+            const picked = (live.picked ?? selected).includes(p.card.id)
+            return (
+              <CardFace
+                key={p.card.id}
+                placed={p}
+                picture={drawing?.mockups[p.card.id] ?? p.card.shot}
+                opens={canOpen(p.card)}
+                selected={picked}
+                receded={false}
+                target={live.line?.target === p.card.id}
+                handles={Boolean(drawing) && (tool === 'pick' || tool === 'wire') && !armed && (hover === p.card.id || (picked && selected.length === 1)) && !live.moves}
+                drawing={Boolean(drawing)}
+                onOpen={() => tunnelIn(p.card)}
+                onPress={drawing ? press(p.card.id) : undefined}
+                onHandle={drawing ? pressHandle(p.card.id) : undefined}
+                onEdit={() => startEditing(p.card.id)}
+              />
+            )
+          })}
 
-          {notes.map((note) => {
-            const at = lifted?.id === note.id ? lifted.at : note
+          {/* Hovering is tracked on the board, not on each card, so a card's
+              dots stay while the pointer crosses onto them. */}
+          <HoverWatch placed={placed} where={frame} view={view} onHover={setHover} />
+
+          {noteBoxes.map(({ note, box }) => {
+            const picked = (live.picked ?? selected).includes(note.id)
             return (
               <div
                 key={note.id}
-                className={drawing?.selected === note.id ? 'map-note map-card--selected' : 'map-note'}
-                style={{ left: at.x + shift.x, top: at.y + shift.y }}
+                className={picked ? 'map-note map-card--selected' : 'map-note'}
+                style={{ left: box.x, top: box.y }}
                 role={drawing ? 'button' : undefined}
                 aria-label={`Note: ${note.text || 'empty'}`}
-                onPointerDown={pickUp(note.id, { x: note.x, y: note.y })}
+                onPointerDown={press(note.id)}
+                onDoubleClick={(event) => {
+                  event.stopPropagation()
+                  startEditing(note.id)
+                }}
                 onClick={(event) => event.stopPropagation()}
               >
-                {note.text || <span className="map-more">Empty note</span>}
+                {editing?.id === note.id ? null : note.text || <span className="map-more">Empty note</span>}
               </div>
             )
           })}
 
           {/* Sentences go over the cards, so a wire that passes behind one
               still says what it is for. */}
-          {[...shapes.outer, ...shapes.inner].map(({ wire, key, at, small }) => (
+          {[...shapes.outer, ...shapes.inner].map(({ wire, key, at, small, said }) => (
             <Sentence
               key={key}
-              wire={wire}
+              said={said}
+              verb={wire.kind}
               at={at}
               small={small}
-              selected={Boolean(drawing && wire.id && drawing.selected === wire.id)}
+              missing={!drawing && !wire.words && wire.kind !== 'leads to' && wire.kind !== 'keeps'}
+              unfinished={Boolean(drawing) && !wire.words && wire.kind !== 'leads to' && Boolean(wire.id)}
+              selected={Boolean(drawing && wire.id && selected.includes(wire.id))}
               pickable={Boolean(drawing && wire.id)}
-              sketch={Boolean(drawing)}
-              onPick={() => wire.id && drawing?.onSelect(wire.id)}
+              hidden={Boolean(editing && wire.id && editing.id === wire.id)}
+              measure={(element) => {
+                if (element) chips.current.set(key, element)
+                else chips.current.delete(key)
+              }}
+              onPick={(event) => {
+                if (!wire.id || !drawing) return
+                setQuick(null)
+                drawing.onSelect(event.shiftKey ? [...selected, wire.id] : [wire.id])
+              }}
+              onEdit={() => wire.id && startEditing(wire.id)}
             />
           ))}
+
+          {/* The two ends of a picked wire, to drag onto another card. */}
+          {pickedWire && pickedWire.wire.id ? (
+            <svg className="map-wires map-wires--ends" width="1" height="1">
+              <circle
+                cx={pickedWire.shape.tail.x}
+                cy={pickedWire.shape.tail.y}
+                r={6}
+                className="map-wire-end"
+                onPointerDown={pressEnd(pickedWire.wire.id, 'from', pickedWire.wire.to)}
+              />
+              <circle
+                cx={pickedWire.shape.head.x}
+                cy={pickedWire.shape.head.y}
+                r={6}
+                className="map-wire-end"
+                onPointerDown={pressEnd(pickedWire.wire.id, 'to', pickedWire.wire.from)}
+              />
+            </svg>
+          ) : null}
+
+          {editing && drawing ? (
+            editingNote ? (
+              <textarea
+                ref={focusQuietly}
+                className="map-edit map-edit--note"
+                aria-label="Note"
+                style={{ left: editingNote.box.x, top: editingNote.box.y }}
+                value={editing.text}
+                placeholder="Write a note"
+                onPointerDown={(event) => event.stopPropagation()}
+                onChange={(event) => setEditing({ ...editing, text: event.target.value })}
+                onBlur={() => finishEditing(true)}
+                onKeyDown={(event) => {
+                  event.stopPropagation()
+                  if (event.key === 'Escape' || (event.key === 'Enter' && (event.ctrlKey || event.metaKey))) finishEditing(true)
+                }}
+              />
+            ) : editingWire ? (
+              <input
+                ref={focusQuietly}
+                className="map-edit map-edit--wire"
+                aria-label="What the wire is for"
+                style={{ left: editingWire.at.x, top: editingWire.at.y }}
+                value={editing.text}
+                placeholder="what it is for, e.g. saves the note"
+                onPointerDown={(event) => event.stopPropagation()}
+                onChange={(event) => setEditing({ ...editing, text: event.target.value })}
+                onBlur={() => finishEditing(true)}
+                onKeyDown={(event) => {
+                  event.stopPropagation()
+                  if (event.key === 'Enter') finishEditing(true)
+                  if (event.key === 'Escape') finishEditing(false)
+                }}
+              />
+            ) : editingBox ? (
+              <input
+                className={`map-edit map-edit--name${isFrame(placed.find((p) => p.card.id === editing.id)?.card ?? root) ? ' map-edit--frame' : ''}`}
+                aria-label="Card name"
+                ref={focusQuietly}
+                style={{
+                  left: editingBox.x + 12,
+                  top: isFrame(placed.find((p) => p.card.id === editing.id)?.card ?? root) ? editingBox.y + editingBox.h - 34 : editingBox.y + 34,
+                  width: editingBox.w - 24,
+                }}
+                value={editing.text}
+                placeholder="Name it"
+                onPointerDown={(event) => event.stopPropagation()}
+                onChange={(event) => setEditing({ ...editing, text: event.target.value })}
+                onBlur={() => finishEditing(true)}
+                onKeyDown={(event) => {
+                  event.stopPropagation()
+                  if (event.key === 'Enter' || event.key === 'Tab') {
+                    event.preventDefault()
+                    finishEditing(true)
+                  }
+                  if (event.key === 'Escape') finishEditing(false)
+                }}
+              />
+            ) : null
+          ) : null}
 
           {pins ? (
             <div className="map-pins" style={{ left: pins.at.x + pins.at.w + 16, top: pins.at.y }}>
               <div className="map-pins-head">What reaches {pins.name}</div>
               {pins.rows.map((row) => (
-                <div key={`${row.from}>${row.kind}`} className="map-pins-row">
-                  <b>{focus.children.find((c) => c.id === row.from)?.name ?? row.from}</b>
-                  <span className="map-pins-verb">{row.kind}</span>
-                  <span>{row.words || '—'}</span>
+                <div key={`${row.from}>${row.kind}`} className="map-pins-row map-pins-row--said">
+                  {sentenceOf(nameOf.get(row.from) ?? row.from, row.kind, pins.name, row.words).map((part, i) => (
+                    <span key={i} className={`map-said-${part.role}`}>
+                      {part.text}
+                    </span>
+                  ))}
                 </div>
               ))}
               {pins.more > 0 ? <div className="map-pins-row map-more">… {pins.more} more</div> : null}
             </div>
           ) : null}
 
-          {marquee ? (
-            <div className="map-marquee" style={{ left: marquee.x, top: marquee.y, width: marquee.w, height: marquee.h }} />
+          {live.marquee ? (
+            <div
+              className={gesture.current?.type === 'select' ? 'map-marquee map-marquee--pick' : 'map-marquee'}
+              style={{ left: live.marquee.x, top: live.marquee.y, width: live.marquee.w, height: live.marquee.h }}
+            />
           ) : null}
         </div>
+
+        {picking ? (
+          <ContextBar
+            key={selected.join(',')}
+            picking={picking.what}
+            below={view.y + picking.box.y * view.k < 56}
+            at={{
+              x: Math.max(160, Math.min(view.x + (picking.box.x + picking.box.w / 2) * view.k, (frame.current?.clientWidth ?? 0) - 160)),
+              y:
+                view.y + picking.box.y * view.k < 56
+                  ? view.y + (picking.box.y + picking.box.h) * view.k + 12
+                  : view.y + picking.box.y * view.k - 12,
+            }}
+            onKind={(id, kind) => drawing?.onKind(id, kind)}
+            onEdit={(id) => startEditing(id)}
+            onOpen={(id) => {
+              const card = placed.find((p) => p.card.id === id)
+              if (card) tunnelIn(card.card)
+            }}
+            onMockup={(id) => drawing?.onMockup(id)}
+            onAlign={(ids, how) => drawing?.onAlign(ids, how)}
+            onRemove={(ids) => {
+              drawing?.onRemove(ids)
+              drawing?.onSelect([])
+            }}
+          />
+        ) : null}
+
+        {quick && drawing ? (
+          <QuickAdd
+            level={childLevel}
+            at={quick.screen}
+            wired={Boolean(quick.from)}
+            onPick={(kind) => {
+              placeAt(quick.inside, kind, quick.from)
+              setQuick(null)
+            }}
+            onNote={() => {
+              noteAt(quick.inside)
+              setQuick(null)
+            }}
+            onClose={() => setQuick(null)}
+          />
+        ) : null}
 
         <ZoomBar
           scale={view.k}
@@ -935,6 +1636,60 @@ export const MapCanvas = ({
           }}
         />
       </div>
+
+      {lifting && lifting.moved ? (
+        <div className={`map-lifted ${kindClass(lifting.kind)}`} style={{ left: lifting.x, top: lifting.y }}>
+          <KindGlyph kind={lifting.kind} size={14} />
+          <span>{lifting.kind}</span>
+        </div>
+      ) : null}
     </>
   )
+}
+
+/** Puts the caret in a box that has just appeared, without scrolling the
+ *  board to show it: the board is placed by its own view, never by scroll. */
+const focusQuietly = (element: HTMLInputElement | HTMLTextAreaElement | null): void => {
+  if (!element || element === document.activeElement) return
+  element.focus({ preventScroll: true })
+  const end = element.value.length
+  element.setSelectionRange(end, end)
+}
+
+/** Works out which card the pointer is over from where it is on the board,
+ *  so the dots a wire is drawn from do not vanish as the pointer moves onto
+ *  them, half outside the card. */
+const HoverWatch = ({
+  placed,
+  where,
+  view,
+  onHover,
+}: {
+  placed: Placed[]
+  where: RefObject<HTMLDivElement>
+  view: View
+  onHover: (id: string) => void
+}) => {
+  useEffect(() => {
+    const el = where.current
+    if (!el) return
+    const REACH = 14
+    const watch = (event: globalThis.PointerEvent): void => {
+      const rect = el.getBoundingClientRect()
+      const at = { x: (event.clientX - rect.left - view.x) / view.k, y: (event.clientY - rect.top - view.y) / view.k }
+      const reach = REACH / view.k
+      const over = placed.find((p) =>
+        inBox(at, { x: p.box.x - reach, y: p.box.y - reach, w: p.box.w + reach * 2, h: p.box.h + reach * 2 }),
+      )
+      onHover(over?.card.id ?? '')
+    }
+    const leave = (): void => onHover('')
+    el.addEventListener('pointermove', watch)
+    el.addEventListener('pointerleave', leave)
+    return () => {
+      el.removeEventListener('pointermove', watch)
+      el.removeEventListener('pointerleave', leave)
+    }
+  }, [placed, where, view, onHover])
+  return null
 }

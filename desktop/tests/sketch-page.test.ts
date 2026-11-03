@@ -6,7 +6,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { aMappedRepo, closeYard, openYard, type Yard } from './yard.js'
 
 /** The built app on a blank computer that knows one project, drawing
- *  sketches of it. */
+ *  sketches of it the way a person would: from the card library, by typing
+ *  onto cards, and by dragging wires from a card's dots. */
 const appFolder = resolve(import.meta.dirname, '..')
 const PATIENCE = 15_000
 const pictures = process.env.CODEGRAPH_PICTURES ?? ''
@@ -25,24 +26,26 @@ const picture = async (name: string): Promise<void> => {
 }
 const settle = (): Promise<void> => page.waitForTimeout(900)
 
-/** Clicks the bare canvas at a share of its width and height. */
-const clickCanvas = async (across: number, down: number): Promise<void> => {
-  const area = page.locator('.map-frame-area')
-  const box = (await area.boundingBox())!
-  await page.mouse.click(box.x + box.width * across, box.y + box.height * down)
+/** A spot on the board, as a share of its width and height. */
+const spot = async (across: number, down: number): Promise<{ x: number; y: number }> => {
+  const box = (await page.locator('.map-frame-area').boundingBox())!
+  return { x: box.x + box.width * across, y: box.y + box.height * down }
 }
 
-/** Drags with the mouse from the middle of one thing to the middle of another. */
-const dragBetween = async (from: Locator, to: Locator): Promise<void> => {
-  const a = (await from.boundingBox())!
-  const b = (await to.boundingBox())!
-  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2)
+const card = (name: string): Locator => page.locator('.map-world').getByRole('button', { name, exact: true })
+const wire = (said: string): Locator => page.getByRole('button', { name: `Wire: ${said}` })
+
+/** Drags with the mouse from one place to another, the way a hand does. */
+const drag = async (from: { x: number; y: number }, to: { x: number; y: number }): Promise<void> => {
+  await page.mouse.move(from.x, from.y)
   await page.mouse.down()
-  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 8 })
+  await page.mouse.move(to.x, to.y, { steps: 12 })
   await page.mouse.up()
 }
-
-const tool = (name: string): Locator => page.getByRole('toolbar', { name: 'Tools' }).getByRole('button', { name })
+const middle = async (locator: Locator): Promise<{ x: number; y: number }> => {
+  const box = (await locator.boundingBox())!
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+}
 
 beforeAll(async () => {
   yard = openYard('sketch')
@@ -69,48 +72,121 @@ afterAll(async () => {
 })
 
 describe('drawing a sketch in the real app', () => {
-  it('starts a blank sketch from the library', async () => {
+  it('starts a blank sketch, with the cards for its level beside the tools', async () => {
     await page.getByRole('button', { name: /^Sketches/ }).click()
     await page.getByRole('button', { name: 'Blank sketch' }).click()
     expect(await page.getByLabel('Sketch name').inputValue()).toBe('New sketch')
-    expect(await shown(page.getByText('Nothing drawn here yet'))).toContain('Pick Card')
+    expect(await shown(page.getByText('Nothing drawn here yet'))).toContain('Drag a card in from the left')
+    const library = page.getByRole('complementary', { name: 'Cards' })
+    expect(await shown(library)).toContain('software system')
+    expect(await shown(library)).toContain('person')
   })
 
-  it('places two cards and names them', async () => {
-    await tool('Card').click()
-    await clickCanvas(0.3, 0.5)
-    await page.getByLabel('Name', { exact: true }).fill('notes')
-    await tool('Card').click()
-    await clickCanvas(0.65, 0.5)
-    await page.getByLabel('Name', { exact: true }).fill('search')
-    await page.getByLabel('Kind', { exact: true }).selectOption('shallow software system')
-    expect(await shown(page.getByRole('button', { name: 'search', exact: true }))).toContain('shallow software system')
+  it('places a card by clicking it in the library, then the board, and names it by typing', async () => {
+    await page.getByRole('button', { name: 'Card: software system' }).click()
+    const at = await spot(0.25, 0.5)
+    await page.mouse.click(at.x, at.y)
+    await page.getByLabel('Card name').waitFor({ timeout: PATIENCE })
+    await page.keyboard.type('notes')
+    await page.keyboard.press('Enter')
+    expect(await shown(card('notes'))).toContain('software system')
   })
 
-  it('wires one to the other, and says what for', async () => {
-    await tool('Wire').click()
-    await dragBetween(page.getByRole('button', { name: 'notes', exact: true }), page.getByRole('button', { name: 'search', exact: true }))
-    await page.getByLabel('What it is for').fill('finds notes by their words')
-    expect(await shown(page.getByText('finds notes by their words'))).toBe('finds notes by their words')
+  it('places another by dragging it in from the library', async () => {
+    const from = await middle(page.getByRole('button', { name: 'Card: shallow software system' }))
+    await drag(from, await spot(0.62, 0.5))
+    await page.getByLabel('Card name').waitFor({ timeout: PATIENCE })
+    await page.keyboard.type('search')
+    await page.keyboard.press('Enter')
+    expect(await shown(card('search'))).toContain('shallow software system')
   })
 
-  it('moves the far card aside so the words have room, clear of both cards', async () => {
+  it('wires one to the other from the dot on its side, and reads it as a sentence', async () => {
+    await page.mouse.click((await spot(0.5, 0.9)).x, (await spot(0.5, 0.9)).y)
+    await card('notes').hover()
+    const dot = card('notes').locator('.map-handle--e')
+    await dot.waitFor({ timeout: PATIENCE })
+    await drag(await middle(dot), await middle(card('search')))
+    await page.keyboard.press('Enter')
+    await page.getByLabel('What the wire is for').waitFor({ timeout: PATIENCE })
+    await page.keyboard.type('finds notes by their words')
+    await page.keyboard.press('Enter')
+    expect(await shown(wire('notes calls search to find notes by their words'))).toContain('to find notes by their words')
+  })
+
+  it('keeps the sentence clear of both cards', async () => {
     await page.waitForTimeout(300)
-    // The panel says the sentence too, so name the chip on the canvas.
-    const words = (await page.locator('.map-wire-words').boundingBox())!
-    const notes = (await page.getByRole('button', { name: 'notes', exact: true }).boundingBox())!
-    const search = (await page.getByRole('button', { name: 'search', exact: true }).boundingBox())!
-    expect(words.x).toBeGreaterThan(notes.x + notes.width)
-    expect(words.x + words.width).toBeLessThan(search.x)
+    const words = (await wire('notes calls search to find notes by their words').boundingBox())!
+    const notes = (await card('notes').boundingBox())!
+    const search = (await card('search').boundingBox())!
+    const clear = (a: typeof words, b: typeof words): boolean =>
+      a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y
+    expect(clear(words, notes)).toBe(true)
+    expect(clear(words, search)).toBe(true)
   })
 
-  it('leaves a note', async () => {
-    await tool('Note').click()
-    await clickCanvas(0.45, 0.2)
-    await page.getByRole('textbox', { name: 'Note' }).fill('Which search service?')
+  it('makes the card at the end of a wire let go on empty board', async () => {
+    await card('notes').hover()
+    const dot = card('notes').locator('.map-handle--s')
+    await dot.waitFor({ timeout: PATIENCE })
+    await drag(await middle(dot), await spot(0.3, 0.85))
+    expect(await shown(page.getByRole('dialog', { name: 'What does the wire reach?' }))).toContain('software system')
+    await page.keyboard.type('software')
+    await page.keyboard.press('Enter')
+    await page.getByLabel('Card name').waitFor({ timeout: PATIENCE })
+    await page.keyboard.type('billing')
+    await page.keyboard.press('Enter')
+    expect(await shown(wire('notes calls billing'))).toContain('billing')
+  })
+
+  it('leaves a note with a double-click on the board', async () => {
+    const at = await spot(0.45, 0.18)
+    await page.mouse.dblclick(at.x, at.y)
+    await page.getByRole('dialog', { name: 'Add to the board' }).waitFor({ timeout: PATIENCE })
+    await page.keyboard.type('note')
+    await page.keyboard.press('Enter')
+    await page.getByRole('textbox', { name: 'Note', exact: true }).waitFor({ timeout: PATIENCE })
+    await page.keyboard.type('Which search service?')
+    await page.keyboard.press('Escape')
     expect(await shown(page.locator('.map-note'))).toBe('Which search service?')
     await settle()
     await picture('sketch-1-drawn')
+  })
+
+  it('undoes and redoes', async () => {
+    await page.keyboard.press('Control+z')
+    await page.waitForTimeout(200)
+    expect(await page.locator('.map-note').count()).toBe(0)
+    await page.keyboard.press('Control+Shift+z')
+    expect(await shown(page.locator('.map-note'))).toBe('Which search service?')
+  })
+
+  it('takes a picked card away with Delete, and Undo brings it back', async () => {
+    await card('billing').click()
+    await page.keyboard.press('Delete')
+    await page.waitForTimeout(200)
+    expect(await card('billing').count()).toBe(0)
+    await page.keyboard.press('Control+z')
+    expect(await shown(card('billing'))).toContain('billing')
+  })
+
+  it('copies and pastes a card', async () => {
+    await card('search').click()
+    await page.keyboard.press('Control+c')
+    await page.keyboard.press('Control+v')
+    await page.waitForTimeout(200)
+    expect(await card('search').count()).toBe(2)
+    await page.keyboard.press('Control+z')
+    await page.waitForTimeout(200)
+    expect(await card('search').count()).toBe(1)
+  })
+
+  it('moves a card by dragging it, settling on the grid', async () => {
+    const before = (await card('billing').boundingBox())!
+    await drag(await middle(card('billing')), { x: before.x + before.width / 2 + 133, y: before.y + before.height / 2 + 7 })
+    await page.waitForTimeout(200)
+    const after = (await card('billing').boundingBox())!
+    expect(after.x).toBeGreaterThan(before.x + 80)
   })
 
   it('keeps it all: back to the map, and open it again', async () => {
@@ -121,18 +197,19 @@ describe('drawing a sketch in the real app', () => {
 
     await page.getByRole('button', { name: /^Sketches/ }).click()
     await page.getByRole('button', { name: /^Search/ }).click()
-    expect(await shown(page.getByText('finds notes by their words'))).toBe('finds notes by their words')
+    expect(await shown(wire('notes calls search to find notes by their words'))).toContain('notes')
     expect(await shown(page.locator('.map-note'))).toBe('Which search service?')
   })
 
-  it('tunnels into a card to draw what is inside it', async () => {
-    await tool('Pick').click()
-    await page.getByRole('button', { name: 'notes', exact: true }).dblclick()
-    expect(await shown(page.getByText('Nothing drawn here yet'))).toContain('Pick Card')
+  it('draws inside a card, from the bar over it', async () => {
+    await card('notes').click()
+    await page.getByRole('button', { name: 'Draw inside it' }).click()
+    expect(await shown(page.getByText('Nothing drawn here yet'))).toContain('Drag a card in from the left')
+    expect(await shown(page.getByRole('complementary', { name: 'Cards' }))).toContain('web app')
     expect(await shown(page.getByRole('navigation', { name: 'Where you are' }))).toContain('notes')
     await settle()
     await page.keyboard.press('Escape')
-    await page.getByRole('button', { name: 'search', exact: true }).waitFor({ timeout: PATIENCE })
+    await card('search').waitFor({ timeout: PATIENCE })
   })
 
   it('starts a sketch from a snapshot of the map, every card as it stood', async () => {
@@ -143,8 +220,9 @@ describe('drawing a sketch in the real app', () => {
     await page.getByRole('button', { name: 'Sketch from the map' }).click()
 
     expect(await page.getByLabel('Sketch name').inputValue()).toBe('notes, as it could be')
-    await page.getByRole('button', { name: 'web', exact: true }).dblclick()
-    expect(await shown(page.getByRole('button', { name: 'write-note', exact: true }))).toContain('feature')
+    await card('web').click()
+    await page.getByRole('button', { name: 'Draw inside it' }).click()
+    expect(await shown(card('write-note'))).toContain('feature')
     await settle()
     await picture('sketch-2-from-map')
   })

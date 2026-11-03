@@ -34,7 +34,7 @@ describe('agreeing to a shallow software system', () => {
     expect(shown.suggestions).toEqual([])
     const mailer = shown.card.children.find((c) => c.name === 'mailer')
     expect(mailer).toMatchObject({ kind: 'shallow software system', level: 'system', children: [] })
-    expect(shown.card.wires).toEqual([
+    expect(shown.card.wires).toMatchObject([
       { from: shown.systems[0]!.id, to: mailer!.id, kind: 'calls', words: 'tells the owner' },
     ])
   })

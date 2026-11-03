@@ -6,7 +6,19 @@ import { live, readMap, type Point, type SystemMap } from '../modules/reader/ind
 export type Level = 'project' | 'system' | 'container' | 'component' | 'code'
 
 /** A wire between two cards that sit side by side inside one card. */
-export type CardWire = { from: string; to: string; kind: string; words: string }
+/** Where a wire really starts and ends, by the ids of the deepest cards it
+ *  joins, when it is drawn a level up between the cards that hold them. */
+export type WireEnds = { from: string; to: string }
+
+export type CardWire = {
+  from: string
+  to: string
+  kind: string
+  words: string
+  /** Every pair of real ends this wire stands for: one for a wire read
+   *  straight off the code, several where wires were gathered into one. */
+  ends: WireEnds[]
+}
 
 /** One thing on the canvas, with what is inside it already laid out as
  *  cards and the wires between them, so the page only has to draw. */
@@ -67,9 +79,14 @@ const card = (id: string, name: string, level: Level, more: Partial<Card> = {}):
  *  same two cards. */
 const join = (wires: CardWire[], wire: CardWire): void => {
   const same = wires.find((w) => w.from === wire.from && w.to === wire.to && w.kind === wire.kind)
-  if (!same) wires.push({ ...wire })
-  else if (wire.words && !same.words.split('; ').includes(wire.words))
+  if (!same) {
+    wires.push({ ...wire, ends: [...wire.ends] })
+    return
+  }
+  if (wire.words && !same.words.split('; ').includes(wire.words))
     same.words = same.words ? `${same.words}; ${wire.words}` : wire.words
+  for (const end of wire.ends)
+    if (!same.ends.some((e) => e.from === end.from && e.to === end.to)) same.ends.push(end)
 }
 
 const systemCard = (id: string, name: string, map: SystemMap): Card => {
@@ -113,8 +130,9 @@ const systemCard = (id: string, name: string, map: SystemMap): Card => {
     const from = containerOf.get(wire.from)
     const to = containerOf.get(wire.to) ?? (wire.to.startsWith('container:') ? wire.to : undefined)
     if (!from || !to) continue
-    if (from === to) join(holder.get(at(from))!.wires, { ...wire, from: at(wire.from), to: at(wire.to) })
-    else join(system.wires, { ...wire, from: at(from), to: at(to) })
+    const ends = [{ from: at(wire.from), to: at(wire.to) }]
+    if (from === to) join(holder.get(at(from))!.wires, { ...wire, from: at(wire.from), to: at(wire.to), ends })
+    else join(system.wires, { ...wire, from: at(from), to: at(to), ends })
   }
   return system
 }
@@ -157,7 +175,8 @@ export const showMap = async (projectId: string, points: Record<string, Point> =
     for (const call of map.outside) {
       const name = call.to.replace(/^outside:/, '')
       const reached = answersTo.get(name.toLowerCase())
-      if (reached && reached !== system.id) join(top.wires, { ...call, from: system.id, to: reached })
+      if (reached && reached !== system.id)
+        join(top.wires, { ...call, from: system.id, to: reached, ends: [{ from: `${system.id}/${call.from}`, to: reached }] })
       else if (!reached) suggestions.add(name)
     }
 

@@ -5,7 +5,7 @@ import type { Component, Point } from './schema.js'
 const CODE = /\.(ts|tsx|js|jsx|mjs|cjs|mts|cts|py|rb|go|rs|java|kt|swift|cs|php|vue|svelte)$/i
 const DECLARATIONS = /\.d\.[mc]?ts$/i
 /** Wires read from imports, which need words saying what they are for. */
-const SAID = new Set(['uses', 'acts on', 'shows', 'starts'])
+const SAID = new Set(['uses', 'asks', 'reads', 'starts'])
 
 const named = (c: Component): string => `${c.kind} ${c.name}`
 const Named = (c: Component): string => named(c).replace(/^./, (first) => first.toUpperCase())

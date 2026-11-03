@@ -52,8 +52,8 @@ describe('reading a set-up repo', () => {
 
   it('draws wires from imports, with their kind and words, through path aliases too', () => {
     expect(wire(map, 'write-note', 'notes')).toMatchObject({ kind: 'uses', words: 'keeps the note' })
-    expect(wire(map, 'new-note', 'write-note')).toMatchObject({ kind: 'acts on', words: 'saves what was typed' })
-    expect(wire(map, 'page:notes', 'module:notes')).toMatchObject({ kind: 'shows', words: 'lists the notes' })
+    expect(wire(map, 'new-note', 'write-note')).toMatchObject({ kind: 'asks', words: 'saves what was typed' })
+    expect(wire(map, 'page:notes', 'module:notes')).toMatchObject({ kind: 'reads', words: 'lists the notes' })
     expect(wire(map, 'nightly-tidy', 'write-note')).toMatchObject({ kind: 'starts', words: 'clears out empty notes' })
   })
 

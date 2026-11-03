@@ -26,7 +26,7 @@ beforeAll(async () => {
     { ...blankCard('page-search', 'search', 'component', 'page'), at: '/search', says: 'Find a note by its words' },
     blankCard('feature-find', 'find-notes', 'component', 'feature'),
   )
-  web.wires.push({ id: 'w1', from: 'page-search', to: 'feature-find', kind: 'acts on', words: 'asks for notes with these words' })
+  web.wires.push({ id: 'w1', from: 'page-search', to: 'feature-find', kind: 'asks', words: 'finds notes with these words' })
   web.notes.push({ id: 'n1', text: 'Search as you type?', x: 0, y: 0 })
   const system = blankCard('notes', 'notes', 'system', 'software system')
   system.children.push(web)
@@ -61,7 +61,7 @@ describe('an agent reading a sketch', () => {
     expect(said).toContain('\n  container web (browser app)')
     expect(said).toContain('\n    page search (at /search): Find a note by its words')
     expect(said).toMatch(/mockup: .+page-search\.png/)
-    expect(said).toContain('\n    page search -> feature find-notes (acts on): asks for notes with these words')
+    expect(said).toContain('\n    page search asks feature find-notes to find notes with these words')
     expect(said).toContain('\n    note: Search as you type?')
   })
 

@@ -1550,3 +1550,692 @@ h3 {
 .sketch-menu-list button:hover {
   background: var(--surface-sunken);
 }
+
+/* ==== drawing a sketch, the second pass ================================ */
+
+/* a wire read aloud: who acts, how, on what, and what for. It takes the
+   width of its words, up to a limit, then wraps: the board gives it no
+   width of its own to shrink into */
+.map-sentence {
+  display: block;
+  width: max-content;
+  max-width: 260px;
+  padding: 3px var(--space-2);
+  white-space: normal;
+  font-size: 11.5px;
+  line-height: 15px;
+  color: var(--ink-soft);
+  text-align: left;
+  overflow-wrap: anywhere;
+  z-index: 1;
+}
+
+.map-sentence--small {
+  padding: 2px var(--space-2);
+}
+
+.map-said-name {
+  color: var(--ink-000);
+  font-weight: 600;
+}
+
+.map-said-verb {
+  color: var(--wire-strong);
+  font-weight: 600;
+}
+
+.map-said-words,
+.map-said-plain {
+  color: var(--ink-soft);
+}
+
+.map-said-missing {
+  color: var(--state-problem);
+}
+
+.map-said-ask {
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+.map-sentence--selected {
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus-ring) 30%, transparent);
+}
+
+.map-sentence--pickable:hover {
+  border-color: var(--wire-strong);
+}
+
+.map-pins-row--said {
+  display: block;
+}
+
+/* a wire: a wide, unseen stroke along it, so it is easy to pick */
+.map-wire-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14px;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.map-wire--selected path:first-child {
+  stroke: var(--focus-ring);
+  stroke-width: var(--stroke-wire-strong);
+}
+
+/* the wire being drawn, before it lands */
+.map-wire-live {
+  fill: none;
+  stroke: var(--focus-ring);
+  stroke-width: var(--stroke-wire-strong);
+  stroke-dasharray: 6 4;
+}
+
+.map-head-live {
+  fill: var(--focus-ring);
+}
+
+/* a wire from outside, carried through the open card's border to the card
+   inside it that it really reaches */
+.map-through {
+  fill: none;
+  stroke: var(--wire-line);
+  stroke-width: var(--stroke-wire);
+  stroke-dasharray: 2 4;
+  opacity: 0.9;
+}
+
+/* the two ends of a picked wire, to drag onto another card */
+.map-wires--ends {
+  pointer-events: none;
+  z-index: 3;
+}
+
+.map-wire-end {
+  fill: var(--pick-handle);
+  stroke: var(--focus-ring);
+  stroke-width: 2px;
+  pointer-events: all;
+  cursor: crosshair;
+}
+
+/* lines that show two edges have lined up while dragging */
+.map-guide {
+  stroke: var(--focus-ring);
+  stroke-width: 1px;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+}
+
+/* the dots on a card's sides that a wire is drawn from */
+.map-handle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border: 2px solid var(--focus-ring);
+  border-radius: var(--radius-pill);
+  background: var(--pick-handle);
+  cursor: crosshair;
+  z-index: 2;
+  transition: transform 80ms ease;
+}
+
+.map-handle:hover {
+  transform: scale(1.35);
+  background: var(--focus-ring);
+}
+
+.map-handle--n { left: 50%; top: 0; }
+.map-handle--e { left: 100%; top: 50%; }
+.map-handle--s { left: 50%; top: 100%; }
+.map-handle--w { left: 0; top: 50%; }
+
+/* a card drawn on a sketch: its dots sit half outside it */
+.map-card--drawn {
+  overflow: visible;
+  cursor: grab;
+}
+
+.map-card--drawn[role="button"] {
+  cursor: grab;
+}
+
+.map-card--drawn .map-shot {
+  overflow: hidden;
+}
+
+.map-card--drawn.map-frame > .map-frame-bar {
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.map-card--selected {
+  outline: var(--stroke-open) solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* the card a wire being drawn would land on */
+.map-card--target {
+  outline: var(--stroke-open) solid var(--focus-ring);
+  outline-offset: 4px;
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--focus-ring) 18%, transparent), var(--shadow-card);
+}
+
+.map-card--person {
+  border-radius: var(--radius-xl) var(--radius-xl) var(--radius-lg) var(--radius-lg);
+}
+
+.map-marquee--pick {
+  border: var(--stroke-edge) solid var(--focus-ring);
+  background: color-mix(in srgb, var(--focus-ring) 8%, transparent);
+}
+
+.map-frame-area--card {
+  cursor: copy;
+}
+
+.map-frame-area--wire .map-card {
+  cursor: crosshair;
+}
+
+.map-frame-area--pan,
+.map-frame-area--pan .map-card {
+  cursor: grab;
+}
+
+/* writing words in place, over the card, the wire, or the note */
+.map-edit {
+  position: absolute;
+  z-index: 4;
+  font: inherit;
+  color: var(--ink-000);
+  background: var(--surface-000);
+  border: var(--stroke-open) solid var(--focus-ring);
+  border-radius: var(--radius-sm);
+  outline: none;
+  box-shadow: var(--shadow-float);
+}
+
+.map-edit--name {
+  height: 28px;
+  padding: 0 var(--space-2);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.map-edit--wire {
+  width: 240px;
+  height: 28px;
+  padding: 0 var(--space-2);
+  font-size: 12px;
+  transform: translate(-50%, -50%);
+}
+
+.map-edit--note {
+  width: var(--note-w);
+  min-height: 80px;
+  padding: var(--space-3);
+  font-size: 13px;
+  line-height: 18px;
+  background: var(--note-fill);
+  color: var(--note-ink);
+  resize: none;
+}
+
+/* ---- the card library, beside the rail -------------------------------- */
+
+.map-palette {
+  width: 216px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-2);
+  background: var(--surface-100);
+  border-right: var(--stroke-edge) solid var(--line-hair);
+  overflow-y: auto;
+  z-index: 2;
+  user-select: none;
+}
+
+.map-palette-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-2);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-000);
+}
+
+.map-palette-close {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+
+.map-palette-close:hover {
+  background: var(--surface-sunken);
+  color: var(--ink-000);
+}
+
+.map-palette-hint {
+  padding: 0 var(--space-2) var(--space-2);
+  font-size: 11.5px;
+  line-height: 15px;
+  color: var(--ink-faint);
+}
+
+.map-palette-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: var(--space-2);
+}
+
+.map-palette-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px var(--space-2);
+  border: var(--stroke-edge) solid transparent;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--ink-000);
+  font: inherit;
+  text-align: left;
+  cursor: grab;
+}
+
+.map-palette-item:hover {
+  background: var(--surface-sunken);
+  border-color: var(--line-hair);
+}
+
+.map-palette-item:active {
+  cursor: grabbing;
+}
+
+.map-palette-item--armed,
+.map-palette-item--armed:hover {
+  border-color: var(--focus-ring);
+  background: color-mix(in srgb, var(--focus-ring) 10%, var(--surface-100));
+}
+
+.map-palette-swatch {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  border-top: var(--stroke-rule) solid var(--k, var(--line-edge));
+  background: var(--kw, var(--surface-sunken));
+  color: var(--k, var(--ink-soft));
+}
+
+.map-palette-swatch--small {
+  width: 20px;
+  height: 20px;
+  border-top-width: 2px;
+}
+
+.kind-of--note {
+  --k: var(--note-edge);
+  --kw: var(--note-fill);
+}
+
+.map-palette-words {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.map-palette-name {
+  font-size: 13px;
+  line-height: 17px;
+  font-weight: 500;
+}
+
+.map-palette-says {
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--ink-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* a kind lifted from the library, following the pointer */
+.map-lifted {
+  position: fixed;
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-top: var(--stroke-rule) solid var(--k, var(--line-edge));
+  border-radius: var(--radius-md);
+  background: var(--surface-000);
+  color: var(--ink-000);
+  font-size: 13px;
+  box-shadow: var(--shadow-float);
+  pointer-events: none;
+  transform: translate(-50%, -50%) rotate(-2deg);
+  opacity: 0.95;
+}
+
+/* ---- asking what to add ----------------------------------------------- */
+
+.map-quick {
+  position: absolute;
+  z-index: 8;
+  width: 236px;
+  padding: var(--space-2);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-lg);
+  background: var(--surface-100);
+  box-shadow: var(--shadow-float);
+}
+
+.map-quick-head {
+  padding: var(--space-1) var(--space-2);
+  font-size: 10.5px;
+  line-height: 14px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.map-quick-find {
+  width: 100%;
+  height: 30px;
+  margin: var(--space-1) 0 var(--space-2);
+  padding: 0 var(--space-2);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-sm);
+  background: var(--surface-000);
+  color: var(--ink-000);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.map-quick-find:focus {
+  border-color: var(--focus-ring);
+}
+
+.map-quick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.map-quick-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 5px var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-000);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.map-quick-row .map-palette-swatch {
+  width: 24px;
+  height: 24px;
+}
+
+.map-quick-row--on {
+  background: var(--surface-sunken);
+}
+
+.map-quick-none {
+  padding: var(--space-2);
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
+/* ---- the bar over what is picked -------------------------------------- */
+
+.map-context {
+  position: absolute;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-md);
+  background: var(--surface-100);
+  box-shadow: var(--shadow-float);
+  transform: translate(-50%, -100%);
+  white-space: nowrap;
+}
+
+.map-context-kind {
+  position: relative;
+}
+
+.map-context-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 200px;
+  padding: var(--space-1);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-md);
+  background: var(--surface-100);
+  box-shadow: var(--shadow-float);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.map-context-words {
+  padding: 0 var(--space-2);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.map-context-rule {
+  width: var(--stroke-edge);
+  align-self: stretch;
+  margin: 3px 2px;
+  background: var(--line-hair);
+}
+
+.map-act {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.map-act:hover {
+  background: var(--surface-sunken);
+  color: var(--ink-000);
+}
+
+.map-act--wide {
+  padding: 0 var(--space-2);
+  color: var(--ink-000);
+}
+
+.map-act--danger:hover {
+  background: var(--state-problem-wash);
+  color: var(--state-problem);
+}
+
+/* ---- small things ----------------------------------------------------- */
+
+.ds-button--icon {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}
+
+.ds-tool:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+
+.ds-tool:disabled:hover {
+  background: none;
+  color: var(--ink-soft);
+}
+
+.sketch-says {
+  resize: vertical;
+  font: inherit;
+  min-height: 60px;
+}
+
+/* ---- the third pass ---------------------------------------------------- */
+
+/* the board is a drawing surface: dragging across it never selects text */
+.map-frame-area,
+.map-rail,
+.map-palette {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.map-edit,
+.map-quick-find {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* the panel is always there on a sketch, docked, so picking something
+   never squeezes the board and moves what is on it */
+.sketch-panel {
+  width: 288px;
+  z-index: 2;
+}
+
+.sketch-keys {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2px;
+  margin: var(--space-2) 0 0;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.sketch-keys dt {
+  margin-top: var(--space-2);
+  color: var(--ink-000);
+  font-weight: 600;
+}
+
+.sketch-keys dd {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+kbd {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 4px;
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-xs);
+  background: var(--surface-000);
+  color: var(--ink-000);
+  font: 500 11px/16px var(--font-mono);
+  text-align: center;
+}
+
+.sketch-panel-head {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--ink-000);
+  text-transform: none;
+}
+
+/* the panel reads a wire out the way the board does */
+.sketch-sentence {
+  padding: var(--space-2) var(--space-3);
+  border: var(--stroke-edge) solid var(--line-hair);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 19px;
+}
+
+.map-context--below {
+  transform: translate(-50%, 0);
+}
+
+.sketch-panel {
+  position: relative;
+}
+
+.sketch-panel-hide {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+
+.sketch-panel-hide:hover {
+  background: var(--surface-sunken);
+  color: var(--ink-000);
+}
+
+.sketch-panel-tab {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-md);
+  background: var(--surface-100);
+  color: var(--ink-soft);
+  box-shadow: var(--shadow-chip);
+  cursor: pointer;
+}

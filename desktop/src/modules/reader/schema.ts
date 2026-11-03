@@ -11,7 +11,11 @@ export const live: Point = { kind: 'live' }
 
 export type ComponentKind = 'module' | 'feature' | 'page' | 'trigger'
 
-export type WireKind = 'uses' | 'acts on' | 'shows' | 'starts' | 'keeps' | 'leads to' | 'calls'
+/** How one card reaches another, read as the verb of a sentence: a page
+ *  asks a feature, reads a module; a feature uses a module; a trigger starts
+ *  a feature; a module keeps things in a store; a page leads to a page; a
+ *  software system calls another. */
+export type WireKind = 'uses' | 'asks' | 'reads' | 'starts' | 'keeps' | 'leads to' | 'calls'
 
 /** One file at the bottom level, with the names declared in it. */
 export type CodeFile = {

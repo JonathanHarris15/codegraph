@@ -2,7 +2,15 @@
 import type { Card } from '../../features/show-map.js'
 
 /** A wire as the canvas draws it, from the map or from a sketch. */
-export type DrawnWire = { id?: string; from: string; to: string; kind: string; words: string }
+export type DrawnWire = {
+  id?: string
+  from: string
+  to: string
+  kind: string
+  words: string
+  /** Where the wire really starts and ends, when it is drawn a level up. */
+  ends?: { from: string; to: string }[]
+}
 
 /** A note a person left on a level of a sketch. */
 export type DrawnNote = { id: string; text: string; x: number; y: number }
@@ -26,10 +34,17 @@ export type Opened = { id: string; w: number; h: number }
 
 const GAP_X = 120
 
-/** How wide a wire's sentence runs, near enough, at the size the canvas draws
- *  it: the verb, the hairline, the words, and a little air either side. */
-export const wordsWidth = (wire: { kind: string; words: string }): number =>
-  Math.round(wire.kind.length * 6.4 + (wire.words ? wire.words.length * 6.6 : 0) + 40) + 48
+/** The widest a wire's sentence runs before it wraps onto a second line. */
+export const SENTENCE_MAX = 260
+
+/** How wide a wire's sentence runs, near enough, before it is drawn and can be
+ *  measured: two names, the verb, the words, and a little air either side. */
+export const sentenceWidth = (wire: { kind: string; words: string }): number =>
+  Math.min(Math.round((24 + wire.kind.length + (wire.words ? wire.words.length + 4 : 0)) * 6.3 + 20), SENTENCE_MAX)
+
+/** The room a wire needs between two cards side by side: its sentence, and
+ *  air either side of it. */
+export const wordsWidth = (wire: { kind: string; words: string }): number => sentenceWidth(wire) + 56
 
 /** The gap between cards side by side: wide enough for the longest sentence on
  *  any wire between them, so the words never press against a card. */
@@ -172,11 +187,45 @@ const middleOf = (
 })
 
 /** A curved path from one card to another, leaving and arriving on the
- *  sides that face each other. */
-export const wirePath = (from: Box, to: Box, slots: Slots = { from: 0.5, to: 0.5 }): WireShape => {
+ *  sides that face each other. One card above another goes straight down
+ *  between them when nothing is in the way; otherwise it loops round the
+ *  side. */
+export const wirePath = (
+  from: Box,
+  to: Box,
+  slots: Slots = { from: 0.5, to: 0.5 },
+  others: Box[] = [],
+): WireShape => {
   const fromMid = { x: from.x + from.w / 2, y: from.y + from.h / 2 }
   const toMid = { x: to.x + to.w / 2, y: to.y + to.h / 2 }
-  const sideways = Math.abs(toMid.x - fromMid.x) > Math.max(from.w, to.w) / 2
+  // The open air between the two cards, across and down. Whichever there is
+  // more of is the way the wire runs.
+  const across = Math.abs(toMid.x - fromMid.x) - (from.w + to.w) / 2
+  const downward = Math.abs(toMid.y - fromMid.y) - (from.h + to.h) / 2
+  const vertical = downward > 24 && downward > across
+  const sideways = !vertical && Math.abs(toMid.x - fromMid.x) > Math.max(from.w, to.w) / 2
+
+  if (vertical || !sideways) {
+    const down = toMid.y > fromMid.y
+    const a = { x: from.x + from.w * slots.from, y: down ? from.y + from.h : from.y }
+    const b = { x: to.x + to.w * slots.to, y: down ? to.y : to.y + to.h }
+    const gap = down ? b.y - a.y : a.y - b.y
+    const lane = { x: Math.min(a.x, b.x) - 8, y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x) + 16, h: Math.abs(b.y - a.y) }
+    const blocked = others.some(
+      (o) => o !== from && o !== to && o.x < lane.x + lane.w && o.x + o.w > lane.x && o.y < lane.y + lane.h && o.y + o.h > lane.y,
+    )
+    if (gap > 24 && !blocked) {
+      const bend = Math.max(24, gap / 2) * (down ? 1 : -1)
+      const c1 = { x: a.x, y: a.y + bend }
+      const c2 = { x: b.x, y: b.y - bend }
+      return {
+        d: `M ${a.x} ${a.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${b.x} ${b.y}`,
+        at: middleOf(a, c1, c2, b),
+        tail: a,
+        head: b,
+      }
+    }
+  }
 
   if (sideways) {
     const forward = toMid.x > fromMid.x
@@ -208,38 +257,45 @@ export const wirePath = (from: Box, to: Box, slots: Slots = { from: 0.5, to: 0.5
 }
 
 /** A sentence sits in the middle of its own wire. Where that would put it on
- *  another sentence or on a card, it slides along the wire — either way, the
- *  nearer clear spot winning — so the words are never pressed against a card. */
+ *  another sentence or on a card, it slides along the wire, either way, and
+ *  then steps off to one side of it, the nearest clear spot winning. It is
+ *  never left on a card when anywhere else will do. */
 export const spread = (
-  chips: { at: { x: number; y: number }; w: number; tail: { x: number; y: number }; head: { x: number; y: number } }[],
+  chips: {
+    at: { x: number; y: number }
+    w: number
+    h: number
+    tail: { x: number; y: number }
+    head: { x: number; y: number }
+  }[],
   cards: Box[] = [],
 ): { x: number; y: number }[] => {
-  const H = 26
-  const placed: { x: number; y: number; w: number }[] = []
-  const clear = (at: { x: number; y: number }, w: number): boolean =>
-    !placed.some((other) => Math.abs(other.y - at.y) < H && Math.abs(other.x - at.x) < (other.w + w) / 2) &&
-    !cards.some(
-      (card) =>
-        at.x + w / 2 > card.x && at.x - w / 2 < card.x + card.w && at.y + H / 2 > card.y && at.y - H / 2 < card.y + card.h,
-    )
+  const AIR = 6
+  const placed: Box[] = []
+  const hits = (one: Box, other: Box): boolean =>
+    one.x < other.x + other.w + AIR && one.x + one.w + AIR > other.x && one.y < other.y + other.h + AIR && one.y + one.h + AIR > other.y
+  const boxAt = (at: { x: number; y: number }, w: number, h: number): Box => ({ x: at.x - w / 2, y: at.y - h / 2, w, h })
   const along = (chip: (typeof chips)[number], by: number): { x: number; y: number } => {
     const end = by < 0 ? chip.tail : chip.head
     const share = Math.abs(by)
     return { x: chip.at.x + (end.x - chip.at.x) * share, y: chip.at.y + (end.y - chip.at.y) * share }
   }
+  const SLIDES = [0, -0.16, 0.16, -0.32, 0.32, -0.48, 0.48, -0.62, 0.62]
   return chips.map((chip) => {
-    // Nowhere along the wire is clear on a crowded level, and then the
-    // middle is still the most honest place for it.
-    let at = { ...chip.at }
-    if (!clear(at, chip.w))
-      for (const by of [-0.18, 0.18, -0.34, 0.34, -0.5, 0.5, -0.64, 0.64]) {
-        const tried = along(chip, by)
-        if (clear(tried, chip.w)) {
-          at = tried
-          break
-        }
+    const tries: { x: number; y: number }[] = []
+    for (const side of [0, -1, 1, -2, 2])
+      for (const by of SLIDES) {
+        const on = along(chip, by)
+        tries.push({ x: on.x, y: on.y + side * (chip.h + AIR) })
       }
-    placed.push({ ...at, w: chip.w })
+    const free = tries.find((at) => {
+      const box = boxAt(at, chip.w, chip.h)
+      return !cards.some((card) => hits(box, card)) && !placed.some((other) => hits(box, other))
+    })
+    // On a level too crowded for anywhere to be clear, the middle is still
+    // the most honest place for it.
+    const at = free ?? chip.at
+    placed.push(boxAt(at, chip.w, chip.h))
     return at
   })
 }

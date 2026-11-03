@@ -7,6 +7,7 @@ import '@fontsource/ibm-plex-sans/600.css'
 import '@fontsource/ibm-plex-mono/400.css'
 import '@fontsource/ibm-plex-mono/500.css'
 import './design-system/theme.css'
+import { wearTheme } from './design-system/kit.js'
 import { CanvasPage } from './pages/canvas.js'
 import { ProjectsPage } from './pages/projects.js'
 
@@ -26,6 +27,8 @@ const App = () => {
     <ProjectsPage onOpen={(id) => (window.location.hash = `#/projects/${id}`)} />
   )
 }
+
+wearTheme()
 
 const root = document.getElementById('root')
 if (!root) throw new Error('the window has no root to draw in')

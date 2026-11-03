@@ -1,7 +1,8 @@
 // codegraph: feature describe-map in agent
-// codegraph: uses reader
+// codegraph: uses reader, wording
 // codegraph: command map
 import { live, readMap, type Point, type SystemMap } from '../modules/reader/index.js'
+import { sentenceOf } from '../modules/wording/index.js'
 
 const pointWords = (point: Point): string =>
   point.kind === 'live' ? 'the live folder' : point.kind === 'branch' ? `branch ${point.name}` : `commit ${point.sha.slice(0, 7)}`
@@ -40,15 +41,20 @@ export const describeMap = async (repo: string, point: Point = live): Promise<st
     out.push('Wires:')
     for (const w of map.wires)
       out.push(
-        `  ${nameOf.get(w.from) ?? w.from} -> ${nameOf.get(w.to) ?? w.to} (${w.kind})${
-          w.words ? `: ${w.words}` : w.kind === 'leads to' ? '' : ': NO WORDS'
-        }`,
+        `  ${sentenceOf(nameOf.get(w.from) ?? w.from, w.kind, nameOf.get(w.to) ?? w.to, w.words)
+          .map((part) => part.text)
+          .join('')}${w.words || w.kind === 'leads to' || w.kind === 'keeps' ? '' : ' (NO WORDS yet)'}`,
       )
     out.push('')
   }
   if (map.outside.length) {
     out.push('Calls out of the repo:')
-    for (const w of map.outside) out.push(`  ${nameOf.get(w.from) ?? w.from} -> ${w.to.replace(/^outside:/, '')}: ${w.words}`)
+    for (const w of map.outside)
+      out.push(
+        `  ${sentenceOf(nameOf.get(w.from) ?? w.from, 'calls', w.to.replace(/^outside:/, ''), w.words)
+          .map((part) => part.text)
+          .join('')}`,
+      )
     out.push('')
   }
   if (map.problems.length) {

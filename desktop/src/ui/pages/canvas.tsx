@@ -4,7 +4,7 @@ import type { SketchListed } from '../../features/list-sketches.js'
 import type { MapShown } from '../../features/show-map.js'
 import type { Point } from '../../modules/reader/index.js'
 import type { Sketch } from '../../modules/sketches/index.js'
-import { Button } from '../design-system/kit.js'
+import { Button, ThemeSwitch } from '../design-system/kit.js'
 import { MapCanvas, walk } from '../components/map-canvas.js'
 import { PointPicker } from '../components/point-picker.js'
 import { SketchEditor } from '../components/sketch-editor.js'
@@ -170,6 +170,7 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
             </button>
           ) : null}
           <Button onClick={() => setLibrary(!library)}>Sketches{sketches.length ? ` (${sketches.length})` : ''}</Button>
+          <ThemeSwitch />
         </div>
       </div>
 

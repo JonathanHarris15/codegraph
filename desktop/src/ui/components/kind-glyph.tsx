@@ -1,6 +1,22 @@
 // codegraph: component kind-glyph
 import {
   AlarmClock,
+  AlignCenterHorizontal,
+  AlignCenterVertical,
+  AlignEndHorizontal,
+  AlignEndVertical,
+  AlignHorizontalSpaceAround,
+  AlignStartHorizontal,
+  AlignStartVertical,
+  AlignVerticalSpaceAround,
+  Copy,
+  Keyboard,
+  Pencil,
+  Redo2,
+  Shapes,
+  SquareArrowOutUpRight,
+  Trash2,
+  Undo2,
   AppWindow,
   ArrowRight,
   Box,
@@ -60,6 +76,7 @@ const GLYPHS: Record<string, LucideIcon> = {
   module: Package,
   trigger: AlarmClock,
   file: FileCode,
+  note: StickyNote,
 }
 
 /** The glyphs of the canvas itself: tools, and getting around. */
@@ -81,6 +98,22 @@ export const TOOL_GLYPHS = {
   close: X,
   more: Ellipsis,
   start: Star,
+  edit: Pencil,
+  bin: Trash2,
+  undo: Undo2,
+  redo: Redo2,
+  copy: Copy,
+  inside: SquareArrowOutUpRight,
+  cards: Shapes,
+  keys: Keyboard,
+  alignLeft: AlignStartVertical,
+  alignCenter: AlignCenterVertical,
+  alignRight: AlignEndVertical,
+  alignTop: AlignStartHorizontal,
+  alignMiddle: AlignCenterHorizontal,
+  alignBottom: AlignEndHorizontal,
+  spaceAcross: AlignHorizontalSpaceAround,
+  spaceDown: AlignVerticalSpaceAround,
 } as const
 
 export type ToolGlyph = keyof typeof TOOL_GLYPHS

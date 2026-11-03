@@ -66,7 +66,7 @@ describe('the canvas in the real app', () => {
     expect(await shown(page.getByLabel('Suggested software systems'))).toContain('The code calls mailer')
     await page.getByRole('button', { name: 'Add it' }).click()
     expect(await shown(page.getByLabel('mailer', { exact: true }))).toContain('shallow software system')
-    expect(await shown(page.getByText('tells the owner'))).toBe('tells the owner')
+    expect(await page.getByLabel('Wire: notes calls mailer to tell the owner').count()).toBe(1)
     await settle()
     await picture('1b-shallow')
   })
@@ -77,7 +77,7 @@ describe('the canvas in the real app', () => {
     expect(await shown(page.getByLabel('db', { exact: true }))).toContain('database')
     // Opening notes keeps the project level around it, so its wires are on
     // screen too: name the one we mean rather than taking the first.
-    expect(await shown(page.getByText('keeps notes'))).toBe('keeps notes')
+    expect(await page.getByLabel('Wire: web keeps notes in db').count()).toBe(1)
     await settle()
     await picture('2-system')
   })
@@ -87,7 +87,7 @@ describe('the canvas in the real app', () => {
     expect(await shown(page.getByRole('button', { name: 'Open new-note' }))).toContain('/notes/new')
     expect(await shown(page.getByText('No screenshot yet'))).toBe('No screenshot yet')
     await page.getByRole('img', { name: 'new-note as it looks' }).waitFor({ state: 'visible', timeout: PATIENCE })
-    expect(await shown(page.getByText('saves what was typed'))).toBe('saves what was typed')
+    expect(await page.getByLabel('Wire: new-note asks write-note to save what was typed').count()).toBe(1)
     expect(await shown(page.getByRole('navigation', { name: 'Where you are' }))).toContain('web')
     await settle()
     await picture('3-container')
