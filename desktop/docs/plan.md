@@ -72,8 +72,7 @@ Point your own agent at indie-stack and have it set up in one sweep.
   shown only once a person agrees.
 - **CG-2.6** (done) GitHub discovery reads the config, not the old plugin file
   (ADR 0006).
-- **CG-2.7** Set up indie-stack for real, on a branch, and merge it. Done on
-  the `codegraph-setup` branch; waiting on Jonathan to merge.
+- **CG-2.7** (done) Set up indie-stack for real, on a branch, and merge it.
 - **CG-2.8** Give each project in the app its short name, the one repos name
   in their config (ADR 0008), and match repos to projects by it. Today the
   app's project names happen to match.
