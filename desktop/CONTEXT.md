@@ -15,6 +15,11 @@ What a project's repos call it, like `harris-appraisals`. It stays the same
 when the project is renamed, so no repo has to change.
 _Avoid_: slug, key, id, handle
 
+**Person**:
+Someone who uses a project's software, drawn beside its software systems.
+No code says who they are, so a person is drawn, not read.
+_Avoid_: user, actor, persona, role
+
 **Software system**:
 One repo, seen whole. It can serve more than one project, and it says in its
 own code which ones.
@@ -95,12 +100,14 @@ _Avoid_: node, box, unit, element, shape
 **Wire**:
 A one-way line between two cards. It shows the kind of relationship, read
 from the code, and a phrase saying what it is for, written in the code beside
-the call.
+the call. It reads as a sentence: who acts, how, on what, and what for —
+write-note uses notes to keep the note.
 _Avoid_: edge, arrow, link, connection, dependency
 
 **Tunnelling**:
-Moving down a level by zooming into a card until its insides fill the canvas;
-tunnelling out is the way back up.
+Moving down a level by zooming into a card: it opens in place, its insides
+drawn within it, while the cards around it and their wires into it stay in
+view. Tunnelling out is the way back up.
 _Avoid_: drilling down, expanding, opening
 
 **Page map**:
