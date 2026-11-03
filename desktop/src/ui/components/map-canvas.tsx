@@ -11,6 +11,7 @@ import {
   type RefObject,
 } from 'react'
 import { sentenceOf, type Said } from '../../modules/wording/index.js'
+import { CanvasMenu, type MenuItem } from './canvas-menu.js'
 import { CardPalette } from './card-palette.js'
 import { ContextBar, type Picking } from './context-bar.js'
 import { Glyph, KindGlyph, keeps, kindClass } from './kind-glyph.js'
@@ -59,13 +60,24 @@ export type Drawing = {
    *  Hands back the new card's id. */
   onPlace: (at: Spot, kind: string, from?: string) => string
   onNote: (at: Spot) => string
-  onMove: (moves: Arrangement) => void
+  /** Puts things down where they were dragged. Joining makes the move one
+   *  step with the one before, as when Alt and drag copied what it carries. */
+  onMove: (moves: Arrangement, join?: boolean) => void
   onWire: (from: string, to: string) => string
   onRewire: (id: string, end: 'from' | 'to', card: string) => void
-  /** A card's name, a wire's words, or a note's words. Writing the first
-   *  words of something just made joins the step that made it, so one undo
-   *  takes the whole thing away. */
-  onText: (id: string, text: string, first?: boolean) => void
+  /** A card's name, a wire's words, or a note's words; or, for a card,
+   *  what it is for. Writing the first words of something just made joins
+   *  the step that made it, so one undo takes the whole thing away. */
+  onText: (id: string, text: string, first?: boolean, field?: 'says') => void
+  canPaste: boolean
+  onCopy: (ids: string[]) => void
+  onCut: (ids: string[]) => void
+  /** Puts what Copy holds onto the level, near a spot if given, and hands
+   *  back the new ids. */
+  onPaste: (at?: Spot) => string[]
+  /** Copies things where they are, and hands back the copies' ids. */
+  onDuplicate: (ids: string[], by?: number) => string[]
+  onSelectAll: () => void
   onKind: (id: string, kind: string) => void
   onMockup: (id: string) => void
   onRemove: (ids: string[]) => void
@@ -73,6 +85,25 @@ export type Drawing = {
 }
 
 const STEP_MS = 320
+
+/** A small thing this window remembers about how a person likes it, such as
+ *  whether the card library is open. Never anything that matters. */
+export const remembered = (key: string, otherwise: boolean): boolean => {
+  try {
+    const kept = window.localStorage.getItem(key)
+    return kept === null ? otherwise : kept === 'yes'
+  } catch {
+    return otherwise
+  }
+}
+
+export const remember = (key: string, value: boolean): void => {
+  try {
+    window.localStorage.setItem(key, value ? 'yes' : 'no')
+  } catch {
+    // Not remembered; it is only a preference.
+  }
+}
 
 /** More wires than this into one card and their sentences collapse to the
  *  verb alone: a diagram cannot say eight things at once, so the card lists
@@ -88,11 +119,11 @@ type Side = 'n' | 'e' | 's' | 'w'
 
 /** One thing being done with the pointer, from press to release. */
 type Gesture =
-  | { type: 'pan'; x: number; y: number; vx: number; vy: number; moved: boolean }
+  | { type: 'pan'; x: number; y: number; vx: number; vy: number; moved: boolean; button: number }
   | { type: 'zoombox'; from: Spot }
   | { type: 'select'; from: Spot; add: boolean; base: string[]; moved: boolean }
-  | { type: 'move'; ids: string[]; grab: Spot; starts: Map<string, Box>; moved: boolean; sx: number; sy: number }
-  | { type: 'connect'; from: string; side: Side | null; rewire?: { id: string; end: 'from' | 'to' }; moved: boolean }
+  | { type: 'move'; ids: string[]; grab: Spot; starts: Map<string, Box>; moved: boolean; sx: number; sy: number; copied?: boolean }
+  | { type: 'connect'; from: string; side: Side | null; rewire?: { id: string; end: 'from' | 'to' }; moved: boolean; sx: number; sy: number }
 
 /** What a gesture under way is showing, before it lands. */
 type Live = {
@@ -296,7 +327,7 @@ const CardFace = ({
             <span
               key={side}
               className={`map-handle map-handle--${side}`}
-              title="Drag to wire it to another card"
+              title="Click to add a card here, wired; drag to wire it to another card"
               onPointerDown={(event) => {
                 event.stopPropagation()
                 onHandle(side, event)
@@ -374,7 +405,21 @@ const Sentence = ({
             </span>
           ))}
           {missing ? <span className="map-said-missing"> · no words yet</span> : null}
-          {unfinished ? <span className="map-said-missing map-said-ask"> · what for?</span> : null}
+          {unfinished ? (
+            <span
+              className="map-said-missing map-said-ask"
+              role="button"
+              aria-label="Say what the wire is for"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation()
+                onEdit()
+              }}
+            >
+              {' '}
+              · what for?
+            </span>
+          ) : null}
         </span>
       )}
     </div>
@@ -399,7 +444,13 @@ export const MapCanvas = ({
   const [moving, setMoving] = useState(false)
   const [faded, setFaded] = useState(false)
   const [tool, setTool] = useState<Tool>('pick')
-  const [palette, setPalette] = useState(true)
+  const [palette, setPaletteNow] = useState(() => remembered('codegraph-palette', true))
+  const setPalette = (open: boolean | ((was: boolean) => boolean)): void =>
+    setPaletteNow((was) => {
+      const next = typeof open === 'function' ? open(was) : open
+      remember('codegraph-palette', next)
+      return next
+    })
   /** A kind waiting to be placed with a click on the board. */
   const [armed, setArmed] = useState('')
   /** A kind picked up from the library, following the pointer. */
@@ -408,7 +459,16 @@ export const MapCanvas = ({
   const [hover, setHover] = useState('')
   const [live, setLive] = useState<Live>({})
   /** Words being written in place: a card's name, a wire's, or a note's. */
-  const [editing, setEditing] = useState<{ id: string; text: string; was: string; first?: boolean } | null>(null)
+  const [editing, setEditing] = useState<{
+    id: string
+    text: string
+    was: string
+    first?: boolean
+    /** A card's second line, what it is for, rather than its name. */
+    says?: boolean
+  } | null>(null)
+  /** The menu a right-click opened, and what it was over. */
+  const [menu, setMenu] = useState<{ screen: Spot; inside: Spot; ids: string[] } | null>(null)
   /** Asking what to put where a wire was dropped, or the board double-clicked. */
   const [quick, setQuick] = useState<{ screen: Spot; inside: Spot; from: string } | null>(null)
   const [sizes, setSizes] = useState<Record<string, { w: number; h: number }>>({})
@@ -795,23 +855,46 @@ export const MapCanvas = ({
   }, [placed, trail, tunnelIn, tunnelOut])
 
   const startEditing = useCallback(
-    (id: string, seed?: string): void => {
+    (id: string, seed?: string, says = false): void => {
       if (!drawing) return
       const card = focus.children.find((c) => c.id === id)
       const wire = focus.wires.find((w) => w.id === id)
       const note = notes.find((n) => n.id === id)
-      const was = card ? card.name : wire ? wire.words : note ? note.text : null
+      const was = card ? (says ? card.says : card.name) : wire ? wire.words : note ? note.text : null
       if (was === null) return
       drawing.onSelect([id])
-      setEditing({ id, text: seed ?? was, was })
+      setEditing({ id, text: seed ?? was, was, says: Boolean(card && says) })
     },
     [drawing, focus, notes],
   )
 
+  // Something being written on is always in sight: a card made off the edge
+  // of the board, or under the panel, brings the board round to it.
+  useEffect(() => {
+    if (!editing) return
+    const box = where.get(editing.id) ?? noteBoxes.find((n) => n.note.id === editing.id)?.box
+    const el = frame.current
+    if (!box || !el) return
+    const MARGIN = 48
+    const v = seen.current
+    const left = v.x + box.x * v.k
+    const top = v.y + box.y * v.k
+    const right = left + box.w * v.k
+    const bottom = top + box.h * v.k
+    let dx = 0
+    let dy = 0
+    if (right > el.clientWidth - MARGIN) dx = el.clientWidth - MARGIN - right
+    if (left + dx < MARGIN) dx = MARGIN - left
+    if (bottom > el.clientHeight - MARGIN) dy = el.clientHeight - MARGIN - bottom
+    if (top + dy < MARGIN) dy = MARGIN - top
+    if (dx || dy) setView((now) => ({ ...now, x: now.x + dx, y: now.y + dy }))
+  }, [editing?.id, where, noteBoxes])
+
   const finishEditing = useCallback(
     (keep: boolean): void => {
       if (!editing || !drawing) return
-      if (keep && editing.text !== editing.was) drawing.onText(editing.id, editing.text, editing.first)
+      if (keep && editing.text !== editing.was)
+        drawing.onText(editing.id, editing.text, editing.first, editing.says ? 'says' : undefined)
       setEditing(null)
     },
     [editing, drawing],
@@ -866,9 +949,15 @@ export const MapCanvas = ({
         return
       }
       if (!drawing && event.key === 'Backspace') tunnelOut()
-      if (event.key === '0' && plain) fit()
-      if ((event.key === '+' || event.key === '=') && plain) zoomBy(1.25)
-      if (event.key === '-' && plain) zoomBy(0.8)
+      // Ctrl and 0, = or - always zoom the board. The keys alone zoom too,
+      // unless something is picked, when they are words being typed on it.
+      const zoomKeys = (event.ctrlKey || event.metaKey) && !event.altKey ? true : plain && !(drawing && selected.length)
+      if (zoomKeys && (event.key === '0' || event.key === '+' || event.key === '=' || event.key === '-')) {
+        event.preventDefault()
+        if (event.key === '0') fit()
+        else zoomBy(event.key === '-' ? 0.8 : 1.25)
+        return
+      }
       if (!drawing || !plain) return
       // With one thing picked, typing writes its words, the way a diagram
       // tool lets you just start typing on a shape.
@@ -936,7 +1025,7 @@ export const MapCanvas = ({
     setQuick(null)
     if (editing && editing.id !== id) finishEditing(true)
     if (tool === 'wire' && focus.children.some((c) => c.id === id)) {
-      gesture.current = { type: 'connect', from: id, side: null, moved: false }
+      gesture.current = { type: 'connect', from: id, side: null, moved: false, sx: event.clientX, sy: event.clientY }
       pending.current = event.pointerId
       return
     }
@@ -949,14 +1038,30 @@ export const MapCanvas = ({
     const starts = new Map<string, Box>()
     for (const p of laid) if (picked.includes(p.card.id)) starts.set(p.card.id, { ...p.box, x: p.box.x - shift.x, y: p.box.y - shift.y })
     for (const n of notes) if (picked.includes(n.id)) starts.set(n.id, { x: n.x, y: n.y, w: 180, h: 60 })
-    gesture.current = { type: 'move', ids: picked, grab: worldOf(event), starts, moved: false, sx: event.clientX, sy: event.clientY }
+    // Alt and drag leaves the originals where they are and carries copies,
+    // the way a diagram tool does.
+    let carried = picked
+    if (event.altKey) {
+      const copies = drawing.onDuplicate(picked, 0)
+      const order = [...starts.keys()]
+      const copied = new Map<string, Box>()
+      order.forEach((was, i) => {
+        const copy = copies[i]
+        if (copy) copied.set(copy, starts.get(was)!)
+      })
+      starts.clear()
+      for (const [key, box] of copied) starts.set(key, box)
+      carried = copies
+      drawing.onSelect(copies)
+    }
+    gesture.current = { type: 'move', ids: carried, grab: worldOf(event), starts, moved: false, sx: event.clientX, sy: event.clientY, copied: event.altKey }
     pending.current = event.pointerId
   }
 
   const pressHandle = (id: string) => (side: Side, event: PointerEvent<HTMLSpanElement>): void => {
     if (!drawing) return
     setQuick(null)
-    gesture.current = { type: 'connect', from: id, side, moved: false }
+    gesture.current = { type: 'connect', from: id, side, moved: false, sx: event.clientX, sy: event.clientY }
     pending.current = event.pointerId
   }
 
@@ -964,16 +1069,59 @@ export const MapCanvas = ({
   const pressEnd = (wireId: string, end: 'from' | 'to', other: string) => (event: PointerEvent<SVGCircleElement>): void => {
     if (!drawing) return
     event.stopPropagation()
-    gesture.current = { type: 'connect', from: other, side: null, rewire: { id: wireId, end }, moved: false }
+    gesture.current = { type: 'connect', from: other, side: null, rewire: { id: wireId, end }, moved: false, sx: event.clientX, sy: event.clientY }
     pending.current = event.pointerId
+  }
+
+  /** A new card of the same kind as one already there, put on one side of
+   *  it, wired from it, and straight into writing its name. */
+  const besideOf = (id: string, side: Side): void => {
+    const source = laid.find((p) => p.card.id === id)
+    if (!source) return
+    const box = { ...source.box, x: source.box.x - shift.x, y: source.box.y - shift.y }
+    const size = sizeOf(source.card)
+    const gapAcross = Math.max(200, size.w * 0.7)
+    const gapDown = Math.max(120, size.h * 0.8)
+    const centre = { x: box.x + box.w / 2, y: box.y + box.h / 2 }
+    const at =
+      side === 'e'
+        ? { x: centre.x + box.w / 2 + gapAcross + size.w / 2, y: centre.y }
+        : side === 'w'
+          ? { x: centre.x - box.w / 2 - gapAcross - size.w / 2, y: centre.y }
+          : side === 's'
+            ? { x: centre.x, y: centre.y + box.h / 2 + gapDown + size.h / 2 }
+            : { x: centre.x, y: centre.y - box.h / 2 - gapDown - size.h / 2 }
+    placeAt(at, source.card.kind, id)
+  }
+
+  /** The menu for a right-click, on what is under the pointer or the board. */
+  const openMenu = (event: { clientX: number; clientY: number }, at: Spot): void => {
+    const card = cardUnder(at)
+    const note = noteBoxes.find((n) => inBox(at, n.box))?.note.id ?? ''
+    const under = card || note
+    let ids = selected
+    if (under && !selected.includes(under)) {
+      ids = [under]
+      drawing?.onSelect(ids)
+    } else if (!under) ids = []
+    const rect = frame.current!.getBoundingClientRect()
+    setMenu({
+      screen: {
+        x: Math.max(8, Math.min(event.clientX - rect.left, rect.width - 240)),
+        y: Math.max(8, Math.min(event.clientY - rect.top, rect.height - 320)),
+      },
+      inside: insideOf(at),
+      ids,
+    })
   }
 
   const down = (event: PointerEvent<HTMLDivElement>): void => {
     setQuick(null)
     if (editing) finishEditing(true)
+    setMenu(null)
     const panning = event.button === 1 || event.button === 2 || space.current || tool === 'pan'
     if (panning) {
-      gesture.current = { type: 'pan', x: event.clientX, y: event.clientY, vx: view.x, vy: view.y, moved: false }
+      gesture.current = { type: 'pan', x: event.clientX, y: event.clientY, vx: view.x, vy: view.y, moved: false, button: event.button }
       capture(event)
       return
     }
@@ -1001,7 +1149,7 @@ export const MapCanvas = ({
       capture(event)
       return
     }
-    gesture.current = { type: 'pan', x: event.clientX, y: event.clientY, vx: view.x, vy: view.y, moved: false }
+    gesture.current = { type: 'pan', x: event.clientX, y: event.clientY, vx: view.x, vy: view.y, moved: false, button: event.button }
     capture(event)
   }
 
@@ -1081,6 +1229,9 @@ export const MapCanvas = ({
       return
     }
     if (now.type === 'connect') {
+      // A wire is drawn once the pointer has really moved; a press and
+      // release on a dot is a click, which adds a card beside.
+      if (!now.moved && Math.hypot(event.clientX - now.sx, event.clientY - now.sy) < 4) return
       now.moved = true
       hold()
       const source = where.get(now.from)
@@ -1103,6 +1254,7 @@ export const MapCanvas = ({
     const at = worldOf(event)
     if (now.type === 'pan') {
       dragged.current = now.moved
+      if (!now.moved && now.button === 2 && drawing) openMenu(event, at)
       return
     }
     if (now.type === 'zoombox') {
@@ -1123,14 +1275,19 @@ export const MapCanvas = ({
     }
     if (now.type === 'move') {
       if (now.moved && shown.moves && drawing) {
-        drawing.onMove([...shown.moves].map(([id, spot]) => ({ id, x: spot.x, y: spot.y })))
+        drawing.onMove([...shown.moves].map(([id, spot]) => ({ id, x: spot.x, y: spot.y })), now.copied)
         dragged.current = true
       }
       return
     }
     if (now.type === 'connect' && drawing) {
       dragged.current = true
-      if (!now.moved) return
+      if (!now.moved) {
+        // A click on a dot, not a drag: a card of the same kind on that side,
+        // wired to this one, the way a diagram tool's quick-add arrows work.
+        if (now.side && !now.rewire) besideOf(now.from, now.side)
+        return
+      }
       const target = cardUnder(at, now.from)
       if (now.rewire) {
         if (target) drawing.onRewire(now.rewire.id, now.rewire.end, target)
@@ -1216,6 +1373,43 @@ export const MapCanvas = ({
     const note = noteBoxes.find((n) => n.note.id === id)
     return note ? { what: { what: 'note', id }, box: note.box } : null
   }, [drawing, selected, editing, live, placed, noteBoxes, shapes, sizes])
+
+  /** What the right-click menu offers, for what was under the pointer. */
+  const menuItems = (ids: string[], inside: Spot): MenuItem[] => {
+    if (!drawing) return []
+    const one = ids.length === 1 ? ids[0]! : ''
+    const card = one ? focus.children.find((c) => c.id === one) : undefined
+    if (ids.length === 0)
+      return [
+        { name: 'Add a card here…', glyph: 'card', keys: 'Double-click', act: () => setQuick({ screen: menu!.screen, inside, from: '' }) },
+        { name: 'Add a note here', glyph: 'note', act: () => noteAt(inside) },
+        'rule',
+        ...(drawing.canPaste
+          ? [{ name: 'Paste here', glyph: 'copy' as const, keys: 'Ctrl+V', act: () => drawing.onSelect(drawing.onPaste(inside)) }]
+          : []),
+        { name: 'Pick everything', keys: 'Ctrl+A', act: () => drawing.onSelectAll() },
+      ]
+    return [
+      ...(one ? [{ name: card ? 'Rename' : 'Edit the words', glyph: 'edit' as const, keys: 'Enter', act: () => startEditing(one) }] : []),
+      ...(card ? [{ name: 'Say what it is for', act: () => startEditing(one, undefined, true) }] : []),
+      ...(card && canOpen(card as DrawnCard)
+        ? [{ name: 'Draw inside it', glyph: 'inside' as const, act: () => {
+            const placedCard = placed.find((p) => p.card.id === one)
+            if (placedCard) tunnelIn(placedCard.card)
+          } }]
+        : []),
+      ...(card?.kind === 'page' ? [{ name: 'Add a mockup', glyph: 'mockup' as const, act: () => drawing.onMockup(one) }] : []),
+      'rule',
+      { name: 'Cut', keys: 'Ctrl+X', act: () => drawing.onCut(ids) },
+      { name: 'Copy', glyph: 'copy', keys: 'Ctrl+C', act: () => drawing.onCopy(ids) },
+      { name: 'Duplicate', keys: 'Ctrl+D', act: () => drawing.onSelect(drawing.onDuplicate(ids)) },
+      'rule',
+      { name: ids.length > 1 ? `Take these ${ids.length} off` : 'Take it off the sketch', glyph: 'bin', keys: 'Delete', danger: true, act: () => {
+        drawing.onRemove(ids)
+        drawing.onSelect([])
+      } },
+    ]
+  }
 
   const wireGroup = (list: typeof shapes.inner, opts: { faint?: boolean } = {}): ReactElement[] =>
     list.map(({ wire, key, shape }) => (
@@ -1521,6 +1715,34 @@ export const MapCanvas = ({
                   if (event.key === 'Escape') finishEditing(false)
                 }}
               />
+            ) : editingBox && editing.says ? (
+              <textarea
+                ref={focusQuietly}
+                className="map-edit map-edit--says"
+                aria-label="What it is for"
+                style={{ left: editingBox.x + 12, top: editingBox.y + 62, width: editingBox.w - 24 }}
+                rows={2}
+                value={editing.text}
+                placeholder="What it is for, in one line"
+                onPointerDown={(event) => event.stopPropagation()}
+                onChange={(event) => setEditing({ ...editing, text: event.target.value })}
+                onBlur={() => finishEditing(true)}
+                onKeyDown={(event) => {
+                  event.stopPropagation()
+                  if (event.key === 'Tab' && event.shiftKey) {
+                    event.preventDefault()
+                    const id = editing.id
+                    finishEditing(true)
+                    setTimeout(() => startEditing(id), 0)
+                    return
+                  }
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault()
+                    finishEditing(true)
+                  }
+                  if (event.key === 'Escape') finishEditing(false)
+                }}
+              />
             ) : editingBox ? (
               <input
                 className={`map-edit map-edit--name${isFrame(placed.find((p) => p.card.id === editing.id)?.card ?? root) ? ' map-edit--frame' : ''}`}
@@ -1538,7 +1760,15 @@ export const MapCanvas = ({
                 onBlur={() => finishEditing(true)}
                 onKeyDown={(event) => {
                   event.stopPropagation()
-                  if (event.key === 'Enter' || event.key === 'Tab') {
+                  if (event.key === 'Tab' && !event.shiftKey) {
+                    // Tab goes on to say what it is for, without the mouse.
+                    event.preventDefault()
+                    const id = editing.id
+                    finishEditing(true)
+                    setTimeout(() => startEditing(id, undefined, true), 0)
+                    return
+                  }
+                  if (event.key === 'Enter') {
                     event.preventDefault()
                     finishEditing(true)
                   }
@@ -1596,6 +1826,14 @@ export const MapCanvas = ({
               drawing?.onRemove(ids)
               drawing?.onSelect([])
             }}
+          />
+        ) : null}
+
+        {menu && drawing ? (
+          <CanvasMenu
+            at={menu.screen}
+            onClose={() => setMenu(null)}
+            items={menuItems(menu.ids, menu.inside)}
           />
         ) : null}
 

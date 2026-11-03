@@ -1,6 +1,6 @@
 // codegraph: shell
 import { join } from 'node:path'
-import { BrowserWindow, app, shell } from 'electron'
+import { BrowserWindow, Menu, app, shell } from 'electron'
 import { useFolder as useGithubFolder, useKeystore } from '../modules/github/index.js'
 import { appFolder, devRendererUrl, keystore } from '../modules/machine/index.js'
 import { useFolder as useProjectsFolder } from '../modules/projects/index.js'
@@ -45,7 +45,17 @@ const openWindow = (): void => {
   else void window.loadFile(join(import.meta.dirname, '../renderer/index.html'))
 }
 
+/** No stock File / Edit / View bar: the app has its own tools, and the
+ *  stock bar's keys zoom the whole window and catch Alt. A Mac keeps the
+ *  app and Edit menus, without which copy and paste in a text box stop. */
+const quietMenu = (): void => {
+  Menu.setApplicationMenu(
+    process.platform === 'darwin' ? Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }]) : null,
+  )
+}
+
 void app.whenReady().then(async () => {
+  quietMenu()
   await wireModules()
   openBridge()
   openWindow()

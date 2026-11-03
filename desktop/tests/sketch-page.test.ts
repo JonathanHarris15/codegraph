@@ -108,7 +108,7 @@ describe('drawing a sketch in the real app', () => {
     await dot.waitFor({ timeout: PATIENCE })
     await drag(await middle(dot), await middle(card('search')))
     await page.keyboard.press('Enter')
-    await page.getByLabel('What the wire is for').waitFor({ timeout: PATIENCE })
+    await page.getByLabel('What the wire is for', { exact: true }).waitFor({ timeout: PATIENCE })
     await page.keyboard.type('finds notes by their words')
     await page.keyboard.press('Enter')
     expect(await shown(wire('notes calls search to find notes by their words'))).toContain('to find notes by their words')
@@ -187,6 +187,64 @@ describe('drawing a sketch in the real app', () => {
     await page.waitForTimeout(200)
     const after = (await card('billing').boundingBox())!
     expect(after.x).toBeGreaterThan(before.x + 80)
+  })
+
+  it('adds a card beside another, wired, with one click on its dot', async () => {
+    await page.mouse.click((await spot(0.5, 0.97)).x, (await spot(0.5, 0.97)).y)
+    await card('search').hover()
+    const dot = card('search').locator('.map-handle--e')
+    await dot.waitFor({ timeout: PATIENCE })
+    await dot.click()
+    await page.getByLabel('Card name').waitFor({ timeout: PATIENCE })
+    await page.keyboard.type('index')
+    await page.keyboard.press('Enter')
+    expect(await shown(card('index'))).toContain('shallow software system')
+    expect(await shown(wire('search calls index'))).toContain('index')
+  })
+
+  it('goes on from a name to what the card is for with Tab', async () => {
+    await card('index').click()
+    await page.keyboard.press('Enter')
+    await page.getByLabel('Card name').waitFor({ timeout: PATIENCE })
+    await page.keyboard.press('Tab')
+    await page.getByRole('textbox', { name: 'What it is for' }).first().waitFor({ timeout: PATIENCE })
+    await page.keyboard.type('Finds words fast')
+    await page.keyboard.press('Enter')
+    expect(await shown(card('index'))).toContain('Finds words fast')
+  })
+
+  it('takes a card off from the right-click menu', async () => {
+    await card('index').click({ button: 'right' })
+    await page.getByRole('menu', { name: 'What to do here' }).waitFor({ timeout: PATIENCE })
+    await page.getByRole('menuitem', { name: /Take it off the sketch/ }).click()
+    await page.waitForTimeout(200)
+    expect(await card('index').count()).toBe(0)
+  })
+
+  it('copies a card by dragging it with Alt held', async () => {
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('0')
+    const from = await middle(card('billing'))
+    await page.keyboard.down('Alt')
+    await drag(from, { x: from.x + 40, y: from.y + 220 })
+    await page.keyboard.up('Alt')
+    await page.waitForTimeout(200)
+    expect(await card('billing').count()).toBe(2)
+    await page.keyboard.press('Control+z')
+    await page.waitForTimeout(200)
+    expect(await card('billing').count()).toBe(1)
+  })
+
+  it('points a wire at another card by dragging its end', async () => {
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('0')
+    await wire('notes calls search to find notes by their words').click()
+    const end = page.locator('.map-wire-end').nth(1)
+    await end.waitFor({ timeout: PATIENCE })
+    await drag(await middle(end), await middle(card('billing')))
+    expect(await shown(wire('notes calls billing to find notes by their words'))).toContain('billing')
+    await page.keyboard.press('Control+z')
+    expect(await shown(wire('notes calls search to find notes by their words'))).toContain('search')
   })
 
   it('keeps it all: back to the map, and open it again', async () => {

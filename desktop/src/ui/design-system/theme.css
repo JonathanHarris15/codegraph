@@ -2239,3 +2239,87 @@ kbd {
   box-shadow: var(--shadow-chip);
   cursor: pointer;
 }
+
+/* ---- the right-click menu --------------------------------------------- */
+
+.map-menu {
+  position: absolute;
+  z-index: 9;
+  min-width: 220px;
+  padding: var(--space-1);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-md);
+  background: var(--surface-100);
+  box-shadow: var(--shadow-float);
+  display: flex;
+  flex-direction: column;
+}
+
+.map-menu-item {
+  display: grid;
+  grid-template-columns: 20px 1fr auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-000);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.map-menu-item:hover,
+.map-menu-item:focus-visible {
+  background: var(--surface-sunken);
+  outline: none;
+}
+
+.map-menu-item--danger:hover,
+.map-menu-item--danger:focus-visible {
+  background: var(--state-problem-wash);
+  color: var(--state-problem);
+}
+
+.map-menu-glyph {
+  display: grid;
+  place-items: center;
+  color: var(--ink-soft);
+}
+
+.map-menu-keys {
+  color: var(--ink-faint);
+  font: 500 11px/16px var(--font-mono);
+}
+
+.map-menu-rule {
+  height: var(--stroke-edge);
+  margin: var(--space-1) var(--space-2);
+  background: var(--line-hair);
+}
+
+/* writing what a card is for, under its name */
+.map-edit--says {
+  min-height: 44px;
+  padding: var(--space-1) var(--space-2);
+  font-size: 12.5px;
+  line-height: 17px;
+  resize: none;
+}
+
+.map-said-ask[role="button"] {
+  cursor: text;
+  pointer-events: auto;
+}
+
+.map-said-ask[role="button"]:hover {
+  color: var(--focus-ring);
+  text-decoration: underline;
+}
+
+/* a card lifts a little under the pointer, so it is plain what a press takes */
+.map-card--drawn:hover {
+  box-shadow: var(--shadow-float);
+}

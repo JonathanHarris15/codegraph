@@ -4,7 +4,7 @@ import type { Sketch, SketchCard } from '../../modules/sketches/index.js'
 import { sentenceOf } from '../../modules/wording/index.js'
 import { Button, Field, Select } from '../design-system/kit.js'
 import { Glyph } from './kind-glyph.js'
-import { MapCanvas, walk } from './map-canvas.js'
+import { MapCanvas, remember, remembered, walk } from './map-canvas.js'
 import {
   addWire,
   align,
@@ -62,7 +62,11 @@ export const SketchEditor = ({
   const last = useRef<{ step: string; at: number }>({ step: '', at: 0 })
   const [, setTick] = useState(0)
   /** The panel can be put away, to give the board the whole window. */
-  const [panel, setPanel] = useState(true)
+  const [panel, setPanelNow] = useState(() => remembered('codegraph-panel', true))
+  const setPanel = (open: boolean): void => {
+    remember('codegraph-panel', open)
+    setPanelNow(open)
+  }
 
   const trail = walk(sketch.root, path)
   const focus = trail.at(-1)!
@@ -192,6 +196,50 @@ export const SketchEditor = ({
     return () => window.removeEventListener('keydown', keys)
   }, [focus, selected, change, undo, redo])
 
+  const copy = (ids: string[]): void => {
+    clipboard = copyOf(focus, ids)
+  }
+  const cut = (ids: string[]): void => {
+    copy(ids)
+    change((f) => remove(f, ids))
+    setSelected([])
+  }
+  /** Pastes what Copy holds: beside where it came from, or centred on a spot. */
+  const pasteNow = (at?: { x: number; y: number }): string[] => {
+    const held = clipboard
+    if (!held) return []
+    let ids: string[] = []
+    change((f) => {
+      let by = 32
+      if (at && held.cards.length) {
+        const first = held.cards[0]!
+        by = 0
+        const moved: Clip = {
+          ...held,
+          cards: held.cards.map((c) => ({ ...c, x: (c.x ?? 0) - (first.x ?? 0) + at.x - 120, y: (c.y ?? 0) - (first.y ?? 0) + at.y - 60 })),
+          notes: held.notes,
+        }
+        const [next, made] = paste(f, moved, by)
+        ids = made
+        return next
+      }
+      const [next, made] = paste(f, held, by)
+      ids = made
+      return next
+    })
+    return ids
+  }
+  const duplicate = (ids: string[], by = 24): string[] => {
+    const held = copyOf(focus, ids)
+    let made: string[] = []
+    change((f) => {
+      const [next, copies] = paste(f, held, by)
+      made = copies
+      return next
+    })
+    return made
+  }
+
   const picked = selected.length === 1 ? pick(focus, selected[0]!) : null
   const nameOf = (id: string): string => focus.children.find((c) => c.id === id)?.name || 'unnamed'
 
@@ -228,7 +276,7 @@ export const SketchEditor = ({
             })
             return id
           },
-          onMove: (moves) => change((f) => moveThings(f, moves)),
+          onMove: (moves, join) => change((f) => moveThings(f, moves), join ? 'join' : ''),
           onWire: (from, to) => {
             let id = ''
             change((f) => {
@@ -239,7 +287,17 @@ export const SketchEditor = ({
             return id
           },
           onRewire: (id, end, card) => change((f) => rewire(f, id, end, card)),
-          onText: (id, text, first) => change((f) => retext(f, id, text), first ? 'join' : ''),
+          onText: (id, text, first, field) =>
+            change(
+              (f) => (field === 'says' ? changeCard(f, id, { says: text }) : retext(f, id, text)),
+              first ? 'join' : '',
+            ),
+          canPaste: clipboard !== null,
+          onCopy: copy,
+          onCut: cut,
+          onPaste: pasteNow,
+          onDuplicate: duplicate,
+          onSelectAll: () => setSelected([...focus.children.map((c) => c.id), ...focus.notes.map((n) => n.id)]),
           onKind: (id, kind) =>
             change((f) => (pick(f, id)?.kind === 'wire' ? changeWire(f, id, { kind }) : changeCard(f, id, { kind }))),
           onMockup: (id) => onAddMockup(id),
