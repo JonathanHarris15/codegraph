@@ -68,7 +68,10 @@ export const wireKinds = ['uses', 'asks', 'reads', 'starts', 'keeps', 'leads to'
 /** The kind a wire drawn between two cards most likely is, which the person
  *  can change. */
 export const kindBetween = (from: SketchCard | undefined, to: SketchCard | undefined): string =>
-  from?.kind === 'page' && to?.kind === 'page'
+  // A person uses the software; they do not call it.
+  from?.kind === 'person'
+    ? 'uses'
+    : from?.kind === 'page' && to?.kind === 'page'
     ? 'leads to'
     : from?.kind === 'page' && to?.kind === 'feature'
       ? 'asks'
