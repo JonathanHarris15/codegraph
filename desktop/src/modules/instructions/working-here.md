@@ -23,4 +23,8 @@ How to work here:
 4. **Check before you finish.** Call the codegraph `check` tool. The work is
    done when it lists nothing you added. If the tool is missing, the
    codegraph MCP is not connected here: say so rather than skip it.
+5. **A proposal is a failing test.** If `codegraph-proposal/` is on this
+   branch, the person drew a change for you to build, and the check fails
+   until it is built. Call the `instructions` tool with topic `proposals`
+   for how to build one, and how to make one from a sketch.
 <!-- codegraph:end -->

@@ -6,10 +6,13 @@ import type { CloudView } from '../features/list-github-software-systems.js'
 import type { ProjectView } from '../features/list-projects.js'
 import type { Linked } from '../features/link-software-system.js'
 import type { MockupAdded } from '../features/add-mockup.js'
+import type { ProposalMockupAdded } from '../features/add-proposal-mockup.js'
+import type { ProposalOpened } from '../features/open-proposal.js'
+import type { ProposalSaved } from '../features/save-proposal.js'
 import type { SketchListed } from '../features/list-sketches.js'
 import type { SketchOpened } from '../features/open-sketch.js'
 import type { Card, MapShown } from '../features/show-map.js'
-import type { Point } from '../modules/reader/index.js'
+import type { DrawnCard, Point } from '../modules/reader/index.js'
 import type { Sketch } from '../modules/sketches/index.js'
 
 /** What the window may ask for: one call per feature, nothing else. */
@@ -30,6 +33,12 @@ export type Api = {
   saveSketch: (sketch: Sketch) => Promise<Sketch>
   deleteSketch: (projectId: string, sketchId: string) => Promise<void>
   addMockup: (projectId: string, sketchId: string, cardId: string) => Promise<MockupAdded>
+  openProposal: (projectId: string, systemId: string, branch?: string) => Promise<ProposalOpened>
+  saveProposal: (projectId: string, systemId: string, draft: DrawnCard, says: string) => Promise<ProposalSaved>
+  addProposalMockup: (projectId: string, systemId: string, page: string) => Promise<ProposalMockupAdded>
+  /** Calls back whenever the project's map may have changed; hands back how
+   *  to stop. One project is watched at a time. */
+  watchProject: (projectId: string, onChange: () => void) => () => void
 }
 
 const api: Api = {
@@ -49,6 +58,18 @@ const api: Api = {
   saveSketch: (sketch) => ipcRenderer.invoke('sketch:save', sketch),
   deleteSketch: (projectId, sketchId) => ipcRenderer.invoke('sketch:delete', projectId, sketchId),
   addMockup: (projectId, sketchId, cardId) => ipcRenderer.invoke('sketch:mockup', projectId, sketchId, cardId),
+  openProposal: (projectId, systemId, branch) => ipcRenderer.invoke('proposal:open', projectId, systemId, branch),
+  saveProposal: (projectId, systemId, draft, says) => ipcRenderer.invoke('proposal:save', projectId, systemId, draft, says),
+  addProposalMockup: (projectId, systemId, page) => ipcRenderer.invoke('proposal:mockup', projectId, systemId, page),
+  watchProject: (projectId, onChange) => {
+    const heard = (): void => onChange()
+    ipcRenderer.on('project:changed', heard)
+    void ipcRenderer.invoke('project:watch', projectId)
+    return () => {
+      ipcRenderer.off('project:changed', heard)
+      void ipcRenderer.invoke('project:watch', '')
+    }
+  },
 }
 
 contextBridge.exposeInMainWorld('codegraph', api)

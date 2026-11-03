@@ -10,6 +10,8 @@ export type DrawnWire = {
   words: string
   /** Where the wire really starts and ends, when it is drawn a level up. */
   ends?: { from: string; to: string }[]
+  /** How it stands against a proposal: drawn new, built, or crossed out. */
+  state?: string
 }
 
 /** A note a person left on a level of a sketch. */

@@ -3,7 +3,18 @@ import { rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { checkCode } from '../src/features/check-code.js'
-import { aMappedRepo, anAgentIn, checkFromTerminal, closeYard, openYard, type Yard } from './yard.js'
+import {
+  aMappedRepo,
+  anAgentIn,
+  aProposal,
+  buildSearch,
+  checkFromTerminal,
+  closeYard,
+  git,
+  openYard,
+  searchProposal,
+  type Yard,
+} from './yard.js'
 
 let yard: Yard
 let repo = ''
@@ -57,5 +68,38 @@ describe('the check in a terminal, the way CI runs it', () => {
     rmSync(join(repo, 'app', 'stray.ts'))
     expect(run.code).toBe(1)
     expect(run.said).toContain('app/stray.ts:1')
+  })
+})
+
+describe('the check on a branch with a proposal', () => {
+  let other: Yard
+  let built = ''
+  beforeAll(() => {
+    other = openYard('check-proposal')
+    built = aMappedRepo(other)
+    const base = git(built, 'rev-parse', 'HEAD')
+    git(built, 'checkout', '-q', '-b', 'search')
+    aProposal(built, searchProposal(base))
+  })
+  afterAll(() => closeYard(other))
+
+  it('fails like a test while the proposal is not built, and says what is left', async () => {
+    const checked = await checkCode(built)
+    expect(checked.clean).toBe(false)
+    expect(checked.words).toContain('The proposal on this branch is not built yet: "Let people search their notes".')
+    expect(checked.words).toContain('Still to do (5 of 5):')
+    expect(checked.words).toContain('- build web/page search')
+    expect(checked.words).toContain('- take away web/trigger nightly-tidy')
+    expect(checked.words).toContain('- build the wire web/page search asks web/feature find-notes')
+  })
+
+  it('says once it is built to delete it in the same change, and still fails until it is', async () => {
+    buildSearch(built)
+    const checked = await checkCode(built)
+    expect(checked.proposal?.built).toBe(true)
+    expect(checked.clean).toBe(false)
+    expect(checked.words).toContain('delete codegraph-proposal/ in this same change')
+    rmSync(join(built, 'codegraph-proposal'), { recursive: true })
+    expect((await checkCode(built)).clean).toBe(true)
   })
 })

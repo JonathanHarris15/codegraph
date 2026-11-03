@@ -121,18 +121,34 @@ cards that can be resized.
 
 Draw a change; the agent builds it while you watch.
 
-- **CG-4.1** A proposal file on its branch, one per branch (ADR 0007), drawn
+- **CG-4.1** (done) A proposal file on its branch, one per branch (ADR 0007), drawn
   over the map: unbuilt parts look unbuilt.
-- **CG-4.2** Draw a proposal directly on the canvas.
-- **CG-4.3** The agent makes proposals from a sketch through the MCP, one per
+- **CG-4.2** (done) Draw a proposal directly on the canvas.
+- **CG-4.3** (done) The agent makes proposals from a sketch through the MCP, one per
   software system it changes.
-- **CG-4.4** The agent reports which card it is on, and the canvas follows.
-- **CG-4.5** The built rule: the check says when a proposal is built, and the
+- **CG-4.4** (done) The agent reports which card it is on, and the canvas follows.
+- **CG-4.5** (done) The built rule: the check says when a proposal is built, and the
   change that builds it deletes it.
-- **CG-4.6** Mockups on a proposal shown beside the page's screenshot.
+- **CG-4.6** (done) Mockups on a proposal shown beside the page's screenshot.
 
 **Try it:** "take this sketch, make it the proposal on this branch, then
 build it," and watch indie-stack change on the canvas.
+
+The file and what the check holds it to are in ADR 0008. Over the map, a card
+still to build is dashed with a "To build" mark, one built says so, and one
+crossed out is struck through. The bar shows how many parts are built; the
+list behind it names each, and anything that changed without being drawn.
+The canvas redraws itself whenever a repo's files change, a branch is checked
+out, or the agent says where it is, and follows the agent unless told not
+to. "Propose a change" draws over the map: what is added is to build, and
+Delete crosses out what is in the code. On the main line it first makes a
+branch. A proposal stops at components; what goes inside them is the agent's.
+
+The agent's tools are `propose` (from a sketch) and `working-on`; the
+`proposals` topic of `instructions` tells it how to build one.
+
+Still rough: a proposal is drawn per software system, so a wire between two
+systems is not proposed yet; that comes with checkpoint 6.
 
 ## Checkpoint 5: Codegraph sets itself up
 

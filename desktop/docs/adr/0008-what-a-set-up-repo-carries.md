@@ -137,6 +137,28 @@ legacy residue:
 | `store X as Y` | `store X in <container it is kept in>` |
 | `test`, `fakes`, `shape of`, `tooling` | the same |
 
+## The proposal on a branch
+
+Added with checkpoint 4. A branch with a proposal (ADR 0007) carries a third
+thing: `codegraph-proposal/proposal.json`, with its mockups as pictures
+beside it. Deleting the folder ends the proposal.
+
+It lists only what changes, each card by the name a person reads it by: a
+container by its name, `web`; a component by its container, kind and name,
+`web/page search`. A wire names its two ends, its kind and its words; a wire
+between containers stands for any wire between what they hold. Anything
+marked `"gone": true` is crossed out. It also says what it is for, the sketch
+it came from, the commit it was drawn on, and where a person put each card
+while drawing it.
+
+The check holds the code to it like a failing test: it fails while anything
+drawn is missing, anything crossed out is still there, or anything changed
+since that commit that the proposal does not draw; and once all of that is
+true, it fails until the folder is deleted in the same change.
+
+Names, not ids, because an agent writes and reads this file as often as the
+app does, and a name is what the tags already say.
+
 ## Considered options
 
 - **Containers by tag on every file**, `module notes in web`. Nothing outside

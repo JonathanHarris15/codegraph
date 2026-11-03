@@ -2401,3 +2401,258 @@ kbd {
     padding: 4px;
   }
 }
+
+/* ---- a proposal drawn over the map ------------------------------------ */
+
+/* Drawn and not built yet: a dashed outline, like a card still to be cut. */
+.map-card--proposed {
+  border-style: dashed;
+  border-color: var(--state-waiting);
+  background: color-mix(in srgb, var(--state-waiting-wash) 70%, var(--surface-100));
+}
+
+/* Crossed out: faded, its name struck through. */
+.map-card--gone {
+  border-color: var(--state-problem);
+  opacity: 0.72;
+}
+
+.map-card--gone .map-name {
+  text-decoration: line-through;
+  text-decoration-color: var(--state-problem);
+  text-decoration-thickness: 2px;
+}
+
+.map-card--built {
+  border-color: color-mix(in srgb, var(--state-good) 60%, var(--line-edge));
+}
+
+/* The small mark on a card's top edge that says how it stands. */
+.map-state {
+  position: absolute;
+  top: -9px;
+  right: 10px;
+  padding: 0 7px;
+  border-radius: var(--radius-pill);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 17px;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.map-state--proposed {
+  background: var(--state-waiting);
+  color: var(--surface-100);
+}
+
+.map-state--built {
+  background: var(--state-good);
+  color: var(--surface-100);
+}
+
+.map-state--gone {
+  background: var(--state-problem);
+  color: var(--surface-100);
+}
+
+.map-wire--proposed path:first-child {
+  stroke: var(--state-waiting);
+  stroke-dasharray: 6 5;
+}
+
+.map-wire--gone path:first-child {
+  stroke: var(--state-problem);
+  stroke-dasharray: 2 5;
+  opacity: 0.8;
+}
+
+.map-sentence--proposed {
+  border-style: dashed;
+  border-color: var(--state-waiting);
+}
+
+.map-sentence--gone .map-said {
+  text-decoration: line-through;
+  text-decoration-color: var(--state-problem);
+}
+
+/* A page shown as it is now and as the proposal would have it. */
+.map-shots {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  flex: 1;
+  min-height: 0;
+}
+
+.map-shots-one {
+  position: relative;
+  margin: 0;
+  min-height: 0;
+  display: flex;
+}
+
+.map-shots-one .map-shot {
+  width: 100%;
+}
+
+.map-shots-one figcaption {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  padding: 0 5px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--ink-000) 72%, transparent);
+  color: var(--ink-inverse);
+  font-size: 10px;
+  line-height: 15px;
+}
+
+/* Where the agent says it is working. */
+.map-card--agent {
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--focus-ring) 55%, transparent),
+    var(--shadow-float);
+}
+
+.map-agent {
+  position: absolute;
+  left: 10px;
+  bottom: -11px;
+  max-width: calc(100% - 20px);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  background: var(--focus-ring);
+  color: var(--surface-100);
+  font-size: 11px;
+  line-height: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.map-agent-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: map-agent-beat 1.4s ease-in-out infinite;
+}
+
+@keyframes map-agent-beat {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-agent-dot {
+    animation: none;
+  }
+}
+
+/* The proposal's progress, in the bar, and the list it opens. */
+.map-proposal {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 4px 10px;
+  border: var(--stroke-edge) dashed var(--state-waiting);
+  border-radius: var(--radius-pill);
+  background: var(--state-waiting-wash);
+  color: var(--ink-000);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.map-proposal--built {
+  border-style: solid;
+  border-color: var(--state-good);
+  background: var(--state-good-wash);
+}
+
+.map-proposal-meter {
+  width: 48px;
+  height: 5px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--state-waiting) 25%, transparent);
+  overflow: hidden;
+}
+
+.map-proposal-meter > span {
+  display: block;
+  height: 100%;
+  background: var(--state-good);
+}
+
+.map-proposal-list li {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+}
+
+.map-proposal-list .map-state {
+  position: static;
+  flex: none;
+}
+
+.map-follow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.map-branch-ask {
+  position: absolute;
+  top: var(--space-3);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 8;
+  width: min(420px, calc(100% - 32px));
+  padding: var(--space-3);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-md);
+  background: var(--surface-100);
+  box-shadow: var(--shadow-float);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* A card with a mark lets the mark sit on its edge, the way a drawn one does. */
+.map-card--proposed,
+.map-card--built,
+.map-card--gone,
+.map-card--agent {
+  overflow: visible;
+}
+
+.map-card--proposed .map-shot,
+.map-card--built .map-shot,
+.map-card--gone .map-shot,
+.map-card--agent .map-shot {
+  overflow: hidden;
+}
+
+.map-card--proposed.map-frame > .map-frame-bar,
+.map-card--built.map-frame > .map-frame-bar,
+.map-card--gone.map-frame > .map-frame-bar,
+.map-card--agent.map-frame > .map-frame-bar {
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.map-world .map-state {
+  font-size: 11.5px;
+  line-height: 18px;
+}

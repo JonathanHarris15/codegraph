@@ -4,7 +4,19 @@
 export type Level = 'project' | 'system' | 'container' | 'component' | 'code'
 
 /** A line between two cards inside one card, drawn by a person. */
-export type SketchWire = { id: string; from: string; to: string; kind: string; words: string }
+export type SketchWire = {
+  id: string
+  from: string
+  to: string
+  kind: string
+  words: string
+  /** Over the map, drawing a proposal: drawn new, or crossed out. */
+  state?: CardState
+}
+
+/** How a card or wire drawn over the map stands: drawn new and not built
+ *  yet, drawn and built, or crossed out to be taken away. */
+export type CardState = 'proposed' | 'built' | 'gone'
 
 /** Words a person puts anywhere on a level of a sketch. */
 export type Note = { id: string; text: string; x: number; y: number }
@@ -25,6 +37,8 @@ export type SketchCard = {
   shot: string
   /** A page's mockup, by file name beside the sketch; '' for none. */
   mockup: string
+  /** Over the map, drawing a proposal: drawn new, or crossed out. */
+  state?: CardState
   /** Where a person put it; left out, the canvas lays it out itself. */
   x?: number
   y?: number

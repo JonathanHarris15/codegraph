@@ -70,6 +70,8 @@ export const sentenceOf = (from: string, kind: string, to: string, words: string
 
   const head: Said = [name(from), gap, { text: verb, role: 'verb' }, gap, name(to)]
   if (!said) return head
+  // Words that already say what for, "to find notes", are taken as they are.
+  if (/^to\s/i.test(said)) return [...head, { text: ` ${said}`, role: 'words' }]
   const following = spoken(said)
   return following
     ? [...head, { text: ` to ${following}`, role: 'words' }]

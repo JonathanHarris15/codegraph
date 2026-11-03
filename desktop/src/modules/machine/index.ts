@@ -1,10 +1,11 @@
 // codegraph: module machine
-// codegraph: front door appFolder, devRendererUrl, keystore, askForFolder, useChooser, askForPicture, usePicturePicker, mcpServerFile, appFolderAnywhere, Keystore
+// codegraph: front door appFolder, devRendererUrl, keystore, askForFolder, useChooser, askForPicture, usePicturePicker, mcpServerFile, appFolderAnywhere, watchFolders, Keystore
 
 /** This computer and the window around the app: where files are kept, the
  *  operating system's keystore, the folder picker, and what the build says.
  *  Everything here comes from outside the program, so it is asked for
  *  lazily: away from the app — in a test, say — each answer is a plain one. */
+import { existsSync, watch, type FSWatcher } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -122,4 +123,36 @@ export const appFolderAnywhere = (): string => {
   if (process.platform === 'win32') return join(process.env['APPDATA'] ?? join(home, 'AppData', 'Roaming'), 'codegraph-desktop')
   if (process.platform === 'darwin') return join(home, 'Library', 'Application Support', 'codegraph-desktop')
   return join(process.env['XDG_CONFIG_HOME'] ?? join(home, '.config'), 'codegraph-desktop')
+}
+
+/** Changes that say nothing about the code: installed packages, and the
+ *  inside of git's object store. A checkout or a commit still moves HEAD. */
+const QUIET = /(^|[\\/])(node_modules|\.git[\\/]objects|\.git[\\/]logs)([\\/]|$)/
+
+/** Calls back once things in some folders have changed and gone quiet
+ *  again, for as long as it is not stopped. A folder that is not there, or
+ *  cannot be watched, is passed over. */
+export const watchFolders = (folders: string[], onChange: () => void, quietMs = 300): (() => void) => {
+  let waiting: ReturnType<typeof setTimeout> | null = null
+  const changed = (file: string): void => {
+    if (QUIET.test(file)) return
+    if (waiting) clearTimeout(waiting)
+    waiting = setTimeout(() => {
+      waiting = null
+      onChange()
+    }, quietMs)
+  }
+  const watchers: FSWatcher[] = []
+  for (const folder of new Set(folders.filter((f) => f && existsSync(f))))
+    try {
+      const watcher = watch(folder, { recursive: true }, (_event, file) => changed(String(file ?? '')))
+      watcher.on('error', () => watcher.close())
+      watchers.push(watcher)
+    } catch {
+      // Not every folder can be watched; the map still reads when asked.
+    }
+  return () => {
+    if (waiting) clearTimeout(waiting)
+    for (const watcher of watchers) watcher.close()
+  }
 }

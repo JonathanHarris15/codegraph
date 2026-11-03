@@ -1,46 +1,14 @@
 // codegraph: feature show-map in workspace
-// codegraph: uses projects, reader
+// codegraph: uses projects, reader, agents, cards
+import { whereIs } from '../modules/agents/index.js'
+import { card, join, systemCard, type Card } from '../modules/cards/index.js'
 import { listProjects } from '../modules/projects/index.js'
-import { live, readMap, type Point, type SystemMap } from '../modules/reader/index.js'
+import { idOfName, live, proposalProgress, readMap, type Point, type Progress } from '../modules/reader/index.js'
 
-export type Level = 'project' | 'system' | 'container' | 'component' | 'code'
+export type { Card, CardState, CardWire, Level, WireEnds } from '../modules/cards/index.js'
 
-/** A wire between two cards that sit side by side inside one card. */
-/** Where a wire really starts and ends, by the ids of the deepest cards it
- *  joins, when it is drawn a level up between the cards that hold them. */
-export type WireEnds = { from: string; to: string }
-
-export type CardWire = {
-  from: string
-  to: string
-  kind: string
-  words: string
-  /** Every pair of real ends this wire stands for: one for a wire read
-   *  straight off the code, several where wires were gathered into one. */
-  ends: WireEnds[]
-}
-
-/** One thing on the canvas, with what is inside it already laid out as
- *  cards and the wires between them, so the page only has to draw. */
-export type Card = {
-  id: string
-  name: string
-  level: Level
-  /** browser app, database, page, module… */
-  kind: string
-  says: string
-  /** A page's address. */
-  at: string
-  start: boolean
-  /** A software system that has a codegraph config to read. */
-  setUp: boolean
-  /** The names declared in a file, at the code level. */
-  names: string[]
-  /** A page's screenshot, as a data URL, or ''. */
-  shot: string
-  children: Card[]
-  wires: CardWire[]
-}
+/** Where an agent says it is working, as the card the canvas follows. */
+export type AgentShown = { card: string; name: string; words: string; at: string }
 
 export type SystemShown = {
   id: string
@@ -49,6 +17,9 @@ export type SystemShown = {
   point: Point
   setUp: boolean
   problems: string[]
+  /** How far the code has got toward the proposal at this point. */
+  proposal: Progress | null
+  agent: AgentShown | null
 }
 
 export type MapShown = {
@@ -57,84 +28,6 @@ export type MapShown = {
   /** Names the code calls out to that no software system in the project
    *  answers to: shallow software systems, until a person says so. */
   suggestions: string[]
-}
-
-const card = (id: string, name: string, level: Level, more: Partial<Card> = {}): Card => ({
-  id,
-  name,
-  level,
-  kind: '',
-  says: '',
-  at: '',
-  start: false,
-  setUp: true,
-  names: [],
-  shot: '',
-  children: [],
-  wires: [],
-  ...more,
-})
-
-/** Adds a wire, or the words of one, to wires already drawn between the
- *  same two cards. */
-const join = (wires: CardWire[], wire: CardWire): void => {
-  const same = wires.find((w) => w.from === wire.from && w.to === wire.to && w.kind === wire.kind)
-  if (!same) {
-    wires.push({ ...wire, ends: [...wire.ends] })
-    return
-  }
-  if (wire.words && !same.words.split('; ').includes(wire.words))
-    same.words = same.words ? `${same.words}; ${wire.words}` : wire.words
-  for (const end of wire.ends)
-    if (!same.ends.some((e) => e.from === end.from && e.to === end.to)) same.ends.push(end)
-}
-
-const systemCard = (id: string, name: string, map: SystemMap): Card => {
-  const at = (inside: string): string => `${id}/${inside}`
-  const containers = map.containers.map((container) =>
-    card(at(container.id), container.name, 'container', {
-      kind: container.kind,
-      says: container.says || (container.stores.length ? `Keeps ${container.stores.join(', ')}` : ''),
-      children: map.components
-        .filter((component) => component.container === container.name)
-        .map((component) =>
-          card(at(component.id), component.name, 'component', {
-            kind: component.kind,
-            says: component.kind === 'trigger' ? `On a ${component.trigger}` : '',
-            at: component.at,
-            start: component.start,
-            shot: component.shot,
-            children: component.files.map((file) =>
-              card(at(`${component.id}/${file.path}`), file.path.split('/').pop() ?? file.path, 'code', {
-                kind: 'file',
-                says: file.path,
-                names: file.names,
-              }),
-            ),
-          }),
-        ),
-    }),
-  )
-
-  const containerOf = new Map<string, string>()
-  for (const component of map.components) containerOf.set(component.id, `container:${component.container}`)
-  const holder = new Map(containers.map((c) => [c.id, c]))
-  const system = card(id, name, 'system', {
-    kind: 'software system',
-    says: map.setUp ? '' : 'Not set up for codegraph yet',
-    setUp: map.setUp,
-    children: containers,
-  })
-
-  for (const wire of map.wires) {
-    const from = containerOf.get(wire.from)
-    const to = containerOf.get(wire.to) ?? (wire.to.startsWith('container:') ? wire.to : undefined)
-    if (!from || !to) continue
-    const ends = [{ from: at(wire.from), to: at(wire.to) }]
-    if (from === to) join(holder.get(at(from))!.wires, { ...wire, from: at(wire.from), to: at(wire.to), ends })
-    else join(system.wires, { ...wire, from: at(from), to: at(to), ends })
-  }
-  return system
 }
 
 /** A project's map, each software system read at the point asked for, or
@@ -155,7 +48,17 @@ export const showMap = async (projectId: string, points: Record<string, Point> =
   const answersTo = new Map<string, string>()
   for (const { system, point, map } of read) {
     top.children.push(systemCard(system.id, system.name, map))
-    systems.push({ id: system.id, name: system.name, path: system.path, point, setUp: map.setUp, problems: map.problems })
+    const said = point.kind === 'live' && system.path ? whereIs(system.path) : null
+    systems.push({
+      id: system.id,
+      name: system.name,
+      path: system.path,
+      point,
+      setUp: map.setUp,
+      problems: map.problems,
+      proposal: map.proposal ? await proposalProgress(system.path, map) : null,
+      agent: said ? { card: `${system.id}/${idOfName(said.card)}`, name: said.card, words: said.words, at: said.at } : null,
+    })
     answersTo.set(system.name.toLowerCase(), system.id)
     if (system.remote) answersTo.set(system.remote.split('/').pop()!.toLowerCase(), system.id)
   }

@@ -143,10 +143,16 @@ agent builds until the map matches it. A branch has at most one. A person can
 draw one directly, or an agent can make one from a sketch.
 _Avoid_: plan, request, spec, ticket, sketch
 
+**Crossed out**:
+A card or wire a proposal takes away. Its wires go with it. Over the map it
+stays in view, struck through, until the code no longer has it.
+_Avoid_: deleted, removed, struck
+
 **Built**:
 A proposal is built when everything it draws exists, everything it crosses out
-is gone, nothing it did not draw has changed, the tests pass and every file is
-tagged. Building it ends the proposal; the sketch it came from stays.
+is gone, nothing it did not draw has changed since the commit it was drawn on,
+the tests pass and every file is tagged. Building it ends the proposal; the
+sketch it came from stays.
 _Avoid_: done, complete, merged, shipped
 
 ## Setting up

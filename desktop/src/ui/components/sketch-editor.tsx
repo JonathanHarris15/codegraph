@@ -1,6 +1,6 @@
 // codegraph: component sketch-editor
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Sketch, SketchCard } from '../../modules/sketches/index.js'
+import type { CardState, Sketch, SketchCard } from '../../modules/sketches/index.js'
 import { sentenceOf } from '../../modules/wording/index.js'
 import { Button, Field, Select } from '../design-system/kit.js'
 import { Glyph } from './kind-glyph.js'
@@ -38,6 +38,25 @@ let clipboard: Clip | null = null
 const ONE_STEP_MS = 900
 const HISTORY = 200
 
+/** Drawing over the map, whatever is new on a level is marked as drawn
+ *  new, all the way down, so it shows as still to build. */
+const stampWith =
+  (known: Set<string> | null) =>
+  (card: SketchCard): SketchCard => {
+    if (!known) return card
+    const mark = (c: SketchCard): SketchCard => ({
+      ...c,
+      ...(c.state || known.has(c.id) ? {} : { state: 'proposed' as const }),
+      children: c.children.map(mark),
+      wires: c.wires.map((w) => (w.state || known.has(w.id) ? w : { ...w, state: 'proposed' as const })),
+    })
+    return {
+      ...card,
+      children: card.children.map(mark),
+      wires: card.wires.map((w) => (w.state || known.has(w.id) ? w : { ...w, state: 'proposed' as const })),
+    }
+  }
+
 /** Draws on a sketch: the canvas with its tools, and a panel for whatever is
  *  picked. Every change goes straight back to the page, which keeps it, and
  *  onto a history, so any of it can be undone. Nothing here has a save button. */
@@ -48,6 +67,7 @@ export const SketchEditor = ({
   onPath,
   onChange,
   onAddMockup,
+  known,
 }: {
   sketch: Sketch
   mockups: Record<string, string>
@@ -55,7 +75,27 @@ export const SketchEditor = ({
   onPath: (path: string[]) => void
   onChange: (sketch: Sketch) => void
   onAddMockup: (cardId: string) => void
+  /** Drawing a proposal over the map: the ids of what is in the code. They
+   *  are crossed out rather than taken off, and keep their names; anything
+   *  else drawn is new, to be built. */
+  known?: string[]
 }) => {
+  const fromCode = new Set(known ?? [])
+  const proposing = known !== undefined
+  const stamp = stampWith(proposing ? fromCode : null)
+  /** Takes things away: off a sketch, or, over the map, crossed out when
+   *  they are in the code, and brought back when crossed out already. */
+  const takeAway = (f: SketchCard, ids: string[]): SketchCard => {
+    if (!proposing) return remove(f, ids)
+    const toggle = <T extends { id: string; state?: CardState }>(x: T): T =>
+      ids.includes(x.id) && fromCode.has(x.id)
+        ? x.state === 'gone'
+          ? (({ state: _, ...rest }) => rest as T)(x)
+          : { ...x, state: 'gone' }
+        : x
+    const crossed = { ...f, children: f.children.map(toggle), wires: f.wires.map(toggle) }
+    return remove(crossed, ids.filter((id) => !fromCode.has(id)))
+  }
   const [selected, setSelected] = useState<string[]>([])
   const past = useRef<Sketch[]>([])
   const future = useRef<Sketch[]>([])
@@ -81,7 +121,7 @@ export const SketchEditor = ({
   const change = useCallback(
     (next: (focus: SketchCard) => SketchCard, step = '', quiet = false): void => {
       const was = now.current
-      const root = changeAt(was.root, here, (f) => makeRoom(next(f)))
+      const root = changeAt(was.root, here, (f) => stamp(makeRoom(next(f))))
       const changed = { ...was, root }
       if (!quiet) {
         // 'join' joins whatever step came last, however long ago.
@@ -97,7 +137,7 @@ export const SketchEditor = ({
       now.current = changed
       onChange(changed)
     },
-    [here.join('/'), onChange],
+    [here.join('/'), onChange, known],
   )
 
   const travel = useCallback(
@@ -149,7 +189,7 @@ export const SketchEditor = ({
         event.preventDefault()
         clipboard = copyOf(focus, selected)
         if (key === 'x') {
-          change((f) => remove(f, selected))
+          change((f) => takeAway(f, selected))
           setSelected([])
         }
         return
@@ -180,7 +220,7 @@ export const SketchEditor = ({
       }
       if ((event.key === 'Delete' || event.key === 'Backspace') && selected.length) {
         event.preventDefault()
-        change((f) => remove(f, selected))
+        change((f) => takeAway(f, selected))
         setSelected([])
         return
       }
@@ -201,7 +241,7 @@ export const SketchEditor = ({
   }
   const cut = (ids: string[]): void => {
     copy(ids)
-    change((f) => remove(f, ids))
+    change((f) => takeAway(f, ids))
     setSelected([])
   }
   /** Pastes what Copy holds: beside where it came from, or centred on a spot. */
@@ -241,6 +281,9 @@ export const SketchEditor = ({
   }
 
   const picked = selected.length === 1 ? pick(focus, selected[0]!) : null
+  const focusState = (id: string): string | undefined =>
+    focus.children.find((c) => c.id === id)?.state ?? focus.wires.find((w) => w.id === id)?.state
+  const lockedPick = picked !== null && selected.length === 1 && fromCode.has(selected[0]!)
   const nameOf = (id: string): string => focus.children.find((c) => c.id === id)?.name || 'unnamed'
 
   return (
@@ -298,11 +341,16 @@ export const SketchEditor = ({
           onPaste: pasteNow,
           onDuplicate: duplicate,
           onSelectAll: () => setSelected([...focus.children.map((c) => c.id), ...focus.notes.map((n) => n.id)]),
-          onKind: (id, kind) =>
-            change((f) => (pick(f, id)?.kind === 'wire' ? changeWire(f, id, { kind }) : changeCard(f, id, { kind }))),
+          onKind: (id, kind) => {
+            if (fromCode.has(id)) return
+            change((f) => (pick(f, id)?.kind === 'wire' ? changeWire(f, id, { kind }) : changeCard(f, id, { kind })))
+          },
           onMockup: (id) => onAddMockup(id),
-          onRemove: (ids) => change((f) => remove(f, ids)),
+          onRemove: (ids) => change((f) => takeAway(f, ids)),
           onAlign: (ids, how) => change((f) => align(f, ids, how)),
+          ...(proposing
+            ? { floor: 'component', locked: [...fromCode], removeName: 'Cross it out, or bring it back' }
+            : {}),
         }}
       />
 
@@ -313,8 +361,12 @@ export const SketchEditor = ({
           </button>
           {selected.length === 0 ? (
             <>
-              <div className="sketch-panel-head">Nothing picked</div>
-              <div className="ds-hint">Pick a card, a wire or a note to change it here.</div>
+              <div className="sketch-panel-head">{proposing ? 'Drawing a proposal' : 'Nothing picked'}</div>
+              <div className="ds-hint">
+                {proposing
+                  ? 'Anything you add is for the agent to build. Pick something from the code and press Delete to cross it out; press it again to bring it back. It is kept on the branch as you draw.'
+                  : 'Pick a card, a wire or a note to change it here.'}
+              </div>
               <dl className="sketch-keys" aria-label="Ways to draw">
                 <dt>Add a card</dt>
                 <dd>Drag one in from the left, or double-click the board</dd>
@@ -357,6 +409,30 @@ export const SketchEditor = ({
               <div className="sketch-panel-head">{selected.length} picked</div>
               <div className="ds-hint">
                 Drag any of them to move them together. The bar over them lines them up or spaces them out.
+              </div>
+            </>
+          ) : lockedPick && picked && picked.kind !== 'note' ? (
+            <>
+              <div className="sketch-panel-head">
+                {picked.kind === 'card' ? `${picked.card.kind || picked.card.level} ${picked.card.name}` : 'A wire'}
+              </div>
+              {picked.kind === 'wire' ? (
+                <div className="sketch-sentence">
+                  {sentenceOf(nameOf(picked.wire.from), picked.wire.kind, nameOf(picked.wire.to), picked.wire.words).map(
+                    (part, i) => (
+                      <span key={i} className={`map-said-${part.role}`}>
+                        {part.text}
+                      </span>
+                    ),
+                  )}
+                </div>
+              ) : picked.card.says ? (
+                <div className="ds-hint">{picked.card.says}</div>
+              ) : null}
+              <div className="ds-hint">
+                {focusState(picked.kind === 'card' ? picked.card.id : picked.wire.id) === 'gone'
+                  ? 'Crossed out: the agent takes it away when it builds the proposal.'
+                  : 'This is in the code, so it keeps its name and kind. Cross it out to have it taken away.'}
               </div>
             </>
           ) : picked?.kind === 'card' ? (
@@ -452,11 +528,19 @@ export const SketchEditor = ({
               <Button
                 look="bare"
                 onClick={() => {
-                  change((f) => remove(f, selected))
+                  change((f) => takeAway(f, selected))
                   setSelected([])
                 }}
               >
-                {selected.length > 1 ? `Take these ${selected.length} off the sketch` : 'Take it off the sketch'}
+                {proposing
+                  ? selected.every((id) => fromCode.has(id))
+                    ? selected.every((id) => focusState(id) === 'gone')
+                      ? 'Bring it back'
+                      : 'Cross it out'
+                    : 'Take it off the drawing'
+                  : selected.length > 1
+                    ? `Take these ${selected.length} off the sketch`
+                    : 'Take it off the sketch'}
               </Button>
             </>
           ) : null}

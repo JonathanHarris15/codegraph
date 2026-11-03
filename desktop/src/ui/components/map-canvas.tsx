@@ -82,6 +82,13 @@ export type Drawing = {
   onMockup: (id: string) => void
   onRemove: (ids: string[]) => void
   onAlign: (ids: string[], how: Alignment) => void
+  /** Drawing over the map: cards of this level are not opened, since what
+   *  is inside them is the agent's to decide. */
+  floor?: string
+  /** Things from the code, which can be crossed out but not written on. */
+  locked?: string[]
+  /** What taking something away is called: off a sketch, or crossed out. */
+  removeName?: string
 }
 
 const STEP_MS = 320
@@ -148,6 +155,9 @@ export const walk = <C extends { id: string; children: C[] }>(root: C, path: str
 /** Tunnelling into a card carries on through any level with only one card
  *  in it, since there is nothing to choose there (ADR 0002). On a sketch it
  *  stops at the card asked for: an empty card is somewhere to draw. */
+/** Whether a card is the one with an id, or has it somewhere inside. */
+const holds = (card: DrawnCard, id: string): boolean => card.id === id || card.children.some((c) => holds(c, id))
+
 const deeper = (trail: DrawnCard[], drawing: boolean): string[] => {
   const path = trail.map((c) => c.id)
   if (drawing) return path
@@ -221,6 +231,9 @@ const Inside = ({ card }: { card: DrawnCard }) => {
 
 const SIDES: Side[] = ['n', 'e', 's', 'w']
 
+/** What a card's mark says, drawn over the map by a proposal. */
+const STATE_WORDS: Record<string, string> = { proposed: 'To build', built: 'Built', gone: 'To remove' }
+
 const CardFace = ({
   placed,
   picture,
@@ -230,6 +243,7 @@ const CardFace = ({
   target,
   handles,
   drawing,
+  agent,
   onOpen,
   onPress,
   onHandle,
@@ -237,6 +251,8 @@ const CardFace = ({
 }: {
   placed: Placed
   picture: string
+  /** The agent says it is working here, or inside here: its words. */
+  agent?: string
   opens: boolean
   selected: boolean
   receded: boolean
@@ -260,6 +276,9 @@ const CardFace = ({
   if (receded) classes.push('map-card--outside')
   if (target) classes.push('map-card--target')
   if (drawing) classes.push('map-card--drawn')
+  if (card.state) classes.push(`map-card--${card.state}`)
+  if (agent !== undefined) classes.push('map-card--agent')
+  const mockup = drawing ? '' : (card.mockup ?? '')
   return (
     <div
       className={classes.join(' ')}
@@ -294,7 +313,20 @@ const CardFace = ({
               <span className="map-frame-at map-frame-at--none">no address</span>
             )}
           </div>
-          {picture ? (
+          {mockup && picture ? (
+            <div className="map-shots">
+              <figure className="map-shots-one">
+                <img className="map-shot map-shot--real" src={picture} alt={`${card.name} as it looks`} draggable={false} />
+                <figcaption>Now</figcaption>
+              </figure>
+              <figure className="map-shots-one">
+                <img className="map-shot map-shot--real" src={mockup} alt={`${card.name} as proposed`} draggable={false} />
+                <figcaption>Proposed</figcaption>
+              </figure>
+            </div>
+          ) : mockup ? (
+            <img className="map-shot map-shot--real" src={mockup} alt={`${card.name} as proposed`} draggable={false} />
+          ) : picture ? (
             <img className="map-shot map-shot--real" src={picture} alt={`${card.name} as it looks`} draggable={false} />
           ) : (
             <div className="map-shot">{drawing ? 'No mockup yet' : 'No screenshot yet'}</div>
@@ -322,6 +354,15 @@ const CardFace = ({
           <Inside card={card} />
         </>
       )}
+      {card.state ? (
+        <span className={`map-state map-state--${card.state}`}>{STATE_WORDS[card.state]}</span>
+      ) : null}
+      {agent !== undefined ? (
+        <span className="map-agent" role="status" aria-label={`The agent is working here${agent ? `: ${agent}` : ''}`}>
+          <span className="map-agent-dot" />
+          {agent || 'Agent working here'}
+        </span>
+      ) : null}
       {handles && onHandle
         ? SIDES.map((side) => (
             <span
@@ -345,6 +386,7 @@ const Sentence = ({
   said,
   verb,
   at,
+  state,
   small,
   missing,
   unfinished,
@@ -358,6 +400,8 @@ const Sentence = ({
   said: Said
   verb: string
   at: Spot
+  /** How the wire stands against a proposal. */
+  state?: string
   small: boolean
   /** On the map, the code gave this wire no words: a problem to show. */
   missing: boolean
@@ -371,6 +415,7 @@ const Sentence = ({
   onEdit: () => void
 }) => {
   const classes = ['map-sentence']
+  if (state) classes.push(`map-sentence--${state}`)
   if (small) classes.push('map-sentence--small')
   if (missing) classes.push('map-sentence--missing')
   if (selected) classes.push('map-sentence--selected')
@@ -431,12 +476,16 @@ export const MapCanvas = ({
   path,
   onPath,
   drawing,
+  agent,
   onStartSketch,
 }: {
   root: DrawnCard
   path: string[]
   onPath: (path: string[]) => void
   drawing?: Drawing
+  /** Where an agent says it is working, to mark on the card or the card it
+   *  is inside. */
+  agent?: { card: string; words: string } | null
   onStartSketch?: () => void
 }) => {
   const frame = useRef<HTMLDivElement>(null)
@@ -761,7 +810,8 @@ export const MapCanvas = ({
     return () => window.removeEventListener('resize', refit)
   }, [])
 
-  const canOpen = (card: DrawnCard): boolean => (drawing ? card.level !== 'code' : card.children.length > 0)
+  const canOpen = (card: DrawnCard): boolean =>
+    drawing ? card.level !== 'code' && card.level !== drawing.floor : card.children.length > 0
 
   /** Opening a card: one inside the card we are in goes deeper; one beside
    *  it moves sideways, into that card instead. */
@@ -862,7 +912,7 @@ export const MapCanvas = ({
 
   const startEditing = useCallback(
     (id: string, seed?: string, says = false): void => {
-      if (!drawing) return
+      if (!drawing || drawing.locked?.includes(id)) return
       const card = focus.children.find((c) => c.id === id)
       const wire = focus.wires.find((w) => w.id === id)
       const note = notes.find((n) => n.id === id)
@@ -1442,7 +1492,7 @@ export const MapCanvas = ({
       { name: 'Copy', glyph: 'copy', keys: 'Ctrl+C', act: () => drawing.onCopy(ids) },
       { name: 'Duplicate', keys: 'Ctrl+D', act: () => drawing.onSelect(drawing.onDuplicate(ids)) },
       'rule',
-      { name: ids.length > 1 ? `Take these ${ids.length} off` : 'Take it off the sketch', glyph: 'bin', keys: 'Delete', danger: true, act: () => {
+      { name: drawing.removeName ?? (ids.length > 1 ? `Take these ${ids.length} off` : 'Take it off the sketch'), glyph: 'bin', keys: 'Delete', danger: true, act: () => {
         drawing.onRemove(ids)
         drawing.onSelect([])
       } },
@@ -1455,7 +1505,7 @@ export const MapCanvas = ({
         key={key}
         className={`map-wire map-wire--${wire.kind.replace(/\s+/g, '-')}${
           drawing && wire.id && selected.includes(wire.id) ? ' map-wire--selected' : ''
-        }${opts.faint ? ' map-wire--outside' : ''}`}
+        }${opts.faint ? ' map-wire--outside' : ''}${wire.state ? ` map-wire--${wire.state}` : ''}`}
       >
         <path d={shape.d} markerEnd="url(#map-head)" />
         {drawing && wire.id && !opts.faint ? (
@@ -1612,6 +1662,7 @@ export const MapCanvas = ({
               target={false}
               handles={false}
               drawing={false}
+              agent={agent && holds(p.card, agent.card) ? agent.words : undefined}
               onOpen={() => tunnelIn(p.card, true)}
             />
           ))}
@@ -1651,6 +1702,7 @@ export const MapCanvas = ({
                 target={live.line?.target === p.card.id}
                 handles={Boolean(drawing) && (tool === 'pick' || tool === 'wire') && !armed && (hover === p.card.id || (picked && selected.length === 1)) && !live.moves}
                 drawing={Boolean(drawing)}
+                agent={agent && holds(p.card, agent.card) ? agent.words : undefined}
                 onOpen={() => tunnelIn(p.card)}
                 onPress={drawing ? press(p.card.id) : undefined}
                 onHandle={drawing ? pressHandle(p.card.id) : undefined}
@@ -1692,6 +1744,7 @@ export const MapCanvas = ({
               said={said}
               verb={wire.kind}
               at={at}
+              state={wire.state}
               small={small}
               missing={!drawing && !wire.words && wire.kind !== 'leads to' && wire.kind !== 'keeps'}
               unfinished={Boolean(drawing) && !wire.words && wire.kind !== 'leads to' && Boolean(wire.id)}
@@ -1900,6 +1953,8 @@ export const MapCanvas = ({
             }}
             onMockup={(id) => drawing?.onMockup(id)}
             onAlign={(ids, how) => drawing?.onAlign(ids, how)}
+            locked={selected.length === 1 && Boolean(drawing?.locked?.includes(selected[0]!))}
+            removeName={drawing?.removeName}
             onRemove={(ids) => {
               drawing?.onRemove(ids)
               drawing?.onSelect([])

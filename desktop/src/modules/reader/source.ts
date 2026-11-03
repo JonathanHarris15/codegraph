@@ -3,12 +3,13 @@ import { execFile, spawn } from 'node:child_process'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
+import { PROPOSAL } from './proposal.js'
 import type { Point } from './schema.js'
 
 const started = promisify(execFile)
 
 const SOURCE = /\.(ts|tsx|js|jsx|mjs|cjs|mts|cts|py|rb|go|rs|java|kt|swift|cs|php|sql|prisma|css|scss|html|vue|svelte|sh)$/i
-const ALSO = new Set(['codegraph.config.json', 'tsconfig.json', 'jsconfig.json'])
+const ALSO = new Set(['codegraph.config.json', PROPOSAL, 'tsconfig.json', 'jsconfig.json'])
 const TOO_BIG = 1024 * 1024
 
 /** The files the reader cares about: source it can tag, and the few config
@@ -118,4 +119,37 @@ export const pointsIn = async (repo: string, commits = 30): Promise<Point[]> => 
       return { kind: 'commit', sha, title: title.join('\t') }
     })
   return [{ kind: 'live' }, ...branches, ...history]
+}
+
+/** One file at a point, as bytes, for a picture; null when it is not there. */
+export const pictureAt = async (repo: string, point: Point, path: string): Promise<Buffer | null> => {
+  if (point.kind === 'live') {
+    const full = join(repo, path)
+    return existsSync(full) && statSync(full).size <= TOO_BIG * 8 ? readFileSync(full) : null
+  }
+  try {
+    const { stdout } = await started('git', ['show', `${refOf(point)}:${path}`], {
+      cwd: repo,
+      windowsHide: true,
+      encoding: 'buffer',
+      maxBuffer: 64 * 1024 * 1024,
+    })
+    return stdout
+  } catch {
+    return null
+  }
+}
+
+/** The commit a change was drawn on: the one named, if git has it, else
+ *  where the checked-out branch left the main line. '' when neither is found. */
+export const baseOf = async (repo: string, named: string): Promise<string> => {
+  if (named) {
+    const sha = (await git(repo, ['rev-parse', '--verify', '--quiet', `${named}^{commit}`])).trim()
+    if (sha) return sha
+  }
+  for (const line of ['origin/main', 'origin/master', 'main', 'master']) {
+    const sha = (await git(repo, ['merge-base', 'HEAD', line])).trim()
+    if (sha) return sha
+  }
+  return ''
 }

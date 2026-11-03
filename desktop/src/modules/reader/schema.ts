@@ -1,4 +1,5 @@
 // codegraph: module reader
+import type { Proposal } from './proposal.js'
 
 /** Where in a repo's history to read it: the folder as it is now, with
  *  whatever is not committed, or a branch or commit read straight from git. */
@@ -72,6 +73,10 @@ export type SystemMap = {
   outside: Wire[]
   /** Things the reader could not make sense of, said plainly. */
   problems: string[]
+  /** The change drawn over this map on this branch, if there is one. */
+  proposal: Proposal | null
+  /** The proposal's mockups, by the id of the page each is for, as data URLs. */
+  mockups: Record<string, string>
 }
 
 export const outsideId = (name: string): string => `outside:${name}`

@@ -15,6 +15,7 @@ describe('a wire read as a sentence', () => {
       'nightly-tidy starts write-note to clear out empty notes',
     )
     expect(plain(sentenceOf('notes', 'calls', 'mailer', 'tells the owner'))).toBe('notes calls mailer to tell the owner')
+    expect(plain(sentenceOf('search', 'asks', 'find-notes', 'to find notes'))).toBe('search asks find-notes to find notes')
   })
 
   it('says what is kept, and where', () => {

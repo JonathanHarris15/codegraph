@@ -5,7 +5,8 @@ import { linkSoftwareSystem } from '../src/features/link-software-system.js'
 import { showMap, type Card } from '../src/features/show-map.js'
 import { useChooser } from '../src/modules/machine/index.js'
 import { useFolder } from '../src/modules/projects/index.js'
-import { aMappedRepo, aSoftwareSystem, closeYard, openYard, type Yard } from './yard.js'
+import { sayWhere, useFolder as useAgents } from '../src/modules/agents/index.js'
+import { aMappedRepo, aProposal, aSoftwareSystem, buildSearch, closeYard, git, openYard, searchProposal, type Yard } from './yard.js'
 
 let yard: Yard
 
@@ -90,5 +91,47 @@ describe('the map of a project', () => {
     const web = child(child(there.card, 'notes'), 'web')
     expect(web?.children.map((c) => c.name)).toContain('search')
     expect(there.systems[0]?.point).toEqual({ kind: 'branch', name: 'add-search' })
+  })
+})
+
+describe('the map of a branch with a proposal', () => {
+  const aProposed = async (): Promise<{ id: string; repo: string }> => {
+    const { id } = await createProject('Notes')
+    const repo = aMappedRepo(yard)
+    await linkSoftwareSystem(id, repo)
+    const base = git(repo, 'rev-parse', 'HEAD')
+    git(repo, 'checkout', '-q', '-b', 'search')
+    aProposal(repo, searchProposal(base), ['search.png'])
+    return { id, repo }
+  }
+
+  it('draws what is not built yet as proposed cards and wires, where they will be', async () => {
+    const shown = await showMap((await aProposed()).id)
+    const web = child(child(shown.card, 'notes'), 'web')
+    expect(child(web, 'search')).toMatchObject({ kind: 'page', state: 'proposed', at: '/search', says: 'Finds a note by its words' })
+    expect(child(web, 'search')?.mockup).toMatch(/^data:image\/png/)
+    expect(child(web, 'find-notes')?.state).toBe('proposed')
+    const asks = web?.wires.find((w) => named(web, w.from) === 'search')
+    expect(asks).toMatchObject({ kind: 'asks', words: 'to find notes', state: 'proposed' })
+  })
+
+  it('marks what it crosses out, and what is built as built', async () => {
+    const { id, repo } = await aProposed()
+    buildSearch(repo, { all: false })
+    const shown = await showMap(id)
+    const web = child(child(shown.card, 'notes'), 'web')
+    expect(child(web, 'nightly-tidy')?.state).toBe('gone')
+    expect(child(web, 'search')?.state).toBe('built')
+    expect(web?.wires.find((w) => named(web, w.from) === 'search')?.state).toBe('built')
+    expect(shown.systems[0]?.proposal?.items.filter((i) => i.state === 'built')).toHaveLength(4)
+  })
+
+  it('shows where the agent says it is working', async () => {
+    const { id, repo } = await aProposed()
+    useAgents(yard.home)
+    sayWhere(repo, 'web/page search', 'writing the page')
+    const agent = (await showMap(id)).systems[0]?.agent
+    expect(agent).toMatchObject({ name: 'web/page search', words: 'writing the page' })
+    expect(agent?.card.endsWith('/web:page:search')).toBe(true)
   })
 })

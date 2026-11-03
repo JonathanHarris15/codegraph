@@ -195,3 +195,50 @@ export const aPicture = (): Buffer =>
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
     'base64',
   )
+
+/** Writes a proposal into a repo's live folder, the way a person drawing on
+ *  the canvas or an agent would, and its mockups beside it. */
+export const aProposal = (repo: string, proposal: Record<string, unknown>, pictures: string[] = []): void => {
+  put(repo, { 'codegraph-proposal/proposal.json': JSON.stringify(proposal, null, 2) })
+  for (const name of pictures) writeFileSync(join(repo, 'codegraph-proposal', name), aPicture())
+}
+
+/** Writes files into a repo's live folder, as an agent building would. */
+export const writeInto = (repo: string, files: Record<string, string>): void => put(repo, files)
+
+/** The proposal on search, used across the proposal tests: a search page
+ *  that asks a new feature, which reads the notes; the nightly tidy crossed out. */
+export const searchProposal = (base: string) => ({
+  says: 'Let people search their notes',
+  sketch: '',
+  base,
+  components: [
+    { container: 'web', kind: 'page', name: 'search', says: 'Finds a note by its words', at: '/search', mockup: 'search.png' },
+    { container: 'web', kind: 'feature', name: 'find-notes', says: 'Looks through the notes', at: '', mockup: '' },
+    { container: 'web', kind: 'trigger', name: 'nightly-tidy', says: '', at: '', mockup: '', gone: true },
+  ],
+  wires: [
+    { from: 'web/page search', to: 'web/feature find-notes', kind: 'asks', words: 'to find notes' },
+    { from: 'web/feature find-notes', to: 'web/module notes', kind: 'uses', words: 'reads every note' },
+  ],
+})
+
+/** Builds the search proposal in the live folder, wholly or but for the
+ *  last step. */
+export const buildSearch = (repo: string, { all = true } = {}): void => {
+  writeInto(repo, {
+    'app/pages/search.tsx': [
+      '// codegraph: page search at /search',
+      "import { findNotes } from '../features/find-notes' // codegraph: wire to find notes",
+      'export const Search = () => findNotes()',
+      '',
+    ].join('\n'),
+    'app/features/find-notes.ts': [
+      '// codegraph: feature find-notes uses notes',
+      "import { listNotes } from '../modules/notes' // codegraph: wire reads every note",
+      'export const findNotes = () => listNotes()',
+      '',
+    ].join('\n'),
+  })
+  if (all) rmSync(join(repo, 'app/triggers/nightly.ts'))
+}

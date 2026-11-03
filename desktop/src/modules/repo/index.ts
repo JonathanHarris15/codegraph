@@ -1,5 +1,5 @@
 // codegraph: module repo
-// codegraph: front door isRepo, remoteName, mainLineRef, isSetUp, readSoftwareSystem, folderName, RepoFacts, SetupFacts
+// codegraph: front door isRepo, remoteName, mainLineRef, isSetUp, readSoftwareSystem, folderName, writeProposal, removeProposal, proposalPicture, headOf, makeBranch, RepoFacts, SetupFacts, Picture
 import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
 import { isRepo, mainLineRef, readGit, remoteName, type GitFacts } from './git.js'
@@ -7,6 +7,8 @@ import { git } from './run.js'
 import { isSetUp, noSetup, readSetupAt, type SetupFacts } from './setup.js'
 
 export { isRepo, isSetUp, mainLineRef, remoteName }
+export { headOf, makeBranch, proposalPicture, removeProposal, writeProposal } from './proposal.js'
+export type { Picture } from './proposal.js'
 export type { SetupFacts } from './setup.js'
 
 /** Everything one working copy on this computer says about itself. The setup

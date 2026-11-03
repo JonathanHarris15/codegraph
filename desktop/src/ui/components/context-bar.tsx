@@ -50,6 +50,8 @@ export const ContextBar = ({
   onMockup,
   onAlign,
   onRemove,
+  locked = false,
+  removeName = 'Take it off the sketch',
 }: {
   picking: Picking
   /** Where on the screen the bar's bottom middle sits, or its top middle
@@ -62,6 +64,9 @@ export const ContextBar = ({
   onMockup: (id: string) => void
   onAlign: (ids: string[], how: Alignment) => void
   onRemove: (ids: string[]) => void
+  /** From the code: it keeps its kind and words, and can only be crossed out. */
+  locked?: boolean
+  removeName?: string
 }) => {
   const [kinds, setKinds] = useState(false)
   const choices =
@@ -75,7 +80,7 @@ export const ContextBar = ({
       aria-label="What to do with what is picked"
       onPointerDown={(event) => event.stopPropagation()}
     >
-      {picking.what === 'card' || picking.what === 'wire' ? (
+      {(picking.what === 'card' || picking.what === 'wire') && !locked ? (
         <span className="map-context-kind">
           <button
             type="button"
@@ -119,7 +124,7 @@ export const ContextBar = ({
         </span>
       ) : null}
 
-      {picking.what !== 'many' ? (
+      {picking.what !== 'many' && !locked ? (
         <Act
           glyph="edit"
           name={picking.what === 'card' ? 'Rename (Enter)' : picking.what === 'wire' ? 'Say what it is for (Enter)' : 'Edit the note (Enter)'}
@@ -160,7 +165,7 @@ export const ContextBar = ({
       <Act
         glyph="bin"
         danger
-        name="Take it off the sketch (Delete)"
+        name={`${removeName} (Delete)`}
         onAct={() => onRemove(picking.what === 'many' ? picking.ids : [picking.id])}
       />
     </div>
