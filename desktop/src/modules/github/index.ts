@@ -1,6 +1,6 @@
 // codegraph: module github
 // codegraph: front door useFolder, useKeystore, tokenIsSafe, saveToken, savedToken, forgetToken, whoAmI, listRepos, codegraphRepos, GithubRepo, GithubRefused, Keystore
-import { GithubRefused, isCodegraph, listRepos, whoAmI, type GithubRepo } from './api.js'
+import { GithubRefused, listRepos, projectsServed, whoAmI, type GithubRepo } from './api.js'
 import {
   forgetToken,
   saveToken,
@@ -44,9 +44,13 @@ const atATime = async <In, Out>(
   return out
 }
 
-/** Of the repos the person can reach, the ones set up for codegraph. */
-export const codegraphRepos = async (token: string): Promise<GithubRepo[]> => {
+/** Of the repos the person can reach, the ones set up for codegraph, with
+ *  the projects each one says it serves. */
+export const codegraphRepos = async (token: string): Promise<(GithubRepo & { projects: string[] })[]> => {
   const repos = await listRepos(token)
-  const verdicts = await atATime(repos, 8, (repo) => isCodegraph(token, repo))
-  return repos.filter((_, i) => verdicts[i])
+  const served = await atATime(repos, 8, (repo) => projectsServed(token, repo))
+  return repos.flatMap((repo, i) => {
+    const projects = served[i]
+    return projects ? [{ ...repo, projects }] : []
+  })
 }

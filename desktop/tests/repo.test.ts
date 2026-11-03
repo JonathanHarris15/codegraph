@@ -96,8 +96,7 @@ describe('reading a working copy', () => {
 
   it('says codegraph is not turned on, and does not bother counting tags', async () => {
     const bare = await readSoftwareSystem(work)
-    expect(bare.toolsOn).toBe(false)
-    expect(bare.rulesWritten).toBe(false)
+    expect(bare.configWritten).toBe(false)
     expect(bare.taggedFiles).toBe(0)
   })
 })
@@ -106,12 +105,10 @@ describe('reading a working copy', () => {
  *  say something sensible at each step. */
 describe('setup is the repo’s, not the branch’s', () => {
   const turnOn = (clone: string): void => {
-    mkdirSync(join(clone, '.claude'), { recursive: true })
     writeFileSync(
-      join(clone, '.claude', 'settings.json'),
-      JSON.stringify({ enabledPlugins: { 'codegraph@codegraph': true } }),
+      join(clone, 'codegraph.config.json'),
+      JSON.stringify({ projects: ['mosaic'], containers: { app: { kind: 'command-line tool', folders: [''] } } }),
     )
-    writeFileSync(join(clone, 'CLAUDE.md'), '# repo\n\nThis repo follows the codegraph rules.\n')
     git(clone, 'add', '-A')
     git(clone, 'commit', '-m', 'turn codegraph on')
   }
@@ -122,14 +119,13 @@ describe('setup is the repo’s, not the branch’s', () => {
   })
 
   it('does not count a setup that is only in the working copy', async () => {
-    mkdirSync(join(work, '.claude'), { recursive: true })
-    writeFileSync(join(work, '.claude', 'settings.json'), '{"enabledPlugins":{"codegraph":true}}')
+    writeFileSync(join(work, 'codegraph.config.json'), '{"projects":["mosaic"]}')
 
     const facts = await readSoftwareSystem(work)
-    expect(facts.toolsOn).toBe(false)
+    expect(facts.configWritten).toBe(false)
     expect(facts.setUpHere).toBe(false)
 
-    rmSync(join(work, '.claude'), { recursive: true, force: true })
+    rmSync(join(work, 'codegraph.config.json'))
   })
 
   it('says it is set up on this branch only, before the branch is merged', async () => {
@@ -139,7 +135,7 @@ describe('setup is the repo’s, not the branch’s', () => {
     const facts = await readSoftwareSystem(work)
     expect(facts.branch).toBe('turn-codegraph-on')
     expect(facts.setUpHere).toBe(true)
-    expect(facts.toolsOn).toBe(false)
+    expect(facts.configWritten).toBe(false)
     expect(isSetUp(facts)).toBe(false)
   })
 
@@ -151,8 +147,8 @@ describe('setup is the repo’s, not the branch’s', () => {
 
     const facts = await readSoftwareSystem(work)
     expect(isSetUp(facts)).toBe(true)
-    expect(facts.toolsOn).toBe(true)
-    expect(facts.rulesWritten).toBe(true)
+    expect(facts.configWritten).toBe(true)
+    expect(facts.projects).toEqual(['mosaic'])
     expect(facts.taggedFiles).toBeGreaterThan(0)
   })
 

@@ -25,20 +25,14 @@ const cloudWords = (
   }
 }
 
-const missingBits = (system: SoftwareSystemView): string => {
-  const missing: string[] = []
-  if (!system.toolsOn) missing.push('the plugin is not on in this repo')
-  if (!system.rulesWritten) missing.push('CLAUDE.md has no codegraph rules')
-  if (system.toolsOn && system.rulesWritten) missing.push('no file carries a tag')
-  const on = system.mainLine || 'the main line'
-  return `On ${on}: ${missing.join('; ')}`
-}
+const missingBits = (system: SoftwareSystemView): string =>
+  `${system.mainLine || 'The main line'} has no codegraph.config.json yet. Ask your agent to set this repo up with codegraph.`
 
 const SetupBadge = ({ system }: { system: SoftwareSystemView }) => {
   if (system.setUp)
     return (
       <Badge tone="good">
-        codegraph on · {system.taggedFiles}/{system.sourceFiles} tagged
+        set up · {system.taggedFiles}/{system.sourceFiles} tagged
       </Badge>
     )
   if (system.setUpHere)

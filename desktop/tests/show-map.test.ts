@@ -43,7 +43,7 @@ describe('the map of a project', () => {
     const web = child(notes, 'web')
     expect(web?.children.map((c) => c.kind).sort()).toEqual(['feature', 'module', 'page', 'page', 'trigger'])
     const module = web?.children.find((c) => c.kind === 'module')
-    expect(module?.children[0]).toMatchObject({ level: 'code', name: 'notes.ts', names: ['Note', 'saveNote', 'listNotes'] })
+    expect(module?.children[0]).toMatchObject({ level: 'code', name: 'notes.ts', names: ['Note', 'saveNote', 'listNotes', 'tellOwner'] })
   })
 
   it('says a repo that is not set up is not, and draws nothing inside it', async () => {

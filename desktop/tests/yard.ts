@@ -37,14 +37,11 @@ export const aSoftwareSystem = (
     join(path, 'thing.ts'),
     setUp ? '// codegraph: module thing\n' : 'export const a = 1\n',
   )
-  if (setUp) {
-    mkdirSync(join(path, '.claude'), { recursive: true })
+  if (setUp)
     writeFileSync(
-      join(path, '.claude', 'settings.json'),
-      JSON.stringify({ enabledPlugins: { 'codegraph@codegraph': true } }),
+      join(path, 'codegraph.config.json'),
+      JSON.stringify({ projects: [name], containers: { app: { kind: 'command-line tool', folders: [''] } } }),
     )
-    writeFileSync(join(path, 'CLAUDE.md'), '# thing\n\nIt follows the codegraph rules.\n')
-  }
   git(path, 'add', '-A')
   git(path, 'commit', '-m', 'first')
   if (remote) git(path, 'remote', 'add', 'origin', `https://github.com/${remote}.git`)
@@ -77,14 +74,12 @@ export const aGithubRepo = (fullName: string) => ({
   clone_url: `https://github.com/${fullName}.git`,
 })
 
-/** What GitHub returns for a repo whose Claude settings name codegraph. */
-export const codegraphSettings = {
+/** What GitHub returns for a repo set up for codegraph: its config. */
+export const codegraphConfig = {
   status: 200,
   body: {
     encoding: 'base64',
-    content: Buffer.from(
-      JSON.stringify({ enabledPlugins: { 'codegraph@codegraph': true } }),
-    ).toString('base64'),
+    content: Buffer.from(JSON.stringify({ projects: ['mosaic'], containers: {} })).toString('base64'),
   },
 }
 
@@ -121,6 +116,7 @@ export const aMappedRepo = (yard: Yard, name = 'notes'): string => {
       'export type Note = { id: string; text: string }',
       'export const saveNote = (text: string): Note => ({ id: "1", text })',
       'export const listNotes = (): Note[] => []',
+      "export const tellOwner = () => fetch('https://mail.example') // codegraph: wire to mailer: tells the owner",
       '',
     ].join('\n'),
     'app/features/write-note.ts': [
@@ -141,18 +137,18 @@ export const aMappedRepo = (yard: Yard, name = 'notes'): string => {
       '// codegraph: page new-note at /notes/new',
       "import { writeNote } from '../features/write-note' // codegraph: wire saves what was typed",
       'export function NewNotePage() {',
-      "  fetch('https://mail.example') // codegraph: wire to mailer: tells the owner",
       "  return <button onClick={() => writeNote('hi')}>Save</button>",
       '}',
       '',
     ].join('\n'),
     'app/triggers/nightly.ts': [
       '// codegraph: trigger nightly-tidy schedule',
-      "import { writeNote } from '../features/write-note'",
+      "import { writeNote } from '../features/write-note' // codegraph: wire clears out empty notes",
       "export const tidy = () => writeNote('')",
       '',
     ].join('\n'),
     'test/write-note.test.ts': "// codegraph: test feature write-note\nexport const nothing = 0\n",
+    'vitest.config.ts': '// codegraph: tooling\nexport default {}\n',
   })
   git(path, 'add', '-A')
   git(path, 'commit', '-m', 'notes')
@@ -164,3 +160,36 @@ export const aMappedRepo = (yard: Yard, name = 'notes'): string => {
   git(path, 'checkout', '-q', 'main')
   return path
 }
+
+/** The built codegraph MCP, started the way an agent starts it, in the
+ *  folder the agent works in. Tests call its tools as an agent would. */
+export const anAgentIn = async (folder: string) => {
+  const { Client } = await import('@modelcontextprotocol/sdk/client/index.js')
+  const { StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js')
+  const server = join(import.meta.dirname, '..', 'out', 'main', 'mcp.js')
+  const client = new Client({ name: 'test-agent', version: '0' })
+  await client.connect(new StdioClientTransport({ command: process.execPath, args: [server], cwd: folder }))
+  const call = async (tool: string, args: Record<string, unknown> = {}): Promise<string> => {
+    const answer = (await client.callTool({ name: tool, arguments: args })) as { content: { text: string }[] }
+    return answer.content.map((c) => c.text).join('\n')
+  }
+  return { client, call, close: () => client.close() }
+}
+
+/** The built MCP's check, run from a terminal the way CI would. */
+export const checkFromTerminal = (folder: string): { code: number; said: string } => {
+  const server = join(import.meta.dirname, '..', 'out', 'main', 'mcp.js')
+  try {
+    return { code: 0, said: execFileSync(process.execPath, [server, 'check', folder], { encoding: 'utf8' }) }
+  } catch (failed) {
+    const { status, stdout } = failed as { status: number; stdout: string }
+    return { code: status, said: stdout }
+  }
+}
+
+/** A real, tiny picture: one blue pixel, as a PNG. */
+export const aPicture = (): Buffer =>
+  Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+    'base64',
+  )

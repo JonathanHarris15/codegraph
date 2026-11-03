@@ -16,6 +16,8 @@ export type CloudSoftwareSystem = {
   private: boolean
   url: string
   cloneUrl: string
+  /** The projects its config says it serves. */
+  projects: string[]
   /** Already in one of this computer's projects. */
   here: boolean
 }
@@ -55,6 +57,7 @@ export const listGithubSoftwareSystems = async (): Promise<CloudView> => {
         private: repo.private,
         url: repo.url,
         cloneUrl: repo.cloneUrl,
+        projects: repo.projects,
         here: here.has(repo.fullName),
       })),
     }

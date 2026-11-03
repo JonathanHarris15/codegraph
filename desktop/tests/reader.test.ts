@@ -3,7 +3,7 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { listPoints, live, outsideId, readMap, type SystemMap } from '../src/modules/reader/index.js'
-import { aMappedRepo, aSoftwareSystem, closeYard, git, openYard, type Yard } from './yard.js'
+import { aMappedRepo, aPicture, aSoftwareSystem, closeYard, git, openYard, type Yard } from './yard.js'
 
 let yard: Yard
 let repo = ''
@@ -46,7 +46,7 @@ describe('reading a set-up repo', () => {
 
   it('reads the names declared in each file', () => {
     const notes = map.components.find((c) => c.kind === 'module')
-    expect(notes?.files[0]?.names).toEqual(['Note', 'saveNote', 'listNotes'])
+    expect(notes?.files[0]?.names).toEqual(['Note', 'saveNote', 'listNotes', 'tellOwner'])
     expect(notes?.frontDoor).toEqual(['saveNote', 'listNotes', 'Note'])
   })
 
@@ -54,7 +54,7 @@ describe('reading a set-up repo', () => {
     expect(wire(map, 'write-note', 'notes')).toMatchObject({ kind: 'uses', words: 'keeps the note' })
     expect(wire(map, 'new-note', 'write-note')).toMatchObject({ kind: 'acts on', words: 'saves what was typed' })
     expect(wire(map, 'page:notes', 'module:notes')).toMatchObject({ kind: 'shows', words: 'lists the notes' })
-    expect(wire(map, 'nightly-tidy', 'write-note')).toMatchObject({ kind: 'starts', words: '' })
+    expect(wire(map, 'nightly-tidy', 'write-note')).toMatchObject({ kind: 'starts', words: 'clears out empty notes' })
   })
 
   it('wires the module that keeps a store to the container it is kept in', () => {
@@ -74,7 +74,7 @@ describe('reading a set-up repo', () => {
 
   it('notes calls out of the repo by the name they are aimed at', () => {
     expect(map.outside).toEqual([
-      { from: 'web:page:new-note', to: outsideId('mailer'), kind: 'calls', words: 'tells the owner' },
+      { from: 'web:module:notes', to: outsideId('mailer'), kind: 'calls', words: 'tells the owner' },
     ])
   })
 })
@@ -121,5 +121,20 @@ describe('reading a repo that is not set up', () => {
     writeFileSync(join(repo, 'loose.ts'), '// codegraph: module loose\n')
     expect((await readMap(repo, live)).problems).toEqual(["loose.ts is not in any container's folders"])
     rmSync(join(repo, 'loose.ts'))
+  })
+})
+
+describe('screenshots on the page map', () => {
+  it('gives a page the picture its tests took of it, in the live folder', async () => {
+    mkdirSync(join(repo, 'codegraph-screenshots'), { recursive: true })
+    writeFileSync(join(repo, 'codegraph-screenshots', 'new-note.png'), aPicture())
+    const now = await readMap(repo, live)
+    const then = await readMap(repo, { kind: 'branch', name: 'main' })
+    rmSync(join(repo, 'codegraph-screenshots'), { recursive: true })
+
+    const page = (m: SystemMap, name: string) => m.components.find((c) => c.kind === 'page' && c.name === name)
+    expect(page(now, 'new-note')?.shot).toMatch(/^data:image\/png;base64,/)
+    expect(page(now, 'notes')?.shot).toBe('')
+    expect(page(then, 'new-note')?.shot).toBe('')
   })
 })

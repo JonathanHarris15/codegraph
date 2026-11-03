@@ -28,13 +28,14 @@ export type SoftwareSystemView = {
   ahead: number
   behind: number
   cloud: Cloud
-  /** Codegraph is turned on in the repo: tools, rules and tags, on its main
-   *  line, whatever branch happens to be checked out here. */
+  /** The repo has its codegraph config on its main line, whatever branch
+   *  happens to be checked out here. */
   setUp: boolean
   /** Set up on the branch checked out here but not yet on the main line. */
   setUpHere: boolean
-  toolsOn: boolean
-  rulesWritten: boolean
+  configWritten: boolean
+  /** The projects its config says it serves. */
+  serves: string[]
   taggedFiles: number
   sourceFiles: number
 }
@@ -83,8 +84,8 @@ export const listProjects = async (fetchFirst = false): Promise<ProjectView[]> =
             cloud: cloudOf(facts),
             setUp: isSetUp(facts),
             setUpHere: facts.setUpHere,
-            toolsOn: facts.toolsOn,
-            rulesWritten: facts.rulesWritten,
+            configWritten: facts.configWritten,
+            serves: facts.projects,
             taggedFiles: facts.taggedFiles,
             sourceFiles: facts.sourceFiles,
           }

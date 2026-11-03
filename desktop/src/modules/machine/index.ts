@@ -1,10 +1,11 @@
 // codegraph: module machine
-// codegraph: front door appFolder, devRendererUrl, keystore, askForFolder, useChooser, Keystore
+// codegraph: front door appFolder, devRendererUrl, keystore, askForFolder, useChooser, mcpServerFile, Keystore
 
 /** This computer and the window around the app: where files are kept, the
  *  operating system's keystore, the folder picker, and what the build says.
  *  Everything here comes from outside the program, so it is asked for
  *  lazily: away from the app — in a test, say — each answer is a plain one. */
+import { join } from 'node:path'
 
 type Electron = typeof import('electron')
 
@@ -33,6 +34,14 @@ export type Keystore = {
 export const appFolder = async (): Promise<string> => {
   const desk = await electron()
   return desk ? desk.app.getPath('userData') : ''
+}
+
+/** Where the built codegraph MCP sits on this computer: beside the app's
+ *  own main process, in out/main. Away from the app, the folder it runs in. */
+export const mcpServerFile = async (): Promise<string> => {
+  const desk = await electron()
+  const root = desk?.app?.getAppPath?.() ?? process.cwd()
+  return join(root, 'out', 'main', 'mcp.js')
 }
 
 /** The page server while the app is being worked on; '' in a built app. */

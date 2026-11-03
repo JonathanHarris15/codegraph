@@ -24,6 +24,8 @@ export type Card = {
   setUp: boolean
   /** The names declared in a file, at the code level. */
   names: string[]
+  /** A page's screenshot, as a data URL, or ''. */
+  shot: string
   children: Card[]
   wires: CardWire[]
 }
@@ -55,6 +57,7 @@ const card = (id: string, name: string, level: Level, more: Partial<Card> = {}):
   start: false,
   setUp: true,
   names: [],
+  shot: '',
   children: [],
   wires: [],
   ...more,
@@ -83,6 +86,7 @@ const systemCard = (id: string, name: string, map: SystemMap): Card => {
             says: component.kind === 'trigger' ? `On a ${component.trigger}` : '',
             at: component.at,
             start: component.start,
+            shot: component.shot,
             children: component.files.map((file) =>
               card(at(`${component.id}/${file.path}`), file.path.split('/').pop() ?? file.path, 'code', {
                 kind: 'file',
@@ -136,6 +140,16 @@ export const showMap = async (projectId: string, points: Record<string, Point> =
     systems.push({ id: system.id, name: system.name, path: system.path, point, setUp: map.setUp, problems: map.problems })
     answersTo.set(system.name.toLowerCase(), system.id)
     if (system.remote) answersTo.set(system.remote.split('/').pop()!.toLowerCase(), system.id)
+  }
+
+  for (const shallow of project.shallow) {
+    top.children.push(
+      card(shallow.id, shallow.name, 'system', {
+        kind: 'shallow software system',
+        says: 'Run by someone else; no repo here',
+      }),
+    )
+    for (const name of shallow.answersTo) answersTo.set(name.toLowerCase(), shallow.id)
   }
 
   const suggestions = new Set<string>()

@@ -498,6 +498,15 @@ h3 {
   background: repeating-linear-gradient(-45deg, transparent 0 10px, rgba(255, 255, 255, 0.02) 10px 20px);
 }
 
+.map-shot--real {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  object-fit: cover;
+  object-position: top;
+  background: #fff;
+}
+
 .map-frame-name {
   display: flex;
   align-items: baseline;
@@ -549,6 +558,41 @@ h3 {
 .map-wire-words {
   font-size: 12px;
   fill: var(--ink-soft);
+}
+
+.map-kind--shallow-software-system {
+  border-style: dashed;
+  background: transparent;
+}
+
+.map-suggestions {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 560px;
+}
+
+.map-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius-small);
+  background: var(--raised);
+  border: 1px solid var(--edge-bright);
+  font-size: 13px;
+}
+
+.map-suggestion span {
+  flex: 1;
+}
+
+.map-suggestion .ds-input {
+  width: auto;
+  padding: 6px 8px;
 }
 
 .map-problems {

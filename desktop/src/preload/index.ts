@@ -1,5 +1,6 @@
 // codegraph: shell
 import { contextBridge, ipcRenderer } from 'electron'
+import type { AgentConnection } from '../features/connect-agent.js'
 import type { Connected } from '../features/connect-github.js'
 import type { CloudView } from '../features/list-github-software-systems.js'
 import type { ProjectView } from '../features/list-projects.js'
@@ -13,6 +14,8 @@ export type Api = {
   createProject: (name: string) => Promise<{ id: string }>
   linkSoftwareSystem: (projectId: string, path?: string) => Promise<Linked>
   connectGithub: (token: string) => Promise<Connected>
+  connectAgent: () => Promise<AgentConnection>
+  agreeShallowSystem: (projectId: string, name: string, sameAs?: string) => Promise<{ id: string }>
   signOutGithub: () => Promise<void>
   listGithubSoftwareSystems: () => Promise<CloudView>
   showMap: (projectId: string, points?: Record<string, Point>) => Promise<MapShown>
@@ -24,6 +27,8 @@ const api: Api = {
   createProject: (name) => ipcRenderer.invoke('projects:create', name),
   linkSoftwareSystem: (projectId, path) => ipcRenderer.invoke('system:link', projectId, path),
   connectGithub: (token) => ipcRenderer.invoke('github:connect', token),
+  connectAgent: () => ipcRenderer.invoke('agent:connect'),
+  agreeShallowSystem: (projectId, name, sameAs = '') => ipcRenderer.invoke('shallow:agree', projectId, name, sameAs),
   signOutGithub: () => ipcRenderer.invoke('github:signOut'),
   listGithubSoftwareSystems: () => ipcRenderer.invoke('github:list'),
   showMap: (projectId, points = {}) => ipcRenderer.invoke('map:show', projectId, points),

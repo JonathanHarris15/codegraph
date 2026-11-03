@@ -48,8 +48,8 @@ describe('the grid of projects', () => {
     await linkSoftwareSystem(id, aSoftwareSystem(yard, 'ready', { setUp: true }))
     const system = (await listProjects())[0]?.systems[0]
     expect(system?.setUp).toBe(true)
-    expect(system?.toolsOn).toBe(true)
-    expect(system?.rulesWritten).toBe(true)
+    expect(system?.configWritten).toBe(true)
+    expect(system?.serves).toEqual(['ready'])
     expect(system?.taggedFiles).toBe(1)
   })
 

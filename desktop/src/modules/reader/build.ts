@@ -19,7 +19,26 @@ type Config = {
   containers: { name: string; kind: string; says: string; folders: string[] }[]
 }
 
-const readConfig = (text: string | undefined, problems: string[]): Config | null => {
+/** Something in a repo that does not fit its tags, where it is, in plain words. */
+export type Mismatch = { file: string; line: number; says: string }
+
+/** One import that reaches from one component into another. */
+export type Link = { path: string; line: number; from: Component; to: Component; names: string[] }
+
+/** What the reader saw on the way to the map, which the check holds the
+ *  code to. */
+export type Facts = {
+  map: SystemMap
+  tagsOf: Map<string, FileTags>
+  componentOf: Map<string, Component>
+  links: Link[]
+  /** Calls out of the repo, by where they are written. */
+  calls: { path: string; line: number; from: Component; to: string }[]
+  /** What the reader could not place. */
+  problems: Mismatch[]
+}
+
+const readConfig = (text: string | undefined, problems: Mismatch[]): Config | null => {
   if (text === undefined) return null
   try {
     const raw = JSON.parse(text) as {
@@ -39,7 +58,7 @@ const readConfig = (text: string | undefined, problems: string[]): Config | null
       })),
     }
   } catch {
-    problems.push(`${CONFIG} is not JSON the reader can read`)
+    problems.push({ file: CONFIG, line: 1, says: `${CONFIG} is not JSON the reader can read` })
     return null
   }
 }
@@ -65,8 +84,10 @@ const routeMatches = (route: string, address: string): boolean => {
 }
 
 /** Lays the files of one repo out as its map (ADR 0008). */
-export const buildMap = (point: Point, files: Map<string, string>): SystemMap => {
-  const problems: string[] = []
+export const buildMap = (point: Point, files: Map<string, string>): SystemMap => readFacts(point, files).map
+
+export const readFacts = (point: Point, files: Map<string, string>): Facts => {
+  const problems: Mismatch[] = []
   const config = readConfig(files.get(CONFIG), problems)
   const map: SystemMap = {
     point,
@@ -76,9 +97,14 @@ export const buildMap = (point: Point, files: Map<string, string>): SystemMap =>
     components: [],
     wires: [],
     outside: [],
-    problems,
+    problems: [],
   }
-  if (!config) return map
+  const facts: Facts = { map, tagsOf: new Map(), componentOf: new Map(), links: [], calls: [], problems }
+  const done = (): Facts => {
+    map.problems = problems.map((p) => p.says)
+    return facts
+  }
+  if (!config) return done()
 
   map.containers = config.containers.map(
     (c): Container => ({ id: `container:${c.name}`, name: c.name, kind: c.kind, says: c.says, stores: [] }),
@@ -86,26 +112,29 @@ export const buildMap = (point: Point, files: Map<string, string>): SystemMap =>
   const containerNamed = new Map(map.containers.map((c) => [c.name, c]))
   const aliases = readAliases(files.get('tsconfig.json') ?? files.get('jsconfig.json'))
 
-  const tagsOf = new Map<string, FileTags>()
+  const tagsOf = facts.tagsOf
   const codeOf = new Map<string, FileCode>()
-  const componentOf = new Map<string, Component>()
+  const componentOf = facts.componentOf
   const byId = new Map<string, Component>()
 
   for (const [path, text] of files) {
     if (path === CONFIG || path === 'tsconfig.json' || path === 'jsconfig.json') continue
     const tags = readTags(path, text)
     tagsOf.set(path, tags)
-    problems.push(...tags.problems)
+    problems.push(...tags.problems.map((says) => ({ file: path, line: 1, says })))
     const role = tags.role
     if (!role || role.kind === 'test' || role.kind === 'tooling') continue
 
     const homes = config.containers.filter((c) => c.folders.some((folder) => inFolder(path, folder)))
     if (homes.length !== 1) {
-      problems.push(
-        homes.length === 0
-          ? `${path} is not in any container's folders`
-          : `${path} is in the folders of ${homes.map((h) => h.name).join(' and ')}`,
-      )
+      problems.push({
+        file: path,
+        line: 1,
+        says:
+          homes.length === 0
+            ? `${path} is not in any container's folders`
+            : `${path} is in the folders of ${homes.map((h) => h.name).join(' and ')}`,
+      })
       continue
     }
     const container = homes[0]!.name
@@ -122,6 +151,7 @@ export const buildMap = (point: Point, files: Map<string, string>): SystemMap =>
         start: false,
         trigger: '',
         frontDoor: [],
+        shot: '',
       }
       byId.set(id, component)
       map.components.push(component)
@@ -138,7 +168,7 @@ export const buildMap = (point: Point, files: Map<string, string>): SystemMap =>
     for (const store of tags.stores) {
       const keeper = containerNamed.get(store.in)
       if (!keeper) {
-        problems.push(`${path} keeps ${store.name} in ${store.in}, which is not a container`)
+        problems.push({ file: path, line: 1, says: `${path} keeps ${store.name} in ${store.in}, which is not a container` })
         continue
       }
       keeper.stores.push(store.name)
@@ -152,10 +182,11 @@ export const buildMap = (point: Point, files: Map<string, string>): SystemMap =>
   for (const [path, component] of componentOf) {
     const tags = tagsOf.get(path)!
     const code = codeOf.get(path)!
-    for (const { from: specifier, line } of code.imports) {
+    for (const { from: specifier, line, names } of code.imports) {
       const target = resolveImport(path, specifier, paths, aliases)
       const reached = target ? componentOf.get(target) : undefined
       if (!reached || reached === component) continue
+      facts.links.push({ path, line, from: component, to: reached, names })
       const key = `${component.id}>${reached.id}`
       const wire = found.get(key) ?? {
         from: component.id,
@@ -168,14 +199,22 @@ export const buildMap = (point: Point, files: Map<string, string>): SystemMap =>
       const words = tags.wires.get(line)?.words
       if (words) wire.said.add(words)
     }
-    for (const [, aimed] of tags.wires) {
+    for (const [line, aimed] of tags.wires) {
       if (!aimed.to) continue
+      facts.calls.push({ path, line, from: component, to: aimed.to })
       map.outside.push({ from: component.id, to: outsideId(aimed.to), kind: 'calls', words: aimed.words })
     }
   }
   for (const wire of found.values()) {
     const [first, ...others] = [...wire.said]
-    if (others.length) problems.push(`the wire from ${wire.from} to ${wire.to} is given different words`)
+    if (others.length) {
+      const where = facts.links.find((l) => l.from.id === wire.from && l.to.id === wire.to)!
+      problems.push({
+        file: where.path,
+        line: where.line,
+        says: `The wire from ${wire.from} to ${wire.to} is given different words in different places.`,
+      })
+    }
     map.wires.push({ from: wire.from, to: wire.to, kind: wire.kind, words: first ?? '' })
   }
 
@@ -189,5 +228,5 @@ export const buildMap = (point: Point, files: Map<string, string>): SystemMap =>
     }
   }
 
-  return map
+  return done()
 }

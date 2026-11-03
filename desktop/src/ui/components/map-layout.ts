@@ -25,6 +25,7 @@ const sizeOf = (card: Card): { w: number; h: number } =>
 const columnOf = (card: Card): number => {
   if (card.level === 'component') return card.kind === 'feature' ? 1 : card.kind === 'module' ? 2 : 0
   if (card.level === 'container') return /database|files/.test(card.kind) ? 1 : 0
+  if (card.level === 'system') return card.kind === 'shallow software system' ? 1 : 0
   return 0
 }
 

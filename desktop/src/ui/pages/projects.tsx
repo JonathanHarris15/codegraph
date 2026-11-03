@@ -1,8 +1,10 @@
 // codegraph: start page projects at /
 import { useCallback, useEffect, useState } from 'react'
+import type { AgentConnection } from '../../features/connect-agent.js'
 import type { CloudView } from '../../features/list-github-software-systems.js'
 import type { ProjectView } from '../../features/list-projects.js'
 import { Button, Card, Field, Sheet } from '../design-system/kit.js'
+import { AgentShelf } from '../components/agent-shelf.js'
 import { GithubShelf } from '../components/github-shelf.js'
 import { ProjectCard } from '../components/project-card.js'
 
@@ -15,6 +17,7 @@ export const ProjectsPage = ({ onOpen }: { onOpen: (projectId: string) => void }
   const [refreshing, setRefreshing] = useState(false)
   const [busyWithGithub, setBusyWithGithub] = useState(false)
   const [note, setNote] = useState('')
+  const [agent, setAgent] = useState<AgentConnection | null>(null)
 
   const load = useCallback(async (fetchFirst = false): Promise<void> => {
     setProjects(await window.codegraph.listProjects(fetchFirst))
@@ -27,6 +30,7 @@ export const ProjectsPage = ({ onOpen }: { onOpen: (projectId: string) => void }
   useEffect(() => {
     void load()
     void loadCloud()
+    void window.codegraph.connectAgent().then(setAgent)
   }, [load, loadCloud])
 
   const create = async (): Promise<void> => {
@@ -43,7 +47,7 @@ export const ProjectsPage = ({ onOpen }: { onOpen: (projectId: string) => void }
     if (linked.problem) setNote(linked.problem)
     else if (linked.ok && linked.needsSetup)
       setNote(
-        `${linked.name ?? 'That repo'} is linked, but codegraph is not turned on in it yet. Open it in Claude Code and run /codegraph:setup.`,
+        `${linked.name ?? 'That repo'} is linked, but it is not set up for codegraph yet. Ask your agent to set it up; the codegraph MCP tells it how.`,
       )
     if (linked.ok) {
       await load()
@@ -137,6 +141,8 @@ export const ProjectsPage = ({ onOpen }: { onOpen: (projectId: string) => void }
         onConnect={connect}
         onSignOut={() => void signOut()}
       />
+
+      <AgentShelf connection={agent} />
 
       {naming ? (
         <Sheet>

@@ -1,10 +1,10 @@
 // codegraph: module projects
-// codegraph: front door useFolder, listProjects, addProject, renameProject, addSoftwareSystem, removeSoftwareSystem, knownRemotes, Project, SoftwareSystem, Workspace
-import { type SoftwareSystem, type Project } from './schema.js'
+// codegraph: front door useFolder, listProjects, addProject, renameProject, addSoftwareSystem, removeSoftwareSystem, knownRemotes, addShallowSystem, Project, SoftwareSystem, ShallowSystem, Workspace
+import { type Project, type ShallowSystem, type SoftwareSystem } from './schema.js'
 import { newId, read, useFolder, write } from './store.js'
 
 export { useFolder }
-export type { SoftwareSystem, Project, Workspace } from './schema.js'
+export type { Project, ShallowSystem, SoftwareSystem, Workspace } from './schema.js'
 
 export const listProjects = (): Project[] => read().projects
 
@@ -15,6 +15,7 @@ export const addProject = (name: string): Project => {
     name: name.trim() || 'Untitled project',
     createdAt: new Date().toISOString(),
     systems: [],
+    shallow: [],
   }
   workspace.projects.push(project)
   write(workspace)
@@ -60,3 +61,21 @@ export const knownRemotes = (): string[] =>
     .projects.flatMap((p) => p.systems)
     .map((c) => c.remote)
     .filter((r) => r.length > 0)
+
+/** Records a shallow software system a person agreed to, or, given one that
+ *  is already there, another name the code calls it by. */
+export const addShallowSystem = (projectId: string, name: string, sameAs = ''): ShallowSystem => {
+  const workspace = read()
+  const project = workspace.projects.find((p) => p.id === projectId)
+  if (!project) throw new Error('no project with that id')
+  const known = project.shallow.find((s) => s.id === sameAs || s.answersTo.includes(name))
+  if (known) {
+    if (!known.answersTo.includes(name)) known.answersTo.push(name)
+    write(workspace)
+    return known
+  }
+  const added: ShallowSystem = { id: newId(), name, answersTo: [name] }
+  project.shallow.push(added)
+  write(workspace)
+  return added
+}

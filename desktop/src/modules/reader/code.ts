@@ -5,8 +5,9 @@ import ts from 'typescript'
 /** What one file's code says, as far as the reader can tell. */
 export type FileCode = {
   names: string[]
-  /** What it imports, by the words it uses and the line it does it on. */
-  imports: { from: string; line: number }[]
+  /** What it imports, by the words it uses and the line it does it on, and
+   *  the names it takes: `default` for a default import, `*` for all. */
+  imports: { from: string; line: number; names: string[] }[]
   /** Strings that look like an address in the app, for leads-to. */
   addresses: string[]
 }
@@ -43,7 +44,7 @@ export const readCode = (path: string, text: string): FileCode => {
       statement.moduleSpecifier &&
       ts.isStringLiteral(statement.moduleSpecifier)
     )
-      code.imports.push({ from: statement.moduleSpecifier.text, line: lineOf(statement) })
+      code.imports.push({ from: statement.moduleSpecifier.text, line: lineOf(statement), names: takenBy(statement) })
   }
 
   const walk = (node: ts.Node): void => {
@@ -53,6 +54,22 @@ export const readCode = (path: string, text: string): FileCode => {
   }
   walk(file)
   return code
+}
+
+/** The names an import or re-export takes from the file it reaches. */
+const takenBy = (statement: ts.ImportDeclaration | ts.ExportDeclaration): string[] => {
+  if (ts.isExportDeclaration(statement)) {
+    const clause = statement.exportClause
+    if (!clause) return ['*']
+    return ts.isNamedExports(clause) ? clause.elements.map((e) => (e.propertyName ?? e.name).text) : ['*']
+  }
+  const clause = statement.importClause
+  if (!clause) return []
+  const names = clause.name ? ['default'] : []
+  const bound = clause.namedBindings
+  if (bound && ts.isNamespaceImport(bound)) names.push('*')
+  else if (bound) names.push(...bound.elements.map((e) => (e.propertyName ?? e.name).text))
+  return names
 }
 
 /** Path aliases a repo's tsconfig sets, like `~/*` to `./app/*`. */

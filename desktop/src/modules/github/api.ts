@@ -76,21 +76,26 @@ export const listRepos = async (token: string, pages = 3): Promise<GithubRepo[]>
 }
 
 /** Asked once per repo per run; a repo's answer only changes when it is pushed to. */
-const seen = new Map<string, boolean>()
+const seen = new Map<string, string[] | null>()
 
-/** A repo is a codegraph software system when its committed Claude settings name
- *  codegraph, which is what setting a repo up writes. */
-export const isCodegraph = async (token: string, repo: GithubRepo): Promise<boolean> => {
+/** The projects a repo serves, when it is set up for codegraph: its config
+ *  names them (ADR 0006). Null where it has no config. */
+export const projectsServed = async (token: string, repo: GithubRepo): Promise<string[] | null> => {
   const key = `${repo.fullName}@${repo.pushedAt}`
   const remembered = seen.get(key)
   if (remembered !== undefined) return remembered
-  const answer = await ask(token, `/repos/${repo.fullName}/contents/.claude/settings.json`)
-  let yes = false
+  const answer = await ask(token, `/repos/${repo.fullName}/contents/codegraph.config.json`)
+  let projects: string[] | null = null
   if (answer.ok) {
     const body = (await answer.json()) as { content?: string; encoding?: string }
     const text = body.content ? Buffer.from(body.content, 'base64').toString('utf8') : ''
-    yes = /codegraph/i.test(text)
+    try {
+      const named = (JSON.parse(text) as { projects?: unknown }).projects
+      projects = Array.isArray(named) ? named.filter((p): p is string => typeof p === 'string') : []
+    } catch {
+      projects = []
+    }
   }
-  seen.set(key, yes)
-  return yes
+  seen.set(key, projects)
+  return projects
 }

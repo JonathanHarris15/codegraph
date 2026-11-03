@@ -12,12 +12,21 @@ export type SoftwareSystem = {
   remote: string
 }
 
+/** A software system the project refers to but has no repo for, which a
+ *  person agreed to. The code may call it by more than one name. */
+export type ShallowSystem = {
+  id: string
+  name: string
+  answersTo: string[]
+}
+
 /** A piece of work with one or more software systems under it. */
 export type Project = {
   id: string
   name: string
   createdAt: string
   systems: SoftwareSystem[]
+  shallow: ShallowSystem[]
 }
 
 /** Everything this computer remembers about the person's projects. */

@@ -5,6 +5,7 @@ import type { Point } from '../../modules/reader/index.js'
 import { Button } from '../design-system/kit.js'
 import { MapCanvas, walk } from '../components/map-canvas.js'
 import { PointPicker } from '../components/point-picker.js'
+import { SuggestionBar } from '../components/suggestion-bar.js'
 
 /** One project's canvas: its map, read from the code, zoomed through level
  *  by level. */
@@ -81,6 +82,16 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
       ) : (
         <MapCanvas root={shown.card} path={path} onPath={setPath} />
       )}
+
+      {shown && trail.length === 1 ? (
+        <SuggestionBar
+          suggestions={shown.suggestions}
+          shallow={shown.card.children.filter((c) => c.kind === 'shallow software system')}
+          onAgree={(name, sameAs) =>
+            void window.codegraph.agreeShallowSystem(projectId, name, sameAs).then(() => load(points))
+          }
+        />
+      ) : null}
 
       {systemShown && systemShown.problems.length > 0 ? (
         <details className="map-problems">

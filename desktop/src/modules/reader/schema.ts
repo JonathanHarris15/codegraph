@@ -32,6 +32,9 @@ export type Component = {
   /** schedule, event or command, for a trigger. */
   trigger: string
   frontDoor: string[]
+  /** A page's screenshot, as its tests last took it, as a data URL; '' when
+   *  there is none, or the map is not of the live folder. */
+  shot: string
 }
 
 export type Container = {

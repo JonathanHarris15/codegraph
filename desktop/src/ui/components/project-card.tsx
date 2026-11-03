@@ -42,8 +42,8 @@ export const ProjectCard = ({
 
     {project.systems.length === 0 ? (
       <div className="ds-hint">
-        Link a repo that git already tracks. Codegraph is set up inside it with{' '}
-        <span className="ds-mono">/codegraph:setup</span>.
+        Link a repo that git already tracks. Your agent sets it up for codegraph through the
+        codegraph MCP.
       </div>
     ) : (
       <div className="ds-rows">

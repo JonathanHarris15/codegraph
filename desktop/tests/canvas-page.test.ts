@@ -1,9 +1,9 @@
 // codegraph: test ui canvas
-import { writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { _electron as electron, type ElectronApplication, type Locator, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { aMappedRepo, closeYard, openYard, type Yard } from './yard.js'
+import { aMappedRepo, aPicture, closeYard, openYard, type Yard } from './yard.js'
 
 /** The built app on a blank computer that knows one project: the notes app
  *  the tests write by hand. */
@@ -32,6 +32,8 @@ const settle = (): Promise<void> => page.waitForTimeout(900)
 beforeAll(async () => {
   yard = openYard('canvas')
   const repo = aMappedRepo(yard)
+  mkdirSync(join(repo, 'codegraph-screenshots'))
+  writeFileSync(join(repo, 'codegraph-screenshots', 'new-note.png'), aPicture())
   writeFileSync(
     join(yard.home, 'projects.json'),
     JSON.stringify({
@@ -60,6 +62,15 @@ describe('the canvas in the real app', () => {
     await picture('1-project')
   })
 
+  it('suggests what the code calls out to, and draws it once agreed', async () => {
+    expect(await shown(page.getByLabel('Suggested software systems'))).toContain('The code calls mailer')
+    await page.getByRole('button', { name: 'Add it' }).click()
+    expect(await shown(page.getByLabel('mailer', { exact: true }))).toContain('shallow software system')
+    expect(await shown(page.getByText('tells the owner'))).toBe('tells the owner')
+    await settle()
+    await picture('1b-shallow')
+  })
+
   it('tunnels into a software system and shows its containers, wired together', async () => {
     await page.getByRole('button', { name: 'Open notes' }).click()
     expect(await shown(page.getByRole('button', { name: 'Open web' }))).toContain('browser app')
@@ -73,6 +84,7 @@ describe('the canvas in the real app', () => {
     await page.getByRole('button', { name: 'Open web' }).click()
     expect(await shown(page.getByRole('button', { name: 'Open new-note' }))).toContain('/notes/new')
     expect(await shown(page.getByText('No screenshot yet'))).toBe('No screenshot yet')
+    await page.getByRole('img', { name: 'new-note as it looks' }).waitFor({ state: 'visible', timeout: PATIENCE })
     expect(await shown(page.getByText('saves what was typed'))).toBe('saves what was typed')
     expect(await shown(page.getByRole('navigation', { name: 'Where you are' }))).toContain('web')
     await settle()

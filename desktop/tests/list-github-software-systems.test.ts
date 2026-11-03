@@ -11,7 +11,7 @@ import {
   aSoftwareSystem,
   aGithubRepo,
   closeYard,
-  codegraphSettings,
+  codegraphConfig,
   githubAnswers,
   openYard,
   type Yard,
@@ -43,7 +43,7 @@ describe('the codegraph repos on GitHub', () => {
   it('lists only the repos set up for codegraph', async () => {
     githubAnswers({
       '/user/repos': { status: 200, body: [aGithubRepo('me/web'), aGithubRepo('me/scratch')] },
-      '/repos/me/web/contents/.claude/settings.json': codegraphSettings,
+      '/repos/me/web/contents/codegraph.config.json': codegraphConfig,
       '/user': whoAmI,
     })
     await connectGithub('ghp_good')
@@ -51,12 +51,13 @@ describe('the codegraph repos on GitHub', () => {
     const view = await listGithubSoftwareSystems()
     expect(view.account).toBe('jono')
     expect(view.systems.map((c) => c.fullName)).toEqual(['me/web'])
+    expect(view.systems[0]?.projects).toEqual(['mosaic'])
   })
 
   it('says a codegraph repo is not on this computer', async () => {
     githubAnswers({
       '/user/repos': { status: 200, body: [aGithubRepo('me/elsewhere')] },
-      '/repos/me/elsewhere/contents/.claude/settings.json': codegraphSettings,
+      '/repos/me/elsewhere/contents/codegraph.config.json': codegraphConfig,
       '/user': whoAmI,
     })
     await connectGithub('ghp_good')
@@ -66,7 +67,7 @@ describe('the codegraph repos on GitHub', () => {
   it('marks one as here once it is linked into a project', async () => {
     githubAnswers({
       '/user/repos': { status: 200, body: [aGithubRepo('me/here')] },
-      '/repos/me/here/contents/.claude/settings.json': codegraphSettings,
+      '/repos/me/here/contents/codegraph.config.json': codegraphConfig,
       '/user': whoAmI,
     })
     await connectGithub('ghp_good')

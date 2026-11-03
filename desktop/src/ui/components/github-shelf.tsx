@@ -99,6 +99,11 @@ export const GithubShelf = ({
                   <Badge>not on this computer</Badge>
                 </div>
                 <div className="ds-mono">{system.fullName}</div>
+                {system.projects.length ? (
+                  <div className="ds-hint" style={{ marginTop: 6 }}>
+                    serves {system.projects.join(', ')}
+                  </div>
+                ) : null}
                 {system.private ? (
                   <div className="ds-hint" style={{ marginTop: 6 }}>
                     private

@@ -94,7 +94,11 @@ const CardFace = ({ placed, onOpen }: { placed: Placed; onOpen: (card: Card) => 
             <span className="map-dot" />
             <span className="map-frame-at">{card.at || 'no address'}</span>
           </div>
-          <div className="map-shot">No screenshot yet</div>
+          {card.shot ? (
+            <img className="map-shot map-shot--real" src={card.shot} alt={`${card.name} as it looks`} draggable={false} />
+          ) : (
+            <div className="map-shot">No screenshot yet</div>
+          )}
           <div className="map-frame-name">
             <span className="map-kind">{kindWords(card)}</span>
             <span className="map-name">{card.name}</span>

@@ -18,11 +18,16 @@ const file = (): string => {
 
 /** A project as an older app may have written it: before version 2 its
  *  software systems were kept under `codebases`. */
-type Stored = Omit<Project, 'systems'> & { systems?: Project['systems']; codebases?: Project['systems'] }
+type Stored = Omit<Project, 'systems' | 'shallow'> & {
+  systems?: Project['systems']
+  codebases?: Project['systems']
+  shallow?: Project['shallow']
+}
 
-const upgrade = ({ codebases, systems, ...project }: Stored): Project => ({
+const upgrade = ({ codebases, systems, shallow, ...project }: Stored): Project => ({
   ...project,
   systems: systems ?? codebases ?? [],
+  shallow: shallow ?? [],
 })
 
 export const read = (): Workspace => {
