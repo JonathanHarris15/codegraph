@@ -484,6 +484,9 @@ export const MapCanvas = ({
   /** A pointer pressed on a card or a dot, held only once it starts to drag,
    *  so a plain click or double-click still lands on what was pressed. */
   const pending = useRef<number | null>(null)
+  /** Where the pointer last was during a gesture, for the board to keep
+   *  moving under it at an edge. */
+  const lastPointer = useRef<{ clientX: number; clientY: number } | null>(null)
   const dragged = useRef(false)
   const seen = useRef(view)
   seen.current = view
@@ -1159,6 +1162,7 @@ export const MapCanvas = ({
   const move = (event: PointerEvent<HTMLDivElement>): void => {
     const now = gesture.current
     if (!now) return
+    lastPointer.current = { clientX: event.clientX, clientY: event.clientY }
     const at = worldOf(event)
     const hold = (): void => {
       if (pending.current === null) return
@@ -1247,7 +1251,38 @@ export const MapCanvas = ({
     }
   }
 
+  // Carrying something to the edge of the board moves the board along, so
+  // a card, a wire or a pick box can go past what is on screen.
+  const moveNow = useRef(move)
+  moveNow.current = move
+  useEffect(() => {
+    let frameId = 0
+    const EDGE = 36
+    const FASTEST = 18
+    const tick = (): void => {
+      frameId = requestAnimationFrame(tick)
+      const now = gesture.current
+      const at = lastPointer.current
+      const el = frame.current
+      if (!now || !at || !el || now.type === 'pan' || now.type === 'zoombox') return
+      if (now.type !== 'select' && !now.moved) return
+      const rect = el.getBoundingClientRect()
+      const push = (near: number): number => (near < EDGE ? Math.ceil(((EDGE - near) / EDGE) * FASTEST) : 0)
+      const dx = push(at.clientX - rect.left) - push(rect.right - at.clientX)
+      const dy = push(at.clientY - rect.top) - push(rect.bottom - at.clientY)
+      if (!dx && !dy) return
+      const v = seen.current
+      const next = { ...v, x: v.x + dx, y: v.y + dy }
+      seen.current = next
+      setView(next)
+      moveNow.current(at as PointerEvent<HTMLDivElement>)
+    }
+    frameId = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frameId)
+  }, [])
+
   const up = (event: PointerEvent<HTMLDivElement>): void => {
+    lastPointer.current = null
     const now = gesture.current
     gesture.current = null
     pending.current = null

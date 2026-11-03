@@ -83,8 +83,8 @@ Point your own agent at indie-stack and have it set up in one sweep.
 The projects page shows the one command that connects Claude Code to the
 MCP; after that, "set this repo up for codegraph" is enough.
 
-Still rough: on a busy level, the words of many wires into one card crowd
-together beside it.
+On a busy level, a card with many wires into it shows each wire's verb alone
+and lists the full sentences beside the card when it is pointed at.
 
 ## Checkpoint 3: Sketches
 
@@ -104,6 +104,18 @@ The MCP's `sketches` and `sketch` tools hand a sketch over in words, with
 the file of each mockup for the agent to open. A sketch drawn as a sketch
 can stop at any level; tunnelling into an empty card is how you draw inside
 it.
+
+After the canvas design pass, drawing was rebuilt around how Lucidchart
+works: a card library beside the tools, dots on a card's sides to draw
+wires (a click on one adds a wired card beside it), typing straight onto
+cards and wires, box and Shift picking, dragging groups with alignment
+guides and grid snapping, a bar over what is picked, a right-click menu,
+undo and redo, copy, paste, duplicate and Alt-drag, the arrow keys, and a
+panel that always says what is picked or how to draw. Every wire reads as a
+sentence, everywhere: "write-note uses notes to save the note".
+
+Still to come: dragging a picture straight onto a card for its mockup;
+cards that can be resized.
 
 ## Checkpoint 4: Proposals
 

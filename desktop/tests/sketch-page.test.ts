@@ -189,6 +189,24 @@ describe('drawing a sketch in the real app', () => {
     expect(after.x).toBeGreaterThan(before.x + 80)
   })
 
+  it('moves the board along when a card is carried to its edge', async () => {
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('Control+0')
+    await page.waitForTimeout(200)
+    const before = (await card('notes').boundingBox())!
+    const area = (await page.locator('.map-frame-area').boundingBox())!
+    const from = await middle(card('billing'))
+    await page.mouse.move(from.x, from.y)
+    await page.mouse.down()
+    await page.mouse.move(area.x + area.width - 8, from.y, { steps: 10 })
+    await page.waitForTimeout(700)
+    await page.mouse.up()
+    const after = (await card('notes').boundingBox())!
+    expect(after.x).toBeLessThan(before.x - 60)
+    await page.keyboard.press('Control+z')
+    await page.keyboard.press('Control+0')
+  })
+
   it('adds a card beside another, wired, with one click on its dot', async () => {
     await page.mouse.click((await spot(0.5, 0.97)).x, (await spot(0.5, 0.97)).y)
     // Everything in view first, so no dot sits behind the panel; then a
