@@ -31,6 +31,16 @@ const columnOf = (card: Card): number => {
 
 const ROW_LIMIT = 4
 
+/** A column taller than this is split into columns side by side, so a busy
+ *  level stays wide rather than tall, and readable without zooming. */
+const COLUMN_LIMIT = 4
+
+const split = (lane: Card[]): Card[][] => {
+  const parts = Math.ceil(lane.length / COLUMN_LIMIT)
+  const each = Math.ceil(lane.length / parts)
+  return Array.from({ length: parts }, (_, i) => lane.slice(i * each, i * each + each))
+}
+
 /** Lays out the cards inside one card, centred on the origin. */
 export const layOut = (cards: Card[]): Placed[] => {
   const columns = new Map<number, Card[]>()
@@ -41,7 +51,7 @@ export const layOut = (cards: Card[]): Placed[] => {
   const lanes: Card[][] =
     columns.size === 1
       ? Array.from({ length: Math.ceil(cards.length / ROW_LIMIT) }, (_, i) => cards.slice(i * ROW_LIMIT, i * ROW_LIMIT + ROW_LIMIT))
-      : [...columns.keys()].sort((a, b) => a - b).map((key) => columns.get(key)!)
+      : [...columns.keys()].sort((a, b) => a - b).flatMap((key) => split(columns.get(key)!))
 
   const placed: Placed[] = []
   if (columns.size === 1) {

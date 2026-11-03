@@ -84,6 +84,9 @@ Point your own agent at indie-stack and have it set up in one sweep.
 The projects page shows the one command that connects Claude Code to the
 MCP; after that, "set this repo up for codegraph" is enough.
 
+Still rough: on a busy level, the words of many wires into one card crowd
+together beside it.
+
 ## Checkpoint 3: Sketches
 
 Draw on a project and keep what you drew.
