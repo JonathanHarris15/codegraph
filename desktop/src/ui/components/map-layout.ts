@@ -21,6 +21,15 @@ export type Box = { x: number; y: number; w: number; h: number }
 export type Placed = { card: DrawnCard; box: Box }
 
 const GAP_X = 120
+
+/** How wide a wire's words run, near enough, at the size the canvas draws
+ *  them, with a little air either side and room for the arrow. */
+export const wordsWidth = (wire: { kind: string; words: string }): number =>
+  Math.max(wire.words.length * 6.6, wire.kind.length * 6.2) + 48
+
+/** The gap between cards side by side: wide enough for the longest words on
+ *  any wire between them, so the words never press against a card. */
+const gapFor = (wires: DrawnWire[]): number => Math.min(Math.max(GAP_X, ...wires.map(wordsWidth)), 360)
 const GAP_Y = 36
 
 /** Pages are drawn as frames for their screenshot, the rest as cards. */
@@ -59,7 +68,8 @@ const split = (lane: DrawnCard[]): DrawnCard[][] => {
 
 /** Lays out the cards inside one card. A card a person put somewhere stays
  *  there; the rest are laid out by kind, centred on the origin. */
-export const layOut = (all: DrawnCard[]): Placed[] => {
+export const layOut = (all: DrawnCard[], wires: DrawnWire[] = []): Placed[] => {
+  const gap = gapFor(wires)
   const put: Placed[] = all
     .filter((card) => card.x !== undefined && card.y !== undefined)
     .map((card) => ({ card, box: { x: card.x!, y: card.y!, ...sizeOf(card) } }))
@@ -84,7 +94,7 @@ export const layOut = (all: DrawnCard[]): Placed[] => {
       for (const card of row) {
         const { w, h } = sizeOf(card)
         placed.push({ card, box: { x, y, w, h } })
-        x += w + GAP_X / 2
+        x += w + gap
         tallest = Math.max(tallest, h)
       }
       y += tallest + GAP_Y
@@ -101,7 +111,7 @@ export const layOut = (all: DrawnCard[]): Placed[] => {
         placed.push({ card, box: { x: x + (widest - w) / 2, y, w, h } })
         y += h + GAP_Y
       }
-      x += widest + GAP_X
+      x += widest + gap
     })
   }
 

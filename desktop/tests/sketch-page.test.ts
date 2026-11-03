@@ -94,6 +94,15 @@ describe('drawing a sketch in the real app', () => {
     expect(await shown(page.getByText('finds notes by their words'))).toBe('finds notes by their words')
   })
 
+  it('moves the far card aside so the words have room, clear of both cards', async () => {
+    await page.waitForTimeout(300)
+    const words = (await page.getByText('finds notes by their words').boundingBox())!
+    const notes = (await page.getByRole('button', { name: 'notes', exact: true }).boundingBox())!
+    const search = (await page.getByRole('button', { name: 'search', exact: true }).boundingBox())!
+    expect(words.x).toBeGreaterThan(notes.x + notes.width)
+    expect(words.x + words.width).toBeLessThan(search.x)
+  })
+
   it('leaves a note', async () => {
     await tool('Note').click()
     await clickCanvas(0.45, 0.2)

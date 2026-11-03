@@ -10,6 +10,7 @@ import {
   changeNote,
   changeWire,
   kindsAt,
+  makeRoom,
   moveThing,
   pick,
   placeCard,
@@ -48,7 +49,7 @@ export const SketchEditor = ({
   const focus = walk(sketch.root, path).at(-1)!
   const here = walk(sketch.root, path).map((c) => c.id)
   const change = (next: (focus: SketchCard) => SketchCard): void =>
-    onChange({ ...sketch, root: changeAt(sketch.root, here, next) })
+    onChange({ ...sketch, root: changeAt(sketch.root, here, (f) => makeRoom(next(f))) })
   const picked = pick(focus, selected)
 
   return (

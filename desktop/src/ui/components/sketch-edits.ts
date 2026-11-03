@@ -2,7 +2,7 @@
 import type { Level, Note, SketchCard, SketchWire } from '../../modules/sketches/index.js'
 import type { Arrangement } from './map-canvas.js'
 import { blankCard } from '../../modules/sketches/schema.js'
-import { sizeOf } from './map-layout.js'
+import { sizeOf, wordsWidth } from './map-layout.js'
 
 /** The level drawn inside a card of each level. */
 export const levelInside: Record<Level, Level> = {
@@ -127,6 +127,32 @@ export const changeNote = (focus: SketchCard, id: string, change: Partial<Note>)
   ...focus,
   notes: focus.notes.map((n) => (n.id === id ? { ...n, ...change } : n)),
 })
+
+/** Moves cards apart where a wire's words would not fit between them: the
+ *  card a wire points to steps aside, the way it already faces. Cards the
+ *  canvas still lays out itself are left to it. */
+export const makeRoom = (focus: SketchCard): SketchCard => {
+  const at = new Map(focus.children.map((c) => [c.id, { ...c }]))
+  for (const wire of focus.wires) {
+    const from = at.get(wire.from)
+    const to = at.get(wire.to)
+    if (!from || !to || from.x === undefined || from.y === undefined || to.x === undefined || to.y === undefined) continue
+    const a = { ...sizeOf(from), x: from.x, y: from.y }
+    const b = { ...sizeOf(to), x: to.x, y: to.y }
+    // Only cards side by side carry their words between them.
+    const sideBySide = Math.abs(b.x + b.w / 2 - (a.x + a.w / 2)) > Math.max(a.w, b.w) / 2
+    if (!sideBySide) continue
+    const need = wordsWidth(wire)
+    if (b.x > a.x) {
+      const gap = b.x - (a.x + a.w)
+      if (gap < need) to.x = a.x + a.w + need
+    } else {
+      const gap = a.x - (b.x + b.w)
+      if (gap < need) to.x = a.x - need - b.w
+    }
+  }
+  return { ...focus, children: focus.children.map((c) => at.get(c.id) ?? c) }
+}
 
 /** Takes a card, wire or note off a level, and any wire left with a loose end. */
 export const remove = (focus: SketchCard, id: string): SketchCard => ({

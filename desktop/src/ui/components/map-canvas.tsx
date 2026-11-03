@@ -191,7 +191,7 @@ export const MapCanvas = ({
   const trail = useMemo(() => walk(root, path), [root, path])
   const focus = trail[trail.length - 1]!
   const notes: DrawnNote[] = focus.notes ?? []
-  const laid = useMemo(() => layOut(focus.children), [focus])
+  const laid = useMemo(() => layOut(focus.children, focus.wires), [focus])
   const placed = useMemo(
     () =>
       lifted ? laid.map((p) => (p.card.id === lifted.id ? { ...p, box: { ...p.box, x: lifted.at.x, y: lifted.at.y } } : p)) : laid,
@@ -488,7 +488,7 @@ export const MapCanvas = ({
           {shapes.map(({ wire, key, shape }) => (
             <g
               key={key}
-              className={`map-wire map-wire--${wire.kind.replace(/\s+/g, '-')}${drawing?.selected === wire.id ? ' map-wire--selected' : ''}`}
+              className={`map-wire map-wire--${wire.kind.replace(/\s+/g, '-')}${drawing && wire.id && drawing.selected === wire.id ? ' map-wire--selected' : ''}`}
             >
               <path d={shape.d} markerEnd="url(#map-head)" />
             </g>
