@@ -95,9 +95,26 @@ export const layOut = (all: DrawnCard[], wires: DrawnWire[] = [], opened?: Opene
   const gap = gapFor(wires)
   const sizeHere = (card: DrawnCard): { w: number; h: number } =>
     opened && card.id === opened.id ? { w: opened.w, h: opened.h } : sizeOf(card)
-  const put: Placed[] = all
+  let put: Placed[] = all
     .filter((card) => card.x !== undefined && card.y !== undefined)
     .map((card) => ({ card, box: { x: card.x!, y: card.y!, ...sizeHere(card) } }))
+  // A card someone put somewhere, opened in place, grows; the cards put
+  // beside it and below it step aside by as much, so it never swallows
+  // them. Only on screen: where they were put stays as it was.
+  const grown = opened ? put.find((p) => p.card.id === opened.id) : undefined
+  if (grown && opened) {
+    const was = sizeOf(grown.card)
+    const wider = opened.w - was.w
+    const taller = opened.h - was.h
+    put = put.map((p) => {
+      if (p === grown) return p
+      const right = p.box.x >= grown.box.x + was.w / 2
+      const below = !right && p.box.y >= grown.box.y + was.h / 2
+      return right || below
+        ? { ...p, box: { ...p.box, x: p.box.x + (right ? wider : 0), y: p.box.y + (below ? taller : 0) } }
+        : p
+    })
+  }
   const cards = all.filter((card) => card.x === undefined || card.y === undefined)
   if (cards.length === 0) return put
   const columns = new Map<number, DrawnCard[]>()

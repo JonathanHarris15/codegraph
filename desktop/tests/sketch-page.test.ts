@@ -126,7 +126,7 @@ describe('drawing a sketch in the real app', () => {
   })
 
   it('makes the card at the end of a wire let go on empty board', async () => {
-    await card('notes').hover()
+    await card('notes').click()
     const dot = card('notes').locator('.map-handle--s')
     await dot.waitFor({ timeout: PATIENCE })
     await drag(await middle(dot), await spot(0.3, 0.85))
@@ -191,7 +191,11 @@ describe('drawing a sketch in the real app', () => {
 
   it('adds a card beside another, wired, with one click on its dot', async () => {
     await page.mouse.click((await spot(0.5, 0.97)).x, (await spot(0.5, 0.97)).y)
-    await card('search').hover()
+    // Everything in view first, so no dot sits behind the panel; then a
+    // picked card keeps its dots, so the click on one cannot race the hover.
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('Control+0')
+    await card('search').click()
     const dot = card('search').locator('.map-handle--e')
     await dot.waitFor({ timeout: PATIENCE })
     await dot.click()

@@ -2323,3 +2323,81 @@ kbd {
 .map-card--drawn:hover {
   box-shadow: var(--shadow-float);
 }
+
+/* ---- the fourth pass --------------------------------------------------- */
+
+/* what the board is waiting for, while a tool is armed */
+.map-hint {
+  position: absolute;
+  top: var(--space-3);
+  left: 50%;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 6px var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--ink-000);
+  color: var(--ink-inverse);
+  font-size: 12.5px;
+  line-height: 16px;
+  box-shadow: var(--shadow-float);
+  transform: translateX(-50%);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.map-hint kbd {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--ink-inverse) 45%, transparent);
+  color: var(--ink-inverse);
+}
+
+.map-hint-keys {
+  opacity: 0.8;
+}
+
+/* a wire under the pointer darkens, so it is plain it can be picked */
+.map-wire:has(.map-wire-hit:hover) path:first-child {
+  stroke: var(--wire-strong);
+  stroke-width: var(--stroke-wire-strong);
+}
+
+/* a narrower window: the panel floats over the board instead of squeezing
+   it, and the card library keeps only its glyphs */
+@media (max-width: 1100px) {
+  .sketch-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    box-shadow: var(--shadow-float);
+  }
+}
+
+@media (max-width: 1000px) {
+  .map-palette {
+    width: 64px;
+    padding: var(--space-2) var(--space-1);
+    align-items: center;
+  }
+
+  .map-palette-hint,
+  .map-palette-words,
+  .map-palette .map-flyout-group {
+    display: none;
+  }
+
+  .map-palette-head {
+    padding: 0;
+    justify-content: center;
+  }
+
+  .map-palette-head > span {
+    display: none;
+  }
+
+  .map-palette-item {
+    padding: 4px;
+  }
+}

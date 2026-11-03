@@ -463,6 +463,9 @@ export const MapCanvas = ({
     id: string
     text: string
     was: string
+    /** When writing started: a blur in the first moments is a stray focus
+     *  change from the press that opened it, not the person leaving. */
+    since?: number
     first?: boolean
     /** A card's second line, what it is for, rather than its name. */
     says?: boolean
@@ -863,7 +866,7 @@ export const MapCanvas = ({
       const was = card ? (says ? card.says : card.name) : wire ? wire.words : note ? note.text : null
       if (was === null) return
       drawing.onSelect([id])
-      setEditing({ id, text: seed ?? was, was, says: Boolean(card && says) })
+      setEditing({ id, text: seed ?? was, was, says: Boolean(card && says), since: Date.now() })
     },
     [drawing, focus, notes],
   )
@@ -903,7 +906,7 @@ export const MapCanvas = ({
   /** Writing starts once the press that made the thing has finished, or
    *  the press would take the typing away from it as it lands. */
   const writeSoon = (id: string): void => {
-    setTimeout(() => setEditing({ id, text: '', was: '', first: true }), 0)
+    setTimeout(() => setEditing({ id, text: '', was: '', first: true, since: Date.now() }), 0)
   }
 
   /** A card put down, and then straight into writing its name. */
@@ -1339,7 +1342,7 @@ export const MapCanvas = ({
 
   /** What is picked, and where its bar floats, on the screen. */
   const picking = useMemo((): { what: Picking; box: Box } | null => {
-    if (!drawing || selected.length === 0 || editing || live.moves || live.marquee) return null
+    if (!drawing || selected.length === 0 || editing || menu || live.moves || live.marquee) return null
     if (selected.length > 1) {
       const boxes = [
         ...placed.filter((p) => selected.includes(p.card.id)).map((p) => p.box),
@@ -1372,7 +1375,7 @@ export const MapCanvas = ({
     }
     const note = noteBoxes.find((n) => n.note.id === id)
     return note ? { what: { what: 'note', id }, box: note.box } : null
-  }, [drawing, selected, editing, live, placed, noteBoxes, shapes, sizes])
+  }, [drawing, selected, editing, menu, live, placed, noteBoxes, shapes, sizes])
 
   /** What the right-click menu offers, for what was under the pointer. */
   const menuItems = (ids: string[], inside: Spot): MenuItem[] => {
@@ -1498,6 +1501,18 @@ export const MapCanvas = ({
           dragged.current = false
         }}
       >
+        {drawing && (armed || tool === 'wire' || tool === 'note') ? (
+          <div className="map-hint" role="status">
+            {armed
+              ? `Click to place a ${armed}. Hold Shift to place more.`
+              : tool === 'wire'
+                ? 'Drag from one card to another.'
+                : 'Click to leave a note.'}
+            <span className="map-hint-keys">
+              <kbd>Esc</kbd> to stop
+            </span>
+          </div>
+        ) : null}
         {empty ? (
           <div className="map-empty">
             {drawing
@@ -1692,7 +1707,14 @@ export const MapCanvas = ({
                 placeholder="Write a note"
                 onPointerDown={(event) => event.stopPropagation()}
                 onChange={(event) => setEditing({ ...editing, text: event.target.value })}
-                onBlur={() => finishEditing(true)}
+                onBlur={(event) => {
+                  if (Date.now() - (editing.since ?? 0) < 250) {
+                    const box = event.currentTarget
+                    setTimeout(() => box.focus({ preventScroll: true }), 0)
+                    return
+                  }
+                  finishEditing(true)
+                }}
                 onKeyDown={(event) => {
                   event.stopPropagation()
                   if (event.key === 'Escape' || (event.key === 'Enter' && (event.ctrlKey || event.metaKey))) finishEditing(true)
@@ -1708,7 +1730,14 @@ export const MapCanvas = ({
                 placeholder="what it is for, e.g. saves the note"
                 onPointerDown={(event) => event.stopPropagation()}
                 onChange={(event) => setEditing({ ...editing, text: event.target.value })}
-                onBlur={() => finishEditing(true)}
+                onBlur={(event) => {
+                  if (Date.now() - (editing.since ?? 0) < 250) {
+                    const box = event.currentTarget
+                    setTimeout(() => box.focus({ preventScroll: true }), 0)
+                    return
+                  }
+                  finishEditing(true)
+                }}
                 onKeyDown={(event) => {
                   event.stopPropagation()
                   if (event.key === 'Enter') finishEditing(true)
@@ -1726,7 +1755,14 @@ export const MapCanvas = ({
                 placeholder="What it is for, in one line"
                 onPointerDown={(event) => event.stopPropagation()}
                 onChange={(event) => setEditing({ ...editing, text: event.target.value })}
-                onBlur={() => finishEditing(true)}
+                onBlur={(event) => {
+                  if (Date.now() - (editing.since ?? 0) < 250) {
+                    const box = event.currentTarget
+                    setTimeout(() => box.focus({ preventScroll: true }), 0)
+                    return
+                  }
+                  finishEditing(true)
+                }}
                 onKeyDown={(event) => {
                   event.stopPropagation()
                   if (event.key === 'Tab' && event.shiftKey) {
@@ -1757,7 +1793,14 @@ export const MapCanvas = ({
                 placeholder="Name it"
                 onPointerDown={(event) => event.stopPropagation()}
                 onChange={(event) => setEditing({ ...editing, text: event.target.value })}
-                onBlur={() => finishEditing(true)}
+                onBlur={(event) => {
+                  if (Date.now() - (editing.since ?? 0) < 250) {
+                    const box = event.currentTarget
+                    setTimeout(() => box.focus({ preventScroll: true }), 0)
+                    return
+                  }
+                  finishEditing(true)
+                }}
                 onKeyDown={(event) => {
                   event.stopPropagation()
                   if (event.key === 'Tab' && !event.shiftKey) {

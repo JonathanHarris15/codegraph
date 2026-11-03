@@ -391,7 +391,7 @@ export const SketchEditor = ({
                 <>
                   <Field
                     label="Address"
-                    placeholder="/notes/new"
+                    placeholder="e.g. /notes/new"
                     value={picked.card.at}
                     onChange={(at) => change((f) => changeCard(f, picked.card.id, { at }), `at:${picked.card.id}`)}
                   />
