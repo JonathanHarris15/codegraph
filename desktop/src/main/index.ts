@@ -4,6 +4,7 @@ import { BrowserWindow, app, shell } from 'electron'
 import { useFolder as useGithubFolder, useKeystore } from '../modules/github/index.js'
 import { appFolder, devRendererUrl, keystore } from '../modules/machine/index.js'
 import { useFolder as useProjectsFolder } from '../modules/projects/index.js'
+import { useFolder as useSketchesFolder } from '../modules/sketches/index.js'
 import { openBridge } from './bridge.js'
 
 /** Hands each module the one outside thing it needs: where this computer
@@ -11,6 +12,7 @@ import { openBridge } from './bridge.js'
 const wireModules = async (): Promise<void> => {
   const home = await appFolder()
   useProjectsFolder(home)
+  useSketchesFolder(home)
   useGithubFolder(home)
 
   const locked = await keystore()

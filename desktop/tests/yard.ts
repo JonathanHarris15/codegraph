@@ -163,12 +163,14 @@ export const aMappedRepo = (yard: Yard, name = 'notes'): string => {
 
 /** The built codegraph MCP, started the way an agent starts it, in the
  *  folder the agent works in. Tests call its tools as an agent would. */
-export const anAgentIn = async (folder: string) => {
+export const anAgentIn = async (folder: string, home = '') => {
   const { Client } = await import('@modelcontextprotocol/sdk/client/index.js')
   const { StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js')
   const server = join(import.meta.dirname, '..', 'out', 'main', 'mcp.js')
   const client = new Client({ name: 'test-agent', version: '0' })
-  await client.connect(new StdioClientTransport({ command: process.execPath, args: [server], cwd: folder }))
+  // A home of its own, when given, stands in for where the app keeps its files.
+  const env = { ...(process.env as Record<string, string>), ...(home ? { CODEGRAPH_HOME: home } : {}) }
+  await client.connect(new StdioClientTransport({ command: process.execPath, args: [server], cwd: folder, env }))
   const call = async (tool: string, args: Record<string, unknown> = {}): Promise<string> => {
     const answer = (await client.callTool({ name: tool, arguments: args })) as { content: { text: string }[] }
     return answer.content.map((c) => c.text).join('\n')

@@ -5,8 +5,12 @@ import type { Connected } from '../features/connect-github.js'
 import type { CloudView } from '../features/list-github-software-systems.js'
 import type { ProjectView } from '../features/list-projects.js'
 import type { Linked } from '../features/link-software-system.js'
-import type { MapShown } from '../features/show-map.js'
+import type { MockupAdded } from '../features/add-mockup.js'
+import type { SketchListed } from '../features/list-sketches.js'
+import type { SketchOpened } from '../features/open-sketch.js'
+import type { Card, MapShown } from '../features/show-map.js'
 import type { Point } from '../modules/reader/index.js'
+import type { Sketch } from '../modules/sketches/index.js'
 
 /** What the window may ask for: one call per feature, nothing else. */
 export type Api = {
@@ -20,6 +24,12 @@ export type Api = {
   listGithubSoftwareSystems: () => Promise<CloudView>
   showMap: (projectId: string, points?: Record<string, Point>) => Promise<MapShown>
   listPoints: (projectId: string, systemId: string) => Promise<Point[]>
+  listSketches: (projectId: string) => Promise<SketchListed[]>
+  startSketch: (projectId: string, name: string, snapshot?: Card) => Promise<Sketch>
+  openSketch: (projectId: string, sketchId: string) => Promise<SketchOpened | null>
+  saveSketch: (sketch: Sketch) => Promise<Sketch>
+  deleteSketch: (projectId: string, sketchId: string) => Promise<void>
+  addMockup: (projectId: string, sketchId: string, cardId: string) => Promise<MockupAdded>
 }
 
 const api: Api = {
@@ -33,6 +43,12 @@ const api: Api = {
   listGithubSoftwareSystems: () => ipcRenderer.invoke('github:list'),
   showMap: (projectId, points = {}) => ipcRenderer.invoke('map:show', projectId, points),
   listPoints: (projectId, systemId) => ipcRenderer.invoke('map:points', projectId, systemId),
+  listSketches: (projectId) => ipcRenderer.invoke('sketch:list', projectId),
+  startSketch: (projectId, name, snapshot) => ipcRenderer.invoke('sketch:start', projectId, name, snapshot),
+  openSketch: (projectId, sketchId) => ipcRenderer.invoke('sketch:open', projectId, sketchId),
+  saveSketch: (sketch) => ipcRenderer.invoke('sketch:save', sketch),
+  deleteSketch: (projectId, sketchId) => ipcRenderer.invoke('sketch:delete', projectId, sketchId),
+  addMockup: (projectId, sketchId, cardId) => ipcRenderer.invoke('sketch:mockup', projectId, sketchId, cardId),
 }
 
 contextBridge.exposeInMainWorld('codegraph', api)

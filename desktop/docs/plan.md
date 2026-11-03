@@ -90,14 +90,20 @@ together beside it.
 
 Draw on a project and keep what you drew.
 
-- **CG-3.1** Drawing tools on the canvas: cards, wires, text, at any level.
-- **CG-3.2** The sketch library, kept with the project in the app.
-- **CG-3.3** Start a sketch from a snapshot of the map.
-- **CG-3.4** Drop mockups onto a sketch.
-- **CG-3.5** The MCP serves a sketch to the agent.
+- **CG-3.1** (done) Drawing tools on the canvas: cards, wires, text, at any level.
+- **CG-3.2** (done) The sketch library, kept with the project in the app.
+- **CG-3.3** (done) Start a sketch from a snapshot of the map.
+- **CG-3.4** (done) Mockups on a sketch's pages, picked from a file. Dragging a
+  picture straight onto a card is still to come.
+- **CG-3.5** (done) The MCP serves a sketch to the agent.
 
 **Try it:** snapshot indie-stack, sketch a new page, hand it to your agent
 and have it describe what it sees.
+
+The MCP's `sketches` and `sketch` tools hand a sketch over in words, with
+the file of each mockup for the agent to open. A sketch drawn as a sketch
+can stop at any level; tunnelling into an empty card is how you draw inside
+it.
 
 ## Checkpoint 4: Proposals
 

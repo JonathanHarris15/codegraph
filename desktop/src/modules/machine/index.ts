@@ -1,10 +1,11 @@
 // codegraph: module machine
-// codegraph: front door appFolder, devRendererUrl, keystore, askForFolder, useChooser, mcpServerFile, Keystore
+// codegraph: front door appFolder, devRendererUrl, keystore, askForFolder, useChooser, askForPicture, usePicturePicker, mcpServerFile, appFolderAnywhere, Keystore
 
 /** This computer and the window around the app: where files are kept, the
  *  operating system's keystore, the folder picker, and what the build says.
  *  Everything here comes from outside the program, so it is asked for
  *  lazily: away from the app — in a test, say — each answer is a plain one. */
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 
 type Electron = typeof import('electron')
@@ -87,3 +88,38 @@ export const useChooser = (which: Chooser): void => {
 
 /** The folder the person picked, or '' if they backed out. */
 export const askForFolder = (): Promise<string> => chooser()
+
+const thePicturePicker: Chooser = async () => {
+  const desk = await electron()
+  if (!desk) return ''
+  const options = {
+    title: 'Pick a mockup',
+    properties: ['openFile' as const],
+    filters: [{ name: 'Pictures', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] }],
+  }
+  const window = desk.BrowserWindow.getFocusedWindow()
+  const picked = window ? await desk.dialog.showOpenDialog(window, options) : await desk.dialog.showOpenDialog(options)
+  return picked.canceled ? '' : (picked.filePaths[0] ?? '')
+}
+
+let picturePicker: Chooser = thePicturePicker
+
+/** Tests hand in their own picture instead of opening a dialog. */
+export const usePicturePicker = (which: Chooser): void => {
+  picturePicker = which
+}
+
+/** The picture the person picked, or '' if they backed out. */
+export const askForPicture = (): Promise<string> => picturePicker()
+
+/** Where the app keeps codegraph's files, worked out without the app, for
+ *  the MCP, which runs on its own. CODEGRAPH_HOME stands in for it, as in
+ *  tests. It matches Electron's own place for an app named codegraph-desktop. */
+export const appFolderAnywhere = (): string => {
+  const told = process.env['CODEGRAPH_HOME']
+  if (told) return told
+  const home = homedir()
+  if (process.platform === 'win32') return join(process.env['APPDATA'] ?? join(home, 'AppData', 'Roaming'), 'codegraph-desktop')
+  if (process.platform === 'darwin') return join(home, 'Library', 'Application Support', 'codegraph-desktop')
+  return join(process.env['XDG_CONFIG_HOME'] ?? join(home, '.config'), 'codegraph-desktop')
+}

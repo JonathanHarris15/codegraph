@@ -1,16 +1,32 @@
 // codegraph: component map-canvas
 import type { Card } from '../../features/show-map.js'
 
+/** A wire as the canvas draws it, from the map or from a sketch. */
+export type DrawnWire = { id?: string; from: string; to: string; kind: string; words: string }
+
+/** A note a person left on a level of a sketch. */
+export type DrawnNote = { id: string; text: string; x: number; y: number }
+
+/** A card as the canvas draws it: a card of the map, or of a sketch, which
+ *  may also say where a person put it and carry notes. */
+export type DrawnCard = Omit<Card, 'children' | 'wires'> & {
+  x?: number
+  y?: number
+  children: DrawnCard[]
+  wires: DrawnWire[]
+  notes?: DrawnNote[]
+}
+
 export type Box = { x: number; y: number; w: number; h: number }
-export type Placed = { card: Card; box: Box }
+export type Placed = { card: DrawnCard; box: Box }
 
 const GAP_X = 120
 const GAP_Y = 36
 
 /** Pages are drawn as frames for their screenshot, the rest as cards. */
-export const isFrame = (card: Card): boolean => card.level === 'component' && card.kind === 'page'
+export const isFrame = (card: DrawnCard): boolean => card.level === 'component' && card.kind === 'page'
 
-const sizeOf = (card: Card): { w: number; h: number } =>
+export const sizeOf = (card: DrawnCard): { w: number; h: number } =>
   isFrame(card)
     ? { w: 260, h: 200 }
     : card.level === 'code'
@@ -22,7 +38,7 @@ const sizeOf = (card: Card): { w: number; h: number } =>
 /** Which column a card sits in, left to right, so most wires run one way:
  *  what starts things (pages and triggers), then what they ask for, then
  *  what does the work, then where things are kept. */
-const columnOf = (card: Card): number => {
+const columnOf = (card: DrawnCard): number => {
   if (card.level === 'component') return card.kind === 'feature' ? 1 : card.kind === 'module' ? 2 : 0
   if (card.level === 'container') return /database|files/.test(card.kind) ? 1 : 0
   if (card.level === 'system') return card.kind === 'shallow software system' ? 1 : 0
@@ -35,20 +51,26 @@ const ROW_LIMIT = 4
  *  level stays wide rather than tall, and readable without zooming. */
 const COLUMN_LIMIT = 4
 
-const split = (lane: Card[]): Card[][] => {
+const split = (lane: DrawnCard[]): DrawnCard[][] => {
   const parts = Math.ceil(lane.length / COLUMN_LIMIT)
   const each = Math.ceil(lane.length / parts)
   return Array.from({ length: parts }, (_, i) => lane.slice(i * each, i * each + each))
 }
 
-/** Lays out the cards inside one card, centred on the origin. */
-export const layOut = (cards: Card[]): Placed[] => {
-  const columns = new Map<number, Card[]>()
+/** Lays out the cards inside one card. A card a person put somewhere stays
+ *  there; the rest are laid out by kind, centred on the origin. */
+export const layOut = (all: DrawnCard[]): Placed[] => {
+  const put: Placed[] = all
+    .filter((card) => card.x !== undefined && card.y !== undefined)
+    .map((card) => ({ card, box: { x: card.x!, y: card.y!, ...sizeOf(card) } }))
+  const cards = all.filter((card) => card.x === undefined || card.y === undefined)
+  if (cards.length === 0) return put
+  const columns = new Map<number, DrawnCard[]>()
   for (const card of cards) columns.set(columnOf(card), [...(columns.get(columnOf(card)) ?? []), card])
 
   // A level with only one column, like the systems in a project or the
   // files in a component, wraps into a grid instead of one long line.
-  const lanes: Card[][] =
+  const lanes: DrawnCard[][] =
     columns.size === 1
       ? Array.from({ length: Math.ceil(cards.length / ROW_LIMIT) }, (_, i) => cards.slice(i * ROW_LIMIT, i * ROW_LIMIT + ROW_LIMIT))
       : [...columns.keys()].sort((a, b) => a - b).flatMap((key) => split(columns.get(key)!))
@@ -84,10 +106,13 @@ export const layOut = (cards: Card[]): Placed[] => {
   }
 
   const bounds = boundsOf(placed.map((p) => p.box))
-  return placed.map((p) => ({
-    ...p,
-    box: { ...p.box, x: p.box.x - bounds.x - bounds.w / 2, y: p.box.y - bounds.y - bounds.h / 2 },
-  }))
+  return [
+    ...put,
+    ...placed.map((p) => ({
+      ...p,
+      box: { ...p.box, x: p.box.x - bounds.x - bounds.w / 2, y: p.box.y - bounds.y - bounds.h / 2 },
+    })),
+  ]
 }
 
 export const boundsOf = (boxes: Box[]): Box => {
