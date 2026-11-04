@@ -40,7 +40,7 @@ export const ToolRail = ({
       <Tool
         name="Pick"
         on={tool === 'pick'}
-        hint={sketch ? 'Pick, drag a box to pick many, drag to move (V)' : 'Pick; click a card to open it'}
+        hint={sketch ? 'Pick; drag cards to move them, Shift and drag a box to pick many (V)' : 'Pick; click a card to open it'}
         onPick={() => onTool('pick')}
       >
         <Glyph of="pick" />

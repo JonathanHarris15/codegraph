@@ -93,6 +93,27 @@ export type Drawing = {
 
 const STEP_MS = 320
 
+/** Whether a wheel event comes from a trackpad rather than a mouse wheel.
+ *  A wheel moves in whole notches, straight up and down; a trackpad sends
+ *  small, uneven steps, often sideways too. Once a trackpad is heard, the
+ *  rest of the same swipe counts as one, though its last steps may be big. */
+const isTrackpad = (event: WheelEvent, until: { current: number }): boolean => {
+  const now = performance.now()
+  const step = event.deltaY || event.deltaX
+  const pad =
+    event.deltaMode === 0 &&
+    ((event.deltaX !== 0 && event.deltaY !== 0) ||
+      (event.deltaX !== 0 && !event.shiftKey) ||
+      // A notch is whole, give or take the screen's scaling.
+      Math.abs(step - Math.round(step)) > 0.01 ||
+      Math.abs(step) < 40)
+  if (pad || now < until.current) {
+    until.current = now + 400
+    return true
+  }
+  return false
+}
+
 /** A small thing this window remembers about how a person likes it, such as
  *  whether the card library is open. Never anything that matters. */
 export const remembered = (key: string, otherwise: boolean): boolean => {
@@ -871,26 +892,36 @@ export const MapCanvas = ({
     })
   }, [])
 
-  // Zooming far enough into a card tunnels into it; far enough out tunnels
-  // out. A trackpad's two fingers pan; pinching, or ctrl with the wheel, zooms.
+  // A trackpad and a mouse wheel ask for different things. Two fingers on a
+  // trackpad pan, and with Ctrl (or a pinch) zoom. A mouse wheel zooms; with
+  // Ctrl it pans up and down, with Shift across. Zooming far enough into a
+  // card tunnels into it; far enough out tunnels out.
+  const padUntil = useRef(0)
   useEffect(() => {
     const el = frame.current
     if (!el) return
     const wheel = (event: WheelEvent): void => {
       event.preventDefault()
       if (busy.current) return
+      const pad = isTrackpad(event, padUntil)
+      const v = seen.current
+      const held = event.ctrlKey || event.metaKey
+      if (pad && !held) {
+        setView({ ...v, x: v.x - event.deltaX, y: v.y - event.deltaY })
+        return
+      }
+      if (!pad && held) {
+        setView({ ...v, y: v.y - (event.deltaY || event.deltaX) })
+        return
+      }
+      if (!pad && event.shiftKey) {
+        setView({ ...v, x: v.x - (event.deltaX || event.deltaY) })
+        return
+      }
       const rect = el.getBoundingClientRect()
       const cx = event.clientX - rect.left
       const cy = event.clientY - rect.top
-      const v = seen.current
-      const trackpad = event.deltaMode === 0 && Math.abs(event.deltaY) < 50 && !Number.isInteger(event.deltaY * 2)
-      if (!event.ctrlKey && !event.metaKey && (event.shiftKey || (event.deltaMode === 0 && Math.abs(event.deltaX) > 0) || trackpad)) {
-        const dx = event.shiftKey && event.deltaX === 0 ? event.deltaY : event.deltaX
-        const dy = event.shiftKey && event.deltaX === 0 ? 0 : event.deltaY
-        setView({ ...v, x: v.x - dx, y: v.y - dy })
-        return
-      }
-      const k = Math.min(Math.max(v.k * Math.exp(-event.deltaY * 0.0015), 0.08), 5)
+      const k = Math.min(Math.max(v.k * Math.exp(-event.deltaY * (pad ? 0.01 : 0.0015)), 0.08), 5)
       const worldX = (cx - v.x) / v.k
       const worldY = (cy - v.y) / v.k
       if (k > fitK.current * 3) {
@@ -1199,7 +1230,8 @@ export const MapCanvas = ({
       capture(event)
       return
     }
-    if (drawing && tool === 'pick') {
+    if (drawing && tool === 'pick' && (event.shiftKey || event.ctrlKey || event.metaKey)) {
+      // Dragging the board moves it; with Shift it draws a box to pick with.
       const add = event.shiftKey || event.ctrlKey || event.metaKey
       gesture.current = { type: 'select', from: worldOf(event), add, base: add ? selected : [], moved: false }
       capture(event)
@@ -1343,6 +1375,8 @@ export const MapCanvas = ({
     if (now.type === 'pan') {
       dragged.current = now.moved
       if (!now.moved && now.button === 2 && drawing) openMenu(event, at)
+      // A click on the empty board, not a drag, lets go of what is picked.
+      else if (!now.moved && now.button === 0 && drawing && tool === 'pick') drawing.onSelect([])
       return
     }
     if (now.type === 'zoombox') {

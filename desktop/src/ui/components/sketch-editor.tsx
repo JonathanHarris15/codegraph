@@ -379,16 +379,19 @@ export const SketchEditor = ({
                   Double-click, or pick it and start typing; <kbd>Enter</kbd> to finish
                 </dd>
                 <dt>Pick many</dt>
-                <dd>Drag a box on the board, or <kbd>Shift</kbd>-click</dd>
+                <dd>
+                  <kbd>Shift</kbd> and drag a box on the board, or <kbd>Shift</kbd>-click
+                </dd>
                 <dt>Draw inside a card</dt>
                 <dd>The bar over it, or zoom into it</dd>
                 <dt>Move the board</dt>
                 <dd>
-                  Hold <kbd>Space</kbd> and drag, right-drag, or scroll with two fingers
+                  Drag the empty board, or two fingers on a trackpad. With a mouse wheel, <kbd>Ctrl</kbd> scrolls up
+                  and down and <kbd>Shift</kbd> across
                 </dd>
                 <dt>Zoom</dt>
                 <dd>
-                  <kbd>Ctrl</kbd> and the wheel, or <kbd>+</kbd> <kbd>−</kbd>; <kbd>0</kbd> fits
+                  The mouse wheel, or <kbd>Ctrl</kbd> and two fingers on a trackpad; <kbd>0</kbd> fits
                 </dd>
                 <dt>Undo, redo</dt>
                 <dd>
