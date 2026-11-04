@@ -1,15 +1,19 @@
-// codegraph: component github-shelf
+// codegraph: component github-window
 import { useState } from 'react'
 import type { CloudView } from '../../features/list-github-software-systems.js'
-import { Badge, Button, Card, Field } from '../design-system/kit.js'
+import { Badge, Button, Card, Field, Sheet } from '../design-system/kit.js'
 
-export const GithubShelf = ({
+/** GitHub, in a small window: sign in with a token, then the repos set up
+ *  for codegraph that are not on this computer. */
+export const GithubWindow = ({
   cloud,
   busy,
   onConnect,
   onSignOut,
   onMakeProject,
+  onClose,
 }: {
+  onClose: () => void
   cloud: CloudView | null
   busy: boolean
   onConnect: (token: string) => Promise<string>
@@ -29,36 +33,30 @@ export const GithubShelf = ({
 
   if (!cloud || !cloud.signedIn) {
     return (
-      <div className="ds-section">
-        <h2 style={{ fontSize: 17 }}>Your repos on GitHub</h2>
-        <p className="ds-sub" style={{ maxWidth: 620 }}>
-          Sign in and codegraph can show the repos you are part of that are already set up for
-          it, including ones that are not on this computer.
-        </p>
-        <Card>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 520 }}>
-            <Field
-              label="GitHub personal access token"
-              value={token}
-              placeholder="ghp_…"
-              password
-              onChange={setToken}
-              onEnter={() => void connect()}
-            />
-            <div className="ds-hint">
-              GitHub → Settings → Developer settings → Personal access tokens. It needs the{' '}
-              <span className="ds-mono">repo</span> scope to see private repos. It is kept on this
-              computer only.
-            </div>
-            {problem ? <div className="ds-problem">{problem}</div> : null}
-            <div>
-              <Button look="loud" onClick={() => void connect()} disabled={busy || !token.trim()}>
-                {busy ? 'Checking…' : 'Sign in'}
-              </Button>
-            </div>
-          </div>
-        </Card>
-      </div>
+      <Sheet title="GitHub" onClose={onClose} wide>
+        <div className="ds-hint">
+          Sign in and codegraph can show the repos you are part of that are already set up for it, including ones
+          that are not on this computer.
+        </div>
+        <Field
+          label="GitHub personal access token"
+          value={token}
+          placeholder="ghp_…"
+          password
+          onChange={setToken}
+          onEnter={() => void connect()}
+        />
+        <div className="ds-hint">
+          GitHub → Settings → Developer settings → Personal access tokens. It needs the{' '}
+          <span className="ds-mono">repo</span> scope to see private repos. It is kept on this computer only.
+        </div>
+        {problem ? <div className="ds-problem">{problem}</div> : null}
+        <div className="ds-sheet-actions">
+          <Button look="loud" onClick={() => void connect()} disabled={busy || !token.trim()}>
+            {busy ? 'Checking…' : 'Sign in'}
+          </Button>
+        </div>
+      </Sheet>
     )
   }
 
@@ -66,14 +64,11 @@ export const GithubShelf = ({
   const already = cloud.systems.length - elsewhere.length
 
   return (
-    <div className="ds-section">
-      <div className="ds-head" style={{ marginBottom: 12 }}>
-        <div>
-          <h2 style={{ fontSize: 17 }}>Your repos on GitHub</h2>
-          <div className="ds-sub">
-            Signed in as {cloud.account || 'GitHub'}
-            {cloud.tokenSafe ? '' : ' · token is not in a keystore on this computer'}
-          </div>
+    <Sheet title="GitHub" onClose={onClose} wide>
+      <div className="ds-row" style={{ justifyContent: 'space-between' }}>
+        <div className="ds-sub">
+          Signed in as {cloud.account || 'GitHub'}
+          {cloud.tokenSafe ? '' : ' · token is not in a keystore on this computer'}
         </div>
         <Button look="bare" onClick={onSignOut}>
           Sign out
@@ -130,6 +125,6 @@ export const GithubShelf = ({
           </div>
         </>
       ) : null}
-    </div>
+    </Sheet>
   )
 }

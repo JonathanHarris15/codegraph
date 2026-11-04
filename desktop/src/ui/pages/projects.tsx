@@ -4,8 +4,8 @@ import type { AgentConnection } from '../../features/connect-agent.js'
 import type { CloudView } from '../../features/list-github-software-systems.js'
 import type { ProjectView } from '../../features/list-projects.js'
 import { Button, Card, Field, Sheet, ThemeSwitch } from '../design-system/kit.js'
-import { AgentShelf } from '../components/agent-shelf.js'
-import { GithubShelf } from '../components/github-shelf.js'
+import { AgentWindow } from '../components/agent-window.js'
+import { GithubWindow } from '../components/github-window.js'
 import { ProjectCard } from '../components/project-card.js'
 
 export const ProjectsPage = ({ onOpen }: { onOpen: (projectId: string) => void }) => {
@@ -18,6 +18,8 @@ export const ProjectsPage = ({ onOpen }: { onOpen: (projectId: string) => void }
   const [busyWithGithub, setBusyWithGithub] = useState(false)
   const [note, setNote] = useState('')
   const [agent, setAgent] = useState<AgentConnection | null>(null)
+  /** Which small window is open over the page, if any. */
+  const [open, setOpen] = useState<'' | 'github' | 'agent'>('')
 
   const load = useCallback(async (fetchFirst = false): Promise<void> => {
     setProjects(await window.codegraph.listProjects(fetchFirst))
@@ -93,6 +95,13 @@ export const ProjectsPage = ({ onOpen }: { onOpen: (projectId: string) => void }
           </div>
         </div>
         <div className="ds-row">
+          <Button look="bare" onClick={() => setOpen('github')} label="GitHub">
+            GitHub
+            {cloud?.signedIn ? <span className="ds-head-dot" title="Signed in" /> : null}
+          </Button>
+          <Button look="bare" onClick={() => setOpen('agent')}>
+            Your agent
+          </Button>
           <ThemeSwitch />
           <Button onClick={() => void refresh()} disabled={refreshing}>
             {refreshing ? 'Checking GitHub…' : 'Refresh'}
@@ -144,19 +153,27 @@ export const ProjectsPage = ({ onOpen }: { onOpen: (projectId: string) => void }
         </div>
       )}
 
-      <GithubShelf
-        cloud={cloud}
-        busy={busyWithGithub}
-        onConnect={connect}
-        onSignOut={() => void signOut()}
-        onMakeProject={(short) => void makeFromGithub(short)}
-      />
+      {open === 'github' ? (
+        <GithubWindow
+          cloud={cloud}
+          busy={busyWithGithub}
+          onConnect={connect}
+          onSignOut={() => void signOut()}
+          onMakeProject={(short) => void makeFromGithub(short)}
+          onClose={() => setOpen('')}
+        />
+      ) : null}
 
-      <AgentShelf connection={agent} />
+      {open === 'agent' ? <AgentWindow connection={agent} onClose={() => setOpen('')} /> : null}
 
       {naming ? (
-        <Sheet>
-          <h2 style={{ fontSize: 17 }}>New project</h2>
+        <Sheet
+          title="New project"
+          onClose={() => {
+            setNaming(false)
+            setName('')
+          }}
+        >
           <Field
             label="What is it called?"
             value={name}

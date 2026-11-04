@@ -1,6 +1,6 @@
 // codegraph: design system
-import { Moon, Sun } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { Moon, Sun, X } from 'lucide-react'
+import { useEffect, useState, type ReactNode } from 'react'
 import './theme.css'
 
 /** A state a badge can carry. Every one of them shows a word too, so none of
@@ -152,11 +152,50 @@ export const Select = ({
   </label>
 )
 
-export const Sheet = ({ children }: { children: ReactNode }) => (
-  <div className="ds-veil">
-    <div className="ds-sheet">{children}</div>
-  </div>
-)
+/** A small window over the page. Given a way to close, Escape or a click
+ *  outside it closes it, and it carries a title with a close button. */
+export const Sheet = ({
+  children,
+  title,
+  onClose,
+  wide = false,
+}: {
+  children: ReactNode
+  title?: string
+  onClose?: () => void
+  wide?: boolean
+}) => {
+  useEffect(() => {
+    if (!onClose) return
+    const keys = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', keys)
+    return () => window.removeEventListener('keydown', keys)
+  }, [onClose])
+  return (
+    <div
+      className="ds-veil"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose?.()
+      }}
+    >
+      <div className={wide ? 'ds-sheet ds-sheet--wide' : 'ds-sheet'} role="dialog" aria-modal="true" aria-label={title}>
+        {title ? (
+          <div className="ds-sheet-head">
+            <h2 className="ds-sheet-title">{title}</h2>
+            {onClose ? (
+              <button type="button" className="ds-sheet-close" aria-label="Close" onClick={onClose}>
+                <X size={16} />
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+        {children}
+      </div>
+    </div>
+  )
+}
 
 export const Rows = ({ children }: { children: ReactNode }) => (
   <div className="ds-rows">{children}</div>

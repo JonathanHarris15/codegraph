@@ -52,7 +52,19 @@ describe('the projects screen in the real app', () => {
   })
 
   it('offers to sign in to GitHub', async () => {
-    expect(await shown(page.getByRole('button', { name: 'Sign in' }))).toBe('Sign in')
+    await page.getByRole('button', { name: 'GitHub', exact: true }).click()
+    const window = page.getByRole('dialog', { name: 'GitHub' })
+    expect(await shown(window.getByRole('button', { name: 'Sign in' }))).toBe('Sign in')
+    await page.keyboard.press('Escape')
+    await window.waitFor({ state: 'detached', timeout: PATIENCE })
+  })
+
+  it('shows how to connect your agent in a window of its own', async () => {
+    await page.getByRole('button', { name: 'Your agent' }).click()
+    const window = page.getByRole('dialog', { name: 'Your agent' })
+    expect(await shown(window)).toContain('claude mcp add --scope user codegraph')
+    await window.getByRole('button', { name: 'Close' }).click()
+    await window.waitFor({ state: 'detached', timeout: PATIENCE })
   })
 
   it('makes a project and shows it as a card', async () => {

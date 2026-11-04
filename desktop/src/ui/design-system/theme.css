@@ -2750,3 +2750,64 @@ kbd {
 .projects-note {
   margin-bottom: var(--space-5);
 }
+
+/* ---- small windows over the page -------------------------------------- */
+
+.ds-sheet--wide {
+  width: 720px;
+  max-height: calc(100vh - 2 * var(--space-6));
+  overflow: auto;
+}
+
+.ds-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.ds-sheet-title {
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 600;
+}
+
+.ds-sheet-close {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.ds-sheet-close:hover,
+.ds-sheet-close:focus-visible {
+  background: var(--surface-sunken);
+  color: var(--ink-000);
+  outline: none;
+}
+
+/* A header button's small mark: signed in, or something waiting. */
+.ds-head-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--state-good);
+  margin-left: 6px;
+  display: inline-block;
+}
+
+/* A command to copy, set apart so it reads as something to run. */
+.ds-command {
+  display: block;
+  padding: var(--space-3);
+  border: var(--stroke-edge) solid var(--line-hair);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
