@@ -64,6 +64,12 @@ describe('the canvas in the real app', () => {
     await picture('1-project')
   })
 
+  it("shows each software system's branch on its card at the project level, not in the bar", async () => {
+    const onCard = page.locator('.map-world').getByRole('button', { name: 'Branch of notes' })
+    expect(await shown(onCard)).toContain('main')
+    expect(await page.locator('.map-bar').getByRole('button', { name: /^Branch of/ }).count()).toBe(0)
+  })
+
   it('suggests what the code calls out to, and draws it once agreed', async () => {
     expect(await shown(page.getByLabel('Suggested software systems'))).toContain('The code calls mailer')
     await page.getByRole('button', { name: 'Add it' }).click()
@@ -140,7 +146,10 @@ describe('the canvas in the real app', () => {
     await page.getByRole('menu', { name: 'Branches of notes' }).getByRole('menuitemradio', { name: /^main/ }).click()
     await expect.poll(async () => row.textContent(), { timeout: PATIENCE }).toContain('main')
     await page.getByRole('button', { name: 'Open Notes', exact: true }).dblclick()
-    const bar = page.getByRole('button', { name: 'Branch of notes' })
+    const card = page.locator('.map-world').getByRole('button', { name: 'Branch of notes' })
+    await expect.poll(async () => card.textContent(), { timeout: PATIENCE }).toContain('main')
+    await page.getByRole('button', { name: 'Open notes' }).click()
+    const bar = page.locator('.map-bar').getByRole('button', { name: 'Branch of notes' })
     await expect.poll(async () => bar.textContent(), { timeout: PATIENCE }).toContain('main')
     expect(await bar.textContent()).toContain('not checked out')
   })

@@ -8,6 +8,7 @@ import {
   useState,
   type PointerEvent,
   type ReactElement,
+  type ReactNode,
   type RefObject,
 } from 'react'
 import { sentenceOf, type Said } from '../../modules/wording/index.js'
@@ -278,6 +279,7 @@ const CardFace = ({
   handles,
   drawing,
   agent,
+  extra,
   onOpen,
   onPress,
   onHandle,
@@ -285,6 +287,9 @@ const CardFace = ({
 }: {
   placed: Placed
   picture: string
+  /** Something the page puts on the card, such as a software system's
+   *  branch; pressing it never opens or moves the card. */
+  extra?: ReactNode
   /** The agent says it is working here, or inside here: its words. */
   agent?: string
   opens: boolean
@@ -388,6 +393,16 @@ const CardFace = ({
           <Inside card={card} />
         </>
       )}
+      {extra ? (
+        <span
+          className="map-card-extra"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+          onDoubleClick={(event) => event.stopPropagation()}
+        >
+          {extra}
+        </span>
+      ) : null}
       {card.state ? (
         <span className={`map-state map-state--${card.state}`}>{STATE_WORDS[card.state]}</span>
       ) : null}
@@ -512,8 +527,11 @@ export const MapCanvas = ({
   drawing,
   annotating,
   agent,
+  cardExtra,
   onStartSketch,
 }: {
+  /** What the page puts on a card, if anything, by the card. */
+  cardExtra?: (card: DrawnCard) => ReactNode
   root: DrawnCard
   path: string[]
   onPath: (path: string[]) => void
@@ -1794,6 +1812,7 @@ export const MapCanvas = ({
               handles={false}
               drawing={false}
               agent={agent && holds(p.card, agent.card) ? agent.words : undefined}
+              extra={cardExtra?.(p.card)}
               onOpen={() => tunnelIn(p.card, true)}
             />
           ))}
@@ -1858,6 +1877,7 @@ export const MapCanvas = ({
                 handles={Boolean(drawing) && (tool === 'pick' || tool === 'wire') && !armed && (hover === p.card.id || (picked && selected.length === 1)) && !live.moves}
                 drawing={Boolean(drawing)}
                 agent={agent && holds(p.card, agent.card) ? agent.words : undefined}
+              extra={cardExtra?.(p.card)}
                 onOpen={() => tunnelIn(p.card)}
                 onPress={drawing ? press(p.card.id) : undefined}
                 onHandle={drawing ? pressHandle(p.card.id) : undefined}

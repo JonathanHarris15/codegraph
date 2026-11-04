@@ -161,7 +161,9 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
   const working: SystemShown | undefined = shown?.systems.find((s) => s.agent)
   /** The software system whose branch the bar shows: the one being looked
    *  at, or the only one the project has. */
-  const branchSystem = system ?? (shown?.systems.length === 1 ? shown.card.children.find((c) => c.id === shown.systems[0]!.id) : undefined)
+  /** The software system whose branch the bar shows: only the one opened.
+   *  At the project level each software system's card carries its own. */
+  const branchSystem = system
   const branchShown = shown?.systems.find((s) => s.id === branchSystem?.id)
 
   // A new software system starts from nothing; the same one keeps what it
@@ -204,16 +206,28 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
     await load(next)
   }
 
-  const pickPoint = async (point: Point): Promise<void> => {
+  /** Reads a software system at another branch or commit. A branch picked
+   *  is where its map opens next time; a commit is a look back. */
+  const pickFor = async (systemId: string, point: Point): Promise<void> => {
     setSwitchProblem('')
-    if (!branchSystem) return
-    // A branch picked is where the map opens next time; a commit is a look back.
     const named = point.kind === 'branch' ? point.name : point.kind === 'live' ? point.branch : ''
-    if (named) void window.codegraph.chooseBranch(projectId, branchSystem.id, named)
-    const next = { ...points, [branchSystem.id]: point }
+    if (named) void window.codegraph.chooseBranch(projectId, systemId, named)
+    const next = { ...pointsNow.current, [systemId]: point }
     setPoints(next)
     await load(next)
   }
+  const pickPoint = async (point: Point): Promise<void> => {
+    if (branchSystem) await pickFor(branchSystem.id, point)
+  }
+
+  // Every software system's branches, for the branch on each one's card.
+  const [branchesOf, setBranchesOf] = useState<Record<string, Point[]>>({})
+  const systemIds = shown?.systems.map((s) => s.id).join(',') ?? ''
+  useEffect(() => {
+    if (!shown || sketch) return
+    for (const s of shown.systems)
+      void window.codegraph.listPoints(projectId, s.id).then((found) => setBranchesOf((all) => ({ ...all, [s.id]: found })))
+  }, [projectId, systemIds, sketch === null, shown])
 
   // A sketch is kept as it is drawn: each change waits a moment for the
   // next, then goes to disk.
@@ -513,6 +527,19 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
             path={path}
             onPath={setPath}
             annotating={{ layers: mapLayers, onChange: changeLayers }}
+            cardExtra={(card) => {
+              const at = card.level === 'system' ? shown.systems.find((s) => s.id === card.id) : undefined
+              if (!at?.path || !at.setUp || system?.id === card.id) return null
+              return (
+                <BranchPicker
+                  system={at.name}
+                  points={branchesOf[at.id] ?? []}
+                  point={at.point}
+                  onPick={(p) => void pickFor(at.id, p)}
+                  compact
+                />
+              )
+            }}
             agent={working?.agent ? { card: working.agent.card, words: working.agent.words } : null}
             onStartSketch={() => void startOne(true)}
           />
