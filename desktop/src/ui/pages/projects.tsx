@@ -104,14 +104,16 @@ export const ProjectsPage = ({ onOpen }: { onOpen: (projectId: string) => void }
       </div>
 
       {note ? (
-        <Card>
-          <div className="ds-row" style={{ justifyContent: 'space-between' }}>
-            <span>{note}</span>
-            <Button look="bare" onClick={() => setNote('')}>
-              Dismiss
-            </Button>
-          </div>
-        </Card>
+        <div className="projects-note">
+          <Card>
+            <div className="ds-row" style={{ justifyContent: 'space-between' }}>
+              <span>{note}</span>
+              <Button look="bare" onClick={() => setNote('')}>
+                Dismiss
+              </Button>
+            </div>
+          </Card>
+        </div>
       ) : null}
 
       {projects === null ? (

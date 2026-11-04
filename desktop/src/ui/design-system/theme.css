@@ -2745,3 +2745,8 @@ kbd {
 .project-repos-link:disabled {
   cursor: progress;
 }
+
+/* A note over the projects keeps clear of the cards below it. */
+.projects-note {
+  margin-bottom: var(--space-5);
+}
