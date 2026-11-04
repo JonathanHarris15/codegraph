@@ -1,6 +1,8 @@
 // codegraph: shell
 import { ipcMain } from 'electron'
 import { addMockup } from '../features/add-mockup.js'
+import { saveAnnotations } from '../features/save-annotations.js'
+import { showAnnotations } from '../features/show-annotations.js'
 import { addProposalMockup } from '../features/add-proposal-mockup.js'
 import { agreeShallowSystem } from '../features/agree-shallow-system.js'
 import { chooseBranch } from '../features/choose-branch.js'
@@ -23,6 +25,7 @@ import { signOutGithub } from '../features/sign-out-github.js'
 import { switchBranch } from '../features/switch-branch.js'
 import { watchProject } from '../features/watch-project.js'
 import type { DrawnCard, Point } from '../modules/reader/index.js'
+import type { Layer } from '../modules/annotations/index.js'
 import type { Sketch } from '../modules/sketches/index.js'
 
 /** The only crossing between the window and the features. Each channel is
@@ -72,6 +75,8 @@ export const openBridge = (): void => {
     watching.set(sender.id, projectId ? watchProject(projectId, () => !sender.isDestroyed() && sender.send('project:changed')) : () => undefined)
     sender.once('destroyed', () => watching.get(sender.id)?.())
   })
+  ipcMain.handle('annotations:show', (_event, projectId: string) => showAnnotations(projectId))
+  ipcMain.handle('annotations:save', (_event, projectId: string, layers: Layer[]) => saveAnnotations(projectId, layers))
   ipcMain.handle('branch:choose', (_event, projectId: string, systemId: string, branch: string) =>
     chooseBranch(projectId, systemId, branch),
   )

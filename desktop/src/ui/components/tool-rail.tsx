@@ -1,4 +1,5 @@
 // codegraph: component tool-rail
+import { Layers, StickyNote } from 'lucide-react'
 import { Tool } from '../design-system/kit.js'
 import { Glyph } from './kind-glyph.js'
 import type { Tool as Which } from './map-canvas.js'
@@ -19,7 +20,16 @@ export const ToolRail = ({
   onStartSketch,
   onFit,
   onOverview,
+  annotations,
+  layers,
+  onAnnotations,
+  onLayers,
 }: {
+  /** The annotation library is open, and the layers list. */
+  annotations: boolean
+  layers: boolean
+  onAnnotations: () => void
+  onLayers: () => void
   tool: Which
   /** On the map the drawing tools are not there at all. */
   sketch: boolean
@@ -78,6 +88,17 @@ export const ToolRail = ({
         </Tool>
       </div>
     )}
+
+    <span className="map-rail-rule" />
+
+    <div className="map-rail-group">
+      <Tool name="Annotate" on={annotations} hint="Text, notes, shapes and lines over the diagram (A)" onPick={onAnnotations}>
+        <StickyNote size={18} strokeWidth={2} aria-hidden="true" />
+      </Tool>
+      <Tool name="Layers" on={layers} hint="Show, hide and pick annotation layers (L)" onPick={onLayers}>
+        <Layers size={18} strokeWidth={2} aria-hidden="true" />
+      </Tool>
+    </div>
 
     <span className="map-rail-rule" />
 

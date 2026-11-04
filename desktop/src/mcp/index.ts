@@ -11,6 +11,7 @@ import { giveInstructions } from '../features/give-instructions.js'
 import { makeProposal } from '../features/make-proposal.js'
 import { reportWork } from '../features/report-work.js'
 import { useFolder as useAgentsFolder } from '../modules/agents/index.js'
+import { useFolder as useAnnotationsFolder } from '../modules/annotations/index.js'
 import { appFolderAnywhere } from '../modules/machine/index.js'
 import { useFolder as useProjectsFolder } from '../modules/projects/index.js'
 import { useFolder as useSketchesFolder } from '../modules/sketches/index.js'
@@ -25,6 +26,7 @@ const here = (repo?: string): string => resolve(repo || process.cwd())
 useProjectsFolder(appFolderAnywhere())
 useSketchesFolder(appFolderAnywhere())
 useAgentsFolder(appFolderAnywhere())
+useAnnotationsFolder(appFolderAnywhere())
 const text = (words: string) => ({ content: [{ type: 'text' as const, text: words }] })
 
 const serve = async (): Promise<void> => {
@@ -32,7 +34,7 @@ const serve = async (): Promise<void> => {
 
   server.tool(
     'map',
-    "The repo's map, read from its code: containers, components and their files, and every wire with what it is for.",
+    "The repo's map, read from its code: containers, components and their files, and every wire with what it is for, and any annotations people drew over it.",
     { repo: z.string().optional().describe('The repo folder; the folder the agent works in if left out.') },
     async ({ repo }) => text(await describeMap(here(repo))),
   )

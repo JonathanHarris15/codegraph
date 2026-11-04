@@ -62,7 +62,8 @@ describe('an agent reading a sketch', () => {
     expect(said).toContain('\n    page search (at /search): Find a note by its words')
     expect(said).toMatch(/mockup: .+page-search\.png/)
     expect(said).toContain('\n    page search asks feature find-notes to find notes with these words')
-    expect(said).toContain('\n    note: Search as you type?')
+    expect(said).toContain('Annotations: notes people drew over the diagram. They are not the architecture and never change the code.')
+    expect(said).toContain('\n  sticky note "Search as you type?" (layer Notes)')
   })
 
   it('says so when there is no sketch by that name', async () => {

@@ -3175,3 +3175,630 @@ kbd {
 .ds-head .ds-button {
   white-space: nowrap;
 }
+
+/* ---- annotations ---------------------------------------------------------
+   Drawn over the diagram for people and agents to read. They look like pen
+   on paper next to the cards: softer, warmer, never mistaken for a card. */
+
+:root {
+  --anno-ink: #3a3631;
+  --anno-line: #6b6458;
+  --anno-yellow: #fff1a8;
+  --anno-orange: #ffd9b0;
+  --anno-pink: #ffd1dc;
+  --anno-purple: #e2d6ff;
+  --anno-blue: #cfe5ff;
+  --anno-green: #cdeccf;
+  --anno-gray: #e6e3dd;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --anno-ink: #ece7dd;
+    --anno-line: #b6ad9e;
+    --anno-yellow: #5a4f1c;
+    --anno-orange: #5c3c1f;
+    --anno-pink: #5a2a3a;
+    --anno-purple: #3d3160;
+    --anno-blue: #1f3a5a;
+    --anno-green: #1f4527;
+    --anno-gray: #3a3834;
+  }
+}
+
+:root[data-theme='dark'] {
+  --anno-ink: #ece7dd;
+  --anno-line: #b6ad9e;
+  --anno-yellow: #5a4f1c;
+  --anno-orange: #5c3c1f;
+  --anno-pink: #5a2a3a;
+  --anno-purple: #3d3160;
+  --anno-blue: #1f3a5a;
+  --anno-green: #1f4527;
+  --anno-gray: #3a3834;
+}
+
+.map-anno {
+  --anno-fill: transparent;
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--anno-ink);
+  cursor: move;
+  user-select: none;
+}
+
+.map-anno-fill--yellow { --anno-fill: var(--anno-yellow); }
+.map-anno-fill--orange { --anno-fill: var(--anno-orange); }
+.map-anno-fill--pink { --anno-fill: var(--anno-pink); }
+.map-anno-fill--purple { --anno-fill: var(--anno-purple); }
+.map-anno-fill--blue { --anno-fill: var(--anno-blue); }
+.map-anno-fill--green { --anno-fill: var(--anno-green); }
+.map-anno-fill--gray { --anno-fill: var(--anno-gray); }
+
+.map-anno-outline {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.map-anno-outline path {
+  fill: var(--anno-fill);
+  stroke: var(--anno-line);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+/* A sticky note is paper: filled, with no outline, a little lifted. */
+.map-anno--sticky .map-anno-outline path {
+  stroke: none;
+}
+
+.map-anno--sticky .map-anno-outline {
+  filter: drop-shadow(0 2px 3px rgba(40, 30, 10, 0.18));
+}
+
+/* Brackets and braces are open marks, never filled. */
+.map-anno--braceleft .map-anno-outline path,
+.map-anno--braceright .map-anno-outline path,
+.map-anno--bracket .map-anno-outline path,
+.map-anno--braces .map-anno-outline path {
+  fill: none;
+}
+
+.map-anno-text {
+  position: relative;
+  max-width: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 18px;
+  text-align: center;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.map-anno--sticky .map-anno-text,
+.map-anno--callout .map-anno-text {
+  align-self: flex-start;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-hand, inherit);
+}
+
+.map-anno--callout .map-anno-text {
+  padding-bottom: 30%;
+}
+
+.map-anno--text .map-anno-text {
+  padding: 2px 4px;
+  font-size: 15px;
+  font-weight: 500;
+  text-align: left;
+}
+
+.map-anno--text:not(.map-anno--picked) .map-anno-text:empty {
+  opacity: 0.5;
+}
+
+.map-anno-text--code {
+  align-self: stretch;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.map-anno--code .map-anno-outline path {
+  fill: color-mix(in srgb, var(--anno-fill) 60%, var(--surface-sunken));
+}
+
+.map-anno-list {
+  position: relative;
+  align-self: flex-start;
+  width: 100%;
+  margin: 0;
+  padding: 10px 14px 10px 28px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+/* Frames and boxes sit behind the cards, and are picked by their edge or
+   their title, so the board inside them still pans and picks cards. */
+.map-anno--behind {
+  z-index: auto;
+  pointer-events: none;
+}
+
+.map-anno--behind .map-anno-outline path {
+  fill: color-mix(in srgb, var(--anno-fill) 45%, transparent);
+  stroke-dasharray: 6 5;
+  pointer-events: visibleStroke;
+  stroke-width: 10;
+  stroke: transparent;
+}
+
+.map-anno--behind .map-anno-outline {
+  pointer-events: none;
+}
+
+.map-anno--behind .map-anno-outline::before {
+  content: none;
+}
+
+/* the visible edge, drawn over the wide invisible one that is picked */
+.map-anno--behind::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1.5px dashed var(--anno-line);
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+.map-anno--oval::after,
+.map-anno--braces::after,
+.map-anno--bracket::after {
+  display: none;
+}
+
+.map-anno--oval .map-anno-outline path,
+.map-anno--braces .map-anno-outline path,
+.map-anno--bracket .map-anno-outline path {
+  stroke: var(--anno-line);
+  stroke-width: 1.5;
+}
+
+.map-anno-title {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  padding: 1px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-100);
+  color: var(--anno-ink);
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: auto;
+  cursor: move;
+  white-space: nowrap;
+}
+
+.map-anno--picked {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* An annotation keeping beside a card says so with a faint pin. */
+.map-anno--kept::before {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--anno-line);
+  opacity: 0.55;
+}
+
+.map-anno-corner {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border: 2px solid var(--focus-ring);
+  border-radius: 2px;
+  background: var(--surface-100);
+  pointer-events: auto;
+  z-index: 1;
+}
+
+.map-anno-corner--nw { left: 0; top: 0; cursor: nwse-resize; }
+.map-anno-corner--ne { left: 100%; top: 0; cursor: nesw-resize; }
+.map-anno-corner--sw { left: 0; top: 100%; cursor: nesw-resize; }
+.map-anno-corner--se { left: 100%; top: 100%; cursor: nwse-resize; }
+
+.map-anno-edit {
+  position: absolute;
+  inset: 4px;
+  z-index: 2;
+  resize: none;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  outline: 2px solid var(--focus-ring);
+  background: color-mix(in srgb, var(--surface-100) 85%, transparent);
+  color: var(--anno-ink);
+  font: inherit;
+  font-size: 13px;
+  line-height: 18px;
+  cursor: text;
+}
+
+.map-anno-edit--line {
+  inset: auto;
+  width: 160px;
+  height: 36px;
+  z-index: 4;
+}
+
+/* Lines and arrows between annotations, cards, or any spot. */
+.map-anno-lines {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.map-anno-line path:first-child {
+  fill: none;
+  stroke: var(--anno-line);
+  stroke-width: 2;
+}
+
+.map-anno-line--dashed path:first-child {
+  stroke-dasharray: 8 6;
+}
+
+.map-anno-line[class*='map-anno-fill--'] path:first-child {
+  stroke: color-mix(in srgb, var(--anno-fill) 40%, var(--anno-line));
+}
+
+.map-anno-line--picked path:first-child {
+  stroke: var(--focus-ring);
+}
+
+.map-anno-head {
+  fill: var(--anno-line);
+}
+
+.map-anno-line-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14;
+  pointer-events: stroke;
+  cursor: move;
+}
+
+.map-anno-end {
+  fill: var(--surface-100);
+  stroke: var(--focus-ring);
+  stroke-width: 2;
+  pointer-events: all;
+  cursor: crosshair;
+}
+
+.map-anno-guide {
+  stroke: var(--anno-line);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+  opacity: 0.7;
+}
+
+.map-anno-line-words {
+  position: absolute;
+  z-index: 3;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-100);
+  color: var(--anno-ink);
+  font-size: 12px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* Putting a shape down covers the board, so nothing else takes the press. */
+.map-anno-placer {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  cursor: crosshair;
+}
+
+.map-anno-placer-world {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
+.map-anno-sizing {
+  position: absolute;
+  border: 1.5px dashed var(--focus-ring);
+  background: color-mix(in srgb, var(--focus-ring) 8%, transparent);
+}
+
+.map-anno-lines--live line {
+  stroke: var(--focus-ring);
+  stroke-width: 2;
+  stroke-dasharray: 6 5;
+}
+
+/* The library of annotations, beside the tools. */
+.map-anno-library {
+  width: 280px;
+}
+
+.map-anno-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 var(--space-3) var(--space-2);
+  padding: 6px var(--space-2);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-md);
+  background: var(--surface-000);
+  color: var(--ink-faint);
+}
+
+.map-anno-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-000);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.map-anno-groups {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 var(--space-2) var(--space-3);
+}
+
+.map-anno-group-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: var(--space-2) var(--space-1);
+  border: 0;
+  background: none;
+  color: var(--ink-000);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.map-anno-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 2px;
+}
+
+.map-anno-pick {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border: var(--stroke-edge) solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.map-anno-pick:hover,
+.map-anno-pick:focus-visible {
+  background: var(--surface-sunken);
+  color: var(--ink-000);
+  outline: none;
+}
+
+.map-anno-pick--on {
+  border-color: var(--focus-ring);
+  background: color-mix(in srgb, var(--focus-ring) 12%, transparent);
+  color: var(--ink-000);
+}
+
+.map-anno-icon {
+  overflow: visible;
+}
+
+.map-anno-icon path,
+.map-anno-icon text {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 6;
+  stroke-linejoin: round;
+}
+
+.map-anno-icon text {
+  fill: currentColor;
+  stroke: none;
+}
+
+.map-anno-icon .map-anno-icon--sticky {
+  fill: var(--anno-yellow);
+  stroke: none;
+}
+
+/* The bar over a picked annotation. */
+.map-anno-bar {
+  gap: 4px;
+}
+
+.map-anno-swatch {
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--line-edge);
+  border-radius: 50%;
+  background: var(--anno-fill);
+  cursor: pointer;
+}
+
+.map-anno-fill--none.map-anno-swatch {
+  background:
+    linear-gradient(135deg, transparent 45%, var(--state-problem) 45%, var(--state-problem) 55%, transparent 55%),
+    var(--surface-100);
+}
+
+.map-anno-swatch--on {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.map-anno-bar-layer {
+  padding: 0 6px;
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+/* The layers list, beside the tools. */
+.map-layers {
+  position: absolute;
+  left: 76px;
+  bottom: 70px;
+  z-index: 8;
+  width: 300px;
+  padding: var(--space-2);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-md);
+  background: var(--surface-100);
+  box-shadow: var(--shadow-float);
+  animation: sketch-new-in 140ms ease;
+}
+
+.map-layers-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-1) var(--space-2) var(--space-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.map-layers-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px var(--space-1);
+  border-radius: var(--radius-sm);
+}
+
+.map-layers-row--on {
+  background: color-mix(in srgb, var(--focus-ring) 10%, transparent);
+}
+
+.map-layers-row--diagram {
+  gap: var(--space-2);
+  padding: 6px var(--space-2);
+  color: var(--ink-soft);
+}
+
+.map-layers-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--ink-soft);
+}
+
+.map-layers-name {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  border: var(--stroke-edge) solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-000);
+  font: inherit;
+  font-size: 13px;
+}
+
+input.map-layers-name:hover,
+input.map-layers-name:focus {
+  border-color: var(--line-edge);
+  outline: none;
+}
+
+.map-layers-icon {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+
+.map-layers-icon:hover {
+  background: var(--surface-sunken);
+  color: var(--ink-000);
+}
+
+.map-layers-icon[aria-pressed='true'] {
+  color: var(--ink-000);
+}
+
+.map-layers-icon--on {
+  color: var(--focus-ring);
+}
+
+.map-layers-radio {
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--ink-faint);
+  border-radius: 50%;
+}
+
+.map-layers-radio--on {
+  border-color: var(--focus-ring);
+  background: radial-gradient(var(--focus-ring) 45%, transparent 50%);
+}
+
+.map-layers-add {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  margin-top: var(--space-1);
+  padding: 6px var(--space-2);
+  border: var(--stroke-edge) dashed var(--line-edge);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.map-layers-add:hover {
+  border-color: var(--focus-ring);
+  color: var(--focus-ring);
+}

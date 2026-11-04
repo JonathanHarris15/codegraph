@@ -1,6 +1,9 @@
 // codegraph: feature describe-map in agent
-// codegraph: uses reader, wording
+// codegraph: uses reader, wording, projects, annotations
 // codegraph: command map
+import { resolve } from 'node:path'
+import { annotationWords, readAnnotations } from '../modules/annotations/index.js'
+import { listProjects } from '../modules/projects/index.js'
 import { live, readMap, type Point, type SystemMap } from '../modules/reader/index.js'
 import { sentenceOf } from '../modules/wording/index.js'
 
@@ -60,6 +63,38 @@ export const describeMap = async (repo: string, point: Point = live): Promise<st
   if (map.problems.length) {
     out.push('Could not place:')
     for (const p of map.problems) out.push(`  ${p}`)
+    out.push('')
   }
+  out.push(...annotationsOver(repo, map))
   return out.join('\n').trimEnd()
+}
+
+/** What people drew over this repo's part of the map of each project it
+ *  serves, for the agent to read; never the architecture. */
+const annotationsOver = (repo: string, map: SystemMap): string[] => {
+  const same = (a: string, b: string): boolean =>
+    process.platform === 'win32' ? resolve(a).toLowerCase() === resolve(b).toLowerCase() : resolve(a) === resolve(b)
+  const out: string[] = []
+  for (const project of listProjects().filter((p) => map.projects.includes(p.shortName))) {
+    const system = project.systems.find((s) => s.path && same(s.path, repo))
+    if (!system) continue
+    const nameOf = (id: string): string => {
+      if (id === project.id) return `the project ${project.name}`
+      if (id === system.id) return `software system ${system.name}`
+      const rest = id.slice(system.id.length + 1)
+      const container = rest.match(/^container:(.+)$/)
+      if (container) return `container ${container[1]}`
+      const component = rest.match(/^([^:]+):([^:]+):(.+)$/)
+      return component ? `${component[2]} ${component[3]}` : rest
+    }
+    const levels = [
+      project.id,
+      system.id,
+      ...map.containers.map((c) => `${system.id}/${c.id}`),
+      ...map.components.map((c) => `${system.id}/${c.id}`),
+    ]
+    const said = annotationWords(readAnnotations(project.id), levels, nameOf)
+    if (said.length) out.push(`From project ${project.name}:`, ...said)
+  }
+  return out
 }

@@ -1,9 +1,10 @@
 // codegraph: feature describe-sketch in agent
-// codegraph: uses reader, projects, sketches, wording
+// codegraph: uses reader, projects, sketches, wording, annotations
 // codegraph: command sketch
+import { annotationWords } from '../modules/annotations/index.js'
 import { listProjects } from '../modules/projects/index.js'
 import { live, readMap } from '../modules/reader/index.js'
-import { listSketches, mockupFile, readSketch, type SketchCard } from '../modules/sketches/index.js'
+import { listSketches, mockupFile, readSketch, withNotesAsAnnotations, type SketchCard } from '../modules/sketches/index.js'
 import { sentenceOf } from '../modules/wording/index.js'
 
 /** One sketch in words an agent reads and works from: every level, each card
@@ -16,7 +17,8 @@ export const describeSketch = async (repo: string, name: string, shortName = '')
 
   for (const project of projects) {
     const listed = listSketches(project.id).find((s) => s.id === name || s.name.toLowerCase() === name.toLowerCase())
-    const sketch = listed ? readSketch(project.id, listed.id) : null
+    const kept = listed ? readSketch(project.id, listed.id) : null
+    const sketch = kept ? withNotesAsAnnotations(kept) : null
     if (!sketch) continue
 
     const out: string[] = [
@@ -47,6 +49,21 @@ export const describeSketch = async (repo: string, name: string, shortName = '')
     }
     for (const child of sketch.root.children) walk(child, 0)
     for (const note of sketch.root.notes) out.push(`note: ${note.text}`)
+
+    // Annotations, level by level, each level named by the card it is in.
+    const cards = new Map<string, SketchCard>()
+    const levels: string[] = []
+    const gather = (card: SketchCard): void => {
+      cards.set(card.id, card)
+      levels.push(card.id)
+      card.children.forEach(gather)
+    }
+    gather(sketch.root)
+    const said = annotationWords(sketch.layers ?? [], levels, (id) => {
+      const card = cards.get(id)
+      return !card ? 'a card since removed' : card.level === 'project' ? `the project ${card.name}` : named(card)
+    })
+    if (said.length) out.push('', ...said)
     return out.join('\n').trimEnd()
   }
   return `There is no sketch called "${name}" in ${projects.length ? projects.map((p) => p.shortName).join(', ') : 'any project this repo names'}. Call \`sketches\` to see them.`

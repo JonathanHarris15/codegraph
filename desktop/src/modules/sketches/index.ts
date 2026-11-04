@@ -1,5 +1,5 @@
 // codegraph: module sketches
-// codegraph: front door useFolder, sketchesFolder, listSketches, newSketch, readSketch, writeSketch, removeSketch, keepMockup, mockupFile, mockupUrl, blankCard, Sketch, SketchCard, SketchWire, Note, Level, CardState
+// codegraph: front door useFolder, sketchesFolder, listSketches, newSketch, readSketch, writeSketch, removeSketch, withNotesAsAnnotations, keepMockup, mockupFile, mockupUrl, blankCard, Sketch, SketchCard, SketchWire, Note, Level, CardState
 import { randomUUID } from 'node:crypto'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, extname, join } from 'node:path'
@@ -84,4 +84,26 @@ export const mockupUrl = (projectId: string, sketchId: string, name: string): st
   const file = mockupFile(projectId, sketchId, name)
   if (!name || !existsSync(file)) return ''
   return `data:image/${KINDS[extname(file).toLowerCase()] ?? 'png'};base64,${readFileSync(file).toString('base64')}`
+}
+
+/** A sketch with the notes drawn on its levels before annotations existed
+ *  turned into sticky notes on a layer of their own, where they now live. */
+export const withNotesAsAnnotations = (sketch: Sketch): Sketch => {
+  const items: NonNullable<Sketch['layers']>[number]['items'] = []
+  const strip = (card: SketchCard): SketchCard => {
+    for (const note of card.notes ?? [])
+      items.push({ id: note.id, at: card.id, kind: 'sticky', x: note.x, y: note.y, w: 180, h: 110, text: note.text, color: 'yellow' })
+    return { ...card, notes: [], children: card.children.map(strip) }
+  }
+  const root = strip(sketch.root)
+  if (!items.length) return sketch
+  const layers = sketch.layers ?? []
+  const kept = layers.find((l) => l.name === 'Notes')
+  return {
+    ...sketch,
+    root,
+    layers: kept
+      ? layers.map((l) => (l === kept ? { ...l, items: [...l.items, ...items] } : l))
+      : [...layers, { id: `notes-${sketch.id.slice(0, 8)}`, name: 'Notes', shown: true, snaps: true, items }],
+  }
 }

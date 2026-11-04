@@ -1,5 +1,6 @@
 // codegraph: module sketches
 // codegraph: store sketches as Sketch
+import type { Layer } from '../annotations/index.js'
 
 export type Level = 'project' | 'system' | 'container' | 'component' | 'code'
 
@@ -57,6 +58,8 @@ export type Sketch = {
   /** Where it started: '' for a blank one, or the map it was a snapshot of. */
   from: string
   root: SketchCard
+  /** What is drawn over it that is not the diagram; left out, none. */
+  layers?: Layer[]
 }
 
 export const blankCard = (id: string, name: string, level: Level, kind = ''): SketchCard => ({

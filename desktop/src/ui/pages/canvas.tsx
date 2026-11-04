@@ -3,6 +3,7 @@ import { Pencil } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SketchListed } from '../../features/list-sketches.js'
 import type { MapShown, SystemShown } from '../../features/show-map.js'
+import type { Layer } from '../../modules/annotations/index.js'
 import type { Point } from '../../modules/reader/index.js'
 import type { Sketch, SketchCard } from '../../modules/sketches/index.js'
 import { Button, ThemeSwitch } from '../design-system/kit.js'
@@ -63,6 +64,37 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
   const draftSaving = useRef<ReturnType<typeof setTimeout> | null>(null)
   const latestDraft = useRef<Drafting | null>(null)
 
+  // The annotations over the map: kept with the project as they change, with
+  // a history of their own to undo, since the map itself never changes here.
+  const [mapLayers, setMapLayers] = useState<Layer[]>([])
+  const layersPast = useRef<Layer[][]>([])
+  const layersFuture = useRef<Layer[][]>([])
+  const layersStep = useRef<{ step: string; at: number }>({ step: '', at: 0 })
+  const layersNow = useRef<Layer[]>([])
+  layersNow.current = mapLayers
+  const layersSaving = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const keepLayers = (next: Layer[]): void => {
+    setMapLayers(next)
+    if (layersSaving.current) clearTimeout(layersSaving.current)
+    layersSaving.current = setTimeout(() => {
+      layersSaving.current = null
+      void window.codegraph.saveAnnotations(projectId, layersNow.current)
+    }, SAVE_AFTER_MS)
+  }
+  const changeLayers = (next: Layer[], step = ''): void => {
+    const joins =
+      step === 'join' || (step !== '' && layersStep.current.step === step && Date.now() - layersStep.current.at < 900)
+    if (!joins) {
+      layersPast.current = [...layersPast.current.slice(-199), layersNow.current]
+      layersFuture.current = []
+    }
+    layersStep.current = { step, at: Date.now() }
+    keepLayers(next)
+  }
+  useEffect(() => {
+    void window.codegraph.showAnnotations(projectId).then(setMapLayers)
+  }, [projectId])
+
   const pointsNow = useRef(points)
   pointsNow.current = points
   const load = useCallback(
@@ -96,6 +128,32 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
       }),
     [projectId, load],
   )
+
+  // Undo and redo for the map's annotations, while the map is what is shown.
+  const onMap = !sketch && !drafting
+  useEffect(() => {
+    if (!onMap) return
+    const keys = (event: KeyboardEvent): void => {
+      const target = event.target as HTMLElement | null
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
+      if (!(event.ctrlKey || event.metaKey)) return
+      const key = event.key.toLowerCase()
+      const back = key === 'z' && !event.shiftKey
+      const forward = key === 'y' || (key === 'z' && event.shiftKey)
+      if (!back && !forward) return
+      const from = back ? layersPast : layersFuture
+      const to = back ? layersFuture : layersPast
+      const step = from.current.at(-1)
+      if (!step) return
+      event.preventDefault()
+      from.current = from.current.slice(0, -1)
+      to.current = [...to.current, layersNow.current]
+      layersStep.current = { step: '', at: 0 }
+      keepLayers(step)
+    }
+    window.addEventListener('keydown', keys)
+    return () => window.removeEventListener('keydown', keys)
+  }, [onMap])
 
   const trail = shown ? walk(shown.card, path) : []
   const system = trail[1]
@@ -454,6 +512,7 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
             root={shown.card}
             path={path}
             onPath={setPath}
+            annotating={{ layers: mapLayers, onChange: changeLayers }}
             agent={working?.agent ? { card: working.agent.card, words: working.agent.words } : null}
             onStartSketch={() => void startOne(true)}
           />

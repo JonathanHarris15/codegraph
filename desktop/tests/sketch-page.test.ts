@@ -140,16 +140,16 @@ describe('drawing a sketch in the real app', () => {
     expect(await shown(wire('notes calls billing'))).toContain('billing')
   })
 
-  it('leaves a note with a double-click on the board', async () => {
+  it('leaves a sticky note with a double-click on the board', async () => {
     const at = await spot(0.45, 0.18)
     await page.mouse.dblclick(at.x, at.y)
     await page.getByRole('dialog', { name: 'Add to the board' }).waitFor({ timeout: PATIENCE })
     await page.keyboard.type('note')
     await page.keyboard.press('Enter')
-    await page.getByRole('textbox', { name: 'Note', exact: true }).waitFor({ timeout: PATIENCE })
+    await page.getByRole('textbox', { name: 'Annotation text' }).waitFor({ timeout: PATIENCE })
     await page.keyboard.type('Which search service?')
     await page.keyboard.press('Escape')
-    expect(await shown(page.locator('.map-note'))).toBe('Which search service?')
+    expect(await shown(page.locator('.map-anno--sticky'))).toBe('Which search service?')
     await settle()
     await picture('sketch-1-drawn')
   })
@@ -157,9 +157,9 @@ describe('drawing a sketch in the real app', () => {
   it('undoes and redoes', async () => {
     await page.keyboard.press('Control+z')
     await page.waitForTimeout(200)
-    expect(await page.locator('.map-note').count()).toBe(0)
+    expect(await page.locator('.map-anno--sticky').count()).toBe(0)
     await page.keyboard.press('Control+Shift+z')
-    expect(await shown(page.locator('.map-note'))).toBe('Which search service?')
+    expect(await shown(page.locator('.map-anno--sticky'))).toBe('Which search service?')
   })
 
   it('takes a picked card away with Delete, and Undo brings it back', async () => {
@@ -279,7 +279,7 @@ describe('drawing a sketch in the real app', () => {
     await page.getByRole('button', { name: /^Sketches/ }).click()
     await page.getByRole('button', { name: /^Search/ }).click()
     expect(await shown(wire('notes calls search to find notes by their words'))).toContain('notes')
-    expect(await shown(page.locator('.map-note'))).toBe('Which search service?')
+    expect(await shown(page.locator('.map-anno--sticky'))).toBe('Which search service?')
   })
 
   it('draws inside a card, from the bar over it', async () => {

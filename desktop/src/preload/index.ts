@@ -14,6 +14,7 @@ import type { Switched } from '../features/switch-branch.js'
 import type { SketchOpened } from '../features/open-sketch.js'
 import type { Card, MapShown } from '../features/show-map.js'
 import type { DrawnCard, Point } from '../modules/reader/index.js'
+import type { Layer } from '../modules/annotations/index.js'
 import type { Sketch } from '../modules/sketches/index.js'
 
 /** What the window may ask for: one call per feature, nothing else. */
@@ -30,6 +31,8 @@ export type Api = {
   listPoints: (projectId: string, systemId: string) => Promise<Point[]>
   switchBranch: (projectId: string, systemId: string, branch: string) => Promise<Switched>
   chooseBranch: (projectId: string, systemId: string, branch: string) => Promise<void>
+  showAnnotations: (projectId: string) => Promise<Layer[]>
+  saveAnnotations: (projectId: string, layers: Layer[]) => Promise<void>
   listSketches: (projectId: string) => Promise<SketchListed[]>
   startSketch: (projectId: string, name: string, snapshot?: Card) => Promise<Sketch>
   openSketch: (projectId: string, sketchId: string) => Promise<SketchOpened | null>
@@ -57,6 +60,8 @@ const api: Api = {
   listPoints: (projectId, systemId) => ipcRenderer.invoke('map:points', projectId, systemId),
   switchBranch: (projectId, systemId, branch) => ipcRenderer.invoke('branch:switch', projectId, systemId, branch),
   chooseBranch: (projectId, systemId, branch) => ipcRenderer.invoke('branch:choose', projectId, systemId, branch),
+  showAnnotations: (projectId) => ipcRenderer.invoke('annotations:show', projectId),
+  saveAnnotations: (projectId, layers) => ipcRenderer.invoke('annotations:save', projectId, layers),
   listSketches: (projectId) => ipcRenderer.invoke('sketch:list', projectId),
   startSketch: (projectId, name, snapshot) => ipcRenderer.invoke('sketch:start', projectId, name, snapshot),
   openSketch: (projectId, sketchId) => ipcRenderer.invoke('sketch:open', projectId, sketchId),

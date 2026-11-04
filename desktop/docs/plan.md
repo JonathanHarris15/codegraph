@@ -150,6 +150,24 @@ The agent's tools are `propose` (from a sketch) and `working-on`; the
 Still rough: a proposal is drawn per software system, so a wire between two
 systems is not proposed yet; that comes with checkpoint 6.
 
+## Between checkpoints: annotations
+
+Done after checkpoint 4, at Jonathan's ask. Maps and sketches carry
+annotations (ADR 0009): text, sticky notes, callouts, lines and arrows,
+frames, lists, code blocks, flowchart shapes, containers and shapes, from a
+library beside the tools (A) that is searched by name. Each sits on a layer
+(L), shown or hidden, and each layer says whether it lines up with the
+diagram's cards. An annotation dropped by a card keeps beside it as the card
+moves; a line's end holds the card or annotation it lands on. Cards never
+line up with annotations. Frames and boxes sit behind the cards and are
+picked by their edge or title, so the board inside them still pans. A
+picked annotation gets a bar to colour, duplicate or delete it, and Ctrl+Z
+undoes on the map as in a sketch. The MCP's `map` and `sketch` tools say
+what is drawn and where, and that it is not the architecture.
+
+A sketch's old notes became sticky notes on a Notes layer, and every way to
+add a note now adds one.
+
 ## Checkpoint 5: Codegraph sets itself up
 
 Run setup on this repo. The desktop app is reshaped and tagged. Legacy shows

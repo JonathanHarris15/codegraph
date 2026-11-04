@@ -1,6 +1,6 @@
 // codegraph: feature open-sketch in workspace
 // codegraph: uses sketches
-import { mockupUrl, readSketch, type Sketch, type SketchCard } from '../modules/sketches/index.js'
+import { mockupUrl, readSketch, withNotesAsAnnotations, type Sketch, type SketchCard } from '../modules/sketches/index.js'
 
 export type SketchOpened = {
   sketch: Sketch
@@ -10,8 +10,9 @@ export type SketchOpened = {
 
 /** One sketch, with its mockups, for the canvas to draw and edit. */
 export const openSketch = async (projectId: string, sketchId: string): Promise<SketchOpened | null> => {
-  const sketch = readSketch(projectId, sketchId)
-  if (!sketch) return null
+  const kept = readSketch(projectId, sketchId)
+  if (!kept) return null
+  const sketch = withNotesAsAnnotations(kept)
   const mockups: Record<string, string> = {}
   const walk = (card: SketchCard): void => {
     const url = mockupUrl(projectId, sketchId, card.mockup)

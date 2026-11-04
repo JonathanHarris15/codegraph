@@ -143,6 +143,19 @@ agent builds until the map matches it. A branch has at most one. A person can
 draw one directly, or an agent can make one from a sketch.
 _Avoid_: plan, request, spec, ticket, sketch
 
+**Annotation**:
+Text, a sticky note, a shape or a line drawn over a map or a sketch for people
+and agents to read. It is not part of the diagram and never changes the code.
+It can keep beside a card, or point at one, but no card ever lines up with
+or moves for an annotation.
+_Avoid_: note (for anything but a sticky note), comment, markup, decoration
+
+**Layer**:
+A set of annotations shown or hidden together. Each says whether its
+annotations line up with the diagram's cards. The diagram itself is never on
+a layer and is always shown.
+_Avoid_: overlay, group, sheet
+
 **Crossed out**:
 A card or wire a proposal takes away. Its wires go with it. Over the map it
 stays in view, struck through, until the code no longer has it.

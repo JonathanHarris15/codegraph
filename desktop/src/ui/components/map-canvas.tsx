@@ -11,6 +11,12 @@ import {
   type RefObject,
 } from 'react'
 import { sentenceOf, type Said } from '../../modules/wording/index.js'
+import { Copy as CopyIcon, Trash2 } from 'lucide-react'
+import type { Layer } from '../../modules/annotations/index.js'
+import { addLayer, changeAnnotation, changeLayer, duplicateAnnotations, layerOf, placeAnnotation, removeAnnotations, removeLayer } from './annotation-edits.js'
+import { AnnotationLayer, AnnotationPlacer, drawnOn } from './annotation-layer.js'
+import { AnnotationLibrary, LayersPanel } from './annotation-library.js'
+import { COLOR_NAMES, COLORS } from './annotation-shapes.js'
 import { CanvasMenu, type MenuItem } from './canvas-menu.js'
 import { CardPalette } from './card-palette.js'
 import { ContextBar, type Picking } from './context-bar.js'
@@ -92,6 +98,13 @@ export type Drawing = {
 }
 
 const STEP_MS = 320
+
+/** What a map or a sketch hands the canvas so annotations can be drawn over
+ *  it: its layers, and where changes to them go. */
+export type Annotating = {
+  layers: Layer[]
+  onChange: (layers: Layer[], step?: string) => void
+}
 
 /** Whether a wheel event comes from a trackpad rather than a mouse wheel.
  *  A wheel moves in whole notches, straight up and down; a trackpad sends
@@ -497,6 +510,7 @@ export const MapCanvas = ({
   path,
   onPath,
   drawing,
+  annotating,
   agent,
   onStartSketch,
 }: {
@@ -504,6 +518,8 @@ export const MapCanvas = ({
   path: string[]
   onPath: (path: string[]) => void
   drawing?: Drawing
+  /** Left out, no annotations are shown or drawn. */
+  annotating?: Annotating
   /** Where an agent says it is working, to mark on the card or the card it
    *  is inside. */
   agent?: { card: string; words: string } | null
@@ -523,6 +539,28 @@ export const MapCanvas = ({
     })
   /** A kind waiting to be placed with a click on the board. */
   const [armed, setArmed] = useState('')
+  // Annotations: the library and the layers list, a shape waiting to be put
+  // down, what is picked and what is being typed into, and which layer new
+  // ones go on.
+  const [annoOpen, setAnnoOpen] = useState(false)
+  const [layersOpen, setLayersOpen] = useState(false)
+  const [annoArmed, setAnnoArmed] = useState('')
+  const [annoPicked, setAnnoPicked] = useState<string[]>([])
+  const [annoEditing, setAnnoEditing] = useState('')
+  const [activeLayer, setActiveLayer] = useState('')
+  const [annoFresh, setAnnoFresh] = useState('')
+
+  /** The layer new annotations go on: the one picked, else the top one. */
+  const layerFor = (layers: Layer[]): [Layer[], string] => {
+    if (layers.some((l) => l.id === activeLayer)) return [layers, activeLayer]
+    if (layers.length) return [layers, layers[layers.length - 1]!.id]
+    return addLayer([], 'Annotations')
+  }
+
+  /** The layers to put a new annotation into, and which: worked out once a
+   *  render, since a first layer made twice would be two different layers. */
+  const ready = useMemo(() => (annotating ? layerFor(annotating.layers) : ([[], ''] as [Layer[], string])), [annotating?.layers, activeLayer])
+
   /** A kind picked up from the library, following the pointer. */
   const [lifting, setLifting] = useState<{ kind: string; x: number; y: number; moved: boolean } | null>(null)
   const [shutOverview, setShutOverview] = useState(true)
@@ -1004,14 +1042,26 @@ export const MapCanvas = ({
     [drawing],
   )
 
+  /** A note is a sticky note: an annotation, put on the layer in use and
+   *  opened for typing. Without annotations, the sketch's own note. */
   const noteAt = useCallback(
     (at: Spot): void => {
+      if (annotating) {
+        const [layers, layerId] = ready
+        const [next, id] = placeAnnotation(layers, layerId, focus.id, 'sticky', { x: at.x + 90, y: at.y + 55 })
+        annotating.onChange(next)
+        drawing?.onSelect([])
+        setAnnoPicked([id])
+        setAnnoFresh(id)
+        setTimeout(() => setAnnoEditing(id), 0)
+        return
+      }
       if (!drawing) return
       const id = drawing.onNote(at)
       drawing.onSelect([id])
       writeSoon(id)
     },
-    [drawing],
+    [drawing, annotating, focus.id, ready],
   )
 
   useEffect(() => {
@@ -1028,7 +1078,9 @@ export const MapCanvas = ({
       if (typing(event.target)) return
       const plain = !event.ctrlKey && !event.metaKey && !event.altKey
       if (event.key === 'Escape') {
-        if (quick) setQuick(null)
+        if (annoArmed) setAnnoArmed('')
+        else if (annoPicked.length) setAnnoPicked([])
+        else if (quick) setQuick(null)
         else if (armed) setArmed('')
         else if (tool !== 'pick') setTool('pick')
         else if (selected.length) drawing?.onSelect([])
@@ -1044,6 +1096,17 @@ export const MapCanvas = ({
         if (event.key === '0') fit()
         else zoomBy(event.key === '-' ? 0.8 : 1.25)
         return
+      }
+      if (plain && annotating && !(drawing && selected.length) && !annoPicked.length) {
+        if (event.key === 'a' || event.key === 'A') {
+          setAnnoOpen((open) => !open)
+          setAnnoArmed('')
+          return
+        }
+        if (event.key === 'l' || event.key === 'L') {
+          setLayersOpen((open) => !open)
+          return
+        }
       }
       if (!drawing || !plain) return
       // With one thing picked, typing writes its words, the way a diagram
@@ -1082,6 +1145,19 @@ export const MapCanvas = ({
     const v = seen.current
     return { x: (event.clientX - rect.left - v.x) / v.k, y: (event.clientY - rect.top - v.y) / v.k }
   }
+  /** A spot on the screen as a spot on the board. */
+  const toWorld = (clientX: number, clientY: number): Spot => worldOf({ clientX, clientY })
+
+  /** The diagram's cards on this level, as annotations see them: something
+   *  to line up with and keep beside, never the other way round. */
+  const annoCards = useMemo(() => placed.map((p) => ({ id: p.card.id, box: p.box })), [placed])
+
+
+  // Picking a card lets go of any annotation, and the other way round.
+  useEffect(() => {
+    if (selected.length) setAnnoPicked([])
+  }, [selected.length])
+
   /** A spot on the board, in the board's own pixels, kept far enough from its
    *  edges that a menu opened there fits. */
   const screenOf = (event: { clientX: number; clientY: number }): Spot => {
@@ -1203,6 +1279,7 @@ export const MapCanvas = ({
   }
 
   const down = (event: PointerEvent<HTMLDivElement>): void => {
+    setAnnoPicked([])
     setQuick(null)
     if (editing) finishEditing(true)
     setMenu(null)
@@ -1583,8 +1660,28 @@ export const MapCanvas = ({
         onStartSketch={() => onStartSketch?.()}
         onFit={fit}
         onOverview={() => setShutOverview(!shutOverview)}
+        annotations={annoOpen}
+        layers={layersOpen}
+        onAnnotations={() => {
+          setAnnoOpen(!annoOpen)
+          setAnnoArmed('')
+        }}
+        onLayers={() => setLayersOpen(!layersOpen)}
       />
-      {drawing && palette && childLevel !== focus.level ? (
+      {annotating && annoOpen ? (
+        <AnnotationLibrary
+          armed={annoArmed}
+          onArm={(kind) => {
+            setArmed('')
+            setTool('pick')
+            setAnnoArmed(kind)
+          }}
+          onClose={() => {
+            setAnnoOpen(false)
+            setAnnoArmed('')
+          }}
+        />
+      ) : drawing && palette && childLevel !== focus.level ? (
         <CardPalette
           level={childLevel}
           armed={armed}
@@ -1723,6 +1820,30 @@ export const MapCanvas = ({
             </div>
           ) : null}
 
+          {annotating ? (
+            <AnnotationLayer
+              part="behind"
+              layers={annotating.layers}
+              level={focus.id}
+              shift={shift}
+              cards={annoCards}
+              k={view.k}
+              selected={annoPicked}
+              editing={annoEditing}
+              fresh={annoFresh}
+              toWorld={toWorld}
+              onSelect={(ids) => {
+                if (ids.length) drawing?.onSelect([])
+                setAnnoPicked(ids)
+              }}
+              onEdit={(id) => {
+                if (!id) setAnnoFresh('')
+                setAnnoEditing(id)
+              }}
+              onChange={annotating.onChange}
+            />
+          ) : null}
+
           {placed.map((p) => {
             const picked = (live.picked ?? selected).includes(p.card.id)
             return (
@@ -1797,6 +1918,30 @@ export const MapCanvas = ({
               onEdit={() => wire.id && startEditing(wire.id)}
             />
           ))}
+
+          {annotating ? (
+            <AnnotationLayer
+              part="front"
+              layers={annotating.layers}
+              level={focus.id}
+              shift={shift}
+              cards={annoCards}
+              k={view.k}
+              selected={annoPicked}
+              editing={annoEditing}
+              fresh={annoFresh}
+              toWorld={toWorld}
+              onSelect={(ids) => {
+                if (ids.length) drawing?.onSelect([])
+                setAnnoPicked(ids)
+              }}
+              onEdit={(id) => {
+                if (!id) setAnnoFresh('')
+                setAnnoEditing(id)
+              }}
+              onChange={annotating.onChange}
+            />
+          ) : null}
 
           {/* The two ends of a picked wire, to drag onto another card. */}
           {pickedWire && pickedWire.wire.id ? (
@@ -1966,6 +2111,131 @@ export const MapCanvas = ({
             />
           ) : null}
         </div>
+
+        {annotating && annoArmed ? (
+          <AnnotationPlacer
+            kind={annoArmed}
+            layers={ready[0]}
+            layerId={ready[1]}
+            level={focus.id}
+            shift={shift}
+            cards={annoCards}
+            toWorld={toWorld}
+            transform={`translate(${view.x}px, ${view.y}px) scale(${view.k})`}
+            onPlaced={(next, id, keepGoing) => {
+              annotating.onChange(next)
+              setActiveLayer(layerOf(next, id)?.id ?? '')
+              drawing?.onSelect([])
+              setAnnoPicked([id])
+              if (!keepGoing) setAnnoArmed('')
+              setAnnoFresh(id)
+              if (['text', 'sticky', 'callout', 'process', 'decision', 'terminator', 'list', 'code', 'frame'].includes(annoArmed) && !keepGoing)
+                setTimeout(() => setAnnoEditing(id), 0)
+            }}
+          />
+        ) : null}
+
+        {annotating && annoArmed ? (
+          <div className="map-hint" role="status">
+            Click to put it down, or drag to size it. Hold Shift to put down more.
+            <span className="map-hint-keys">
+              <kbd>Esc</kbd> to stop
+            </span>
+          </div>
+        ) : null}
+
+        {annotating && annoPicked.length && !annoEditing ? (() => {
+          const shown = drawnOn(annotating.layers, focus.id, shift, annoCards).filter((d) => annoPicked.includes(d.a.id))
+          if (!shown.length) return null
+          const top = Math.min(...shown.map((d) => d.box.y))
+          const left = Math.min(...shown.map((d) => d.box.x))
+          const right = Math.max(...shown.map((d) => d.box.x + d.box.w))
+          const at = { x: view.x + ((left + right) / 2) * view.k, y: view.y + top * view.k - 12 }
+          const one = shown.length === 1 ? shown[0]! : null
+          return (
+            <div
+              className="map-context map-anno-bar"
+              style={{ left: Math.max(160, at.x), top: Math.max(44, at.y) }}
+              role="toolbar"
+              aria-label="What to do with the annotation"
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              {COLORS.map((color) => (
+                <button
+                  key={color || 'none'}
+                  type="button"
+                  className={`map-anno-swatch map-anno-fill--${color || 'none'}${one?.a.color === color ? ' map-anno-swatch--on' : ''}`}
+                  aria-label={`Colour: ${COLOR_NAMES[color]}`}
+                  title={COLOR_NAMES[color]}
+                  onClick={() => {
+                    let next = annotating.layers
+                    for (const d of shown) next = changeAnnotation(next, d.a.id, { color })
+                    annotating.onChange(next)
+                  }}
+                />
+              ))}
+              <span className="map-context-rule" />
+              {one ? (
+                <span className="map-anno-bar-layer" title="The layer it is on">
+                  {one.layer.name}
+                </span>
+              ) : null}
+              <button
+                type="button"
+                className="map-act"
+                aria-label="Duplicate (Ctrl+D)"
+                title="Duplicate (Ctrl+D)"
+                onClick={() => {
+                  const [next, made] = duplicateAnnotations(annotating.layers, annoPicked)
+                  annotating.onChange(next)
+                  setAnnoPicked(made)
+                }}
+              >
+                <CopyIcon size={15} />
+              </button>
+              <button
+                type="button"
+                className="map-act map-act--danger"
+                aria-label="Delete (Delete)"
+                title="Delete (Delete)"
+                onClick={() => {
+                  annotating.onChange(removeAnnotations(annotating.layers, annoPicked))
+                  setAnnoPicked([])
+                }}
+              >
+                <Trash2 size={15} />
+              </button>
+            </div>
+          )
+        })() : null}
+
+        {annotating && layersOpen ? (
+          <LayersPanel
+            layers={annotating.layers}
+            active={layerFor(annotating.layers)[1]}
+            onActive={setActiveLayer}
+            onToggle={(id) => {
+              const layer = annotating.layers.find((l) => l.id === id)
+              if (layer) annotating.onChange(changeLayer(annotating.layers, id, { shown: !layer.shown }))
+              setAnnoPicked([])
+            }}
+            onSnaps={(id) => {
+              const layer = annotating.layers.find((l) => l.id === id)
+              if (layer) annotating.onChange(changeLayer(annotating.layers, id, { snaps: !layer.snaps }))
+            }}
+            onRename={(id, name) => annotating.onChange(changeLayer(annotating.layers, id, { name }), `layer:${id}`)}
+            onAdd={() => {
+              const [next, id] = addLayer(annotating.layers, `Layer ${annotating.layers.length + 1}`)
+              annotating.onChange(next)
+              setActiveLayer(id)
+            }}
+            onRemove={(id) => {
+              annotating.onChange(removeLayer(annotating.layers, id))
+              setAnnoPicked([])
+            }}
+            onClose={() => setLayersOpen(false)}
+          />
+        ) : null}
 
         {picking ? (
           <ContextBar

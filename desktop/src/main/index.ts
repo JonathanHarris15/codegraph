@@ -2,6 +2,7 @@
 import { join } from 'node:path'
 import { BrowserWindow, Menu, app, shell } from 'electron'
 import { useFolder as useAgentsFolder } from '../modules/agents/index.js'
+import { useFolder as useAnnotationsFolder } from '../modules/annotations/index.js'
 import { useFolder as useGithubFolder, useKeystore } from '../modules/github/index.js'
 import { appFolder, devRendererUrl, keystore } from '../modules/machine/index.js'
 import { useFolder as useProjectsFolder } from '../modules/projects/index.js'
@@ -15,6 +16,7 @@ const wireModules = async (): Promise<void> => {
   useProjectsFolder(home)
   useSketchesFolder(home)
   useAgentsFolder(home)
+  useAnnotationsFolder(home)
   useGithubFolder(home)
 
   const locked = await keystore()

@@ -31,7 +31,8 @@ describe('saving what was drawn', () => {
     expect(saved.updatedAt >= sketch.createdAt).toBe(true)
     const opened = await openSketch(projectId, sketch.id)
     expect(opened?.sketch.name).toBe('Search, for real')
-    expect(opened?.sketch.root.notes).toEqual([{ id: 'n', text: 'needs a page', x: 1, y: 2 }])
+    // A note is kept, and opens as a sticky note on the Notes layer.
+    expect(opened?.sketch.layers?.[0]?.items[0]).toMatchObject({ id: 'n', kind: 'sticky', text: 'needs a page', x: 1, y: 2 })
     expect((await listSketches(projectId)).map((s) => s.name)).toEqual(['Search, for real'])
   })
 

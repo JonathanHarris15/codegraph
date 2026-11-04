@@ -122,7 +122,16 @@ export const SketchEditor = ({
     (next: (focus: SketchCard) => SketchCard, step = '', quiet = false): void => {
       const was = now.current
       const root = changeAt(was.root, here, (f) => stamp(makeRoom(next(f))))
-      const changed = { ...was, root }
+      keep({ ...was, root }, step, quiet)
+    },
+    [here.join('/'), onChange, known],
+  )
+
+  /** A changed sketch kept, and as a step to undo unless it is quiet. A
+   *  change named the same as the last, soon after it, joins that step. */
+  const keep = useCallback(
+    (changed: Sketch, step = '', quiet = false): void => {
+      const was = now.current
       if (!quiet) {
         // 'join' joins whatever step came last, however long ago.
         const joins =
@@ -137,7 +146,7 @@ export const SketchEditor = ({
       now.current = changed
       onChange(changed)
     },
-    [here.join('/'), onChange, known],
+    [onChange],
   )
 
   const travel = useCallback(
@@ -292,6 +301,11 @@ export const SketchEditor = ({
         root={sketch.root}
         path={path}
         onPath={onPath}
+        annotating={
+          proposing
+            ? undefined
+            : { layers: sketch.layers ?? [], onChange: (layers, step) => keep({ ...now.current, layers }, step ?? '') }
+        }
         drawing={{
           selected,
           mockups,
