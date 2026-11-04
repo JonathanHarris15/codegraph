@@ -25,7 +25,7 @@ export type DrawnCard = {
   x?: number
   y?: number
   children: DrawnCard[]
-  wires: { from: string; to: string; kind: string; words: string; state?: string }[]
+  wires: { from: string; to: string; kind: string; words: string; state?: string; x?: number; y?: number }[]
 }
 
 export type FromDrawing = {
@@ -128,6 +128,10 @@ export const proposalFrom = (system: DrawnCard, map: SystemMap, how: FromDrawing
       const from = nameOf.get(w.from)
       const to = nameOf.get(w.to)
       if (!from || !to || !WIRES.has(w.kind)) continue
+      // Where a person dragged the wire's sentence, kept the way a card's
+      // spot is: by the names it reads as, so it survives being read again.
+      if (w.x !== undefined && w.y !== undefined)
+        proposal.layout[`${from}>${w.kind}>${to}`] = [Math.round(w.x), Math.round(w.y)]
       drawnWires.push({ from, to, kind: w.kind as WireKind, words: w.words, ...(w.state === 'gone' ? { gone: true } : {}) })
     }
   const listedWire = (w: ProposedWire): boolean =>

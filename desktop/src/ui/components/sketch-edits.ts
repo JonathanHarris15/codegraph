@@ -1,10 +1,10 @@
 // codegraph: component sketch-editor
 import type { Level, Note, SketchCard, SketchWire } from '../../modules/sketches/index.js'
 import { blankCard } from '../../modules/sketches/schema.js'
+import type { Arrangement } from '../../modules/arrangements/schema.js'
 import { sizeOf, wordsWidth } from './map-layout.js'
 
-/** Where every card on a level sits, by id, in the level's own space. */
-export type Arrangement = { id: string; x: number; y: number }[]
+export type { Arrangement }
 
 /** The level drawn inside a card of each level. */
 export const levelInside: Record<Level, Level> = {
@@ -134,7 +134,7 @@ export const placeNote = (focus: SketchCard, at: { x: number; y: number }): [Ske
   return [{ ...focus, notes: [...focus.notes, note] }, note.id]
 }
 
-/** Moves cards and notes to where they were put down. */
+/** Moves cards, notes and wires' sentences to where they were put down. */
 export const moveThings = (focus: SketchCard, moves: Arrangement): SketchCard => {
   const to = new Map(moves.map((m) => [m.id, m]))
   return {
@@ -146,6 +146,10 @@ export const moveThings = (focus: SketchCard, moves: Arrangement): SketchCard =>
     notes: focus.notes.map((n) => {
       const m = to.get(n.id)
       return m ? { ...n, x: Math.round(m.x), y: Math.round(m.y) } : n
+    }),
+    wires: focus.wires.map((w) => {
+      const m = to.get(w.id)
+      return m ? { ...w, x: Math.round(m.x), y: Math.round(m.y) } : w
     }),
   }
 }

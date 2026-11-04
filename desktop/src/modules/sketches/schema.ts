@@ -13,6 +13,10 @@ export type SketchWire = {
   words: string
   /** Over the map, drawing a proposal: drawn new, or crossed out. */
   state?: CardState
+  /** Where a person put its sentence, by its middle; left out, the canvas
+   *  lays it out itself. */
+  x?: number
+  y?: number
 }
 
 /** How a card or wire drawn over the map stands: drawn new and not built

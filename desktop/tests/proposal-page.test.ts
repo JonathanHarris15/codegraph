@@ -71,9 +71,9 @@ afterAll(async () => {
 
 describe('watching a proposal get built', () => {
   it('draws the proposal over the map: what is to build dashed, what is crossed out marked', async () => {
-    await page.getByRole('button', { name: 'Open notes' }).click()
+    await page.getByRole('button', { name: 'Open notes' }).dblclick()
     expect(await shown(meter())).toContain('0 of 5')
-    await page.getByRole('button', { name: 'Open web' }).click()
+    await page.getByRole('button', { name: 'Open web' }).dblclick()
     await settle()
     expect(await shown(onMap('web:page:search').locator('.map-state'))).toBe('To build')
     expect(await shown(onMap('web:trigger:nightly-tidy').locator('.map-state'))).toBe('To remove')
@@ -123,8 +123,8 @@ describe('drawing a proposal of your own', () => {
   it('asks for a branch when the repo is on its main line, and makes it', async () => {
     await page.getByRole('button', { name: '← Projects' }).click()
     await page.getByRole('button', { name: 'Open Jots', exact: true }).dblclick()
-    await page.getByRole('button', { name: 'Open jots' }).click()
-    await page.getByRole('button', { name: 'Open web' }).click()
+    await page.getByRole('button', { name: 'Open jots' }).dblclick()
+    await page.getByRole('button', { name: 'Open web' }).dblclick()
     await settle()
     await page.getByRole('button', { name: 'Propose a change' }).click()
     const ask = page.getByRole('form', { name: 'Make a branch for the proposal' })

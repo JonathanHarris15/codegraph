@@ -50,7 +50,7 @@ describe('drawing a proposal over the map', () => {
     const draft = opened.draft
     const notes = web(draft).children.find((c) => c.kind === 'module')!
     web(draft).children.push({ ...blankCard('new', 'search', 'component', 'page'), at: '/search', state: 'proposed', x: 40, y: 300 })
-    web(draft).wires.push({ id: 'w', from: 'new', to: notes.id, kind: 'reads', words: 'looks through the notes', state: 'proposed' })
+    web(draft).wires.push({ id: 'w', from: 'new', to: notes.id, kind: 'reads', words: 'looks through the notes', state: 'proposed', x: 150, y: 260 })
     web(draft).children.find((c) => c.name === 'nightly-tidy')!.state = 'gone'
     expect(await saveProposal(projectId, systemId, draft, 'Let people search')).toEqual({ ok: true, kept: true })
 
@@ -58,6 +58,14 @@ describe('drawing a proposal over the map', () => {
     expect(map.proposal?.says).toBe('Let people search')
     expect(map.proposal?.base).toBe(git(repo, 'rev-parse', 'HEAD'))
     expect(map.proposal?.layout['web/page search']).toEqual([40, 300])
+    // A sentence dragged out of the way is kept by the names it reads as.
+    expect(map.proposal?.layout['web/page search>reads>web/module notes']).toEqual([150, 260])
+    const again = await openProposal(projectId, systemId)
+    if (!again.ok) throw new Error(again.why)
+    expect(web(again.draft).wires.find((w) => w.kind === 'reads' && w.words === 'looks through the notes')).toMatchObject({
+      x: 150,
+      y: 260,
+    })
     expect((await proposalProgress(repo))?.items.map((i) => `${i.name} ${i.state}`)).toEqual([
       'web/trigger nightly-tidy to remove',
       'web/page search to build',

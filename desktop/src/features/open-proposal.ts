@@ -20,6 +20,14 @@ export type ProposalOpened =
       mockups: Record<string, string>
     }
 
+/** What a proposal calls one of the cards inside this one: a container by
+ *  its name, a component by its container and kind as well. */
+const nameOfCard = (holder: Card, id: string): string => {
+  const one = holder.children.find((c) => c.id === id)
+  if (!one) return ''
+  return holder.level === 'system' ? one.name : componentName({ container: holder.name, kind: one.kind, name: one.name })
+}
+
 /** A card of the map as a card to draw on, down to the components: what is
  *  inside them is the agent's to decide. */
 const toDraw = (card: Card, at: Record<string, [number, number]>, name: string): SketchCard => {
@@ -44,14 +52,20 @@ const toDraw = (card: Card, at: Record<string, [number, number]>, name: string):
         : card.children.map((c) =>
             toDraw(c, at, card.level === 'system' ? c.name : componentName({ container: card.name, kind: c.kind, name: c.name })),
           ),
-    wires: card.wires.map((w) => ({
-      id: `${w.from}>${w.kind}>${w.to}`,
-      from: w.from,
-      to: w.to,
-      kind: w.kind,
-      words: w.words,
-      ...(w.state ? { state: w.state as CardState } : {}),
-    })),
+    wires: card.wires.map((w) => {
+      // A wire's sentence is kept by the names it reads as, like a card's
+      // spot, since the cards' ids are made afresh each time it is read.
+      const said = at[`${nameOfCard(card, w.from)}>${w.kind}>${nameOfCard(card, w.to)}`]
+      return {
+        id: `${w.from}>${w.kind}>${w.to}`,
+        from: w.from,
+        to: w.to,
+        kind: w.kind,
+        words: w.words,
+        ...(w.state ? { state: w.state as CardState } : {}),
+        ...(said ? { x: said[0], y: said[1] } : {}),
+      }
+    }),
     notes: [],
   }
 }

@@ -55,7 +55,7 @@ const open = async (): Promise<void> => {
   page = await app.firstWindow()
   await page.setViewportSize({ width: 1400, height: 860 })
   await page.getByRole('button', { name: 'Open Notes', exact: true }).dblclick()
-  await page.getByRole('button', { name: 'Open notes' }).click()
+  await page.getByRole('button', { name: 'Open notes' }).dblclick()
   await page.getByRole('button', { name: 'Open web' }).waitFor({ timeout: PATIENCE })
   await page.waitForTimeout(900)
 }

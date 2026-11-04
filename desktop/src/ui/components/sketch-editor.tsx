@@ -390,14 +390,20 @@ export const SketchEditor = ({
                 <dd>Drag from a dot and let go on empty board</dd>
                 <dt>Write on it</dt>
                 <dd>
-                  Double-click, or pick it and start typing; <kbd>Enter</kbd> to finish
+                  Double-click its name, or pick it and start typing; <kbd>Enter</kbd> to finish
                 </dd>
+                <dt>Move things</dt>
+                <dd>Drag a card, a note, or a wire's words out from under each other</dd>
                 <dt>Pick many</dt>
                 <dd>
                   <kbd>Shift</kbd> and drag a box on the board, or <kbd>Shift</kbd>-click
                 </dd>
                 <dt>Draw inside a card</dt>
-                <dd>The bar over it, or zoom into it</dd>
+                <dd>Double-click it, the bar over it, or zoom into it</dd>
+                <dt>Fill the screen with one card</dt>
+                <dd>
+                  Point at it and press <kbd>F</kbd>
+                </dd>
                 <dt>Move the board</dt>
                 <dd>
                   Drag the empty board, or two fingers on a trackpad. With a mouse wheel, <kbd>Ctrl</kbd> scrolls up

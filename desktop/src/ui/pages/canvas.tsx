@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SketchListed } from '../../features/list-sketches.js'
 import type { MapShown, SystemShown } from '../../features/show-map.js'
 import type { Layer } from '../../modules/annotations/index.js'
+import { forgetting, movedTo, type Arrangement } from '../../modules/arrangements/schema.js'
 import type { Point } from '../../modules/reader/index.js'
 import type { Sketch, SketchCard } from '../../modules/sketches/index.js'
 import { Button, ThemeSwitch } from '../design-system/kit.js'
@@ -94,6 +95,19 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
   useEffect(() => {
     void window.codegraph.showAnnotations(projectId).then(setMapLayers)
   }, [projectId])
+
+  // Where the person has moved the map's cards and its wires' sentences,
+  // kept beside the map: the code says nothing about where anything sits.
+  const [spots, setSpots] = useState<Arrangement>([])
+  useEffect(() => {
+    void window.codegraph.showArrangement(projectId).then(setSpots)
+  }, [projectId])
+  const keepSpots = (next: Arrangement): void => {
+    setSpots(next)
+    void window.codegraph.saveArrangement(projectId, next)
+  }
+  const rearrange = (moves: Arrangement): void => keepSpots(movedTo(spots, moves))
+  const forget = (ids: string[]): void => keepSpots(forgetting(spots, ids))
 
   const pointsNow = useRef(points)
   pointsNow.current = points
@@ -526,6 +540,7 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
             root={shown.card}
             path={path}
             onPath={setPath}
+            rearranging={{ spots, onMove: rearrange, onForget: forget }}
             annotating={{ layers: mapLayers, onChange: changeLayers }}
             cardExtra={(card) => {
               const at = card.level === 'system' ? shown.systems.find((s) => s.id === card.id) : undefined

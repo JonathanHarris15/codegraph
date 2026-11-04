@@ -799,6 +799,13 @@ h3 {
   cursor: zoom-in;
 }
 
+/* a card that can be dragged somewhere else: the hand says so, and the
+   double-click that goes into it is what zoom-in used to promise */
+.map-card--movable,
+.map-card--movable[role='button'] {
+  cursor: grab;
+}
+
 .map-card[role='button']:hover,
 .map-card[role='button']:focus-visible {
   border-color: var(--pick-ring);
@@ -2355,6 +2362,74 @@ kbd {
 
 .map-hint-keys {
   opacity: 0.8;
+}
+
+/* ---- the wires of the card under the pointer --------------------------- */
+
+/* hovering a card lights its wires: both the ones that reach it and the ones
+   it reaches, so what it is joined to reads at a glance. The light grows in
+   rather than snapping on, and a dash runs along each wire the way the
+   arrow points */
+.map-wire path:first-child {
+  transition: stroke 140ms ease-out, stroke-width 140ms ease-out;
+}
+
+.map-wire--lit:not(.map-wire--selected) path:first-child {
+  stroke: var(--wire-strong);
+  stroke-width: var(--stroke-wire-strong);
+  opacity: 1;
+}
+
+.map-wire .map-wire-flow {
+  fill: none;
+  stroke: var(--focus-ring);
+  stroke-width: var(--stroke-wire-strong);
+  stroke-linecap: round;
+  stroke-dasharray: 2 16;
+  animation: map-wire-flow 900ms linear infinite, map-wire-glow 240ms ease-out;
+  pointer-events: none;
+}
+
+@keyframes map-wire-flow {
+  from {
+    stroke-dashoffset: 18;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes map-wire-glow {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* the sentence of a lit wire comes forward with it */
+.map-sentence--lit {
+  border-color: var(--wire-strong);
+  box-shadow: var(--shadow-float);
+  z-index: 2;
+}
+
+/* a sentence can be dragged out of the way of whatever it is sitting on */
+.map-sentence--movable {
+  pointer-events: auto;
+  cursor: grab;
+}
+
+/* nothing animates for a person who asked for less movement */
+@media (prefers-reduced-motion: reduce) {
+  .map-wire .map-wire-flow {
+    animation: none;
+  }
+
+  .map-wire path:first-child {
+    transition: none;
+  }
 }
 
 /* a wire under the pointer darkens, so it is plain it can be picked */

@@ -168,6 +168,17 @@ what is drawn and where, and that it is not the architecture.
 A sketch's old notes became sticky notes on a Notes layer, and every way to
 add a note now adds one.
 
+## Between checkpoints: moving the map about
+
+Done after annotations, at Jonathan's ask. A card and a wire's sentence can
+be dragged anywhere on a map as well as on a sketch, so a crowded level can
+be untangled (ADR 0010). Where things were put is an arrangement, kept
+beside the map; a right-click puts one card or the whole level back. Going
+into a card is now a double-click, since the single click picks it up, and
+pointing at a card and pressing F fills the screen with it. Hovering a card
+lights the wires into and out of it, with a dash running the way each
+arrow points.
+
 ## Checkpoint 5: Codegraph sets itself up
 
 Run setup on this repo. The desktop app is reshaped and tagged. Legacy shows

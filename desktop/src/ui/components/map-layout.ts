@@ -12,6 +12,10 @@ export type DrawnWire = {
   ends?: { from: string; to: string }[]
   /** How it stands against a proposal: drawn new, built, or crossed out. */
   state?: string
+  /** Where a person put its sentence, by its middle, in the level's own
+   *  space. Left out, the level lays the sentence out itself. */
+  x?: number
+  y?: number
 }
 
 /** A note a person left on a level of a sketch. */
@@ -286,14 +290,17 @@ export const spread = (
     h: number
     tail: { x: number; y: number }
     head: { x: number; y: number }
+    /** A sentence a person has moved stays exactly where they put it, and
+     *  the rest keep clear of it. */
+    fixed?: boolean
   }[],
   cards: Box[] = [],
 ): { x: number; y: number }[] => {
   const AIR = 6
-  const placed: Box[] = []
   const hits = (one: Box, other: Box): boolean =>
     one.x < other.x + other.w + AIR && one.x + one.w + AIR > other.x && one.y < other.y + other.h + AIR && one.y + one.h + AIR > other.y
   const boxAt = (at: { x: number; y: number }, w: number, h: number): Box => ({ x: at.x - w / 2, y: at.y - h / 2, w, h })
+  const placed: Box[] = chips.filter((chip) => chip.fixed).map((chip) => boxAt(chip.at, chip.w, chip.h))
   const along = (chip: (typeof chips)[number], by: number): { x: number; y: number } => {
     const end = by < 0 ? chip.tail : chip.head
     const share = Math.abs(by)
@@ -301,6 +308,7 @@ export const spread = (
   }
   const SLIDES = [0, -0.16, 0.16, -0.32, 0.32, -0.48, 0.48, -0.62, 0.62]
   return chips.map((chip) => {
+    if (chip.fixed) return chip.at
     const tries: { x: number; y: number }[] = []
     for (const side of [0, -1, 1, -2, 2])
       for (const by of SLIDES) {

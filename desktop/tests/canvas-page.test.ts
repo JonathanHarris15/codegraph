@@ -80,7 +80,7 @@ describe('the canvas in the real app', () => {
   })
 
   it('tunnels into a software system and shows its containers, wired together', async () => {
-    await page.getByRole('button', { name: 'Open notes' }).click()
+    await page.getByRole('button', { name: 'Open notes' }).dblclick()
     expect(await shown(page.getByRole('button', { name: 'Open web' }))).toContain('browser app')
     expect(await shown(page.getByLabel('db', { exact: true }))).toContain('database')
     // Opening notes keeps the project level around it, so its wires are on
@@ -91,7 +91,7 @@ describe('the canvas in the real app', () => {
   })
 
   it('tunnels into a container and shows its pages as frames, with the wires between components', async () => {
-    await page.getByRole('button', { name: 'Open web' }).click()
+    await page.getByRole('button', { name: 'Open web' }).dblclick()
     expect(await shown(page.getByRole('button', { name: 'Open new-note' }))).toContain('/notes/new')
     expect(await shown(page.getByText('No screenshot yet'))).toBe('No screenshot yet')
     await page.getByRole('img', { name: 'new-note as it looks' }).waitFor({ state: 'visible', timeout: PATIENCE })
@@ -102,7 +102,7 @@ describe('the canvas in the real app', () => {
   })
 
   it('tunnels down to the code', async () => {
-    await page.getByRole('button', { name: 'Open write-note' }).click()
+    await page.getByRole('button', { name: 'Open write-note' }).dblclick()
     expect(await shown(page.getByText('writeNote'))).toBe('writeNote')
     await settle()
     await picture('4-code')
@@ -124,7 +124,7 @@ describe('the canvas in the real app', () => {
     expect(await shown(menu.getByRole('menuitemradio', { name: /^add-search/ }))).toContain('local')
     await menu.getByRole('menuitemradio', { name: /^add-search/ }).click()
     await expect.poll(async () => branch.textContent(), { timeout: PATIENCE }).toContain('not checked out')
-    await page.getByRole('button', { name: 'Open web' }).click()
+    await page.getByRole('button', { name: 'Open web' }).dblclick()
     expect(await shown(page.getByRole('button', { name: 'Open search' }))).toContain('/search')
     await settle()
     await picture('5-branch')
@@ -148,7 +148,7 @@ describe('the canvas in the real app', () => {
     await page.getByRole('button', { name: 'Open Notes', exact: true }).dblclick()
     const card = page.locator('.map-world').getByRole('button', { name: 'Branch of notes' })
     await expect.poll(async () => card.textContent(), { timeout: PATIENCE }).toContain('main')
-    await page.getByRole('button', { name: 'Open notes' }).click()
+    await page.getByRole('button', { name: 'Open notes' }).dblclick()
     const bar = page.locator('.map-bar').getByRole('button', { name: 'Branch of notes' })
     await expect.poll(async () => bar.textContent(), { timeout: PATIENCE }).toContain('main')
     expect(await bar.textContent()).toContain('not checked out')

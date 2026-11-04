@@ -105,10 +105,21 @@ write-note uses notes to keep the note.
 _Avoid_: edge, arrow, link, connection, dependency
 
 **Tunnelling**:
-Moving down a level by zooming into a card: it opens in place, its insides
-drawn within it, while the cards around it and their wires into it stay in
-view. Tunnelling out is the way back up.
+Moving down a level by zooming into a card, or by double-clicking it: it
+opens in place, its insides drawn within it, while the cards around it and
+their wires into it stay in view. Tunnelling out is the way back up.
 _Avoid_: drilling down, expanding, opening
+
+**Arrangement**:
+Where a person has moved a map's cards and its wires' sentences. No code
+says where anything sits, so an arrangement is kept beside the map, never
+in a repo, and moving something changes no code. A sketch holds its own.
+_Avoid_: layout, positions, coordinates, pins
+
+**Framing**:
+Filling the screen with one card without going into it, for reading a
+crowded level a card at a time.
+_Avoid_: focus, isolate, maximise
 
 **Page map**:
 What a container's pages look like on the canvas: each page shown by its

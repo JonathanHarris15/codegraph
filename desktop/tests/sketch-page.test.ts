@@ -295,7 +295,7 @@ describe('drawing a sketch in the real app', () => {
 
   it('starts a sketch from a snapshot of the map, every card as it stood', async () => {
     await page.getByRole('button', { name: '← Map' }).click()
-    await page.getByRole('button', { name: 'Open notes' }).click()
+    await page.getByRole('button', { name: 'Open notes' }).dblclick()
     await page.getByRole('button', { name: 'Open web' }).waitFor({ timeout: PATIENCE })
     await page.getByRole('button', { name: /^Sketches/ }).click()
     await page.getByRole('button', { name: 'New sketch' }).click()
