@@ -63,7 +63,7 @@ describe('the projects screen in the real app', () => {
     expect(await shown(page.getByText('Mosaic Manager'))).toContain('Mosaic Manager')
     expect(await shown(page.getByText('no software systems yet'))).toContain('repos call it')
     expect(await shown(page.getByText('mosaic-manager', { exact: true }))).toBe('mosaic-manager')
-    expect(await shown(page.getByRole('button', { name: 'Link a repo' }))).toBe('Link a repo')
+    expect(await shown(page.getByRole('button', { name: '+ Link a repo git already tracks' }))).toContain('Link a repo')
   }, 30_000)
 
   it('keeps the project when the app is opened again', async () => {

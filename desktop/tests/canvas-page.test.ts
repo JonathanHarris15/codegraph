@@ -56,7 +56,7 @@ afterAll(async () => {
 
 describe('the canvas in the real app', () => {
   it('opens a project from the grid onto its map', async () => {
-    await page.getByRole('link', { name: 'Open map' }).click()
+    await page.getByRole('button', { name: 'Open Notes', exact: true }).dblclick()
     expect(await shown(page.getByRole('button', { name: 'Open notes' }))).toContain('notes')
     await settle()
     await picture('1-project')

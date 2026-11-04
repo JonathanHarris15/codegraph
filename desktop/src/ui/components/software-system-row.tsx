@@ -63,15 +63,7 @@ const SetupBadge = ({ system, project }: { system: SoftwareSystemView; project: 
 export const SoftwareSystemRow = ({ system, project }: { system: SoftwareSystemView; project: string }) => {
   const cloud = cloudWords(system)
   return (
-    <div
-      style={{
-        borderTop: '1px solid var(--edge)',
-        paddingTop: 10,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 6,
-      }}
-    >
+    <div className="project-repo">
       <div className="ds-row" style={{ justifyContent: 'space-between' }}>
         <span style={{ fontWeight: 500 }}>{system.name}</span>
         {system.branch ? <span className="ds-mono">{system.branch}</span> : null}

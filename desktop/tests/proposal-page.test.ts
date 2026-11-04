@@ -60,7 +60,7 @@ beforeAll(async () => {
   app = await electron.launch({ args: ['.', `--user-data-dir=${yard.home}`], cwd: appFolder })
   page = await app.firstWindow()
   await page.setViewportSize({ width: 1400, height: 860 })
-  await page.getByRole('link', { name: 'Open map' }).first().click()
+  await page.getByRole('button', { name: 'Open Notes', exact: true }).dblclick()
   await page.getByRole('button', { name: 'Open notes' }).waitFor({ timeout: PATIENCE })
 }, 60_000)
 
@@ -122,7 +122,7 @@ describe('watching a proposal get built', () => {
 describe('drawing a proposal of your own', () => {
   it('asks for a branch when the repo is on its main line, and makes it', async () => {
     await page.getByRole('button', { name: '← Projects' }).click()
-    await page.getByRole('link', { name: 'Open map' }).nth(1).click()
+    await page.getByRole('button', { name: 'Open Jots', exact: true }).dblclick()
     await page.getByRole('button', { name: 'Open jots' }).click()
     await page.getByRole('button', { name: 'Open web' }).click()
     await settle()

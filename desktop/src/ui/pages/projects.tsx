@@ -88,8 +88,8 @@ export const ProjectsPage = ({ onOpen }: { onOpen: (projectId: string) => void }
         <div>
           <h1 className="ds-title">Projects</h1>
           <div className="ds-sub">
-            A project holds the software systems you work on together, each one a git repo. Open
-            a project to see its map.
+            A project holds the software systems you work on together, each one a git repo.
+            Double-click a project to see its map.
           </div>
         </div>
         <div className="ds-row">

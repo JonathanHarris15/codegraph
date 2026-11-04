@@ -62,7 +62,7 @@ beforeAll(async () => {
   app = await electron.launch({ args: ['.', `--user-data-dir=${yard.home}`], cwd: appFolder })
   page = await app.firstWindow()
   await page.setViewportSize({ width: 1400, height: 860 })
-  await page.getByRole('link', { name: 'Open map' }).click()
+  await page.getByRole('button', { name: 'Open Notes', exact: true }).dblclick()
   await page.getByRole('button', { name: 'Open notes' }).waitFor({ timeout: PATIENCE })
 }, 60_000)
 
