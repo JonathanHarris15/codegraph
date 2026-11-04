@@ -3112,3 +3112,23 @@ kbd {
   font-size: 11.5px;
   line-height: 16px;
 }
+
+/* Why the folder could not be switched, over the top of the board. */
+.map-switch-problem {
+  position: absolute;
+  top: var(--space-3);
+  left: 50%;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: min(560px, calc(100% - 32px));
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border: var(--stroke-edge) solid var(--state-problem);
+  border-radius: var(--radius-md);
+  background: var(--state-problem-wash);
+  color: var(--ink-000);
+  font-size: 13px;
+  box-shadow: var(--shadow-float);
+  transform: translateX(-50%);
+}

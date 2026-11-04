@@ -106,8 +106,10 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
   const branchSystem = system ?? (shown?.systems.length === 1 ? shown.card.children.find((c) => c.id === shown.systems[0]!.id) : undefined)
   const branchShown = shown?.systems.find((s) => s.id === branchSystem?.id)
 
+  // A new software system starts from nothing; the same one keeps what it
+  // showed until its branches are read again, so the bar never blinks.
+  useEffect(() => setChoices([]), [branchSystem?.id])
   useEffect(() => {
-    setChoices([])
     if (!branchSystem || sketch) return
     void window.codegraph.listPoints(projectId, branchSystem.id).then(setChoices)
   }, [projectId, branchSystem?.id, sketch === null, shown])
@@ -122,7 +124,28 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
     if (to.length > 1) setPath(to.slice(0, -1))
   }, [shown, working?.agent?.card, follow, sketch, drafting])
 
+  /** Moves the repo's folder onto the branch being looked at; the map then
+   *  reads the folder again, now on that branch. */
+  const [switching, setSwitching] = useState(false)
+  const [switchProblem, setSwitchProblem] = useState('')
+  const switchFolder = async (): Promise<void> => {
+    if (!branchSystem || branchShown?.point.kind !== 'branch') return
+    setSwitching(true)
+    setSwitchProblem('')
+    const done = await window.codegraph.switchBranch(projectId, branchSystem.id, branchShown.point.name)
+    setSwitching(false)
+    if (!done.ok) {
+      setSwitchProblem(done.problem)
+      return
+    }
+    const next = { ...points }
+    delete next[branchSystem.id]
+    setPoints(next)
+    await load(next)
+  }
+
   const pickPoint = async (point: Point): Promise<void> => {
+    setSwitchProblem('')
     if (!branchSystem) return
     const next = { ...points, [branchSystem.id]: point }
     setPoints(next)
@@ -337,6 +360,11 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
           {!sketch && !drafting && branchSystem && branchShown ? (
             <BranchPicker system={branchSystem.name} points={choices} point={branchShown.point} onPick={(p) => void pickPoint(p)} />
           ) : null}
+          {!sketch && !drafting && branchShown?.point.kind === 'branch' ? (
+            <Button onClick={() => void switchFolder()} disabled={switching}>
+              {switching ? 'Switching…' : `Switch folder to ${branchShown.point.name.replace(/^origin\//, '')}`}
+            </Button>
+          ) : null}
           {!sketch && !drafting && progress ? (
             <button
               type="button"
@@ -425,6 +453,15 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
             onStartSketch={() => void startOne(true)}
           />
         )}
+
+        {switchProblem ? (
+          <div className="map-switch-problem" role="alert">
+            <span>{switchProblem}</span>
+            <Button look="bare" onClick={() => setSwitchProblem('')}>
+              Dismiss
+            </Button>
+          </div>
+        ) : null}
 
         {asking ? (
           <form

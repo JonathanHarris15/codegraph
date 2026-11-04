@@ -32,6 +32,8 @@ const settle = (): Promise<void> => page.waitForTimeout(900)
 beforeAll(async () => {
   yard = openYard('canvas')
   const repo = aMappedRepo(yard)
+  // Set-up repos keep their screenshots out of git, as this one does.
+  writeFileSync(join(repo, '.git', 'info', 'exclude'), 'codegraph-screenshots/\n')
   mkdirSync(join(repo, 'codegraph-screenshots'))
   writeFileSync(join(repo, 'codegraph-screenshots', 'new-note.png'), aPicture())
   writeFileSync(
@@ -120,5 +122,13 @@ describe('the canvas in the real app', () => {
     expect(await shown(page.getByRole('button', { name: 'Open search' }))).toContain('/search')
     await settle()
     await picture('5-branch')
+  })
+
+  it('switches the folder to the branch being looked at, from the bar', async () => {
+    await page.getByRole('button', { name: 'Switch folder to add-search' }).click()
+    const branch = page.getByRole('button', { name: 'Branch of notes' })
+    await expect.poll(async () => branch.textContent(), { timeout: PATIENCE }).not.toContain('not checked out')
+    await expect.poll(async () => branch.textContent(), { timeout: PATIENCE }).toContain('add-search')
+    expect(await page.getByRole('button', { name: /^Switch folder/ }).count()).toBe(0)
   })
 })

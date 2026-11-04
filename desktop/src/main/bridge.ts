@@ -19,6 +19,7 @@ import { linkSoftwareSystem } from '../features/link-software-system.js'
 import { showMap, type Card } from '../features/show-map.js'
 import { startSketch } from '../features/start-sketch.js'
 import { signOutGithub } from '../features/sign-out-github.js'
+import { switchBranch } from '../features/switch-branch.js'
 import { watchProject } from '../features/watch-project.js'
 import type { DrawnCard, Point } from '../modules/reader/index.js'
 import type { Sketch } from '../modules/sketches/index.js'
@@ -70,6 +71,9 @@ export const openBridge = (): void => {
     watching.set(sender.id, projectId ? watchProject(projectId, () => !sender.isDestroyed() && sender.send('project:changed')) : () => undefined)
     sender.once('destroyed', () => watching.get(sender.id)?.())
   })
+  ipcMain.handle('branch:switch', (_event, projectId: string, systemId: string, branch: string) =>
+    switchBranch(projectId, systemId, branch),
+  )
   ipcMain.handle('map:points', (_event, projectId: string, systemId: string) =>
     listPoints(projectId, systemId),
   )
