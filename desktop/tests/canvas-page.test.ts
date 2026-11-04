@@ -131,4 +131,17 @@ describe('the canvas in the real app', () => {
     await expect.poll(async () => branch.textContent(), { timeout: PATIENCE }).toContain('add-search')
     expect(await page.getByRole('button', { name: /^Switch folder/ }).count()).toBe(0)
   })
+
+  it('opens on the branch picked for a repo on the projects page', async () => {
+    await page.getByRole('button', { name: '← Projects' }).click()
+    const row = page.getByRole('button', { name: 'Branch of notes' })
+    expect(await shown(row)).toContain('add-search')
+    await row.click()
+    await page.getByRole('menu', { name: 'Branches of notes' }).getByRole('menuitemradio', { name: /^main/ }).click()
+    await expect.poll(async () => row.textContent(), { timeout: PATIENCE }).toContain('main')
+    await page.getByRole('button', { name: 'Open Notes', exact: true }).dblclick()
+    const bar = page.getByRole('button', { name: 'Branch of notes' })
+    await expect.poll(async () => bar.textContent(), { timeout: PATIENCE }).toContain('main')
+    expect(await bar.textContent()).toContain('not checked out')
+  })
 })

@@ -3,6 +3,7 @@ import { ipcMain } from 'electron'
 import { addMockup } from '../features/add-mockup.js'
 import { addProposalMockup } from '../features/add-proposal-mockup.js'
 import { agreeShallowSystem } from '../features/agree-shallow-system.js'
+import { chooseBranch } from '../features/choose-branch.js'
 import { connectAgent } from '../features/connect-agent.js'
 import { connectGithub } from '../features/connect-github.js'
 import { createProject } from '../features/create-project.js'
@@ -71,6 +72,9 @@ export const openBridge = (): void => {
     watching.set(sender.id, projectId ? watchProject(projectId, () => !sender.isDestroyed() && sender.send('project:changed')) : () => undefined)
     sender.once('destroyed', () => watching.get(sender.id)?.())
   })
+  ipcMain.handle('branch:choose', (_event, projectId: string, systemId: string, branch: string) =>
+    chooseBranch(projectId, systemId, branch),
+  )
   ipcMain.handle('branch:switch', (_event, projectId: string, systemId: string, branch: string) =>
     switchBranch(projectId, systemId, branch),
   )

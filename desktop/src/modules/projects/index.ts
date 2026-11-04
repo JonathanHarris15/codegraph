@@ -1,5 +1,5 @@
 // codegraph: module projects
-// codegraph: front door useFolder, listProjects, addProject, renameProject, addSoftwareSystem, removeSoftwareSystem, knownRemotes, addShallowSystem, Project, SoftwareSystem, ShallowSystem, Workspace
+// codegraph: front door useFolder, listProjects, addProject, renameProject, addSoftwareSystem, removeSoftwareSystem, chooseBranch, knownRemotes, addShallowSystem, Project, SoftwareSystem, ShallowSystem, Workspace
 import { shortNameOf, type Project, type ShallowSystem, type SoftwareSystem } from './schema.js'
 import { newId, read, useFolder, write } from './store.js'
 
@@ -60,6 +60,15 @@ export const removeSoftwareSystem = (projectId: string, systemId: string): void 
   const project = workspace.projects.find((p) => p.id === projectId)
   if (!project) return
   project.systems = project.systems.filter((c) => c.id !== systemId)
+  write(workspace)
+}
+
+/** Remembers the branch a software system's map opens on. */
+export const chooseBranch = (projectId: string, systemId: string, branch: string): void => {
+  const workspace = read()
+  const system = workspace.projects.find((p) => p.id === projectId)?.systems.find((s) => s.id === systemId)
+  if (!system || system.branch === branch) return
+  system.branch = branch
   write(workspace)
 }
 

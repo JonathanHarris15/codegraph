@@ -147,6 +147,10 @@ export const ProjectsPage = ({ onOpen }: { onOpen: (projectId: string) => void }
               project={project}
               onLink={(id) => void link(id)}
               onOpen={onOpen}
+              onChoose={(systemId, point) => {
+                const named = point.kind === 'branch' ? point.name : point.kind === 'live' ? point.branch : ''
+                if (named) void window.codegraph.chooseBranch(project.id, systemId, named).then(() => load())
+              }}
               linking={linking === project.id}
             />
           ))}

@@ -10,6 +10,9 @@ export type SoftwareSystem = {
   path: string
   /** owner/name on GitHub, where it has one. */
   remote: string
+  /** The branch its map opens on, as a person last chose it; the one
+   *  checked out when left out. */
+  branch?: string
 }
 
 /** A software system the project refers to but has no repo for, which a

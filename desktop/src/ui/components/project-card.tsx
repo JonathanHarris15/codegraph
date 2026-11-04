@@ -1,5 +1,6 @@
 // codegraph: component project-card
 import type { ProjectView } from '../../features/list-projects.js'
+import type { Point } from '../../modules/reader/index.js'
 import { SoftwareSystemRow } from './software-system-row.js'
 
 const countWords = (many: number): string =>
@@ -12,11 +13,14 @@ export const ProjectCard = ({
   project,
   onLink,
   onOpen,
+  onChoose,
   linking,
 }: {
   project: ProjectView
   onLink: (projectId: string) => void
   onOpen: (projectId: string) => void
+  /** A person picked the branch one of its repos' maps opens on. */
+  onChoose: (systemId: string, point: Point) => void
   linking: boolean
 }) => (
   <div className="ds-card project-card" onDoubleClick={() => onOpen(project.id)}>
@@ -41,7 +45,12 @@ export const ProjectCard = ({
 
     <div className="project-repos" aria-label={`Repos in ${project.name}`} onDoubleClick={(event) => event.stopPropagation()}>
       {project.systems.map((system) => (
-        <SoftwareSystemRow key={system.id} system={system} project={project.shortName} />
+        <SoftwareSystemRow
+          key={system.id}
+          system={system}
+          project={project.shortName}
+          onChoose={(point) => onChoose(system.id, point)}
+        />
       ))}
       <button type="button" className="project-repos-link" onClick={() => onLink(project.id)} disabled={linking}>
         {linking

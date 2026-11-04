@@ -1,5 +1,5 @@
 // codegraph: component branch-picker
-import { ArrowDown, ArrowUp, ChevronDown, Cloud, GitBranch, GitCommitHorizontal, Laptop } from 'lucide-react'
+import { ArrowUp, ChevronDown, Cloud, GitBranch, GitCommitHorizontal, Laptop, TriangleAlert } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { Point } from '../../modules/reader/index.js'
 
@@ -35,8 +35,11 @@ const Apart = ({ branch }: { branch: BranchPoint }) =>
         </span>
       ) : null}
       {branch.behind ? (
-        <span title={`${branch.behind} commit${branch.behind === 1 ? '' : 's'} on GitHub not here yet`}>
-          <ArrowDown size={11} aria-hidden="true" />
+        <span
+          className="map-branch-behind"
+          title={`${branch.behind} commit${branch.behind === 1 ? '' : 's'} on GitHub not here yet. Pull before building on it.`}
+        >
+          <TriangleAlert size={11} aria-hidden="true" />
           {branch.behind} behind
         </span>
       ) : null}
@@ -55,11 +58,17 @@ export const BranchPicker = ({
   points,
   point,
   onPick,
+  onOpen,
+  compact = false,
 }: {
   system: string
   points: Point[]
   point: Point
   onPick: (point: Point) => void
+  /** Called as the menu opens, for a page that reads the branches only then. */
+  onOpen?: () => void
+  /** Smaller, branches only, for a row on the projects page. */
+  compact?: boolean
 }) => {
   const [open, setOpen] = useState(false)
   const [older, setOlder] = useState(false)
@@ -85,7 +94,7 @@ export const BranchPicker = ({
   const live = points.find((p): p is Extract<Point, { kind: 'live' }> => p.kind === 'live')
   const branches = points.filter((p): p is BranchPoint => p.kind === 'branch')
   const commits = points.filter((p): p is Extract<Point, { kind: 'commit' }> => p.kind === 'commit')
-  const checkedOut = live?.branch ?? ''
+  const checkedOut = live?.branch ?? (point.kind === 'live' ? (point.branch ?? '') : '')
   const showing = point.kind === 'live' ? branches.find((b) => b.current) : point.kind === 'branch' ? branches.find((b) => b.name === point.name) : undefined
 
   const pick = (one: Point): void => {
@@ -97,17 +106,20 @@ export const BranchPicker = ({
     <span className="sketch-menu" ref={box}>
       <button
         type="button"
-        className="map-branch"
+        className={compact ? 'map-branch map-branch--compact' : 'map-branch'}
         aria-label={`Branch of ${system}`}
         aria-expanded={open}
-        onClick={() => setOpen(!open)}
+        onClick={() => {
+          if (!open) onOpen?.()
+          setOpen(!open)
+        }}
       >
         {point.kind === 'commit' ? <GitCommitHorizontal size={14} aria-hidden="true" /> : <GitBranch size={14} aria-hidden="true" />}
         <span className="map-branch-name">
           {point.kind === 'live' ? checkedOut || 'this folder' : point.kind === 'branch' ? point.name : point.sha.slice(0, 7)}
         </span>
         {point.kind === 'commit' ? <span className="map-picker-title">{point.title}</span> : null}
-        {point.kind !== 'live' ? <span className="map-branch-note">not checked out</span> : null}
+        {point.kind !== 'live' && !compact ? <span className="map-branch-note">not checked out</span> : null}
         {showing ? <Apart branch={showing} /> : null}
         <ChevronDown size={14} aria-hidden="true" />
       </button>
@@ -143,7 +155,8 @@ export const BranchPicker = ({
               <span className="map-branch-row-name">This folder</span>
             </button>
           ) : null}
-          {commits.length ? (
+          {points.length === 0 ? <div className="map-branch-foot">Reading the branches…</div> : null}
+          {commits.length && !compact ? (
             <>
               <button type="button" className="map-branch-older" aria-expanded={older} onClick={() => setOlder(!older)}>
                 {older ? 'Hide earlier commits' : `Earlier commits on ${checkedOut || 'this branch'}`}
@@ -162,7 +175,9 @@ export const BranchPicker = ({
             </>
           ) : null}
           <div className="map-branch-foot">
-            The checked-out branch shows what is not committed yet. Any other is read from git; your folder stays as it is.
+            {compact
+              ? 'The map opens on the branch picked here. Your folder stays as it is.'
+              : 'The checked-out branch shows what is not committed yet. Any other is read from git; your folder stays as it is.'}
           </div>
         </div>
       ) : null}

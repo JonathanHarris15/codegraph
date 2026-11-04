@@ -1,5 +1,5 @@
 // codegraph: module reader
-// codegraph: front door readMap, listPoints, checkRepo, proposalProgress, measure, proposalFrom, changesAnything, blankProposal, idOfName, componentName, live, outsideId, PROPOSAL, PROPOSAL_FOLDER, Point, SystemMap, Component, Container, CodeFile, Wire, WireKind, ComponentKind, Mismatch, Proposal, ProposedContainer, ProposedComponent, ProposedWire, Progress, ProposalItem, ItemState, DrawnCard, FromDrawing
+// codegraph: front door readMap, listPoints, pointFor, checkRepo, proposalProgress, measure, proposalFrom, changesAnything, blankProposal, idOfName, componentName, live, outsideId, PROPOSAL, PROPOSAL_FOLDER, Point, SystemMap, Component, Container, CodeFile, Wire, WireKind, ComponentKind, Mismatch, Proposal, ProposedContainer, ProposedComponent, ProposedWire, Progress, ProposalItem, ItemState, DrawnCard, FromDrawing
 import { existsSync, readFileSync } from 'node:fs'
 import { extname, join } from 'node:path'
 import { buildMap, type Mismatch } from './build.js'
@@ -7,6 +7,8 @@ import { checkFiles } from './check.js'
 import { measure, PROPOSAL_FOLDER, type Progress } from './proposal.js'
 import { live as liveFolder, type Point, type SystemMap } from './schema.js'
 import { baseOf, filesAt, pictureAt, pointsIn } from './source.js'
+
+export { pointFor } from './source.js'
 
 export { live, outsideId } from './schema.js'
 export { blankProposal, componentName, idOfName, measure, PROPOSAL, PROPOSAL_FOLDER } from './proposal.js'

@@ -182,3 +182,23 @@ export const baseOf = async (repo: string, named: string): Promise<string> => {
   }
   return ''
 }
+
+/** Where to read a repo when a person last chose a branch: the folder, if
+ *  that branch is the one checked out; the branch, if git still has it here
+ *  or on GitHub; and if it has gone, the main line instead, saying so. */
+export const pointFor = async (repo: string, chosen = ''): Promise<{ point: Point; branch: string; moved: boolean }> => {
+  if (!existsSync(join(repo, '.git'))) return { point: { kind: 'live' }, branch: '', moved: false }
+  const checkedOut = (await git(repo, ['rev-parse', '--abbrev-ref', 'HEAD'])).trim()
+  const at = (name: string, moved: boolean) => ({
+    point: name === checkedOut ? ({ kind: 'live', branch: name } as Point) : ({ kind: 'branch', name } as Point),
+    branch: name,
+    moved,
+  })
+  const has = async (name: string): Promise<boolean> =>
+    (await git(repo, ['rev-parse', '--verify', '--quiet', `refs/heads/${name}`])).trim() !== '' ||
+    (await git(repo, ['rev-parse', '--verify', '--quiet', `refs/remotes/${name}`])).trim() !== ''
+  if (!chosen) return at(checkedOut, false)
+  if (chosen === checkedOut || (await has(chosen))) return at(chosen, false)
+  for (const main of ['main', 'master', 'origin/main', 'origin/master']) if (await has(main)) return at(main, true)
+  return at(checkedOut, true)
+}

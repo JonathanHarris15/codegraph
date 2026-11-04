@@ -1,6 +1,8 @@
 // codegraph: component software-system-row
 import type { SoftwareSystemView } from '../../features/list-projects.js'
+import type { Point } from '../../modules/reader/index.js'
 import { Badge } from '../design-system/kit.js'
+import { BranchPicker } from './branch-picker.js'
 
 const cloudWords = (
   system: SoftwareSystemView,
@@ -60,13 +62,24 @@ const SetupBadge = ({ system, project }: { system: SoftwareSystemView; project: 
   )
 }
 
-export const SoftwareSystemRow = ({ system, project }: { system: SoftwareSystemView; project: string }) => {
+export const SoftwareSystemRow = ({
+  system,
+  project,
+  onChoose,
+}: {
+  system: SoftwareSystemView
+  project: string
+  /** A person picked the branch the map opens on. */
+  onChoose: (point: Point) => void
+}) => {
   const cloud = cloudWords(system)
   return (
     <div className="project-repo">
       <div className="ds-row" style={{ justifyContent: 'space-between' }}>
         <span style={{ fontWeight: 500 }}>{system.name}</span>
-        {system.branch ? <span className="ds-mono">{system.branch}</span> : null}
+        {system.tracked ? (
+          <BranchPicker system={system.name} points={system.branches} point={system.point} onPick={onChoose} compact />
+        ) : null}
       </div>
       <div className="ds-row" style={{ flexWrap: 'wrap', gap: 6 }}>
         <SetupBadge system={system} project={project} />

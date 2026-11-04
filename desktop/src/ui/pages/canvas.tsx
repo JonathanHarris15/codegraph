@@ -132,12 +132,14 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
     if (!branchSystem || branchShown?.point.kind !== 'branch') return
     setSwitching(true)
     setSwitchProblem('')
-    const done = await window.codegraph.switchBranch(projectId, branchSystem.id, branchShown.point.name)
+    const name = branchShown.point.name
+    const done = await window.codegraph.switchBranch(projectId, branchSystem.id, name)
     setSwitching(false)
     if (!done.ok) {
       setSwitchProblem(done.problem)
       return
     }
+    await window.codegraph.chooseBranch(projectId, branchSystem.id, name.replace(/^origin\//, ''))
     const next = { ...points }
     delete next[branchSystem.id]
     setPoints(next)
@@ -147,6 +149,9 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
   const pickPoint = async (point: Point): Promise<void> => {
     setSwitchProblem('')
     if (!branchSystem) return
+    // A branch picked is where the map opens next time; a commit is a look back.
+    const named = point.kind === 'branch' ? point.name : point.kind === 'live' ? point.branch : ''
+    if (named) void window.codegraph.chooseBranch(projectId, branchSystem.id, named)
     const next = { ...points, [branchSystem.id]: point }
     setPoints(next)
     await load(next)

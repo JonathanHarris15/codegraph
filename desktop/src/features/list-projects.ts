@@ -1,6 +1,7 @@
 // codegraph: feature list-projects in workspace
-// codegraph: uses projects, repo
-import { listProjects as stored } from '../modules/projects/index.js'
+// codegraph: uses projects, repo, reader
+import { chooseBranch, listProjects as stored } from '../modules/projects/index.js'
+import { listPoints, pointFor, type Point } from '../modules/reader/index.js'
 import { isSetUp, readSoftwareSystem, type RepoFacts } from '../modules/repo/index.js'
 
 /** How a working copy stands against the copy on GitHub. */
@@ -22,7 +23,12 @@ export type SoftwareSystemView = {
   present: boolean
   tracked: boolean
   dirty: boolean
+  /** The branch checked out in the folder. */
   branch: string
+  /** Where its map opens: the branch last chosen for it, or the folder. */
+  point: Point
+  /** Its branches, each with where it is and how far from GitHub. */
+  branches: Point[]
   /** The repo's main line, which the setup answers are read against. */
   mainLine: string
   ahead: number
@@ -74,6 +80,8 @@ export const listProjects = async (fetchFirst = false): Promise<ProjectView[]> =
       systems: await Promise.all(
         project.systems.map(async (system) => {
           const facts = await readSoftwareSystem(system.path, fetchFirst)
+          const [chosen, points] = await Promise.all([pointFor(system.path, system.branch), listPoints(system.path)])
+          if (chosen.moved) chooseBranch(project.id, system.id, chosen.branch)
           return {
             id: system.id,
             name: system.name,
@@ -83,6 +91,8 @@ export const listProjects = async (fetchFirst = false): Promise<ProjectView[]> =
             tracked: facts.tracked,
             dirty: facts.dirty,
             branch: facts.branch,
+            point: chosen.point,
+            branches: points.filter((p) => p.kind !== 'commit'),
             mainLine: facts.mainLine,
             ahead: facts.ahead,
             behind: facts.behind,

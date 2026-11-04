@@ -29,6 +29,7 @@ export type Api = {
   showMap: (projectId: string, points?: Record<string, Point>) => Promise<MapShown>
   listPoints: (projectId: string, systemId: string) => Promise<Point[]>
   switchBranch: (projectId: string, systemId: string, branch: string) => Promise<Switched>
+  chooseBranch: (projectId: string, systemId: string, branch: string) => Promise<void>
   listSketches: (projectId: string) => Promise<SketchListed[]>
   startSketch: (projectId: string, name: string, snapshot?: Card) => Promise<Sketch>
   openSketch: (projectId: string, sketchId: string) => Promise<SketchOpened | null>
@@ -55,6 +56,7 @@ const api: Api = {
   showMap: (projectId, points = {}) => ipcRenderer.invoke('map:show', projectId, points),
   listPoints: (projectId, systemId) => ipcRenderer.invoke('map:points', projectId, systemId),
   switchBranch: (projectId, systemId, branch) => ipcRenderer.invoke('branch:switch', projectId, systemId, branch),
+  chooseBranch: (projectId, systemId, branch) => ipcRenderer.invoke('branch:choose', projectId, systemId, branch),
   listSketches: (projectId) => ipcRenderer.invoke('sketch:list', projectId),
   startSketch: (projectId, name, snapshot) => ipcRenderer.invoke('sketch:start', projectId, name, snapshot),
   openSketch: (projectId, sketchId) => ipcRenderer.invoke('sketch:open', projectId, sketchId),

@@ -2,8 +2,8 @@
 // codegraph: uses projects, reader, agents, cards
 import { whereIs } from '../modules/agents/index.js'
 import { card, join, systemCard, type Card } from '../modules/cards/index.js'
-import { listProjects } from '../modules/projects/index.js'
-import { idOfName, live, proposalProgress, readMap, type Point, type Progress } from '../modules/reader/index.js'
+import { chooseBranch, listProjects } from '../modules/projects/index.js'
+import { idOfName, pointFor, proposalProgress, readMap, type Point, type Progress } from '../modules/reader/index.js'
 
 export type { Card, CardState, CardWire, Level, WireEnds } from '../modules/cards/index.js'
 
@@ -31,14 +31,21 @@ export type MapShown = {
 }
 
 /** A project's map, each software system read at the point asked for, or
- *  its live folder (ADR 0003). */
+ *  else on the branch last chosen for it, or the live folder (ADR 0003). A
+ *  chosen branch that has gone falls back to the main line, which is then
+ *  remembered instead. */
 export const showMap = async (projectId: string, points: Record<string, Point> = {}): Promise<MapShown> => {
   const project = listProjects().find((p) => p.id === projectId)
   if (!project) throw new Error('no project with that id')
 
   const read = await Promise.all(
     project.systems.map(async (system) => {
-      const point = points[system.id] ?? live
+      let point = points[system.id]
+      if (!point) {
+        const chosen = await pointFor(system.path, system.branch)
+        if (chosen.moved) chooseBranch(project.id, system.id, chosen.branch)
+        point = chosen.point
+      }
       return { system, point, map: await readMap(system.path, point) }
     }),
   )
