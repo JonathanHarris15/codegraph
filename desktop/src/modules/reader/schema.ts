@@ -4,8 +4,22 @@ import type { Proposal } from './proposal.js'
 /** Where in a repo's history to read it: the folder as it is now, with
  *  whatever is not committed, or a branch or commit read straight from git. */
 export type Point =
-  | { kind: 'live' }
-  | { kind: 'branch'; name: string }
+  | {
+      kind: 'live'
+      /** The branch checked out there, when it is listed. */
+      branch?: string
+    }
+  | {
+      kind: 'branch'
+      name: string
+      /** On this computer only, only on GitHub, or both; when it is listed. */
+      where?: 'local' | 'cloud' | 'both'
+      /** Commits on this computer GitHub has not got, and the other way. */
+      ahead?: number
+      behind?: number
+      /** It is the branch checked out in the folder. */
+      current?: boolean
+    }
   | { kind: 'commit'; sha: string; title: string }
 
 export const live: Point = { kind: 'live' }

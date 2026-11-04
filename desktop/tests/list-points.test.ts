@@ -25,7 +25,7 @@ describe('where a person can look in a software system', () => {
     const systemId = listProjects()[0]!.systems[0]!.id
 
     const points = await listPoints(id, systemId)
-    expect(points[0]).toEqual({ kind: 'live' })
+    expect(points[0]).toEqual({ kind: 'live', branch: 'main' })
     expect(points.flatMap((p) => (p.kind === 'branch' ? [p.name] : [])).sort()).toEqual(['add-search', 'main'])
     expect(points.some((p) => p.kind === 'commit')).toBe(true)
   })

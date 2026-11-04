@@ -1,4 +1,5 @@
 // codegraph: page canvas at /projects/:id
+import { Pencil } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SketchListed } from '../../features/list-sketches.js'
 import type { MapShown, SystemShown } from '../../features/show-map.js'
@@ -6,7 +7,7 @@ import type { Point } from '../../modules/reader/index.js'
 import type { Sketch, SketchCard } from '../../modules/sketches/index.js'
 import { Button, ThemeSwitch } from '../design-system/kit.js'
 import { MapCanvas, walk } from '../components/map-canvas.js'
-import { PointPicker } from '../components/point-picker.js'
+import { BranchPicker } from '../components/branch-picker.js'
 import { ProposalPanel } from '../components/proposal-panel.js'
 import { SketchEditor } from '../components/sketch-editor.js'
 import { SketchLibrary } from '../components/sketch-library.js'
@@ -100,12 +101,16 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
   const system = trail[1]
   const systemShown = shown?.systems.find((s) => s.id === system?.id)
   const working: SystemShown | undefined = shown?.systems.find((s) => s.agent)
+  /** The software system whose branch the bar shows: the one being looked
+   *  at, or the only one the project has. */
+  const branchSystem = system ?? (shown?.systems.length === 1 ? shown.card.children.find((c) => c.id === shown.systems[0]!.id) : undefined)
+  const branchShown = shown?.systems.find((s) => s.id === branchSystem?.id)
 
   useEffect(() => {
     setChoices([])
-    if (!system || sketch) return
-    void window.codegraph.listPoints(projectId, system.id).then(setChoices)
-  }, [projectId, system?.id, sketch === null])
+    if (!branchSystem || sketch) return
+    void window.codegraph.listPoints(projectId, branchSystem.id).then(setChoices)
+  }, [projectId, branchSystem?.id, sketch === null, shown])
 
   // Wherever the agent says it is working, the canvas goes too, unless the
   // person has said not to follow.
@@ -118,8 +123,8 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
   }, [shown, working?.agent?.card, follow, sketch, drafting])
 
   const pickPoint = async (point: Point): Promise<void> => {
-    if (!system) return
-    const next = { ...points, [system.id]: point }
+    if (!branchSystem) return
+    const next = { ...points, [branchSystem.id]: point }
     setPoints(next)
     await load(next)
   }
@@ -176,8 +181,23 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
     setLibrary(false)
   }
 
+  /** What a snapshot is named after: the branch the map is read from, or
+   *  the project when there is none to name. */
+  const snapshotOf = (): string => {
+    const at = branchShown?.point
+    if (at?.kind === 'branch') return at.name
+    if (at?.kind === 'commit') return at.sha.slice(0, 7)
+    const live = choices.find((c) => c.kind === 'live')
+    return (live?.kind === 'live' && live.branch) || shown?.card.name || 'Map'
+  }
+  const today = (): string => {
+    const d = new Date()
+    const two = (n: number): string => String(n).padStart(2, '0')
+    return `${two(d.getDate())}/${two(d.getMonth() + 1)}/${two(d.getFullYear() % 100)}`
+  }
+
   const startOne = async (fromMap: boolean): Promise<void> => {
-    const name = fromMap ? `${trail.at(-1)?.name ?? 'Map'}, as it could be` : 'New sketch'
+    const name = fromMap ? `${snapshotOf()} (sketch ${today()})` : 'New sketch'
     const started = await window.codegraph.startSketch(projectId, name, fromMap && shown ? shown.card : undefined)
     await loadSketches()
     await openOne(started.id)
@@ -298,6 +318,7 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
             className="ds-input map-sketch-name"
             aria-label="What this change is for"
             placeholder="What this change is for"
+            style={{ width: `${Math.min(Math.max(drafting.sketch.name.length + 3, 24), 44)}ch` }}
             value={drafting.sketch.name}
             onChange={(e) => draftChanged({ ...drafting.sketch, name: e.target.value })}
           />
@@ -305,6 +326,7 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
           <input
             className="ds-input map-sketch-name"
             aria-label="Sketch name"
+            style={{ width: `${Math.min(Math.max(sketch.name.length + 3, 14), 44)}ch` }}
             value={sketch.name}
             onChange={(e) => changed({ ...sketch, name: e.target.value })}
           />
@@ -312,8 +334,8 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
         <Trail steps={showing.map((card) => ({ id: card.id, name: card.name, level: card.level }))} onGo={goTo} />
         <div className="map-bar-end">
           {drafting ? <span className="map-follow">Proposal on {drafting.branch}</span> : null}
-          {!sketch && !drafting && system && systemShown ? (
-            <PointPicker system={system.name} points={choices} point={systemShown.point} onPick={(p) => void pickPoint(p)} />
+          {!sketch && !drafting && branchSystem && branchShown ? (
+            <BranchPicker system={branchSystem.name} points={choices} point={branchShown.point} onPick={(p) => void pickPoint(p)} />
           ) : null}
           {!sketch && !drafting && progress ? (
             <button
@@ -348,7 +370,21 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
             <Button onClick={() => void propose(system.id)}>{progress ? 'Change the proposal' : 'Propose a change'}</Button>
           ) : null}
           {!drafting ? (
-            <Button onClick={() => setLibrary(!library)}>Sketches{sketches.length ? ` (${sketches.length})` : ''}</Button>
+            sketch ? (
+              <button
+                type="button"
+                className="map-sketching"
+                aria-expanded={library}
+                aria-label={`Sketches: working on ${sketch.name}`}
+                onClick={() => setLibrary(!library)}
+              >
+                <Pencil size={13} aria-hidden="true" />
+                <span>Sketching</span>
+                <span className="map-sketching-count">{sketches.length}</span>
+              </button>
+            ) : (
+              <Button onClick={() => setLibrary(!library)}>Sketches{sketches.length ? ` (${sketches.length})` : ''}</Button>
+            )
           ) : null}
           <ThemeSwitch />
         </div>
@@ -457,8 +493,9 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
           </aside>
         ) : null}
 
-        {library && !drafting ? (
+        {!drafting ? (
           <SketchLibrary
+            shown={library}
             sketches={sketches}
             open={sketch?.id ?? ''}
             onOpen={(id) => void openOne(id)}

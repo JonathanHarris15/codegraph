@@ -108,8 +108,14 @@ describe('the canvas in the real app', () => {
   })
 
   it('reads another branch when it is picked, without leaving the level', async () => {
-    await page.getByLabel('Where to read notes').click()
-    await page.getByRole('button', { name: 'add-search' }).click()
+    const branch = page.getByRole('button', { name: 'Branch of notes' })
+    expect(await shown(branch)).toContain('main')
+    await branch.click()
+    const menu = page.getByRole('menu', { name: 'Branches of notes' })
+    expect(await shown(menu.getByRole('menuitemradio', { name: /^main/ }))).toContain('checked out')
+    expect(await shown(menu.getByRole('menuitemradio', { name: /^add-search/ }))).toContain('local')
+    await menu.getByRole('menuitemradio', { name: /^add-search/ }).click()
+    await expect.poll(async () => branch.textContent(), { timeout: PATIENCE }).toContain('not checked out')
     await page.getByRole('button', { name: 'Open web' }).click()
     expect(await shown(page.getByRole('button', { name: 'Open search' }))).toContain('/search')
     await settle()

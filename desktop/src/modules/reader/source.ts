@@ -94,23 +94,51 @@ const catFiles = (repo: string, names: string[]): Promise<(string | undefined)[]
     child.stdin.end(names.join('\n') + '\n')
   })
 
-/** The branches a person might want to look at, and the latest commits on
- *  the one checked out. */
+/** The branches a person might want to look at, each saying whether it is
+ *  on this computer, on GitHub, or both, and how far apart the two are; and
+ *  the latest commits on the one checked out. */
 export const pointsIn = async (repo: string, commits = 30): Promise<Point[]> => {
   if (!existsSync(join(repo, '.git'))) return []
   const [refs, log] = await Promise.all([
-    git(repo, ['for-each-ref', '--sort=-committerdate', '--format=%(refname:short)', 'refs/heads', 'refs/remotes']),
+    git(repo, [
+      'for-each-ref',
+      '--sort=-committerdate',
+      '--format=%(refname)%09%(upstream:short)%09%(upstream:track,nobracket)%09%(HEAD)',
+      'refs/heads',
+      'refs/remotes',
+    ]),
     git(repo, ['log', `-n${commits}`, '--format=%H%x09%s']),
   ])
-  const local = new Set<string>()
-  const branches: Point[] = []
-  for (const name of refs.split('\n').map((line) => line.trim()).filter(Boolean)) {
-    if (name.endsWith('/HEAD') || name === 'origin') continue
-    const short = name.replace(/^origin\//, '')
-    if (name.startsWith('origin/') && local.has(short)) continue
-    local.add(name)
-    branches.push({ kind: 'branch', name })
+  const lines = refs
+    .split('\n')
+    .map((line) => line.split('\t'))
+    .filter((parts) => parts[0])
+  const remote = new Set(lines.map(([ref]) => ref!).filter((ref) => ref.startsWith('refs/remotes/')).map((ref) => ref.replace('refs/remotes/', '')))
+  const tracked = new Set<string>()
+  const branches: Extract<Point, { kind: 'branch' }>[] = []
+  for (const [ref = '', upstream = '', track = '', head = ''] of lines) {
+    if (!ref.startsWith('refs/heads/')) continue
+    const name = ref.replace('refs/heads/', '')
+    const there = upstream && remote.has(upstream) && track !== 'gone'
+    if (there) tracked.add(upstream)
+    const count = (word: string): number => Number(track.match(new RegExp(`${word} (\\d+)`))?.[1] ?? 0)
+    branches.push({
+      kind: 'branch',
+      name,
+      where: there ? 'both' : 'local',
+      ahead: there ? count('ahead') : 0,
+      behind: there ? count('behind') : 0,
+      current: head.trim() === '*',
+    })
   }
+  const local = new Set(branches.map((b) => b.name))
+  for (const [ref = ''] of lines) {
+    if (!ref.startsWith('refs/remotes/') || ref.endsWith('/HEAD')) continue
+    const name = ref.replace('refs/remotes/', '')
+    if (tracked.has(name) || local.has(name.replace(/^[^/]+\//, '')) || !name.includes('/')) continue
+    branches.push({ kind: 'branch', name, where: 'cloud', ahead: 0, behind: 0, current: false })
+  }
+  branches.sort((a, b) => Number(b.current) - Number(a.current))
   const history: Point[] = log
     .split('\n')
     .filter(Boolean)
@@ -118,7 +146,8 @@ export const pointsIn = async (repo: string, commits = 30): Promise<Point[]> => 
       const [sha = '', ...title] = line.split('\t')
       return { kind: 'commit', sha, title: title.join('\t') }
     })
-  return [{ kind: 'live' }, ...branches, ...history]
+  const checkedOut = branches.find((b) => b.current)?.name
+  return [{ kind: 'live', ...(checkedOut ? { branch: checkedOut } : {}) }, ...branches, ...history]
 }
 
 /** One file at a point, as bytes, for a picture; null when it is not there. */

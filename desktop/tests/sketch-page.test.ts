@@ -74,7 +74,8 @@ afterAll(async () => {
 describe('drawing a sketch in the real app', () => {
   it('starts a blank sketch, with the cards for its level beside the tools', async () => {
     await page.getByRole('button', { name: /^Sketches/ }).click()
-    await page.getByRole('button', { name: 'Blank sketch' }).click()
+    await page.getByRole('button', { name: 'New sketch' }).click()
+    await page.getByRole('button', { name: /^Blank/ }).click()
     expect(await page.getByLabel('Sketch name').inputValue()).toBe('New sketch')
     expect(await shown(page.getByText('Nothing drawn here yet'))).toContain('Drag a card in from the left')
     const library = page.getByRole('complementary', { name: 'Cards' })
@@ -297,9 +298,17 @@ describe('drawing a sketch in the real app', () => {
     await page.getByRole('button', { name: 'Open notes' }).click()
     await page.getByRole('button', { name: 'Open web' }).waitFor({ timeout: PATIENCE })
     await page.getByRole('button', { name: /^Sketches/ }).click()
-    await page.getByRole('button', { name: 'Sketch from the map' }).click()
+    await page.getByRole('button', { name: 'New sketch' }).click()
+    await page.getByRole('button', { name: /^From the map/ }).click()
 
-    expect(await page.getByLabel('Sketch name').inputValue()).toBe('notes, as it could be')
+    // Named after the branch it was taken from, and the day.
+    const day = new Date()
+    const two = (n: number): string => String(n).padStart(2, '0')
+    const name = `main (sketch ${two(day.getDate())}/${two(day.getMonth() + 1)}/${two(day.getFullYear() % 100)})`
+    expect(await page.getByLabel('Sketch name').inputValue()).toBe(name)
+    // The bar says a sketch is being worked on, and the branch is put away.
+    expect(await shown(page.getByRole('button', { name: `Sketches: working on ${name}` }))).toContain('Sketching')
+    expect(await page.getByRole('button', { name: /^Branch of/ }).count()).toBe(0)
     await card('web').click()
     await page.getByRole('button', { name: 'Draw inside it' }).click()
     expect(await shown(card('write-note'))).toContain('feature')

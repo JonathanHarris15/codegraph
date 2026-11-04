@@ -118,10 +118,34 @@ describe('reading at a point', () => {
 
   it('lists the live folder, the branches and the latest commits', async () => {
     const points = await listPoints(repo)
-    expect(points[0]).toEqual(live)
+    expect(points[0]).toEqual({ kind: 'live', branch: 'main' })
     const branches = points.flatMap((p) => (p.kind === 'branch' ? [p.name] : []))
     expect(branches.sort()).toEqual(['add-search', 'main'])
     expect(points.find((p) => p.kind === 'commit')).toMatchObject({ title: 'notes' })
+  })
+})
+
+describe('the branches of a repo with a copy on GitHub', () => {
+  it('says which are here, which only there, and how far apart', async () => {
+    const remote = join(yard.path, 'remote.git')
+    git(yard.path, 'init', '--bare', '-q', remote)
+    const here = aMappedRepo(yard, 'cloned')
+    git(here, 'remote', 'add', 'origin', remote)
+    git(here, 'push', '-q', '-u', 'origin', 'main', 'add-search')
+    git(here, 'branch', '-q', '-D', 'add-search')
+    git(here, 'checkout', '-q', '-b', 'just-here')
+    git(here, 'checkout', '-q', 'main')
+    writeFileSync(join(here, 'app', 'more.ts'), '// codegraph: module more\n')
+    git(here, 'add', '-A')
+    git(here, 'commit', '-q', '-m', 'more')
+
+    const points = await listPoints(here)
+    expect(points[0]).toEqual({ kind: 'live', branch: 'main' })
+    const branches = points.filter((p) => p.kind === 'branch')
+    expect(branches[0]).toMatchObject({ name: 'main', where: 'both', ahead: 1, behind: 0, current: true })
+    expect(branches.find((b) => b.name === 'just-here')).toMatchObject({ where: 'local', current: false })
+    expect(branches.find((b) => b.name === 'origin/add-search')).toMatchObject({ where: 'cloud' })
+    expect(branches.some((b) => b.name === 'origin/main')).toBe(false)
   })
 })
 
