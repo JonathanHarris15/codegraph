@@ -77,7 +77,7 @@ describe('drawing a sketch in the real app', () => {
     await page.getByRole('button', { name: 'New sketch' }).click()
     await page.getByRole('button', { name: /^Blank/ }).click()
     expect(await page.getByLabel('Sketch name').inputValue()).toBe('New sketch')
-    expect(await shown(page.getByText('Nothing drawn here yet'))).toContain('Drag a card in from the left')
+    expect(await page.getByText('Nothing drawn here yet').count()).toBe(0)
     const library = page.getByRole('complementary', { name: 'Cards' })
     expect(await shown(library)).toContain('software system')
     expect(await shown(library)).toContain('person')
@@ -287,7 +287,7 @@ describe('drawing a sketch in the real app', () => {
   it('draws inside a card, from the bar over it', async () => {
     await card('notes').click()
     await page.getByRole('button', { name: 'Draw inside it' }).click()
-    expect(await shown(page.getByText('Nothing drawn here yet'))).toContain('Drag a card in from the left')
+    expect(await page.getByText('Nothing drawn here yet').count()).toBe(0)
     expect(await shown(page.getByRole('complementary', { name: 'Cards' }))).toContain('web app')
     expect(await shown(page.getByRole('navigation', { name: 'Where you are' }))).toContain('notes')
     await settle()

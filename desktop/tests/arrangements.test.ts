@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { saveArrangement } from '../src/features/save-arrangement.js'
 import { showArrangement } from '../src/features/show-arrangement.js'
-import { forgetting, movedTo, useFolder as useArrangements } from '../src/modules/arrangements/index.js'
+import { forgetting, movedTo, roomKey, useFolder as useArrangements } from '../src/modules/arrangements/index.js'
 import { addProject, addSoftwareSystem, useFolder as useProjects } from '../src/modules/projects/index.js'
 import { aMappedRepo, closeYard, openYard, type Yard } from './yard.js'
 
@@ -26,6 +26,12 @@ beforeAll(() => {
 afterAll(() => closeYard(yard))
 
 describe('where a person has moved a map about', () => {
+  it('keeps how much room a person gave an open card, with its size', async () => {
+    const room = { id: roomKey(web()), x: -400, y: -300, w: 900, h: 700 }
+    expect(movedTo([], [room])).toEqual([room])
+    expect(movedTo([room], [{ id: db(), x: 10, y: 20 }])).toEqual([room, { id: db(), x: 10, y: 20 }])
+  })
+
   it('is nothing until they move something', async () => {
     expect(await showArrangement(projectId)).toEqual([])
   })

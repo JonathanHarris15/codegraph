@@ -4,7 +4,7 @@ Date: 2026-11-04
 
 ## Status
 
-Accepted.
+Accepted. How a card opens has since changed; see ADR 0011.
 
 ## Context
 

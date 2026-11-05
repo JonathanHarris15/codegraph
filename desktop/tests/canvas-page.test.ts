@@ -26,7 +26,7 @@ const picture = async (name: string): Promise<void> => {
   if (pictures) await page.screenshot({ path: join(pictures, `${name}.png`) })
 }
 
-/** Lets a tunnel finish before looking. */
+/** Lets a card finish opening before looking. */
 const settle = (): Promise<void> => page.waitForTimeout(900)
 
 beforeAll(async () => {
@@ -79,7 +79,7 @@ describe('the canvas in the real app', () => {
     await picture('1b-shallow')
   })
 
-  it('tunnels into a software system and shows its containers, wired together', async () => {
+  it('opens a software system and shows its containers, wired together', async () => {
     await page.getByRole('button', { name: 'Open notes' }).dblclick()
     expect(await shown(page.getByRole('button', { name: 'Open web' }))).toContain('browser app')
     expect(await shown(page.getByLabel('db', { exact: true }))).toContain('database')
@@ -90,7 +90,7 @@ describe('the canvas in the real app', () => {
     await picture('2-system')
   })
 
-  it('tunnels into a container and shows its pages as frames, with the wires between components', async () => {
+  it('opens a container and shows its pages as frames, with the wires between components', async () => {
     await page.getByRole('button', { name: 'Open web' }).dblclick()
     expect(await shown(page.getByRole('button', { name: 'Open new-note' }))).toContain('/notes/new')
     expect(await shown(page.getByText('No screenshot yet'))).toBe('No screenshot yet')
@@ -101,14 +101,14 @@ describe('the canvas in the real app', () => {
     await picture('3-container')
   })
 
-  it('tunnels down to the code', async () => {
+  it('opens down to the code', async () => {
     await page.getByRole('button', { name: 'Open write-note' }).dblclick()
     expect(await shown(page.getByText('writeNote'))).toBe('writeNote')
     await settle()
     await picture('4-code')
   })
 
-  it('tunnels back out', async () => {
+  it('backs out', async () => {
     await page.keyboard.press('Escape')
     await settle()
     await page.keyboard.press('Escape')

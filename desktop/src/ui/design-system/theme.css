@@ -747,6 +747,11 @@ h3 {
   touch-action: none;
 }
 
+/* a double-click on the board adds a card; it never picks text beside it */
+.map-frame-area {
+  user-select: none;
+}
+
 .map-frame-area:active {
   cursor: grabbing;
 }
@@ -763,9 +768,7 @@ h3 {
 }
 
 .map-world--moving {
-  transition:
-    transform 320ms cubic-bezier(0.3, 0.1, 0.2, 1),
-    opacity 320ms ease;
+  transition: transform 320ms cubic-bezier(0.3, 0.1, 0.2, 1);
 }
 
 .map-empty {
@@ -846,6 +849,13 @@ h3 {
   padding: 0;
   overflow: visible;
   cursor: default;
+  /* its insides are drawn on the board, so a press in here lands there */
+  pointer-events: none;
+}
+
+/* the open card a person is working inside */
+.map-card--open.map-card--here {
+  box-shadow: 0 0 0 1px var(--k, var(--line-edge));
 }
 
 .map-card--open::before {
@@ -855,6 +865,7 @@ h3 {
   border-radius: inherit;
   background: var(--surface-open);
   opacity: var(--opacity-open-fill);
+  pointer-events: none;
 }
 
 /* its name, out of the way of its insides */
@@ -872,6 +883,102 @@ h3 {
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   background: var(--surface-100);
   white-space: nowrap;
+  pointer-events: auto;
+}
+
+.map-lip--movable {
+  cursor: grab;
+}
+
+/* the way back out, first thing on the lip */
+.map-back {
+  display: grid;
+  place-items: center;
+  width: var(--space-5);
+  height: var(--space-5);
+  margin-left: calc(-1 * var(--space-2));
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+
+.map-back:hover,
+.map-back:focus-visible {
+  background: var(--surface-000);
+  color: var(--ink-000);
+  outline: none;
+}
+
+/* the handles that change how much room it has: the corners show, and the
+   sides are a strip along each edge that only the pointer finds */
+.map-grip {
+  position: absolute;
+  pointer-events: auto;
+  z-index: 1;
+}
+
+.map-grip--n,
+.map-grip--s {
+  left: 12px;
+  right: 12px;
+  height: 12px;
+  cursor: ns-resize;
+}
+
+.map-grip--e,
+.map-grip--w {
+  top: 12px;
+  bottom: 12px;
+  width: 12px;
+  cursor: ew-resize;
+}
+
+.map-grip--n {
+  top: -6px;
+}
+.map-grip--s {
+  bottom: -6px;
+}
+.map-grip--e {
+  right: -6px;
+}
+.map-grip--w {
+  left: -6px;
+}
+
+.map-grip--nw,
+.map-grip--ne,
+.map-grip--sw,
+.map-grip--se {
+  width: 12px;
+  height: 12px;
+  border: var(--stroke-edge) solid var(--k, var(--line-edge));
+  border-radius: 3px;
+  background: var(--surface-000);
+}
+
+.map-grip--nw {
+  top: -6px;
+  left: -6px;
+  cursor: nwse-resize;
+}
+.map-grip--se {
+  bottom: -6px;
+  right: -6px;
+  cursor: nwse-resize;
+}
+.map-grip--ne {
+  top: -6px;
+  right: -6px;
+  cursor: nesw-resize;
+}
+.map-grip--sw {
+  bottom: -6px;
+  left: -6px;
+  cursor: nesw-resize;
 }
 
 /* where a wire from outside crosses its border */
@@ -882,6 +989,7 @@ h3 {
   border-radius: var(--radius-pill);
   background: var(--ink-000);
   transform: translate(-50%, -50%);
+  pointer-events: auto;
 }
 
 .map-kind {
