@@ -1,0 +1,206 @@
+// codegraph: start page projects at /
+import { useCallback, useEffect, useState } from 'react'
+import type { AgentConnection } from '../../features/connect-agent.js'
+import type { CloudView } from '../../features/list-github-software-systems.js'
+import type { ProjectView } from '../../features/list-projects.js'
+import { Button, Card, Field, Sheet, ThemeSwitch } from '../design-system/kit.js'
+import { AgentWindow } from '../components/agent-window.js'
+import { GithubWindow } from '../components/github-window.js'
+import { ProjectCard } from '../components/project-card.js'
+
+export const ProjectsPage = ({ onOpen }: { onOpen: (projectId: string) => void }) => {
+  const [projects, setProjects] = useState<ProjectView[] | null>(null)
+  const [cloud, setCloud] = useState<CloudView | null>(null)
+  const [naming, setNaming] = useState(false)
+  const [name, setName] = useState('')
+  const [linking, setLinking] = useState('')
+  const [refreshing, setRefreshing] = useState(false)
+  const [busyWithGithub, setBusyWithGithub] = useState(false)
+  const [note, setNote] = useState('')
+  const [agent, setAgent] = useState<AgentConnection | null>(null)
+  /** Which small window is open over the page, if any. */
+  const [open, setOpen] = useState<'' | 'github' | 'agent'>('')
+
+  const load = useCallback(async (fetchFirst = false): Promise<void> => {
+    setProjects(await window.codegraph.listProjects(fetchFirst))
+  }, [])
+
+  const loadCloud = useCallback(async (): Promise<void> => {
+    setCloud(await window.codegraph.listGithubSoftwareSystems())
+  }, [])
+
+  useEffect(() => {
+    void load()
+    void loadCloud()
+    void window.codegraph.connectAgent().then(setAgent)
+  }, [load, loadCloud])
+
+  const create = async (): Promise<void> => {
+    await window.codegraph.createProject(name)
+    setName('')
+    setNaming(false)
+    await load()
+  }
+
+  const link = async (projectId: string): Promise<void> => {
+    setLinking(projectId)
+    setNote('')
+    const linked = await window.codegraph.linkSoftwareSystem(projectId)
+    if (linked.problem) setNote(linked.problem)
+    else if (linked.ok && linked.needsSetup)
+      setNote(
+        `${linked.name ?? 'That repo'} is linked, but it is not set up for codegraph yet. Ask your agent to set it up; the codegraph MCP tells it how.`,
+      )
+    if (linked.ok) {
+      await load()
+      await loadCloud()
+    }
+    setLinking('')
+  }
+
+  const refresh = async (): Promise<void> => {
+    setRefreshing(true)
+    await load(true)
+    await loadCloud()
+    setRefreshing(false)
+  }
+
+  const connect = async (token: string): Promise<string> => {
+    setBusyWithGithub(true)
+    const connected = await window.codegraph.connectGithub(token)
+    if (connected.ok) await loadCloud()
+    setBusyWithGithub(false)
+    return connected.problem ?? ''
+  }
+
+  const makeFromGithub = async (shortName: string): Promise<void> => {
+    await window.codegraph.createProject(shortName, shortName)
+    await load()
+    await loadCloud()
+  }
+
+  const signOut = async (): Promise<void> => {
+    await window.codegraph.signOutGithub()
+    await loadCloud()
+  }
+
+  return (
+    <div className="ds-page">
+      <div className="ds-head">
+        <div>
+          <h1 className="ds-title">Projects</h1>
+          <div className="ds-sub">
+            A project holds the software systems you work on together, each one a git repo.
+            Double-click a project to see its map.
+          </div>
+        </div>
+        <div className="ds-row">
+          <Button look="bare" onClick={() => setOpen('github')} label="GitHub">
+            GitHub
+            {cloud?.signedIn ? <span className="ds-head-dot" title="Signed in" /> : null}
+          </Button>
+          <Button look="bare" onClick={() => setOpen('agent')}>
+            Your agent
+          </Button>
+          <ThemeSwitch />
+          <Button onClick={() => void refresh()} disabled={refreshing}>
+            {refreshing ? 'Checking GitHub…' : 'Refresh'}
+          </Button>
+          <Button look="loud" onClick={() => setNaming(true)}>
+            New project
+          </Button>
+        </div>
+      </div>
+
+      {note ? (
+        <div className="projects-note">
+          <Card>
+            <div className="ds-row" style={{ justifyContent: 'space-between' }}>
+              <span>{note}</span>
+              <Button look="bare" onClick={() => setNote('')}>
+                Dismiss
+              </Button>
+            </div>
+          </Card>
+        </div>
+      ) : null}
+
+      {projects === null ? (
+        <div className="ds-empty">Reading your projects…</div>
+      ) : projects.length === 0 ? (
+        <div className="ds-empty">
+          <div style={{ fontSize: 16, color: 'var(--ink)', marginBottom: 6 }}>
+            No projects yet
+          </div>
+          <div>Make one, then link the repos that belong to it.</div>
+          <div style={{ marginTop: 16 }}>
+            <Button look="loud" onClick={() => setNaming(true)}>
+              New project
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="ds-grid">
+          {projects.map((project) => (
+            <ProjectCard
+              key={project.id}
+              project={project}
+              onLink={(id) => void link(id)}
+              onOpen={onOpen}
+              onChoose={(systemId, point) => {
+                const named = point.kind === 'branch' ? point.name : point.kind === 'live' ? point.branch : ''
+                if (named) void window.codegraph.chooseBranch(project.id, systemId, named).then(() => load())
+              }}
+              linking={linking === project.id}
+            />
+          ))}
+        </div>
+      )}
+
+      {open === 'github' ? (
+        <GithubWindow
+          cloud={cloud}
+          busy={busyWithGithub}
+          onConnect={connect}
+          onSignOut={() => void signOut()}
+          onMakeProject={(short) => void makeFromGithub(short)}
+          onClose={() => setOpen('')}
+        />
+      ) : null}
+
+      {open === 'agent' ? <AgentWindow connection={agent} onClose={() => setOpen('')} /> : null}
+
+      {naming ? (
+        <Sheet
+          title="New project"
+          onClose={() => {
+            setNaming(false)
+            setName('')
+          }}
+        >
+          <Field
+            label="What is it called?"
+            value={name}
+            placeholder="Mosaic Manager"
+            onChange={setName}
+            onEnter={() => void create()}
+          />
+          <div className="ds-sheet-actions">
+            <Button
+              look="bare"
+              onClick={() => {
+                setNaming(false)
+                setName('')
+              }}
+            >
+              Cancel
+            </Button>
+            <Button look="loud" onClick={() => void create()} disabled={!name.trim()}>
+              Make it
+            </Button>
+          </div>
+        </Sheet>
+      ) : null}
+    </div>
+  )
+}

@@ -1,6 +1,13 @@
+# python
 __pycache__/
 *.pyc
 .venv/
+
+# node
+node_modules/
+dist/
+out/
+*.log
 
 # generated output
 codegraph.html

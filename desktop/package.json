@@ -1,0 +1,38 @@
+{
+  "name": "codegraph-desktop",
+  "version": "0.1.0",
+  "description": "The codegraph app: your projects, their software systems, and a map of each read from its code.",
+  "author": "Jonathan Harris",
+  "main": "./out/main/index.js",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "tsc --noEmit && electron-vite build",
+    "start": "electron-vite preview",
+    "test": "electron-vite build && vitest run",
+    "typecheck": "tsc --noEmit",
+    "test:quick": "vitest run --exclude \"tests/projects-page.test.ts\""
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.5",
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.2",
+    "electron": "^33.0.2",
+    "electron-vite": "^2.3.0",
+    "playwright": "^1.64.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "vite": "^5.4.9",
+    "vitest": "^2.1.3"
+  },
+  "dependencies": {
+    "@fontsource/ibm-plex-mono": "^5.1.0",
+    "@fontsource/ibm-plex-sans": "^5.1.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "lucide-react": "^0.456.0",
+    "typescript": "^5.6.3",
+    "zod": "^3.25.76"
+  }
+}

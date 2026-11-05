@@ -1,6 +1,0 @@
-[tool.pytest.ini_options]
-# the tests import modules/ and features/ from the repo root
-pythonpath = ["."]
-testpaths = ["tests"]
-# the app in tests/indie-stack is tried, not collected
-norecursedirs = [".*", "node_modules", "build", "dist", "indie-stack"]

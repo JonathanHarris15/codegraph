@@ -1,0 +1,3901 @@
+/* codegraph: design system */
+
+/* Paper, the default. The canvas carries real screenshots of real light web
+   pages, and those glare on a near-black board. */
+:root {
+  --canvas-000: #f5f3ef;
+  --canvas-grid: #dedad2;
+  --surface-000: #ffffff;
+  --surface-100: #ffffff;
+  --surface-sunken: #efece6;
+  --surface-open: #fbfaf7;
+  --shot-mat: #ffffff;
+
+  --ink-000: #1c1a17;
+  --ink-soft: #5b5952;
+  --ink-faint: #7d7a72;
+  --ink-inverse: #fbfaf7;
+
+  --line-hair: #e4e0d9;
+  --line-edge: #959189;
+  --focus-ring: #0e7490;
+
+  --kind-structure: #2b3a4f;
+  --kind-structure-wash: #e9edf3;
+  --kind-outside: #6b6962;
+  --kind-outside-wash: #efeeea;
+  --kind-person: #7a6a56;
+  --kind-person-wash: #f3ede5;
+  --kind-page: #1d5fd0;
+  --kind-page-wash: #e8effc;
+  --kind-feature: #0f6b45;
+  --kind-feature-wash: #e3f1eb;
+  --kind-module: #9a6208;
+  --kind-module-wash: #f8efdc;
+  --kind-trigger: #6d28d9;
+  --kind-trigger-wash: #f0e9fd;
+  --kind-keep: #9d2063;
+  --kind-keep-wash: #fbe8f1;
+  --kind-code: #55606e;
+  --kind-code-wash: #ebeef2;
+
+  --wire-line: #8a867d;
+  --wire-strong: #3a372f;
+  --wire-chip: #ffffff;
+
+  --state-good: #0f6f7a;
+  --state-good-wash: #e3f1f3;
+  --state-waiting: #8a5a00;
+  --state-waiting-wash: #f8efdc;
+  --state-problem: #b3261e;
+  --state-problem-wash: #fbeae9;
+
+  --pick-ring: #1c1a17;
+  --pick-handle: #ffffff;
+
+  --note-fill: #fdf3c8;
+  --note-ink: #3f3a1b;
+  --note-edge: #e8d98a;
+
+  --shadow-card: 0 1px 2px rgba(29, 27, 24, 0.07), 0 2px 8px rgba(29, 27, 24, 0.06);
+  --shadow-chip: 0 1px 2px rgba(29, 27, 24, 0.1);
+  --shadow-float: 0 2px 4px rgba(29, 27, 24, 0.07), 0 12px 28px rgba(29, 27, 24, 0.12);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-9: 36px;
+  --space-14: 56px;
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-store: 20px;
+  --radius-pill: 999px;
+
+  /* The sizes the canvas really lays out with; map-layout.ts holds the same. */
+  --card-w: 240px;
+  --card-w-wide: 280px;
+  --frame-w: 260px;
+  --frame-h: 200px;
+  --note-w: 180px;
+  --note-h: 60px;
+  --rail-w: 56px;
+  --bar-h: 48px;
+  --panel-w: 300px;
+  --library-w: 360px;
+  --overview-w: 208px;
+  --grid-pitch: 24px;
+
+  --stroke-rule: 3px;
+  --stroke-edge: 1px;
+  --stroke-open: 2px;
+  --stroke-wire: 1.6px;
+  --stroke-wire-strong: 2.4px;
+
+  --opacity-outside: 0.55;
+  --opacity-open-fill: 0.6;
+  --opacity-ghost: 0.35;
+  --opacity-disabled: 0.45;
+
+  --font-sans: 'IBM Plex Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  --canvas-000: #14161b;
+  --canvas-grid: #262a32;
+  --surface-000: #1e222a;
+  --surface-100: #232832;
+  --surface-sunken: #191d24;
+  --surface-open: #1a1e25;
+  --shot-mat: #f1efea;
+
+  --ink-000: #edeff3;
+  --ink-soft: #a9afbb;
+  --ink-faint: #8b919d;
+  --ink-inverse: #14161b;
+
+  --line-hair: #2c313a;
+  --line-edge: #6a7180;
+  --focus-ring: #22d3ee;
+
+  --kind-structure: #c6d2e4;
+  --kind-structure-wash: #212630;
+  --kind-outside: #9b978c;
+  --kind-outside-wash: #25251f;
+  --kind-person: #c3ab8d;
+  --kind-person-wash: #272118;
+  --kind-page: #7aa7f7;
+  --kind-page-wash: #1b2434;
+  --kind-feature: #4cc18c;
+  --kind-feature-wash: #16291f;
+  --kind-module: #e0a948;
+  --kind-module-wash: #2c2518;
+  --kind-trigger: #b08bf5;
+  --kind-trigger-wash: #231e32;
+  --kind-keep: #f09ac4;
+  --kind-keep-wash: #301824;
+  --kind-code: #93a3b8;
+  --kind-code-wash: #1f242b;
+
+  --wire-line: #767e8d;
+  --wire-strong: #cfd5e0;
+  --wire-chip: #262b34;
+
+  --state-good: #4fc9d6;
+  --state-good-wash: #16282b;
+  --state-waiting: #e2b057;
+  --state-waiting-wash: #2c2518;
+  --state-problem: #ff8a80;
+  --state-problem-wash: #331b19;
+
+  --pick-ring: #edeff3;
+  --pick-handle: #1e222a;
+
+  --note-fill: #3b3520;
+  --note-ink: #f3e7b6;
+  --note-edge: #564d2d;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.5), 0 2px 10px rgba(0, 0, 0, 0.35);
+  --shadow-chip: 0 1px 2px rgba(0, 0, 0, 0.55);
+  --shadow-float: 0 2px 4px rgba(0, 0, 0, 0.5), 0 16px 36px rgba(0, 0, 0, 0.5);
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--canvas-000);
+  color: var(--ink-000);
+  font: 400 13.5px/19px var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  font-family: var(--font-sans);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+/* One colour per kind: a card sets --k and --kw, everything else reads them. */
+.kind-of--project,
+.kind-of--software-system,
+.kind-of--web-app,
+.kind-of--browser-app,
+.kind-of--server,
+.kind-of--desktop-app,
+.kind-of--mobile-app,
+.kind-of--function,
+.kind-of--command-line-tool,
+.kind-of--container {
+  --k: var(--kind-structure);
+  --kw: var(--kind-structure-wash);
+}
+.kind-of--shallow-software-system { --k: var(--kind-outside); --kw: var(--kind-outside-wash); }
+.kind-of--person { --k: var(--kind-person); --kw: var(--kind-person-wash); }
+.kind-of--page { --k: var(--kind-page); --kw: var(--kind-page-wash); }
+.kind-of--feature { --k: var(--kind-feature); --kw: var(--kind-feature-wash); }
+.kind-of--module { --k: var(--kind-module); --kw: var(--kind-module-wash); }
+.kind-of--trigger { --k: var(--kind-trigger); --kw: var(--kind-trigger-wash); }
+.kind-of--database,
+.kind-of--files-on-disk { --k: var(--kind-keep); --kw: var(--kind-keep-wash); }
+.kind-of--file { --k: var(--kind-code); --kw: var(--kind-code-wash); }
+
+/* ---- the kit -------------------------------------------------------- */
+
+.ds-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 28px 24px 64px;
+}
+
+.ds-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.ds-title {
+  font-size: 20px;
+  line-height: 26px;
+}
+
+.ds-sub {
+  color: var(--ink-soft);
+  margin-top: var(--space-1);
+}
+
+.ds-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.ds-card {
+  background: var(--surface-000);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-card);
+}
+
+.ds-card--quiet {
+  background: transparent;
+  border-style: dashed;
+  box-shadow: none;
+}
+
+.ds-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.ds-card-name {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+}
+
+.ds-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  text-decoration: none;
+  background: var(--surface-100);
+  color: var(--ink-000);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.ds-button:hover:not(:disabled) {
+  background: var(--surface-sunken);
+}
+
+.ds-button:focus-visible,
+.ds-input:focus-visible,
+.ds-tool:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.ds-button:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+
+/* Loud is ink, not a hue: a primary button never reads as a kind. */
+.ds-button--loud {
+  background: var(--ink-000);
+  color: var(--ink-inverse);
+  border-color: var(--ink-000);
+  font-weight: 600;
+}
+
+.ds-button--loud:hover:not(:disabled) {
+  background: var(--ink-soft);
+  border-color: var(--ink-soft);
+}
+
+.ds-button--bare {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ink-soft);
+  padding: var(--space-1) var(--space-2);
+}
+
+.ds-button--bare:hover:not(:disabled) {
+  background: var(--surface-sunken);
+  color: var(--ink-000);
+  border-color: transparent;
+}
+
+.ds-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: 12px;
+  line-height: 16px;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  border: var(--stroke-edge) solid var(--line-edge);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.ds-badge--good {
+  color: var(--state-good);
+  border-color: var(--state-good);
+  background: var(--state-good-wash);
+}
+
+.ds-badge--waiting {
+  color: var(--state-waiting);
+  border-color: var(--state-waiting);
+  background: var(--state-waiting-wash);
+}
+
+.ds-badge--problem {
+  color: var(--state-problem);
+  border-color: var(--state-problem);
+  background: var(--state-problem-wash);
+}
+
+.ds-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ds-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.ds-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.ds-label {
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  line-height: 15px;
+  font-weight: 500;
+}
+
+.ds-input {
+  background: var(--surface-sunken);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-md);
+  color: var(--ink-000);
+  padding: var(--space-2) var(--space-3);
+  font: inherit;
+  width: 100%;
+}
+
+.ds-input::placeholder {
+  color: var(--ink-faint);
+}
+
+.ds-hint {
+  color: var(--ink-faint);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.ds-problem {
+  color: var(--state-problem);
+  font-size: 13px;
+}
+
+.ds-veil {
+  position: fixed;
+  inset: 0;
+  background: rgba(28, 26, 23, 0.45);
+  display: grid;
+  place-items: center;
+  padding: var(--space-6);
+  z-index: 10;
+}
+
+.ds-sheet {
+  background: var(--surface-100);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-float);
+  padding: var(--space-5);
+  width: 440px;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.ds-sheet-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.ds-empty {
+  border: var(--stroke-edge) dashed var(--line-edge);
+  border-radius: var(--radius-lg);
+  padding: 40px var(--space-6);
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+.ds-section {
+  margin-top: var(--space-9);
+  padding-top: var(--space-6);
+  border-top: var(--stroke-edge) solid var(--line-hair);
+}
+
+.ds-mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--ink-faint);
+  overflow-wrap: break-word;
+}
+
+/* ---- the canvas ----------------------------------------------------- */
+
+.map-page {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.map-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: var(--bar-h);
+  flex: none;
+  padding: 0 var(--space-4);
+  border-bottom: var(--stroke-edge) solid var(--line-hair);
+  background: var(--surface-100);
+  z-index: 2;
+}
+
+.map-body {
+  position: relative;
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.map-trail {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.map-trail-step {
+  display: flex;
+  align-items: center;
+}
+
+.map-trail-gap {
+  color: var(--ink-faint);
+  padding: 0 var(--space-1);
+}
+
+.map-trail-link,
+.map-trail-here {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  border: 0;
+  background: none;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--ink-soft);
+  text-align: left;
+  cursor: pointer;
+}
+
+.map-trail-link:hover {
+  color: var(--ink-000);
+  background: var(--surface-sunken);
+}
+
+.map-trail-here {
+  color: var(--ink-000);
+  font-weight: 600;
+  cursor: default;
+}
+
+.map-trail-level {
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  line-height: 15px;
+  font-weight: 500;
+}
+
+.map-bar-end {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+}
+
+/* where the map is read */
+.map-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-md);
+  background: var(--surface-100);
+  color: var(--ink-soft);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.map-picker:hover {
+  background: var(--surface-sunken);
+}
+
+.map-picker-where {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--ink-000);
+}
+
+.map-picker-title {
+  color: var(--ink-faint);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-count {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border: var(--stroke-edge) solid var(--state-problem);
+  border-radius: var(--radius-pill);
+  background: var(--state-problem-wash);
+  color: var(--state-problem);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.map-count::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--state-problem);
+}
+
+/* ---- the tool rail --------------------------------------------------- */
+
+.map-rail {
+  width: var(--rail-w);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) 0;
+  background: var(--surface-100);
+  border-right: var(--stroke-edge) solid var(--line-hair);
+  z-index: 2;
+}
+
+.map-rail-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.map-rail-rule {
+  height: var(--stroke-edge);
+  background: var(--line-hair);
+  margin: var(--space-2) var(--space-3);
+  flex: none;
+}
+
+.map-rail-note {
+  margin: 0 var(--space-2);
+  padding: var(--space-2) 0;
+  text-align: center;
+  color: var(--ink-faint);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.map-rail-note .ds-button {
+  width: 100%;
+  justify-content: center;
+  margin-top: var(--space-2);
+  padding: var(--space-1);
+}
+
+.ds-tool {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin: 0 var(--space-1);
+  padding: var(--space-1) 0 3px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  line-height: 15px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.ds-tool:hover {
+  background: var(--surface-sunken);
+  color: var(--ink-000);
+}
+
+.ds-tool--on,
+.ds-tool--on:hover {
+  background: var(--ink-000);
+  color: var(--ink-inverse);
+}
+
+.ds-tool-more {
+  position: absolute;
+  right: 3px;
+  top: 3px;
+}
+
+/* the kinds for the level you are on */
+.map-flyout {
+  position: absolute;
+  left: var(--rail-w);
+  z-index: 6;
+  min-width: 212px;
+  padding: var(--space-2);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-lg);
+  background: var(--surface-100);
+  box-shadow: var(--shadow-float);
+}
+
+.map-flyout-group {
+  padding: var(--space-2) var(--space-2) var(--space-1);
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  line-height: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 600;
+}
+
+.map-flyout-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-000);
+  text-align: left;
+  cursor: pointer;
+}
+
+.map-flyout-item:hover {
+  background: var(--surface-sunken);
+}
+
+/* ---- the board ------------------------------------------------------- */
+
+.map-frame-area {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  cursor: grab;
+  background-color: var(--canvas-000);
+  background-image: radial-gradient(var(--canvas-grid) 1px, transparent 1px);
+  background-size: var(--grid-pitch) var(--grid-pitch);
+  touch-action: none;
+}
+
+.map-frame-area:active {
+  cursor: grabbing;
+}
+
+.map-frame-area--reading {
+  opacity: 0.6;
+}
+
+.map-world {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+}
+
+.map-world--moving {
+  transition:
+    transform 320ms cubic-bezier(0.3, 0.1, 0.2, 1),
+    opacity 320ms ease;
+}
+
+.map-empty {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+  color: var(--ink-faint);
+  padding: var(--space-6);
+  text-align: center;
+}
+
+/* ---- a card ---------------------------------------------------------- */
+
+.map-card {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-3) var(--space-4);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-top: var(--stroke-rule) solid var(--k, var(--line-edge));
+  border-radius: var(--radius-lg);
+  background: var(--surface-000);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  cursor: default;
+}
+
+.map-card[role='button'] {
+  cursor: zoom-in;
+}
+
+/* a card that can be dragged somewhere else: the hand says so, and the
+   double-click that goes into it is what zoom-in used to promise */
+.map-card--movable,
+.map-card--movable[role='button'] {
+  cursor: grab;
+}
+
+.map-card[role='button']:hover,
+.map-card[role='button']:focus-visible {
+  border-color: var(--pick-ring);
+  border-top-color: var(--k, var(--line-edge));
+  outline: none;
+}
+
+/* a store is the one card shape that is not a rounded rectangle */
+.map-card--keeps {
+  border-radius: var(--radius-store);
+}
+
+/* a shallow software system, or a repo with nothing to read */
+.map-card--bare {
+  border-style: dashed;
+  border-top-style: solid;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* the cards around the one that is open */
+.map-card--outside {
+  opacity: var(--opacity-outside);
+  box-shadow: none;
+}
+
+.map-card--selected {
+  outline: var(--stroke-open) solid var(--pick-ring);
+  outline-offset: 2px;
+}
+
+/* a card opened in place: it stays where it is and turns see-through */
+.map-card--open {
+  background: none;
+  border: var(--stroke-open) solid var(--k, var(--line-edge));
+  border-radius: var(--radius-lg);
+  box-shadow: none;
+  padding: 0;
+  overflow: visible;
+  cursor: default;
+}
+
+.map-card--open::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--surface-open);
+  opacity: var(--opacity-open-fill);
+}
+
+/* its name, out of the way of its insides */
+.map-lip {
+  position: absolute;
+  top: calc(-1 * var(--space-6) - 2px);
+  left: calc(-1 * var(--stroke-open));
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--space-6);
+  padding: 0 var(--space-3);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-bottom: 0;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: var(--surface-100);
+  white-space: nowrap;
+}
+
+/* where a wire from outside crosses its border */
+.map-port {
+  position: absolute;
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--ink-000);
+  transform: translate(-50%, -50%);
+}
+
+.map-kind {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.map-glyph {
+  display: grid;
+  place-items: center;
+  width: var(--space-5);
+  height: var(--space-5);
+  flex: none;
+  border-radius: var(--radius-xs);
+  background: var(--kw, transparent);
+  color: var(--k, var(--ink-faint));
+}
+
+.map-kind-word {
+  font-size: 10.5px;
+  line-height: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ink-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.map-start {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border-radius: var(--radius-pill);
+  background: var(--kind-page-wash);
+  color: var(--kind-page);
+}
+
+.map-name {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-top: var(--space-1);
+  color: var(--ink-000);
+  overflow-wrap: anywhere;
+}
+
+.map-says {
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  line-height: 17px;
+  margin-top: var(--space-1);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.map-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+.map-chip {
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 500;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.map-chip--store {
+  background: var(--kind-keep-wash);
+  color: var(--kind-keep);
+}
+
+.map-more {
+  color: var(--ink-faint);
+}
+
+.map-names {
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+  font: 400 12px/18px var(--font-mono);
+  color: var(--ink-soft);
+}
+
+/* ---- a page is a window ---------------------------------------------- */
+
+.map-frame {
+  padding: 0;
+}
+
+.map-frame-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  background: var(--surface-sunken);
+  border-bottom: var(--stroke-edge) solid var(--line-hair);
+  flex: none;
+}
+
+.map-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-pill);
+  background: var(--line-edge);
+  flex: none;
+}
+
+.map-frame-at {
+  margin-left: var(--space-2);
+  font: 400 11.5px/16px var(--font-mono);
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-frame-at--none {
+  font: 400 12px/16px var(--font-sans);
+  color: var(--ink-faint);
+}
+
+.map-shot {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  color: var(--ink-faint);
+  background:
+    repeating-linear-gradient(-45deg, transparent 0 10px, var(--surface-sunken) 10px 20px),
+    var(--surface-000);
+}
+
+.map-shot--real {
+  display: block;
+  width: 100%;
+  object-fit: cover;
+  object-position: top;
+  background: var(--shot-mat);
+}
+
+.map-frame-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-top: var(--stroke-edge) solid var(--line-hair);
+  flex: none;
+}
+
+.map-frame-name .map-name {
+  font-size: 14px;
+  margin: 0;
+}
+
+/* ---- wires ------------------------------------------------------------ */
+
+.map-wires {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.map-wire path {
+  fill: none;
+  stroke: var(--wire-line);
+  stroke-width: var(--stroke-wire);
+}
+
+.map-wire--leads-to path {
+  stroke-dasharray: 5 4;
+}
+
+.map-wire--ghost path {
+  opacity: var(--opacity-ghost);
+}
+
+/* the wires of the level around the card that is open */
+.map-wire--outside path {
+  opacity: var(--opacity-outside);
+}
+
+.map-wire--selected path {
+  stroke: var(--wire-strong);
+  stroke-width: var(--stroke-wire-strong);
+}
+
+.map-head {
+  fill: var(--wire-line);
+}
+
+/* What a wire is for, as one chip at the midpoint of its own curve. */
+.map-sentence {
+  position: absolute;
+  display: inline-flex;
+  align-items: stretch;
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-md);
+  background: var(--wire-chip);
+  box-shadow: var(--shadow-chip);
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+}
+
+.map-wire-kind {
+  padding: var(--space-1) var(--space-2);
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--wire-strong);
+}
+
+.map-wire-words {
+  padding: var(--space-1) var(--space-2);
+  border-left: var(--stroke-edge) solid var(--line-hair);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--ink-soft);
+}
+
+/* a wire the code left empty is a problem to show, not to hide */
+.map-sentence--missing .map-wire-words {
+  color: var(--state-problem);
+}
+
+.map-sentence--missing .map-wire-words::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--state-problem);
+}
+
+.map-sentence--selected {
+  border-color: var(--wire-strong);
+}
+
+.map-sentence--pickable {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+/* the whole sentence, over a wire that is picked */
+.map-raised {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--ink-000);
+  color: var(--ink-inverse);
+  box-shadow: var(--shadow-float);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* what reaches a busy card, listed beside it */
+.map-pins {
+  position: absolute;
+  min-width: 232px;
+  max-width: 300px;
+  padding: var(--space-3);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-md);
+  background: var(--surface-100);
+  box-shadow: var(--shadow-float);
+}
+
+.map-pins-head {
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  line-height: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+}
+
+.map-pins-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.3fr);
+  gap: var(--space-2);
+  padding: 2px 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--ink-soft);
+}
+
+.map-pins-row b {
+  color: var(--ink-000);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.map-pins-verb {
+  color: var(--wire-strong);
+  font-weight: 600;
+}
+
+/* ---- getting around --------------------------------------------------- */
+
+.map-zoom {
+  position: absolute;
+  left: var(--space-6);
+  bottom: var(--space-6);
+  display: inline-flex;
+  align-items: center;
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-md);
+  background: var(--surface-100);
+  box-shadow: var(--shadow-float);
+  overflow: hidden;
+  z-index: 3;
+}
+
+.map-zoom-button {
+  display: grid;
+  place-items: center;
+  width: var(--space-8);
+  height: var(--space-8);
+  border: 0;
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.map-zoom-button:hover:not(:disabled) {
+  background: var(--surface-sunken);
+  color: var(--ink-000);
+}
+
+.map-zoom-button:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+
+.map-zoom-scale {
+  min-width: 56px;
+  height: var(--space-8);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-left: var(--stroke-edge) solid var(--line-hair);
+  border-right: var(--stroke-edge) solid var(--line-hair);
+  background: none;
+  color: var(--ink-000);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.map-zoom-scale:hover {
+  background: var(--surface-sunken);
+}
+
+.map-zoom-sep {
+  width: var(--stroke-edge);
+  height: var(--space-8);
+  background: var(--line-hair);
+}
+
+.map-overview {
+  position: absolute;
+  right: var(--space-6);
+  bottom: var(--space-6);
+  width: var(--overview-w);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-xl);
+  background: var(--surface-100);
+  box-shadow: var(--shadow-float);
+  overflow: hidden;
+  z-index: 3;
+}
+
+.map-overview--shut {
+  width: auto;
+  border-radius: var(--radius-md);
+}
+
+.map-overview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  border-bottom: var(--stroke-edge) solid var(--line-hair);
+}
+
+.map-overview-body {
+  position: relative;
+  height: 128px;
+  background: var(--canvas-000);
+  cursor: pointer;
+}
+
+.map-overview-block {
+  position: absolute;
+  border-radius: 2px;
+  opacity: 0.8;
+}
+
+.map-overview-box {
+  position: absolute;
+  border: var(--stroke-open) solid var(--pick-ring);
+  border-radius: var(--radius-xs);
+}
+
+/* a box dragged out with the Area tool */
+.map-marquee {
+  position: absolute;
+  border: var(--stroke-open) dashed var(--pick-ring);
+  border-radius: var(--radius-xs);
+  pointer-events: none;
+}
+
+/* ---- the things the canvas has to say --------------------------------- */
+
+.map-suggestions {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 620px;
+  z-index: 3;
+}
+
+.map-suggestion {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-100);
+  border: var(--stroke-edge) solid var(--line-edge);
+  box-shadow: var(--shadow-float);
+  color: var(--ink-soft);
+}
+
+.map-suggestion span {
+  flex: 1;
+}
+
+.map-suggestion b {
+  color: var(--ink-000);
+}
+
+.map-suggestion .ds-input {
+  width: auto;
+  padding: var(--space-1) var(--space-2);
+}
+
+.map-problems {
+  position: absolute;
+  right: var(--space-6);
+  top: var(--space-6);
+  width: 420px;
+  max-width: calc(100% - var(--space-6) * 2);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--surface-100);
+  border: var(--stroke-edge) solid var(--line-edge);
+  box-shadow: var(--shadow-float);
+  color: var(--ink-soft);
+  z-index: 4;
+}
+
+.map-problems ul {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+}
+
+.map-path {
+  font-family: var(--font-mono);
+  color: var(--ink-000);
+}
+
+/* ---- drawing on a sketch ---------------------------------------------- */
+
+.sketch-area {
+  position: relative;
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.map-frame-area--card,
+.map-frame-area--note,
+.map-frame-area--mockup,
+.map-frame-area--area {
+  cursor: crosshair;
+}
+
+.map-frame-area--wire .map-card {
+  cursor: alias;
+}
+
+.map-frame-area--pick .map-card,
+.map-frame-area--pick .map-note {
+  cursor: grab;
+}
+
+.map-frame-area--pan {
+  cursor: grab;
+}
+
+.map-note {
+  position: absolute;
+  width: var(--note-w);
+  min-height: var(--note-h);
+  padding: var(--space-3);
+  border: var(--stroke-edge) solid var(--note-edge);
+  border-radius: var(--radius-sm);
+  background: var(--note-fill);
+  color: var(--note-ink);
+  white-space: pre-wrap;
+  box-shadow: var(--shadow-card);
+}
+
+.sketch-panel {
+  width: var(--panel-w);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-left: var(--stroke-edge) solid var(--line-hair);
+  background: var(--surface-100);
+  overflow-y: auto;
+}
+
+.sketch-sentence {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--ink-000);
+  color: var(--ink-inverse);
+}
+
+.sketch-sentence b {
+  font-weight: 600;
+}
+
+.sketch-note-text {
+  resize: vertical;
+  font: inherit;
+}
+
+.sketch-rule {
+  height: var(--stroke-edge);
+  background: var(--line-hair);
+  border: 0;
+  margin: var(--space-2) 0 0;
+  width: 100%;
+}
+
+.map-sketch-name {
+  width: 200px;
+  padding: var(--space-1) var(--space-3);
+  font-weight: 600;
+}
+
+.sketch-library {
+  width: var(--library-w);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface-100);
+  border-left: var(--stroke-edge) solid var(--line-edge);
+  box-shadow: var(--shadow-float);
+  overflow-y: auto;
+  z-index: 4;
+}
+
+.sketch-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sketch-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-right: var(--space-2);
+  border: var(--stroke-edge) solid var(--line-hair);
+  border-left: var(--stroke-open) solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--surface-000);
+}
+
+.sketch-item--open {
+  border-left-color: var(--pick-ring);
+}
+
+.sketch-item-open {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  background: none;
+  color: var(--ink-000);
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.sketch-item-name {
+  font-weight: 600;
+}
+
+.sketch-menu {
+  position: relative;
+}
+
+.sketch-menu-list {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 5;
+  min-width: 160px;
+  padding: var(--space-1);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-md);
+  background: var(--surface-100);
+  box-shadow: var(--shadow-float);
+}
+
+.sketch-menu-list button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-000);
+  text-align: left;
+  cursor: pointer;
+}
+
+.sketch-menu-list button:hover {
+  background: var(--surface-sunken);
+}
+
+/* ==== drawing a sketch, the second pass ================================ */
+
+/* a wire read aloud: who acts, how, on what, and what for. It takes the
+   width of its words, up to a limit, then wraps: the board gives it no
+   width of its own to shrink into */
+.map-sentence {
+  display: block;
+  width: max-content;
+  max-width: 260px;
+  padding: 3px var(--space-2);
+  white-space: normal;
+  font-size: 11.5px;
+  line-height: 15px;
+  color: var(--ink-soft);
+  text-align: left;
+  overflow-wrap: anywhere;
+  z-index: 1;
+}
+
+.map-sentence--small {
+  padding: 2px var(--space-2);
+}
+
+.map-said-name {
+  color: var(--ink-000);
+  font-weight: 600;
+}
+
+.map-said-verb {
+  color: var(--wire-strong);
+  font-weight: 600;
+}
+
+.map-said-words,
+.map-said-plain {
+  color: var(--ink-soft);
+}
+
+.map-said-missing {
+  color: var(--state-problem);
+}
+
+.map-said-ask {
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+.map-sentence--selected {
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus-ring) 30%, transparent);
+}
+
+.map-sentence--pickable:hover {
+  border-color: var(--wire-strong);
+}
+
+.map-pins-row--said {
+  display: block;
+}
+
+/* a wire: a wide, unseen stroke along it, so it is easy to pick */
+.map-wire-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14px;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.map-wire--selected path:first-child {
+  stroke: var(--focus-ring);
+  stroke-width: var(--stroke-wire-strong);
+}
+
+/* the wire being drawn, before it lands */
+.map-wire-live {
+  fill: none;
+  stroke: var(--focus-ring);
+  stroke-width: var(--stroke-wire-strong);
+  stroke-dasharray: 6 4;
+}
+
+.map-head-live {
+  fill: var(--focus-ring);
+}
+
+/* a wire from outside, carried through the open card's border to the card
+   inside it that it really reaches */
+.map-through {
+  fill: none;
+  stroke: var(--wire-line);
+  stroke-width: var(--stroke-wire);
+  stroke-dasharray: 2 4;
+  opacity: 0.9;
+}
+
+/* the two ends of a picked wire, to drag onto another card */
+.map-wires--ends {
+  pointer-events: none;
+  z-index: 3;
+}
+
+.map-wire-end {
+  fill: var(--pick-handle);
+  stroke: var(--focus-ring);
+  stroke-width: 2px;
+  pointer-events: all;
+  cursor: crosshair;
+}
+
+/* lines that show two edges have lined up while dragging */
+.map-guide {
+  stroke: var(--focus-ring);
+  stroke-width: 1px;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+}
+
+/* the dots on a card's sides that a wire is drawn from */
+.map-handle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border: 2px solid var(--focus-ring);
+  border-radius: var(--radius-pill);
+  background: var(--pick-handle);
+  cursor: crosshair;
+  z-index: 2;
+  transition: transform 80ms ease;
+}
+
+.map-handle:hover {
+  transform: scale(1.35);
+  background: var(--focus-ring);
+}
+
+.map-handle--n { left: 50%; top: 0; }
+.map-handle--e { left: 100%; top: 50%; }
+.map-handle--s { left: 50%; top: 100%; }
+.map-handle--w { left: 0; top: 50%; }
+
+/* a card drawn on a sketch: its dots sit half outside it */
+.map-card--drawn {
+  overflow: visible;
+  cursor: grab;
+}
+
+.map-card--drawn[role="button"] {
+  cursor: grab;
+}
+
+.map-card--drawn .map-shot {
+  overflow: hidden;
+}
+
+.map-card--drawn.map-frame > .map-frame-bar {
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.map-card--selected {
+  outline: var(--stroke-open) solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* the card a wire being drawn would land on */
+.map-card--target {
+  outline: var(--stroke-open) solid var(--focus-ring);
+  outline-offset: 4px;
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--focus-ring) 18%, transparent), var(--shadow-card);
+}
+
+.map-card--person {
+  border-radius: var(--radius-xl) var(--radius-xl) var(--radius-lg) var(--radius-lg);
+}
+
+.map-marquee--pick {
+  border: var(--stroke-edge) solid var(--focus-ring);
+  background: color-mix(in srgb, var(--focus-ring) 8%, transparent);
+}
+
+.map-frame-area--card {
+  cursor: copy;
+}
+
+.map-frame-area--wire .map-card {
+  cursor: crosshair;
+}
+
+.map-frame-area--pan,
+.map-frame-area--pan .map-card {
+  cursor: grab;
+}
+
+/* writing words in place, over the card, the wire, or the note */
+.map-edit {
+  position: absolute;
+  z-index: 4;
+  font: inherit;
+  color: var(--ink-000);
+  background: var(--surface-000);
+  border: var(--stroke-open) solid var(--focus-ring);
+  border-radius: var(--radius-sm);
+  outline: none;
+  box-shadow: var(--shadow-float);
+}
+
+.map-edit--name {
+  height: 28px;
+  padding: 0 var(--space-2);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.map-edit--wire {
+  width: 240px;
+  height: 28px;
+  padding: 0 var(--space-2);
+  font-size: 12px;
+  transform: translate(-50%, -50%);
+}
+
+.map-edit--note {
+  width: var(--note-w);
+  min-height: 80px;
+  padding: var(--space-3);
+  font-size: 13px;
+  line-height: 18px;
+  background: var(--note-fill);
+  color: var(--note-ink);
+  resize: none;
+}
+
+/* ---- the card library, beside the rail -------------------------------- */
+
+.map-palette {
+  width: 216px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-2);
+  background: var(--surface-100);
+  border-right: var(--stroke-edge) solid var(--line-hair);
+  overflow-y: auto;
+  z-index: 2;
+  user-select: none;
+}
+
+.map-palette-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-2);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-000);
+}
+
+.map-palette-close {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+
+.map-palette-close:hover {
+  background: var(--surface-sunken);
+  color: var(--ink-000);
+}
+
+.map-palette-hint {
+  padding: 0 var(--space-2) var(--space-2);
+  font-size: 11.5px;
+  line-height: 15px;
+  color: var(--ink-faint);
+}
+
+.map-palette-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: var(--space-2);
+}
+
+.map-palette-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px var(--space-2);
+  border: var(--stroke-edge) solid transparent;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--ink-000);
+  font: inherit;
+  text-align: left;
+  cursor: grab;
+}
+
+.map-palette-item:hover {
+  background: var(--surface-sunken);
+  border-color: var(--line-hair);
+}
+
+.map-palette-item:active {
+  cursor: grabbing;
+}
+
+.map-palette-item--armed,
+.map-palette-item--armed:hover {
+  border-color: var(--focus-ring);
+  background: color-mix(in srgb, var(--focus-ring) 10%, var(--surface-100));
+}
+
+.map-palette-swatch {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  border-top: var(--stroke-rule) solid var(--k, var(--line-edge));
+  background: var(--kw, var(--surface-sunken));
+  color: var(--k, var(--ink-soft));
+}
+
+.map-palette-swatch--small {
+  width: 20px;
+  height: 20px;
+  border-top-width: 2px;
+}
+
+.kind-of--note {
+  --k: var(--note-edge);
+  --kw: var(--note-fill);
+}
+
+.map-palette-words {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.map-palette-name {
+  font-size: 13px;
+  line-height: 17px;
+  font-weight: 500;
+}
+
+.map-palette-says {
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--ink-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* a kind lifted from the library, following the pointer */
+.map-lifted {
+  position: fixed;
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-top: var(--stroke-rule) solid var(--k, var(--line-edge));
+  border-radius: var(--radius-md);
+  background: var(--surface-000);
+  color: var(--ink-000);
+  font-size: 13px;
+  box-shadow: var(--shadow-float);
+  pointer-events: none;
+  transform: translate(-50%, -50%) rotate(-2deg);
+  opacity: 0.95;
+}
+
+/* ---- asking what to add ----------------------------------------------- */
+
+.map-quick {
+  position: absolute;
+  z-index: 8;
+  width: 236px;
+  padding: var(--space-2);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-lg);
+  background: var(--surface-100);
+  box-shadow: var(--shadow-float);
+}
+
+.map-quick-head {
+  padding: var(--space-1) var(--space-2);
+  font-size: 10.5px;
+  line-height: 14px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.map-quick-find {
+  width: 100%;
+  height: 30px;
+  margin: var(--space-1) 0 var(--space-2);
+  padding: 0 var(--space-2);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-sm);
+  background: var(--surface-000);
+  color: var(--ink-000);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.map-quick-find:focus {
+  border-color: var(--focus-ring);
+}
+
+.map-quick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.map-quick-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 5px var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-000);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.map-quick-row .map-palette-swatch {
+  width: 24px;
+  height: 24px;
+}
+
+.map-quick-row--on {
+  background: var(--surface-sunken);
+}
+
+.map-quick-none {
+  padding: var(--space-2);
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
+/* ---- the bar over what is picked -------------------------------------- */
+
+.map-context {
+  position: absolute;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-md);
+  background: var(--surface-100);
+  box-shadow: var(--shadow-float);
+  transform: translate(-50%, -100%);
+  white-space: nowrap;
+}
+
+.map-context-kind {
+  position: relative;
+}
+
+.map-context-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 200px;
+  padding: var(--space-1);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-md);
+  background: var(--surface-100);
+  box-shadow: var(--shadow-float);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.map-context-words {
+  padding: 0 var(--space-2);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.map-context-rule {
+  width: var(--stroke-edge);
+  align-self: stretch;
+  margin: 3px 2px;
+  background: var(--line-hair);
+}
+
+.map-act {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.map-act:hover {
+  background: var(--surface-sunken);
+  color: var(--ink-000);
+}
+
+.map-act--wide {
+  padding: 0 var(--space-2);
+  color: var(--ink-000);
+}
+
+.map-act--danger:hover {
+  background: var(--state-problem-wash);
+  color: var(--state-problem);
+}
+
+/* ---- small things ----------------------------------------------------- */
+
+.ds-button--icon {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}
+
+.ds-tool:disabled {
+  opacity: var(--opacity-disabled);
+  cursor: default;
+}
+
+.ds-tool:disabled:hover {
+  background: none;
+  color: var(--ink-soft);
+}
+
+.sketch-says {
+  resize: vertical;
+  font: inherit;
+  min-height: 60px;
+}
+
+/* ---- the third pass ---------------------------------------------------- */
+
+/* the board is a drawing surface: dragging across it never selects text */
+.map-frame-area,
+.map-rail,
+.map-palette {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.map-edit,
+.map-quick-find {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* the panel is always there on a sketch, docked, so picking something
+   never squeezes the board and moves what is on it */
+.sketch-panel {
+  width: 288px;
+  z-index: 2;
+}
+
+.sketch-keys {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2px;
+  margin: var(--space-2) 0 0;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.sketch-keys dt {
+  margin-top: var(--space-2);
+  color: var(--ink-000);
+  font-weight: 600;
+}
+
+.sketch-keys dd {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+kbd {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 4px;
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-xs);
+  background: var(--surface-000);
+  color: var(--ink-000);
+  font: 500 11px/16px var(--font-mono);
+  text-align: center;
+}
+
+.sketch-panel-head {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--ink-000);
+  text-transform: none;
+}
+
+/* the panel reads a wire out the way the board does */
+.sketch-sentence {
+  padding: var(--space-2) var(--space-3);
+  border: var(--stroke-edge) solid var(--line-hair);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 19px;
+}
+
+.map-context--below {
+  transform: translate(-50%, 0);
+}
+
+.sketch-panel {
+  position: relative;
+}
+
+.sketch-panel-hide {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+
+.sketch-panel-hide:hover {
+  background: var(--surface-sunken);
+  color: var(--ink-000);
+}
+
+.sketch-panel-tab {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-md);
+  background: var(--surface-100);
+  color: var(--ink-soft);
+  box-shadow: var(--shadow-chip);
+  cursor: pointer;
+}
+
+/* ---- the right-click menu --------------------------------------------- */
+
+.map-menu {
+  position: absolute;
+  z-index: 9;
+  min-width: 220px;
+  padding: var(--space-1);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-md);
+  background: var(--surface-100);
+  box-shadow: var(--shadow-float);
+  display: flex;
+  flex-direction: column;
+}
+
+.map-menu-item {
+  display: grid;
+  grid-template-columns: 20px 1fr auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-000);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.map-menu-item:hover,
+.map-menu-item:focus-visible {
+  background: var(--surface-sunken);
+  outline: none;
+}
+
+.map-menu-item--danger:hover,
+.map-menu-item--danger:focus-visible {
+  background: var(--state-problem-wash);
+  color: var(--state-problem);
+}
+
+.map-menu-glyph {
+  display: grid;
+  place-items: center;
+  color: var(--ink-soft);
+}
+
+.map-menu-keys {
+  color: var(--ink-faint);
+  font: 500 11px/16px var(--font-mono);
+}
+
+.map-menu-rule {
+  height: var(--stroke-edge);
+  margin: var(--space-1) var(--space-2);
+  background: var(--line-hair);
+}
+
+/* writing what a card is for, under its name */
+.map-edit--says {
+  min-height: 44px;
+  padding: var(--space-1) var(--space-2);
+  font-size: 12.5px;
+  line-height: 17px;
+  resize: none;
+}
+
+.map-said-ask[role="button"] {
+  cursor: text;
+  pointer-events: auto;
+}
+
+.map-said-ask[role="button"]:hover {
+  color: var(--focus-ring);
+  text-decoration: underline;
+}
+
+/* a card lifts a little under the pointer, so it is plain what a press takes */
+.map-card--drawn:hover {
+  box-shadow: var(--shadow-float);
+}
+
+/* ---- the fourth pass --------------------------------------------------- */
+
+/* what the board is waiting for, while a tool is armed */
+.map-hint {
+  position: absolute;
+  top: var(--space-3);
+  left: 50%;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 6px var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--ink-000);
+  color: var(--ink-inverse);
+  font-size: 12.5px;
+  line-height: 16px;
+  box-shadow: var(--shadow-float);
+  transform: translateX(-50%);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.map-hint kbd {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--ink-inverse) 45%, transparent);
+  color: var(--ink-inverse);
+}
+
+.map-hint-keys {
+  opacity: 0.8;
+}
+
+/* ---- the wires of the card under the pointer --------------------------- */
+
+/* hovering a card lights its wires: both the ones that reach it and the ones
+   it reaches, so what it is joined to reads at a glance. The light grows in
+   rather than snapping on, and a dash runs along each wire the way the
+   arrow points */
+.map-wire path:first-child {
+  transition: stroke 140ms ease-out, stroke-width 140ms ease-out;
+}
+
+.map-wire--lit:not(.map-wire--selected) path:first-child {
+  stroke: var(--wire-strong);
+  stroke-width: var(--stroke-wire-strong);
+  opacity: 1;
+}
+
+.map-wire .map-wire-flow {
+  fill: none;
+  stroke: var(--focus-ring);
+  stroke-width: var(--stroke-wire-strong);
+  stroke-linecap: round;
+  stroke-dasharray: 2 16;
+  animation: map-wire-flow 900ms linear infinite, map-wire-glow 240ms ease-out;
+  pointer-events: none;
+}
+
+@keyframes map-wire-flow {
+  from {
+    stroke-dashoffset: 18;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes map-wire-glow {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* the sentence of a lit wire comes forward with it */
+.map-sentence--lit {
+  border-color: var(--wire-strong);
+  box-shadow: var(--shadow-float);
+  z-index: 2;
+}
+
+/* a sentence can be dragged out of the way of whatever it is sitting on */
+.map-sentence--movable {
+  pointer-events: auto;
+  cursor: grab;
+}
+
+/* nothing animates for a person who asked for less movement */
+@media (prefers-reduced-motion: reduce) {
+  .map-wire .map-wire-flow {
+    animation: none;
+  }
+
+  .map-wire path:first-child {
+    transition: none;
+  }
+}
+
+/* a wire under the pointer darkens, so it is plain it can be picked */
+.map-wire:has(.map-wire-hit:hover) path:first-child {
+  stroke: var(--wire-strong);
+  stroke-width: var(--stroke-wire-strong);
+}
+
+/* a narrower window: the panel floats over the board instead of squeezing
+   it, and the card library keeps only its glyphs */
+@media (max-width: 1100px) {
+  .sketch-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    box-shadow: var(--shadow-float);
+  }
+}
+
+@media (max-width: 1000px) {
+  .map-palette {
+    width: 64px;
+    padding: var(--space-2) var(--space-1);
+    align-items: center;
+  }
+
+  .map-palette-hint,
+  .map-palette-words,
+  .map-palette .map-flyout-group {
+    display: none;
+  }
+
+  .map-palette-head {
+    padding: 0;
+    justify-content: center;
+  }
+
+  .map-palette-head > span {
+    display: none;
+  }
+
+  .map-palette-item {
+    padding: 4px;
+  }
+}
+
+/* ---- a proposal drawn over the map ------------------------------------ */
+
+/* Drawn and not built yet: a dashed outline, like a card still to be cut. */
+.map-card--proposed {
+  border-style: dashed;
+  border-color: var(--state-waiting);
+  background: color-mix(in srgb, var(--state-waiting-wash) 70%, var(--surface-100));
+}
+
+/* Crossed out: faded, its name struck through. */
+.map-card--gone {
+  border-color: var(--state-problem);
+  opacity: 0.72;
+}
+
+.map-card--gone .map-name {
+  text-decoration: line-through;
+  text-decoration-color: var(--state-problem);
+  text-decoration-thickness: 2px;
+}
+
+.map-card--built {
+  border-color: color-mix(in srgb, var(--state-good) 60%, var(--line-edge));
+}
+
+/* The small mark on a card's top edge that says how it stands. */
+.map-state {
+  position: absolute;
+  top: -9px;
+  right: 10px;
+  padding: 0 7px;
+  border-radius: var(--radius-pill);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 17px;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.map-state--proposed {
+  background: var(--state-waiting);
+  color: var(--surface-100);
+}
+
+.map-state--built {
+  background: var(--state-good);
+  color: var(--surface-100);
+}
+
+.map-state--gone {
+  background: var(--state-problem);
+  color: var(--surface-100);
+}
+
+.map-wire--proposed path:first-child {
+  stroke: var(--state-waiting);
+  stroke-dasharray: 6 5;
+}
+
+.map-wire--gone path:first-child {
+  stroke: var(--state-problem);
+  stroke-dasharray: 2 5;
+  opacity: 0.8;
+}
+
+.map-sentence--proposed {
+  border-style: dashed;
+  border-color: var(--state-waiting);
+}
+
+.map-sentence--gone .map-said {
+  text-decoration: line-through;
+  text-decoration-color: var(--state-problem);
+}
+
+/* A page shown as it is now and as the proposal would have it. */
+.map-shots {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  flex: 1;
+  min-height: 0;
+}
+
+.map-shots-one {
+  position: relative;
+  margin: 0;
+  min-height: 0;
+  display: flex;
+}
+
+.map-shots-one .map-shot {
+  width: 100%;
+}
+
+.map-shots-one figcaption {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  padding: 0 5px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--ink-000) 72%, transparent);
+  color: var(--ink-inverse);
+  font-size: 10px;
+  line-height: 15px;
+}
+
+/* Where the agent says it is working. */
+.map-card--agent {
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--focus-ring) 55%, transparent),
+    var(--shadow-float);
+}
+
+.map-agent {
+  position: absolute;
+  left: 10px;
+  bottom: -11px;
+  max-width: calc(100% - 20px);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  background: var(--focus-ring);
+  color: var(--surface-100);
+  font-size: 11px;
+  line-height: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.map-agent-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: map-agent-beat 1.4s ease-in-out infinite;
+}
+
+@keyframes map-agent-beat {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-agent-dot {
+    animation: none;
+  }
+}
+
+/* The proposal's progress, in the bar, and the list it opens. */
+.map-proposal {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 4px 10px;
+  border: var(--stroke-edge) dashed var(--state-waiting);
+  border-radius: var(--radius-pill);
+  background: var(--state-waiting-wash);
+  color: var(--ink-000);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.map-proposal--built {
+  border-style: solid;
+  border-color: var(--state-good);
+  background: var(--state-good-wash);
+}
+
+.map-proposal-meter {
+  width: 48px;
+  height: 5px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--state-waiting) 25%, transparent);
+  overflow: hidden;
+}
+
+.map-proposal-meter > span {
+  display: block;
+  height: 100%;
+  background: var(--state-good);
+}
+
+.map-proposal-list li {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+}
+
+.map-proposal-list .map-state {
+  position: static;
+  flex: none;
+}
+
+.map-follow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.map-branch-ask {
+  position: absolute;
+  top: var(--space-3);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 8;
+  width: min(420px, calc(100% - 32px));
+  padding: var(--space-3);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-md);
+  background: var(--surface-100);
+  box-shadow: var(--shadow-float);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* A card with a mark lets the mark sit on its edge, the way a drawn one does. */
+.map-card--proposed,
+.map-card--built,
+.map-card--gone,
+.map-card--agent {
+  overflow: visible;
+}
+
+.map-card--proposed .map-shot,
+.map-card--built .map-shot,
+.map-card--gone .map-shot,
+.map-card--agent .map-shot {
+  overflow: hidden;
+}
+
+.map-card--proposed.map-frame > .map-frame-bar,
+.map-card--built.map-frame > .map-frame-bar,
+.map-card--gone.map-frame > .map-frame-bar,
+.map-card--agent.map-frame > .map-frame-bar {
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.map-world .map-state {
+  font-size: 11.5px;
+  line-height: 18px;
+}
+
+/* ---- a project on the projects page ----------------------------------- */
+
+/* Double-click opens it; the repos below keep their own clicks. */
+.project-card {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  cursor: default;
+  user-select: none;
+  transition: box-shadow 120ms ease, border-color 120ms ease;
+}
+
+.project-card:hover {
+  border-color: color-mix(in srgb, var(--focus-ring) 45%, var(--line-edge));
+  box-shadow: var(--shadow-float);
+}
+
+.project-card-top {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 88px;
+  padding: var(--space-4);
+  outline: none;
+}
+
+.project-card-top:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
+}
+
+.project-card-open {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.project-card:hover .project-card-open,
+.project-card-top:focus-visible .project-card-open {
+  opacity: 1;
+}
+
+/* The lower half: the repos, one under the next. */
+.project-repos {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border-top: var(--stroke-edge) solid var(--line-hair);
+  background: var(--surface-sunken);
+  user-select: text;
+}
+
+.project-repo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: var(--stroke-edge) solid var(--line-hair);
+}
+
+/* The quiet last line of the list. */
+.project-repos-link {
+  margin: 0;
+  padding: 10px var(--space-4);
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.project-repos-link:hover,
+.project-repos-link:focus-visible {
+  color: var(--focus-ring);
+  background: color-mix(in srgb, var(--focus-ring) 6%, transparent);
+  outline: none;
+}
+
+.project-repos-link:disabled {
+  cursor: progress;
+}
+
+/* A note over the projects keeps clear of the cards below it. */
+.projects-note {
+  margin-bottom: var(--space-5);
+}
+
+/* ---- small windows over the page -------------------------------------- */
+
+.ds-sheet--wide {
+  width: 720px;
+  max-height: calc(100vh - 2 * var(--space-6));
+  overflow: auto;
+}
+
+.ds-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.ds-sheet-title {
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 600;
+}
+
+.ds-sheet-close {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.ds-sheet-close:hover,
+.ds-sheet-close:focus-visible {
+  background: var(--surface-sunken);
+  color: var(--ink-000);
+  outline: none;
+}
+
+/* A header button's small mark: signed in, or something waiting. */
+.ds-head-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--state-good);
+  margin-left: 6px;
+  display: inline-block;
+}
+
+/* A command to copy, set apart so it reads as something to run. */
+.ds-command {
+  display: block;
+  padding: var(--space-3);
+  border: var(--stroke-edge) solid var(--line-hair);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+/* ---- the sketch drawer, the sketching mark, and the branch menu -------- */
+
+/* The drawer lies over the board and slides in from the side. */
+.sketch-library {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  transform: translateX(calc(100% + 24px));
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 160ms ease,
+    visibility 0s linear 220ms;
+}
+
+.sketch-library--out {
+  transform: none;
+  opacity: 1;
+  visibility: visible;
+  transition:
+    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 160ms ease,
+    visibility 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sketch-library,
+  .sketch-library--out {
+    transition: none;
+  }
+}
+
+/* One quiet way to start a sketch, under the list. */
+.sketch-new {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 10px var(--space-3);
+  border: var(--stroke-edge) dashed var(--line-edge);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.sketch-new:hover,
+.sketch-new:focus-visible {
+  border-color: var(--focus-ring);
+  color: var(--focus-ring);
+  outline: none;
+}
+
+.sketch-new-choice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: var(--stroke-edge) dashed var(--line-edge);
+  border-radius: var(--radius-md);
+  animation: sketch-new-in 160ms ease;
+}
+
+@keyframes sketch-new-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.sketch-new-way {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: var(--stroke-edge) solid var(--line-hair);
+  border-radius: var(--radius-sm);
+  background: var(--surface-000);
+  color: var(--ink-000);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sketch-new-way > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--ink-soft);
+}
+
+.sketch-new-way > span {
+  display: flex;
+  flex-direction: column;
+}
+
+.sketch-new-way:hover,
+.sketch-new-way:focus-visible {
+  border-color: var(--focus-ring);
+  outline: none;
+}
+
+.sketch-new-way-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.sketch-new-cancel {
+  align-self: flex-end;
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* Working on a sketch: the drawer's button says so, in the accent. */
+.map-sketching {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: var(--stroke-edge) solid var(--focus-ring);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--focus-ring) 14%, var(--surface-100));
+  color: var(--ink-000);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.map-sketching > svg {
+  color: var(--focus-ring);
+}
+
+.map-sketching-count {
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--focus-ring) 22%, transparent);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* The branch in the bar. */
+.map-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 420px;
+  padding: 5px var(--space-2) 5px var(--space-3);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-md);
+  background: var(--surface-100);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.map-branch:hover,
+.map-branch[aria-expanded='true'] {
+  background: var(--surface-sunken);
+}
+
+.map-branch-name {
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-000);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-branch-note {
+  color: var(--state-waiting);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.map-branch-apart {
+  display: inline-flex;
+  gap: var(--space-2);
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.map-branch-apart > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.map-branch-apart--level {
+  color: var(--state-good);
+}
+
+.map-branch-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 9;
+  width: 380px;
+  max-height: min(520px, calc(100vh - 120px));
+  overflow-y: auto;
+  padding: var(--space-1);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-md);
+  background: var(--surface-100);
+  box-shadow: var(--shadow-float);
+  animation: sketch-new-in 140ms ease;
+}
+
+.map-branch-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-000);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.map-branch-row:hover,
+.map-branch-row:focus-visible {
+  background: var(--surface-sunken);
+  outline: none;
+}
+
+.map-branch-row--on {
+  background: color-mix(in srgb, var(--focus-ring) 10%, transparent);
+}
+
+.map-branch-row-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.map-branch-row-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding-left: 19px;
+  color: var(--ink-soft);
+  font-size: 11.5px;
+}
+
+.map-branch-where {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.map-branch-here {
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--state-good-wash);
+  color: var(--state-good);
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.map-branch-older {
+  width: 100%;
+  margin-top: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-top: var(--stroke-edge) solid var(--line-hair);
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.map-branch-foot {
+  padding: var(--space-2) var(--space-3);
+  border-top: var(--stroke-edge) solid var(--line-hair);
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  line-height: 16px;
+}
+
+/* Why the folder could not be switched, over the top of the board. */
+.map-switch-problem {
+  position: absolute;
+  top: var(--space-3);
+  left: 50%;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: min(560px, calc(100% - 32px));
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border: var(--stroke-edge) solid var(--state-problem);
+  border-radius: var(--radius-md);
+  background: var(--state-problem-wash);
+  color: var(--ink-000);
+  font-size: 13px;
+  box-shadow: var(--shadow-float);
+  transform: translateX(-50%);
+}
+
+/* A branch behind its copy on GitHub always says so, in the warning colour. */
+.map-branch-behind {
+  color: var(--state-waiting);
+  font-weight: 600;
+}
+
+/* The branch menu on a repo row of the projects page: smaller, and free to
+   hang out of the card. */
+.project-card {
+  overflow: visible;
+}
+
+.project-card-top {
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.project-repos {
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+.map-branch--compact {
+  max-width: 230px;
+  padding: 2px 6px 2px var(--space-2);
+  border-color: var(--line-hair);
+  background: transparent;
+  font-size: 11.5px;
+}
+
+.map-branch--compact .map-branch-name {
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.map-branch--compact + .map-branch-menu,
+.project-repo .map-branch-menu {
+  width: 340px;
+}
+
+/* Header buttons keep their words on one line. */
+.ds-head .ds-button {
+  white-space: nowrap;
+}
+
+/* ---- annotations ---------------------------------------------------------
+   Drawn over the diagram for people and agents to read. They look like pen
+   on paper next to the cards: softer, warmer, never mistaken for a card. */
+
+:root {
+  --anno-ink: #3a3631;
+  --anno-line: #6b6458;
+  --anno-yellow: #fff1a8;
+  --anno-orange: #ffd9b0;
+  --anno-pink: #ffd1dc;
+  --anno-purple: #e2d6ff;
+  --anno-blue: #cfe5ff;
+  --anno-green: #cdeccf;
+  --anno-gray: #e6e3dd;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --anno-ink: #ece7dd;
+    --anno-line: #b6ad9e;
+    --anno-yellow: #5a4f1c;
+    --anno-orange: #5c3c1f;
+    --anno-pink: #5a2a3a;
+    --anno-purple: #3d3160;
+    --anno-blue: #1f3a5a;
+    --anno-green: #1f4527;
+    --anno-gray: #3a3834;
+  }
+}
+
+:root[data-theme='dark'] {
+  --anno-ink: #ece7dd;
+  --anno-line: #b6ad9e;
+  --anno-yellow: #5a4f1c;
+  --anno-orange: #5c3c1f;
+  --anno-pink: #5a2a3a;
+  --anno-purple: #3d3160;
+  --anno-blue: #1f3a5a;
+  --anno-green: #1f4527;
+  --anno-gray: #3a3834;
+}
+
+.map-anno {
+  --anno-fill: transparent;
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--anno-ink);
+  cursor: move;
+  user-select: none;
+}
+
+.map-anno-fill--yellow { --anno-fill: var(--anno-yellow); }
+.map-anno-fill--orange { --anno-fill: var(--anno-orange); }
+.map-anno-fill--pink { --anno-fill: var(--anno-pink); }
+.map-anno-fill--purple { --anno-fill: var(--anno-purple); }
+.map-anno-fill--blue { --anno-fill: var(--anno-blue); }
+.map-anno-fill--green { --anno-fill: var(--anno-green); }
+.map-anno-fill--gray { --anno-fill: var(--anno-gray); }
+
+.map-anno-outline {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.map-anno-outline path {
+  fill: var(--anno-fill);
+  stroke: var(--anno-line);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+/* A sticky note is paper: filled, with no outline, a little lifted. */
+.map-anno--sticky .map-anno-outline path {
+  stroke: none;
+}
+
+.map-anno--sticky .map-anno-outline {
+  filter: drop-shadow(0 2px 3px rgba(40, 30, 10, 0.18));
+}
+
+/* Brackets and braces are open marks, never filled. */
+.map-anno--braceleft .map-anno-outline path,
+.map-anno--braceright .map-anno-outline path,
+.map-anno--bracket .map-anno-outline path,
+.map-anno--braces .map-anno-outline path {
+  fill: none;
+}
+
+.map-anno-text {
+  position: relative;
+  max-width: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 18px;
+  text-align: center;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.map-anno--sticky .map-anno-text,
+.map-anno--callout .map-anno-text {
+  align-self: flex-start;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-hand, inherit);
+}
+
+.map-anno--callout .map-anno-text {
+  padding-bottom: 30%;
+}
+
+.map-anno--text .map-anno-text {
+  padding: 2px 4px;
+  font-size: 15px;
+  font-weight: 500;
+  text-align: left;
+}
+
+.map-anno--text:not(.map-anno--picked) .map-anno-text:empty {
+  opacity: 0.5;
+}
+
+.map-anno-text--code {
+  align-self: stretch;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.map-anno--code .map-anno-outline path {
+  fill: color-mix(in srgb, var(--anno-fill) 60%, var(--surface-sunken));
+}
+
+.map-anno-list {
+  position: relative;
+  align-self: flex-start;
+  width: 100%;
+  margin: 0;
+  padding: 10px 14px 10px 28px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+/* Frames and boxes sit behind the cards, and are picked by their edge or
+   their title, so the board inside them still pans and picks cards. */
+.map-anno--behind {
+  z-index: auto;
+  pointer-events: none;
+}
+
+.map-anno--behind .map-anno-outline path {
+  fill: color-mix(in srgb, var(--anno-fill) 45%, transparent);
+  stroke-dasharray: 6 5;
+  pointer-events: visibleStroke;
+  stroke-width: 10;
+  stroke: transparent;
+}
+
+.map-anno--behind .map-anno-outline {
+  pointer-events: none;
+}
+
+.map-anno--behind .map-anno-outline::before {
+  content: none;
+}
+
+/* the visible edge, drawn over the wide invisible one that is picked */
+.map-anno--behind::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1.5px dashed var(--anno-line);
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+.map-anno--oval::after,
+.map-anno--braces::after,
+.map-anno--bracket::after {
+  display: none;
+}
+
+.map-anno--oval .map-anno-outline path,
+.map-anno--braces .map-anno-outline path,
+.map-anno--bracket .map-anno-outline path {
+  stroke: var(--anno-line);
+  stroke-width: 1.5;
+}
+
+.map-anno-title {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  padding: 1px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-100);
+  color: var(--anno-ink);
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: auto;
+  cursor: move;
+  white-space: nowrap;
+}
+
+.map-anno--picked {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* An annotation keeping beside a card says so with a faint pin. */
+.map-anno--kept::before {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--anno-line);
+  opacity: 0.55;
+}
+
+.map-anno-corner {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border: 2px solid var(--focus-ring);
+  border-radius: 2px;
+  background: var(--surface-100);
+  pointer-events: auto;
+  z-index: 1;
+}
+
+.map-anno-corner--nw { left: 0; top: 0; cursor: nwse-resize; }
+.map-anno-corner--ne { left: 100%; top: 0; cursor: nesw-resize; }
+.map-anno-corner--sw { left: 0; top: 100%; cursor: nesw-resize; }
+.map-anno-corner--se { left: 100%; top: 100%; cursor: nwse-resize; }
+
+.map-anno-edit {
+  position: absolute;
+  inset: 4px;
+  z-index: 2;
+  resize: none;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  outline: 2px solid var(--focus-ring);
+  background: color-mix(in srgb, var(--surface-100) 85%, transparent);
+  color: var(--anno-ink);
+  font: inherit;
+  font-size: 13px;
+  line-height: 18px;
+  cursor: text;
+}
+
+.map-anno-edit--line {
+  inset: auto;
+  width: 160px;
+  height: 36px;
+  z-index: 4;
+}
+
+/* Lines and arrows between annotations, cards, or any spot. */
+.map-anno-lines {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.map-anno-line path:first-child {
+  fill: none;
+  stroke: var(--anno-line);
+  stroke-width: 2;
+}
+
+.map-anno-line--dashed path:first-child {
+  stroke-dasharray: 8 6;
+}
+
+.map-anno-line[class*='map-anno-fill--'] path:first-child {
+  stroke: color-mix(in srgb, var(--anno-fill) 40%, var(--anno-line));
+}
+
+.map-anno-line--picked path:first-child {
+  stroke: var(--focus-ring);
+}
+
+.map-anno-head {
+  fill: var(--anno-line);
+}
+
+.map-anno-line-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14;
+  pointer-events: stroke;
+  cursor: move;
+}
+
+.map-anno-end {
+  fill: var(--surface-100);
+  stroke: var(--focus-ring);
+  stroke-width: 2;
+  pointer-events: all;
+  cursor: crosshair;
+}
+
+.map-anno-guide {
+  stroke: var(--anno-line);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+  opacity: 0.7;
+}
+
+.map-anno-line-words {
+  position: absolute;
+  z-index: 3;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-100);
+  color: var(--anno-ink);
+  font-size: 12px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* Putting a shape down covers the board, so nothing else takes the press. */
+.map-anno-placer {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  cursor: crosshair;
+}
+
+.map-anno-placer-world {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
+.map-anno-sizing {
+  position: absolute;
+  border: 1.5px dashed var(--focus-ring);
+  background: color-mix(in srgb, var(--focus-ring) 8%, transparent);
+}
+
+.map-anno-lines--live line {
+  stroke: var(--focus-ring);
+  stroke-width: 2;
+  stroke-dasharray: 6 5;
+}
+
+/* The library of annotations, beside the tools. */
+.map-anno-library {
+  width: 280px;
+}
+
+.map-anno-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 var(--space-3) var(--space-2);
+  padding: 6px var(--space-2);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-md);
+  background: var(--surface-000);
+  color: var(--ink-faint);
+}
+
+.map-anno-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-000);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.map-anno-groups {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 var(--space-2) var(--space-3);
+}
+
+.map-anno-group-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: var(--space-2) var(--space-1);
+  border: 0;
+  background: none;
+  color: var(--ink-000);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.map-anno-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 2px;
+}
+
+.map-anno-pick {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border: var(--stroke-edge) solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.map-anno-pick:hover,
+.map-anno-pick:focus-visible {
+  background: var(--surface-sunken);
+  color: var(--ink-000);
+  outline: none;
+}
+
+.map-anno-pick--on {
+  border-color: var(--focus-ring);
+  background: color-mix(in srgb, var(--focus-ring) 12%, transparent);
+  color: var(--ink-000);
+}
+
+.map-anno-icon {
+  overflow: visible;
+}
+
+.map-anno-icon path,
+.map-anno-icon text {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 6;
+  stroke-linejoin: round;
+}
+
+.map-anno-icon text {
+  fill: currentColor;
+  stroke: none;
+}
+
+.map-anno-icon .map-anno-icon--sticky {
+  fill: var(--anno-yellow);
+  stroke: none;
+}
+
+/* The bar over a picked annotation. */
+.map-anno-bar {
+  gap: 4px;
+}
+
+.map-anno-swatch {
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--line-edge);
+  border-radius: 50%;
+  background: var(--anno-fill);
+  cursor: pointer;
+}
+
+.map-anno-fill--none.map-anno-swatch {
+  background:
+    linear-gradient(135deg, transparent 45%, var(--state-problem) 45%, var(--state-problem) 55%, transparent 55%),
+    var(--surface-100);
+}
+
+.map-anno-swatch--on {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.map-anno-bar-layer {
+  padding: 0 6px;
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+/* The layers list, beside the tools. */
+.map-layers {
+  position: absolute;
+  left: 76px;
+  bottom: 70px;
+  z-index: 8;
+  width: 300px;
+  padding: var(--space-2);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-md);
+  background: var(--surface-100);
+  box-shadow: var(--shadow-float);
+  animation: sketch-new-in 140ms ease;
+}
+
+.map-layers-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-1) var(--space-2) var(--space-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.map-layers-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px var(--space-1);
+  border-radius: var(--radius-sm);
+}
+
+.map-layers-row--on {
+  background: color-mix(in srgb, var(--focus-ring) 10%, transparent);
+}
+
+.map-layers-row--diagram {
+  gap: var(--space-2);
+  padding: 6px var(--space-2);
+  color: var(--ink-soft);
+}
+
+.map-layers-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--ink-soft);
+}
+
+.map-layers-name {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  border: var(--stroke-edge) solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-000);
+  font: inherit;
+  font-size: 13px;
+}
+
+input.map-layers-name:hover,
+input.map-layers-name:focus {
+  border-color: var(--line-edge);
+  outline: none;
+}
+
+.map-layers-icon {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+
+.map-layers-icon:hover {
+  background: var(--surface-sunken);
+  color: var(--ink-000);
+}
+
+.map-layers-icon[aria-pressed='true'] {
+  color: var(--ink-000);
+}
+
+.map-layers-icon--on {
+  color: var(--focus-ring);
+}
+
+.map-layers-radio {
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--ink-faint);
+  border-radius: 50%;
+}
+
+.map-layers-radio--on {
+  border-color: var(--focus-ring);
+  background: radial-gradient(var(--focus-ring) 45%, transparent 50%);
+}
+
+.map-layers-add {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  margin-top: var(--space-1);
+  padding: 6px var(--space-2);
+  border: var(--stroke-edge) dashed var(--line-edge);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.map-layers-add:hover {
+  border-color: var(--focus-ring);
+  color: var(--focus-ring);
+}
+
+/* A software system's branch, on its own card at the project level. */
+.map-card:has(.map-card-extra) {
+  overflow: visible;
+}
+
+.map-card-extra {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 4;
+  cursor: default;
+}
+
+.map-card-extra .map-branch--compact {
+  max-width: 170px;
+  background: var(--surface-000);
+}
+
+.map-card-extra .map-branch-menu {
+  z-index: 20;
+}

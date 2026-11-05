@@ -2,5 +2,5 @@
   "name": "codegraph",
   "description": "Codegraph: keep a codebase in modules, features and UI, with a live map that fills the chat.",
   "owner": { "name": "Jonathan Harris" },
-  "plugins": [{ "name": "codegraph", "source": "./" }]
+  "plugins": [{ "name": "codegraph", "source": "./legacy" }]
 }
