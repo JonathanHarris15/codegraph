@@ -230,7 +230,9 @@ describe('drawing a sketch in the real app', () => {
     await page.keyboard.press('Enter')
     await page.getByLabel('Card name').waitFor({ timeout: PATIENCE })
     await page.keyboard.press('Tab')
-    await page.getByRole('textbox', { name: 'What it is for' }).first().waitFor({ timeout: PATIENCE })
+    // The side panel has a box of the same name, there all along. Wait for
+    // the one on the card to take the caret, the way a person would.
+    await page.waitForFunction(() => document.activeElement?.classList.contains('map-edit--says'), undefined, { timeout: PATIENCE })
     await page.keyboard.type('Finds words fast')
     await page.keyboard.press('Enter')
     expect(await shown(card('index'))).toContain('Finds words fast')
