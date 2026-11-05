@@ -1,13 +1,13 @@
 // codegraph: module machine
-// codegraph: front door appFolder, devRendererUrl, keystore, askForFolder, useChooser, askForPicture, usePicturePicker, mcpServerFile, appFolderAnywhere, watchFolders, Keystore
+// codegraph: front door appFolder, devRendererUrl, keystore, askForFolder, useChooser, askForPicture, usePicturePicker, mcpServerFile, appFolderAnywhere, watchFolders, realFolder, sameFolder, Keystore
 
 /** This computer and the window around the app: where files are kept, the
  *  operating system's keystore, the folder picker, and what the build says.
  *  Everything here comes from outside the program, so it is asked for
  *  lazily: away from the app — in a test, say — each answer is a plain one. */
-import { existsSync, watch, type FSWatcher } from 'node:fs'
+import { existsSync, realpathSync, watch, type FSWatcher } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 
 type Electron = typeof import('electron')
 
@@ -123,6 +123,24 @@ export const appFolderAnywhere = (): string => {
   if (process.platform === 'win32') return join(process.env['APPDATA'] ?? join(home, 'AppData', 'Roaming'), 'codegraph-desktop')
   if (process.platform === 'darwin') return join(home, 'Library', 'Application Support', 'codegraph-desktop')
   return join(process.env['XDG_CONFIG_HOME'] ?? join(home, '.config'), 'codegraph-desktop')
+}
+
+/** The one name this computer has for a folder, whichever name it was reached
+ *  by: a link, or the way macOS keeps /var at /private/var. An agent's working
+ *  folder comes back under this name, whatever name a person linked. A folder
+ *  that is not there keeps the name it was asked by. */
+export const realFolder = (path: string): string => {
+  try {
+    return realpathSync.native(path)
+  } catch {
+    return resolve(path)
+  }
+}
+
+/** Whether two names lead to one folder. */
+export const sameFolder = (a: string, b: string): boolean => {
+  const [first, second] = [realFolder(a), realFolder(b)]
+  return process.platform === 'win32' ? first.toLowerCase() === second.toLowerCase() : first === second
 }
 
 /** Changes that say nothing about the code: installed packages, and the

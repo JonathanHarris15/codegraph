@@ -4,6 +4,7 @@
 import { createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { realFolder } from '../machine/index.js'
 
 /** Where an agent says it is working in one repo, so the canvas can follow
  *  it: the card, by the name a proposal gives it, and a few words. */
@@ -26,7 +27,7 @@ export const agentsFolder = (): string => {
 }
 
 const fileOf = (repo: string): string => {
-  const key = resolve(repo).replace(/[\/]+$/, '')
+  const key = realFolder(repo)
   const id = createHash('sha1').update(process.platform === 'win32' ? key.toLowerCase() : key).digest('hex').slice(0, 16)
   return join(agentsFolder(), `${id}.json`)
 }

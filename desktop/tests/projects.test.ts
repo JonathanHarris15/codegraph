@@ -1,5 +1,5 @@
 // codegraph: test module projects
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -72,6 +72,18 @@ describe('the projects a computer remembers', () => {
     addSoftwareSystem(project.id, { name: 'api', path: '/tmp/api', remote: 'me/api' })
     const [kept] = listProjects()
     expect(kept?.systems.map((c) => c.name)).toEqual(['web', 'api'])
+  })
+
+  it('does not link the same folder twice under another name', () => {
+    const project = addProject('Mosaic')
+    const web = join(folder, 'web')
+    mkdirSync(web)
+    const link = join(folder, 'link')
+    symlinkSync(web, link, 'junction')
+    const first = addSoftwareSystem(project.id, { name: 'web', path: web, remote: '' })
+    const again = addSoftwareSystem(project.id, { name: 'web', path: link, remote: '' })
+    expect(again.id).toBe(first.id)
+    expect(listProjects()[0]?.systems).toHaveLength(1)
   })
 
   it('does not link the same folder twice', () => {

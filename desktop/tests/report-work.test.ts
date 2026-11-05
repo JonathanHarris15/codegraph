@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { reportWork } from '../src/features/report-work.js'
 import { useFolder, whereIs } from '../src/modules/agents/index.js'
-import { aMappedRepo, anAgentIn, aProposal, closeYard, git, openYard, searchProposal, type Yard } from './yard.js'
+import { aLinkTo, aMappedRepo, anAgentIn, aProposal, closeYard, git, openYard, searchProposal, type Yard } from './yard.js'
 
 let yard: Yard
 let repo = ''
@@ -51,5 +51,12 @@ describe('saying where, called straight', () => {
   it('names a container as well as a component', async () => {
     expect(await reportWork(repo, 'db', 'adding a table')).toBe('The canvas follows you to db.')
     expect(whereIs(repo)?.words).toBe('adding a table')
+  })
+
+  it('is heard under any name the folder goes by', async () => {
+    const link = aLinkTo(yard, repo)
+    expect(await reportWork(link, 'db', 'through a link')).toBe('The canvas follows you to db.')
+    expect(whereIs(repo)?.words).toBe('through a link')
+    expect(whereIs(link)?.words).toBe('through a link')
   })
 })

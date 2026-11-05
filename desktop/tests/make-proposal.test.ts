@@ -8,7 +8,7 @@ import { startSketch } from '../src/features/start-sketch.js'
 import { addProject, addSoftwareSystem, useFolder as useProjects } from '../src/modules/projects/index.js'
 import { live, proposalProgress, readMap } from '../src/modules/reader/index.js'
 import { blankCard, keepMockup, useFolder as useSketches, writeSketch } from '../src/modules/sketches/index.js'
-import { aMappedRepo, anAgentIn, aPicture, closeYard, git, openYard, type Yard } from './yard.js'
+import { aLinkTo, aMappedRepo, anAgentIn, aPicture, closeYard, git, openYard, type Yard } from './yard.js'
 
 let yard: Yard
 let repo = ''
@@ -81,6 +81,10 @@ describe('making a proposal from a sketch', () => {
   it('keeps to one proposal a branch unless told to replace it', async () => {
     expect(await makeProposal(repo, 'Search')).toContain('There is already a proposal on search: "Search"')
     expect(await makeProposal(repo, 'Search', '', true)).toContain('Wrote the proposal')
+  })
+
+  it('knows the repo under any name the folder goes by', async () => {
+    expect(await makeProposal(aLinkTo(yard, repo), 'Search', '', true)).toContain('Wrote the proposal')
   })
 
   it('is what an agent asks for through the MCP', async () => {

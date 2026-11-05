@@ -1,7 +1,8 @@
 // codegraph: feature make-proposal in agent
-// codegraph: uses reader, projects, sketches, repo
+// codegraph: uses reader, projects, sketches, repo, machine
 // codegraph: command propose
-import { extname, resolve } from 'node:path'
+import { extname } from 'node:path'
+import { sameFolder } from '../modules/machine/index.js'
 import { listProjects, type Project, type SoftwareSystem } from '../modules/projects/index.js'
 import {
   changesAnything,
@@ -14,11 +15,6 @@ import {
 } from '../modules/reader/index.js'
 import { headOf, readSoftwareSystem, writeProposal, type Picture } from '../modules/repo/index.js'
 import { listSketches, mockupFile, readSketch, type Sketch, type SketchCard } from '../modules/sketches/index.js'
-
-const same = (a: string, b: string): boolean => {
-  const norm = (p: string): string => resolve(p).replace(/[\\/]+$/, '')
-  return process.platform === 'win32' ? norm(a).toLowerCase() === norm(b).toLowerCase() : norm(a) === norm(b)
-}
 
 /** The system card a sketch draws for one software system: by the id a
  *  snapshot of the map kept, or else by name. */
@@ -66,7 +62,7 @@ export const makeProposal = async (repo: string, name: string, shortName = '', r
   if (!project || !sketch)
     return `There is no sketch called "${name}" in ${projects.length ? projects.map((p) => p.shortName).join(', ') : 'any project this repo names'}. Call \`sketches\` to see them.`
 
-  const system = project.systems.find((s) => s.path && same(s.path, repo))
+  const system = project.systems.find((s) => s.path && sameFolder(s.path, repo))
   if (!system) return `This repo is not one of the software systems of ${project.name} on this computer. Link it in the app first.`
   const drawn = drawnFor(sketch, system)
   if (!drawn)

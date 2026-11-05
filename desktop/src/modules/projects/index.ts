@@ -1,5 +1,6 @@
 // codegraph: module projects
 // codegraph: front door useFolder, listProjects, addProject, renameProject, addSoftwareSystem, removeSoftwareSystem, chooseBranch, knownRemotes, addShallowSystem, Project, SoftwareSystem, ShallowSystem, Workspace
+import { sameFolder } from '../machine/index.js'
 import { shortNameOf, type Project, type ShallowSystem, type SoftwareSystem } from './schema.js'
 import { newId, read, useFolder, write } from './store.js'
 
@@ -46,7 +47,7 @@ export const addSoftwareSystem = (
   const project = workspace.projects.find((p) => p.id === projectId)
   if (!project) throw new Error('no project with that id')
   const already = project.systems.find(
-    (c) => (system.path && c.path === system.path) || (system.remote && c.remote === system.remote),
+    (c) => (system.path && c.path && sameFolder(c.path, system.path)) || (system.remote && c.remote === system.remote),
   )
   if (already) return already
   const added: SoftwareSystem = { id: newId(), ...system }

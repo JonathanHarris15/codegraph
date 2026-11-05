@@ -1,8 +1,8 @@
 // codegraph: feature describe-map in agent
-// codegraph: uses reader, wording, projects, annotations
+// codegraph: uses reader, wording, projects, annotations, machine
 // codegraph: command map
-import { resolve } from 'node:path'
 import { annotationWords, readAnnotations } from '../modules/annotations/index.js'
+import { sameFolder } from '../modules/machine/index.js'
 import { listProjects } from '../modules/projects/index.js'
 import { live, readMap, type Point, type SystemMap } from '../modules/reader/index.js'
 import { sentenceOf } from '../modules/wording/index.js'
@@ -72,11 +72,9 @@ export const describeMap = async (repo: string, point: Point = live): Promise<st
 /** What people drew over this repo's part of the map of each project it
  *  serves, for the agent to read; never the architecture. */
 const annotationsOver = (repo: string, map: SystemMap): string[] => {
-  const same = (a: string, b: string): boolean =>
-    process.platform === 'win32' ? resolve(a).toLowerCase() === resolve(b).toLowerCase() : resolve(a) === resolve(b)
   const out: string[] = []
   for (const project of listProjects().filter((p) => map.projects.includes(p.shortName))) {
-    const system = project.systems.find((s) => s.path && same(s.path, repo))
+    const system = project.systems.find((s) => s.path && sameFolder(s.path, repo))
     if (!system) continue
     const nameOf = (id: string): string => {
       if (id === project.id) return `the project ${project.name}`

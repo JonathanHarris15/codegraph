@@ -1,6 +1,6 @@
 // codegraph: tooling
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { vi } from 'vitest'
@@ -20,6 +20,14 @@ export const openYard = (what: string): Yard => {
 
 export const closeYard = (yard: Yard): void => {
   rmSync(yard.path, { recursive: true, force: true })
+}
+
+/** A second name for a folder: a symbolic link, a junction on Windows, which
+ *  needs no special rights there. */
+export const aLinkTo = (yard: Yard, folder: string, name = 'link'): string => {
+  const link = join(yard.path, name)
+  symlinkSync(folder, link, 'junction')
+  return link
 }
 
 /** A repo on this computer, set up for codegraph as far as it is told to be. */
