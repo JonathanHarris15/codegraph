@@ -186,8 +186,9 @@ V pick, H pan, Z zoom box, W wire, N sticky note, T text, A arrow, L line,
 R rectangle, O circle, D decision. 1 to 9 pick the cards of the level being
 drawn, in the card library's order, so the same key means the first kind at
 every level. [ and ] step through the annotation layers. ? lists them all.
-So letters can always pick tools, writing on a picked card is Enter or a
-double-click, no longer just starting to type.
+So letters can always pick tools, no key writes on anything: a double-click
+on a card's name or what it is for changes that field, and on a wire or a note
+writes on it. A new card still opens ready for its name.
 
 A sticky note has a dot on each edge. Drag one out and it points an arrow
 anywhere, or click it for a short one: a pointer, part of the note, holding

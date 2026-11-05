@@ -371,7 +371,8 @@ const CardFace = ({
   onOpen: () => void
   onPress?: (event: PointerEvent<HTMLDivElement>) => void
   onHandle?: (side: Side, event: PointerEvent<HTMLSpanElement>) => void
-  onEdit?: () => void
+  /** Double-clicked one of its fields: its name, or what it is for. */
+  onEdit?: (says?: boolean) => void
 }) => {
   const { card, box } = placed
   const classes = ['map-card', `map-card--${card.level}`, kindClass(card.kind)]
@@ -387,11 +388,11 @@ const CardFace = ({
   if (card.state) classes.push(`map-card--${card.state}`)
   if (agent !== undefined) classes.push('map-card--agent')
   const mockup = drawing ? '' : (card.mockup ?? '')
-  const onName =
+  const onField = (says: boolean) =>
     drawing && onEdit
       ? (event: { stopPropagation: () => void }): void => {
           event.stopPropagation()
-          onEdit()
+          onEdit(says)
         }
       : undefined
   return (
@@ -410,8 +411,8 @@ const CardFace = ({
         if (opens) onOpen()
       }}
       onKeyDown={(event) => {
-        // Enter is the way in without a mouse; while drawing it writes on
-        // the card instead, which the board's own keys look after.
+        // Enter is the way in without a mouse. While drawing it does nothing:
+        // a card's fields open with a double-click.
         if (!drawing && opens && event.key === 'Enter') onOpen()
       }}
     >
@@ -445,7 +446,7 @@ const CardFace = ({
           ) : (
             <div className="map-shot">{drawing ? 'No mockup yet' : 'No screenshot yet'}</div>
           )}
-          <div className="map-frame-name" onDoubleClick={onName}>
+          <div className="map-frame-name" onDoubleClick={onField(false)}>
             <span className="map-kind-word">{kindWords(card)}</span>
             {card.start ? (
               <span className="map-start" title="The start page">
@@ -463,10 +464,14 @@ const CardFace = ({
             </span>
             <span className="map-kind-word">{kindWords(card)}</span>
           </div>
-          <div className="map-name" onDoubleClick={onName}>
+          <div className="map-name" onDoubleClick={onField(false)}>
             {card.name || <span className="map-more">Unnamed</span>}
           </div>
-          {card.says ? <div className="map-says">{card.says}</div> : null}
+          {card.says ? (
+            <div className="map-says" onDoubleClick={onField(true)}>
+              {card.says}
+            </div>
+          ) : null}
           <Inside card={card} />
         </>
       )}
@@ -1368,13 +1373,8 @@ export const MapCanvas = ({
         return
       }
       if (!plain) return
-      if (drawing && selected.length === 1 && (event.key === 'Enter' || event.key === 'F2')) {
-        event.preventDefault()
-        startEditing(selected[0]!)
-        return
-      }
       // Letters and numbers pick tools whatever is picked, the way an art
-      // program's do, so writing on a card is Enter or a double-click.
+      // program's do. No key writes on anything: that is a double-click.
       const hotkey = event.repeat ? null : hotkeyFor(event, { drawing: Boolean(drawing), annotating: Boolean(annotating) })
       if (!hotkey) return
       event.preventDefault()
@@ -2081,7 +2081,7 @@ export const MapCanvas = ({
         { name: 'Pick everything', keys: 'Ctrl+A', act: () => drawing.onSelectAll() },
       ]
     return [
-      ...(one ? [{ name: card ? 'Rename' : 'Edit the words', glyph: 'edit' as const, keys: 'Enter', act: () => startEditing(one) }] : []),
+      ...(one ? [{ name: card ? 'Rename' : 'Edit the words', glyph: 'edit' as const, act: () => startEditing(one) }] : []),
       ...(card ? [{ name: 'Say what it is for', act: () => startEditing(one, true) }] : []),
       ...(card && canOpen(card as DrawnCard)
         ? [{ name: 'Draw inside it', glyph: 'inside' as const, act: () => {
@@ -2406,7 +2406,7 @@ export const MapCanvas = ({
               onOpen={() => openCard(p.card, p.depth)}
               onPress={canMove ? pressOn(p.depth, p.card.id) : undefined}
               onHandle={drawing ? pressHandle(p.depth, p.card.id) : undefined}
-              onEdit={() => startEditing(p.card.id)}
+              onEdit={(says) => startEditing(p.card.id, says)}
             />
           ))}
 
@@ -2429,7 +2429,7 @@ export const MapCanvas = ({
                 onOpen={() => openCard(p.card, workAt)}
                 onPress={canMove ? press(p.card.id) : undefined}
                 onHandle={drawing ? pressHandle(workAt, p.card.id) : undefined}
-                onEdit={() => startEditing(p.card.id)}
+                onEdit={(says) => startEditing(p.card.id, says)}
               />
             )
           })}

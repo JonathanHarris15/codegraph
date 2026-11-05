@@ -168,9 +168,6 @@ export const AnnotationLayer = ({
         const [next, made] = duplicateAnnotations(all, ids)
         onChange(next)
         onSelect(made)
-      } else if (event.key === 'Enter' && ids.length === 1) {
-        event.preventDefault()
-        onEdit(ids[0]!)
       } else if (event.key.startsWith('Arrow') && !mod) {
         event.preventDefault()
         const by = event.shiftKey ? 24 : 4

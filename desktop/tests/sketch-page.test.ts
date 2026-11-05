@@ -108,7 +108,7 @@ describe('drawing a sketch in the real app', () => {
     const dot = card('notes').locator('.map-handle--e')
     await dot.waitFor({ timeout: PATIENCE })
     await drag(await middle(dot), await middle(card('search')))
-    await page.keyboard.press('Enter')
+    await wire('notes calls search').dblclick()
     await page.getByLabel('What the wire is for', { exact: true }).waitFor({ timeout: PATIENCE })
     await page.keyboard.type('finds notes by their words')
     await page.keyboard.press('Enter')
@@ -226,8 +226,7 @@ describe('drawing a sketch in the real app', () => {
   })
 
   it('goes on from a name to what the card is for with Tab', async () => {
-    await card('index').click()
-    await page.keyboard.press('Enter')
+    await card('index').locator('.map-name').dblclick()
     await page.getByLabel('Card name').waitFor({ timeout: PATIENCE })
     await page.keyboard.press('Tab')
     // The side panel has a box of the same name, there all along. Wait for
@@ -236,6 +235,17 @@ describe('drawing a sketch in the real app', () => {
     await page.keyboard.type('Finds words fast')
     await page.keyboard.press('Enter')
     expect(await shown(card('index'))).toContain('Finds words fast')
+  })
+
+  it('changes a field only with a double-click on it, never with a key', async () => {
+    await card('index').click()
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('F2')
+    expect(await page.locator('.map-edit').count()).toBe(0)
+    await card('index').locator('.map-says').dblclick()
+    await page.waitForFunction(() => document.activeElement?.classList.contains('map-edit--says'), undefined, { timeout: PATIENCE })
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('Escape')
   })
 
   it('takes a card off from the right-click menu', async () => {

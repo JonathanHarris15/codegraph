@@ -307,7 +307,7 @@ describe('annotating a sketch', () => {
     await picture('annotate-2-sketch')
   })
 
-  it('picks a card with its number, even with another card picked, and names it by Enter', async () => {
+  it('picks a card with its number, even with another card picked', async () => {
     const web = page.locator('.map-world').getByRole('button', { name: 'web', exact: true })
     await web.click()
     await page.keyboard.press('1')
