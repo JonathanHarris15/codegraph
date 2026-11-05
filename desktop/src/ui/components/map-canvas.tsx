@@ -18,9 +18,11 @@ import type { Layer } from '../../modules/annotations/index.js'
 import { addLayer, changeAnnotation, changeLayer, duplicateAnnotations, layerOf, placeAnnotation, removeAnnotations, removeLayer } from './annotation-edits.js'
 import { AnnotationLayer, AnnotationPlacer, drawnOn } from './annotation-layer.js'
 import { AnnotationLibrary, LayersPanel } from './annotation-library.js'
-import { COLOR_NAMES, COLORS } from './annotation-shapes.js'
+import { COLOR_NAMES, COLORS, shapeOf } from './annotation-shapes.js'
 import { CanvasMenu, type MenuItem } from './canvas-menu.js'
 import { CardPalette } from './card-palette.js'
+import { hotkeyFor } from './hotkeys.js'
+import { KeyList } from './key-list.js'
 import { ContextBar, type Picking } from './context-bar.js'
 import { Glyph, KindGlyph, keeps, kindClass } from './kind-glyph.js'
 import {
@@ -45,7 +47,7 @@ import {
 } from './map-layout.js'
 import { Overview } from './overview.js'
 import { QuickAdd } from './quick-add.js'
-import { levelInside, type Alignment, type Arrangement } from './sketch-edits.js'
+import { kindGroups, levelInside, type Alignment, type Arrangement } from './sketch-edits.js'
 import { ToolRail } from './tool-rail.js'
 import { ZoomBar } from './zoom-bar.js'
 
@@ -651,6 +653,9 @@ export const MapCanvas = ({
   const [annoEditing, setAnnoEditing] = useState('')
   const [activeLayer, setActiveLayer] = useState('')
   const [annoFresh, setAnnoFresh] = useState('')
+  const [keysOpen, setKeysOpen] = useState(false)
+  /** Says which layer a key just stepped to, for a moment. */
+  const [layerSaid, setLayerSaid] = useState('')
 
   /** The layer new annotations go on: the one picked, else the top one. */
   const layerFor = (layers: Layer[]): [Layer[], string] => {
@@ -1219,7 +1224,7 @@ export const MapCanvas = ({
   }, [])
 
   const startEditing = useCallback(
-    (id: string, seed?: string, says = false): void => {
+    (id: string, says = false): void => {
       if (!drawing || drawing.locked?.includes(id)) return
       const card = children.find((c) => c.id === id)
       const wire = wires.find((w) => w.id === id)
@@ -1227,7 +1232,7 @@ export const MapCanvas = ({
       const was = card ? (says ? card.says : card.name) : wire ? wire.words : note ? note.text : null
       if (was === null) return
       drawing.onSelect([id])
-      setEditing({ id, text: seed ?? was, was, says: Boolean(card && says), since: Date.now() })
+      setEditing({ id, text: was, was, says: Boolean(card && says), since: Date.now() })
     },
     [drawing, focus, notes],
   )
@@ -1303,6 +1308,27 @@ export const MapCanvas = ({
     [drawing, annotating, focus.id, ready],
   )
 
+  /** One thing in hand at a time: picking a tool, a card or a shape puts down
+   *  whichever was held. Pressing the key of the one held puts it down too. */
+  const pickTool = (next: Tool): void => {
+    setArmed('')
+    setAnnoArmed('')
+    setTool(next)
+  }
+  const armCard = (kind: string): void => {
+    setAnnoArmed('')
+    // The card library and the annotation library share a place; show the
+    // one the key reached for.
+    setAnnoOpen(false)
+    setTool('pick')
+    setArmed((held) => (held === kind ? '' : kind))
+  }
+  const armShape = (kind: string): void => {
+    setArmed('')
+    setTool('pick')
+    setAnnoArmed((held) => (held === kind ? '' : kind))
+  }
+
   useEffect(() => {
     const typing = (target: EventTarget | null): boolean =>
       target instanceof HTMLInputElement ||
@@ -1317,7 +1343,8 @@ export const MapCanvas = ({
       if (typing(event.target)) return
       const plain = !event.ctrlKey && !event.metaKey && !event.altKey
       if (event.key === 'Escape') {
-        if (annoArmed) setAnnoArmed('')
+        if (keysOpen) setKeysOpen(false)
+        else if (annoArmed) setAnnoArmed('')
         else if (annoPicked.length) setAnnoPicked([])
         else if (quick) setQuick(null)
         else if (armed) setArmed('')
@@ -1326,54 +1353,50 @@ export const MapCanvas = ({
         else backOut()
         return
       }
-      if (!drawing && event.key === 'Backspace') backOut()
-      // Ctrl and 0, = or - always zoom the board. The keys alone zoom too,
-      // unless something is picked, when they are words being typed on it.
-      const zoomKeys = (event.ctrlKey || event.metaKey) && !event.altKey ? true : plain && !(drawing && selected.length)
-      if (zoomKeys && (event.key === '0' || event.key === '+' || event.key === '=' || event.key === '-')) {
+      // Backspace on a picked annotation takes it away, not the level.
+      if (!drawing && event.key === 'Backspace' && !annoPicked.length) backOut()
+      if (!event.altKey && (event.key === '0' || event.key === '+' || event.key === '=' || event.key === '-')) {
         event.preventDefault()
         if (event.key === '0') fit()
         else zoomBy(event.key === '-' ? 0.8 : 1.25)
         return
       }
-      // f fills the screen with the card under the pointer. It wins over
-      // typing a name, because the pointer is nearly always on the card.
+      // f fills the screen with the card under the pointer.
       if (plain && hover && (event.key === 'f' || event.key === 'F')) {
         event.preventDefault()
         frameOn(hover)
         return
       }
-      if (plain && annotating && !(drawing && selected.length) && !annoPicked.length) {
-        if (event.key === 'a' || event.key === 'A') {
-          setAnnoOpen((open) => !open)
-          setAnnoArmed('')
-          return
-        }
-        if (event.key === 'l' || event.key === 'L') {
-          setLayersOpen((open) => !open)
-          return
-        }
-      }
-      if (!drawing || !plain) return
-      // With one thing picked, typing writes its words, the way a diagram
-      // tool lets you just start typing on a shape.
-      if (selected.length === 1 && (event.key === 'Enter' || event.key === 'F2')) {
+      if (!plain) return
+      if (drawing && selected.length === 1 && (event.key === 'Enter' || event.key === 'F2')) {
         event.preventDefault()
         startEditing(selected[0]!)
         return
       }
-      if (selected.length === 1 && event.key.length === 1 && /\S/.test(event.key)) {
-        event.preventDefault()
-        startEditing(selected[0]!, event.key)
-        return
+      // Letters and numbers pick tools whatever is picked, the way an art
+      // program's do, so writing on a card is Enter or a double-click.
+      const hotkey = event.repeat ? null : hotkeyFor(event, { drawing: Boolean(drawing), annotating: Boolean(annotating) })
+      if (!hotkey) return
+      event.preventDefault()
+      if (hotkey.do === 'tool') pickTool(hotkey.tool)
+      else if (hotkey.do === 'shape') armShape(hotkey.kind)
+      else if (hotkey.do === 'card') {
+        // The numbers count down the card library, so they follow the level.
+        const inside = levelInside[focus.level]
+        const kind = inside === focus.level ? undefined : kindGroups(inside).flatMap((group) => group.kinds)[hotkey.index]
+        if (kind) armCard(kind)
+      } else if (hotkey.do === 'palette') setPalette((open) => !open)
+      else if (hotkey.do === 'keys') setKeysOpen((open) => !open)
+      else if (hotkey.do === 'layers') setLayersOpen((open) => !open)
+      else if (hotkey.do === 'library') {
+        setAnnoOpen((open) => !open)
+        setAnnoArmed('')
+      } else if (hotkey.do === 'layer' && annotating?.layers.length) {
+        const all = annotating.layers
+        const next = all[(all.findIndex((l) => l.id === ready[1]) + hotkey.by + all.length) % all.length]!
+        setActiveLayer(next.id)
+        setLayerSaid(next.name)
       }
-      if (selected.length) return
-      const key = event.key.toLowerCase()
-      if (key === 'v') setTool('pick')
-      if (key === 'h') setTool('pan')
-      if (key === 'w') setTool('wire')
-      if (key === 'n') setTool('note')
-      if (key === 'c') setPalette((open) => !open)
     }
     const up = (event: KeyboardEvent): void => {
       if (event.key === ' ') space.current = false
@@ -1384,7 +1407,13 @@ export const MapCanvas = ({
       window.removeEventListener('keydown', down)
       window.removeEventListener('keyup', up)
     }
-  }, [backOut, drawing, fit, zoomBy, quick, armed, tool, selected, startEditing, hover, frameOn, annotating, annoArmed, annoPicked, select])
+  }, [backOut, drawing, fit, zoomBy, quick, armed, tool, selected, startEditing, hover, frameOn, annotating, annoArmed, annoPicked, select, keysOpen, focus.level, ready])
+
+  useEffect(() => {
+    if (!layerSaid) return
+    const later = setTimeout(() => setLayerSaid(''), 1400)
+    return () => clearTimeout(later)
+  }, [layerSaid])
 
   const worldOf = (event: { clientX: number; clientY: number }): Spot => {
     const rect = frame.current!.getBoundingClientRect()
@@ -2053,7 +2082,7 @@ export const MapCanvas = ({
       ]
     return [
       ...(one ? [{ name: card ? 'Rename' : 'Edit the words', glyph: 'edit' as const, keys: 'Enter', act: () => startEditing(one) }] : []),
-      ...(card ? [{ name: 'Say what it is for', act: () => startEditing(one, undefined, true) }] : []),
+      ...(card ? [{ name: 'Say what it is for', act: () => startEditing(one, true) }] : []),
       ...(card && canOpen(card as DrawnCard)
         ? [{ name: 'Draw inside it', glyph: 'inside' as const, act: () => {
             const placedCard = placed.find((p) => p.card.id === one)
@@ -2113,14 +2142,15 @@ export const MapCanvas = ({
   return (
     <>
       <ToolRail
-        tool={tool}
+        tool={annoArmed === 'sticky' ? 'note' : tool}
         sketch={Boolean(drawing)}
         palette={palette}
         canUndo={drawing?.canUndo ?? false}
         canRedo={drawing?.canRedo ?? false}
         onTool={(next) => {
-          setArmed('')
-          setTool(next)
+          // A note is a sticky note wherever annotations can be drawn.
+          if (next === 'note' && annotating) armShape('sticky')
+          else pickTool(next)
         }}
         onPalette={() => setPalette(!palette)}
         onUndo={() => drawing?.onUndo()}
@@ -2135,6 +2165,8 @@ export const MapCanvas = ({
           setAnnoArmed('')
         }}
         onLayers={() => setLayersOpen(!layersOpen)}
+        keys={keysOpen}
+        onKeys={() => setKeysOpen(!keysOpen)}
       />
       {annotating && annoOpen ? (
         <AnnotationLibrary
@@ -2185,7 +2217,22 @@ export const MapCanvas = ({
           dragged.current = false
         }}
       >
-        {drawing && (armed || tool === 'wire' || tool === 'note') ? (
+        {annotating && annoArmed ? (
+          <div className="map-hint" role="status">
+            {shapeOf(annoArmed).line
+              ? `${shapeOf(annoArmed).name}: drag from one place to another.`
+              : `${shapeOf(annoArmed).name}: click the board, or drag to size it.`}{' '}
+            {annotating.layers.length > 1 ? `On ${ready[0].find((l) => l.id === ready[1])?.name ?? 'the first layer'}.` : ''}
+            <span className="map-hint-keys">
+              <kbd>Esc</kbd> to stop
+            </span>
+          </div>
+        ) : layerSaid ? (
+          <div className="map-hint" role="status">
+            Drawing on {layerSaid}
+          </div>
+        ) : null}
+        {drawing && !annoArmed && (armed || tool === 'wire' || tool === 'note') ? (
           <div className="map-hint" role="status">
             {armed
               ? `Click to place a ${armed}. Hold Shift to place more.`
@@ -2606,7 +2653,7 @@ export const MapCanvas = ({
                     event.preventDefault()
                     const id = editing.id
                     finishEditing(true)
-                    setTimeout(() => startEditing(id, undefined, true), 0)
+                    setTimeout(() => startEditing(id, true), 0)
                     return
                   }
                   if (event.key === 'Enter') {
@@ -2773,6 +2820,8 @@ export const MapCanvas = ({
             onClose={() => setLayersOpen(false)}
           />
         ) : null}
+
+        {keysOpen ? <KeyList onClose={() => setKeysOpen(false)} /> : null}
 
         {picking ? (
           <ContextBar

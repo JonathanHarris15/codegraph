@@ -3,11 +3,17 @@ import { describe, expect, it } from 'vitest'
 import type { Layer } from '../src/modules/annotations/index.js'
 import {
   addLayer,
+  addPointer,
   duplicateAnnotations,
+  edgeToward,
+  holdPointers,
+  movePointer,
   nearestCard,
   placeAnnotation,
   placeAt,
+  pointerOut,
   removeAnnotations,
+  removePointer,
   snapBox,
 } from '../src/ui/components/annotation-edits.js'
 import { drawnOn } from '../src/ui/components/annotation-layer.js'
@@ -102,5 +108,53 @@ describe('changing annotations', () => {
     const [next, made] = duplicateAnnotations(two(), ['s'])
     expect(made).toHaveLength(1)
     expect(next[0]?.items.find((a) => a.id === made[0])).toMatchObject({ x: 24, y: 24, text: 'hi' })
+  })
+})
+
+describe('a sticky note pointing with arrows', () => {
+  const note: Layer[] = [
+    { id: 'l', name: 'Review', shown: true, snaps: true, items: [{ id: 's', at: 'level', kind: 'sticky', x: 100, y: 100, w: 180, h: 110, text: '', color: '' }] },
+  ]
+  const pointers = (layers: Layer[]) => layers[0]?.items.find((a) => a.id === 's')?.pointers ?? []
+  const box = { x: 100, y: 100, w: 180, h: 110 }
+
+  it('adds arrows as a part of the note, each kept by how far its tip is from the note', () => {
+    const [one, first] = addPointer(note, 's', { dx: 90, dy: 200 })
+    const [two, second] = addPointer(one, 's', { dx: -60, dy: 50 })
+    expect([first, second]).toEqual([0, 1])
+    expect(pointers(two)).toEqual([{ dx: 90, dy: 200 }, { dx: -60, dy: 50 }])
+  })
+
+  it('moves an arrow’s tip, and takes one away without touching the note or the others', () => {
+    const [one] = addPointer(note, 's', { dx: 90, dy: 200 })
+    const [two] = addPointer(one, 's', { dx: -60, dy: 50 })
+    expect(pointers(movePointer(two, 's', 1, { dx: 1, dy: 2 }))).toEqual([{ dx: 90, dy: 200 }, { dx: 1, dy: 2 }])
+    const gone = removePointer(two, 's', 0)
+    expect(pointers(gone)).toEqual([{ dx: -60, dy: 50 }])
+    expect(gone[0]?.items).toHaveLength(1)
+  })
+
+  it('pulls a short arrow straight out of whichever edge is clicked', () => {
+    expect(pointerOut(box, 's')).toEqual({ dx: 90, dy: 170 })
+    expect(pointerOut(box, 'n')).toEqual({ dx: 90, dy: -60 })
+    expect(pointerOut(box, 'e')).toEqual({ dx: 240, dy: 55 })
+    expect(pointerOut(box, 'w')).toEqual({ dx: -60, dy: 55 })
+  })
+
+  it('draws an arrow from the edge facing its tip, wherever the tip has gone', () => {
+    expect(edgeToward(box, { x: 190, y: 270 })).toEqual({ x: 190, y: 210 })
+    expect(edgeToward(box, { x: 190, y: 40 })).toEqual({ x: 190, y: 100 })
+    expect(edgeToward(box, { x: 340, y: 155 })).toEqual({ x: 280, y: 155 })
+  })
+
+  it('keeps every tip where it is when the note’s corner moves under it', () => {
+    const [one] = addPointer(note, 's', { dx: 90, dy: 200 })
+    expect(pointers(holdPointers(one, 's', -20, 10))).toEqual([{ dx: 110, dy: 190 }])
+  })
+
+  it('copies its arrows with the note', () => {
+    const [one] = addPointer(note, 's', { dx: 90, dy: 200 })
+    const [next, [made]] = duplicateAnnotations(one, ['s'])
+    expect(next[0]?.items.find((a) => a.id === made)?.pointers).toEqual([{ dx: 90, dy: 200 }])
   })
 })

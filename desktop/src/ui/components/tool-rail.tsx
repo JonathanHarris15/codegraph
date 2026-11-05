@@ -1,5 +1,5 @@
 // codegraph: component tool-rail
-import { Layers, StickyNote } from 'lucide-react'
+import { Keyboard, Layers, StickyNote } from 'lucide-react'
 import { Tool } from '../design-system/kit.js'
 import { Glyph } from './kind-glyph.js'
 import type { Tool as Which } from './map-canvas.js'
@@ -22,14 +22,19 @@ export const ToolRail = ({
   onOverview,
   annotations,
   layers,
+  keys,
   onAnnotations,
   onLayers,
+  onKeys,
 }: {
   /** The annotation library is open, and the layers list. */
   annotations: boolean
   layers: boolean
+  /** The list of keys is open. */
+  keys: boolean
   onAnnotations: () => void
   onLayers: () => void
+  onKeys: () => void
   tool: Which
   /** On the map the drawing tools are not there at all. */
   sketch: boolean
@@ -53,7 +58,7 @@ export const ToolRail = ({
         hint={
           sketch
             ? 'Pick; drag cards and words to move them, Shift and drag a box to pick many (V)'
-            : 'Pick; drag a card or a wire’s words to move them, double-click a card to go in, F to fill the screen'
+            : 'Pick; drag a card or a wire’s words to move them, double-click a card to go in, F to fill the screen (V)'
         }
         onPick={() => onTool('pick')}
       >
@@ -63,7 +68,7 @@ export const ToolRail = ({
         <Glyph of="pan" />
       </Tool>
       {sketch ? null : (
-        <Tool name="Area" on={tool === 'area'} hint="Drag a box to zoom to it" onPick={() => onTool('area')}>
+        <Tool name="Area" on={tool === 'area'} hint="Drag a box to zoom to it (Z)" onPick={() => onTool('area')}>
           <Glyph of="area" />
         </Tool>
       )}
@@ -96,10 +101,10 @@ export const ToolRail = ({
     <span className="map-rail-rule" />
 
     <div className="map-rail-group">
-      <Tool name="Annotate" on={annotations} hint="Text, notes, shapes and lines over the diagram (A)" onPick={onAnnotations}>
+      <Tool name="Annotate" on={annotations} hint="Text, notes, shapes and lines over the diagram (Shift+A)" onPick={onAnnotations}>
         <StickyNote size={18} strokeWidth={2} aria-hidden="true" />
       </Tool>
-      <Tool name="Layers" on={layers} hint="Show, hide and pick annotation layers (L)" onPick={onLayers}>
+      <Tool name="Layers" on={layers} hint="Show, hide and pick annotation layers (Shift+L, or [ and ] to step through them)" onPick={onLayers}>
         <Layers size={18} strokeWidth={2} aria-hidden="true" />
       </Tool>
     </div>
@@ -126,6 +131,9 @@ export const ToolRail = ({
       </Tool>
       <Tool name="Overview" on={false} hint="Show where you are" onPick={onOverview}>
         <Glyph of="overview" />
+      </Tool>
+      <Tool name="Keys" on={keys} hint="Every key on the canvas (?)" onPick={onKeys}>
+        <Keyboard size={18} strokeWidth={2} aria-hidden="true" />
       </Tool>
     </div>
   </div>

@@ -2,16 +2,22 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent, type ReactElement } from 'react'
 import type { Annotation, AnnotationEnd, Layer } from '../../modules/annotations/index.js'
 import {
+  addPointer,
   changeAnnotation,
   duplicateAnnotations,
   edgeToward,
+  holdPointers,
+  movePointer,
   nearestCard,
   placeAnnotation,
   placeAt,
+  pointerOut,
   removeAnnotations,
+  removePointer,
   snapBox,
   type Box,
   type Guides,
+  type Side,
 } from './annotation-edits.js'
 import { shapeOf } from './annotation-shapes.js'
 
@@ -74,6 +80,16 @@ type Drag =
   | { type: 'move'; ids: string[]; from: Spot; boxes: Map<string, Box>; moved: boolean }
   | { type: 'size'; id: string; corner: string; from: Spot; box: Box }
   | { type: 'end'; id: string; end: 'from' | 'to'; at: Spot }
+  | { type: 'pull'; id: string; side: Side; from: Spot; moved: boolean }
+  | { type: 'tip'; id: string; index: number; from: Spot; moved: boolean }
+
+/** What each edge of a sticky note is called, for a person. */
+const SIDES: { side: Side; name: string }[] = [
+  { side: 'n', name: 'top' },
+  { side: 'e', name: 'right' },
+  { side: 's', name: 'bottom' },
+  { side: 'w', name: 'left' },
+]
 
 /** The annotations drawn over a level of a map or a sketch: shapes, text and
  *  lines a person or an agent reads, which are not the diagram. Shapes that
@@ -119,20 +135,30 @@ export const AnnotationLayer = ({
   const [preview, setPreview] = useState<Map<string, Box> | null>(null)
   const [endAt, setEndAt] = useState<{ id: string; end: 'from' | 'to'; at: Spot } | null>(null)
   const [guides, setGuides] = useState<Guides>({ x: [], y: [] })
+  /** A sticky note's arrow on its way: a new one being pulled out, or one
+   *  whose tip is being moved. */
+  const [aiming, setAiming] = useState<{ id: string; index: number | null; at: Spot } | null>(null)
+  /** The one arrow picked on the picked note: Delete takes that, not the note. */
+  const [arrow, setArrow] = useState<{ id: string; index: number } | null>(null)
+  const pickedArrow = arrow && selected.length === 1 && selected[0] === arrow.id ? arrow : null
 
   const layerSnaps = (id: string): boolean => drawn.find((d) => d.a.id === id)?.layer.snaps ?? true
 
   // The keys act on what is picked, while nothing is being typed.
-  const now = useRef({ layers, selected })
-  now.current = { layers, selected }
+  const now = useRef({ layers, selected, pickedArrow })
+  now.current = { layers, selected, pickedArrow }
   useEffect(() => {
     if (selected.length === 0 || part !== 'front') return
     const keys = (event: KeyboardEvent): void => {
       const target = event.target as HTMLElement | null
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
-      const { layers: all, selected: ids } = now.current
+      const { layers: all, selected: ids, pickedArrow: picked } = now.current
       const mod = event.ctrlKey || event.metaKey
-      if (event.key === 'Delete' || event.key === 'Backspace') {
+      if ((event.key === 'Delete' || event.key === 'Backspace') && picked) {
+        event.preventDefault()
+        onChange(removePointer(all, picked.id, picked.index))
+        setArrow(null)
+      } else if (event.key === 'Delete' || event.key === 'Backspace') {
         event.preventDefault()
         onChange(removeAnnotations(all, ids))
         onSelect([])
@@ -183,6 +209,7 @@ export const AnnotationLayer = ({
     if (editing === d.a.id) return
     const ids = event.shiftKey ? (selected.includes(d.a.id) ? selected.filter((x) => x !== d.a.id) : [...selected, d.a.id]) : selected.includes(d.a.id) ? selected : [d.a.id]
     onSelect(ids)
+    setArrow(null)
     const boxes = new Map(drawn.filter((x) => ids.includes(x.a.id)).map((x) => [x.a.id, x.box]))
     drag.current = { type: 'move', ids, from: world(event), boxes, moved: false }
     ;(event.currentTarget as Element).setPointerCapture(event.pointerId)
@@ -200,11 +227,40 @@ export const AnnotationLayer = ({
     ;(event.currentTarget as Element).setPointerCapture(event.pointerId)
   }
 
+  /** Pressing one of the dots on a sticky note's edges starts a new arrow. */
+  const pressPull = (d: Drawn, side: Side) => (event: PointerEvent<Element>) => {
+    if (event.button !== 0) return
+    event.stopPropagation()
+    onSelect([d.a.id])
+    setArrow(null)
+    drag.current = { type: 'pull', id: d.a.id, side, from: world(event), moved: false }
+    ;(event.currentTarget as Element).setPointerCapture(event.pointerId)
+  }
+
+  const pressTip = (d: Drawn, index: number) => (event: PointerEvent<Element>) => {
+    if (event.button !== 0) return
+    event.stopPropagation()
+    setArrow({ id: d.a.id, index })
+    drag.current = { type: 'tip', id: d.a.id, index, from: world(event), moved: false }
+    ;(event.currentTarget as Element).setPointerCapture(event.pointerId)
+  }
+
+  /** Pressing an arrow picks its note and moves it, as the note's own body
+   *  does, and picks that arrow too, so Delete takes only the arrow. */
+  const pressArrow = (d: Drawn, index: number) => (event: PointerEvent<Element>) => {
+    press(d)(event)
+    if (event.button === 0) setArrow({ id: d.a.id, index })
+  }
+
   const move = (event: PointerEvent<Element>): void => {
     const g = drag.current
     if (!g) return
     const at = world(event)
-    if (g.type === 'move') {
+    if (g.type === 'pull' || g.type === 'tip') {
+      if (!g.moved && Math.hypot(at.x - g.from.x, at.y - g.from.y) * k < 4) return
+      g.moved = true
+      setAiming({ id: g.id, index: g.type === 'tip' ? g.index : null, at })
+    } else if (g.type === 'move') {
       const dx = at.x - g.from.x
       const dy = at.y - g.from.y
       if (!g.moved && Math.hypot(dx, dy) * k < 4) return
@@ -251,6 +307,24 @@ export const AnnotationLayer = ({
     drag.current = null
     setGuides({ x: [], y: [] })
     if (!g) return
+    if (g.type === 'pull' || g.type === 'tip') {
+      setAiming(null)
+      const d = drawn.find((x) => x.a.id === g.id)
+      if (!d || (g.type === 'tip' && !g.moved)) return
+      const at = world(event)
+      // Let go on its own note and the arrow is not wanted.
+      const inside = inBox(at, d.box)
+      const tip = { dx: Math.round(at.x - d.box.x), dy: Math.round(at.y - d.box.y) }
+      if (g.type === 'tip') {
+        onChange(inside ? removePointer(layers, g.id, g.index) : movePointer(layers, g.id, g.index, tip))
+        if (inside) setArrow(null)
+      } else if (!g.moved || !inside) {
+        const [next, index] = addPointer(layers, g.id, g.moved ? tip : pointerOut(d.box, g.side))
+        onChange(next)
+        setArrow({ id: g.id, index })
+      }
+      return
+    }
     if (g.type === 'end') {
       setEndAt(null)
       onChange(changeAnnotation(layers, g.id, { [g.end]: endOn(world(event), g.id, layerSnaps(g.id)) }))
@@ -277,7 +351,10 @@ export const AnnotationLayer = ({
       const card = d.layer.snaps && !shapeOf(d.a.kind).behind ? nearestCard(box, cards, 28 / k) : null
       moves.set(id, { box: level, near: card ? { card: card.id, dx: Math.round(box.x - card.box.x), dy: Math.round(box.y - card.box.y) } : undefined })
     }
-    onChange(placeAt(next, moves))
+    next = placeAt(next, moves)
+    // A resized note's arrows keep pointing where they pointed.
+    if (g.type === 'size' && shown.get(g.id)) next = holdPointers(next, g.id, shown.get(g.id)!.x - g.box.x, shown.get(g.id)!.y - g.box.y)
+    onChange(next)
   }
 
   const boxOf = (d: Drawn): Box => preview?.get(d.a.id) ?? d.box
@@ -359,8 +436,38 @@ export const AnnotationLayer = ({
               />
             ))
           : null}
+        {d.a.kind === 'sticky' && editing !== d.a.id && selected.length <= 1
+          ? SIDES.map(({ side, name }) => (
+              <span
+                key={side}
+                className={`map-anno-pull map-anno-pull--${side}`}
+                role="button"
+                aria-label={`Pull an arrow out of the ${name} of the note`}
+                title="Drag to point an arrow, or click for a short one"
+                onPointerDown={pressPull(d, side)}
+                onPointerMove={move}
+                onPointerUp={up}
+                onDoubleClick={(event) => event.stopPropagation()}
+              />
+            ))
+          : null}
       </div>
     )
+  }
+
+  /** A note's arrows as drawn now. A resize leaves the tips where they are;
+   *  anything else carries them along with the note. */
+  const arrowsOf = (d: Drawn): { index: number; from: Spot; to: Spot }[] => {
+    const box = boxOf(d)
+    const corner = drag.current?.type === 'size' ? d.box : box
+    const arrows = (d.a.pointers ?? []).map((p, index) => {
+      const tip = { x: corner.x + p.dx, y: corner.y + p.dy }
+      const to = aiming?.id === d.a.id && aiming.index === index ? aiming.at : tip
+      return { index, to, from: edgeToward(box, to) }
+    })
+    if (aiming?.id === d.a.id && aiming.index === null)
+      arrows.push({ index: arrows.length, to: aiming.at, from: edgeToward(box, aiming.at) })
+    return arrows
   }
 
   const lines = drawn.filter((d) => d.ends)
@@ -430,6 +537,42 @@ export const AnnotationLayer = ({
             </g>
           )
         })}
+        {drawn.flatMap((d) =>
+          arrowsOf(d).map(({ index, from, to }) => {
+            const picked = pickedArrow?.id === d.a.id && pickedArrow.index === index
+            const path = `M ${from.x} ${from.y} L ${to.x} ${to.y}`
+            return (
+              <g
+                key={`${d.a.id}:${index}`}
+                className={`map-anno-line map-anno-pointer${picked ? ' map-anno-line--picked' : ''}${d.a.color ? ` map-anno-fill--${d.a.color}` : ''}`}
+              >
+                <path d={path} markerEnd="url(#map-anno-head)" />
+                <path
+                  d={path}
+                  className="map-anno-line-hit"
+                  role="button"
+                  aria-label="The note’s arrow"
+                  onPointerDown={pressArrow(d, index)}
+                  onPointerMove={move}
+                  onPointerUp={up}
+                />
+                {selected.length === 1 && selected[0] === d.a.id ? (
+                  <circle
+                    cx={to.x}
+                    cy={to.y}
+                    r={6 / k}
+                    className="map-anno-end"
+                    role="button"
+                    aria-label="The tip of the note’s arrow"
+                    onPointerDown={pressTip(d, index)}
+                    onPointerMove={move}
+                    onPointerUp={up}
+                  />
+                ) : null}
+              </g>
+            )
+          }),
+        )}
         {guides.x.map((x) => (
           <line key={`x${x}`} x1={x} x2={x} y1={-100000} y2={100000} className="map-anno-guide" />
         ))}

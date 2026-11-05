@@ -1,5 +1,5 @@
 // codegraph: module annotations
-import type { Annotation, AnnotationEnd, Layer } from './schema.js'
+import type { Annotation, AnnotationEnd, Layer, Pointer } from './schema.js'
 
 /** What each kind of annotation is called, in words. */
 const CALLED: Record<string, string> = {
@@ -19,6 +19,22 @@ const CALLED: Record<string, string> = {
 
 const called = (kind: string): string => CALLED[kind] ?? `${kind} shape`
 
+/** Which way an arrow goes out of its note, in words: it holds nothing, so
+ *  the way it points is all there is to say. */
+const wayOf = (a: Annotation, p: Pointer): string => {
+  const dx = p.dx - a.w / 2
+  const dy = p.dy - a.h / 2
+  const across = Math.abs(dx) * 2 < Math.abs(dy) ? '' : dx < 0 ? 'left' : 'right'
+  const down = Math.abs(dy) * 2 < Math.abs(dx) ? '' : dy < 0 ? 'up' : 'down'
+  return [down, across].filter(Boolean).join(' and ')
+}
+
+const pointing = (a: Annotation): string => {
+  const ways = (a.pointers ?? []).map((p) => wayOf(a, p))
+  if (!ways.length) return ''
+  return ways.length === 1 ? `, with an arrow pointing ${ways[0]}` : `, with arrows pointing ${ways.join('; ')}`
+}
+
 /** The annotations on some levels, in words an agent reads: what each is,
  *  what it says, the card it keeps beside, and what a line joins. Each
  *  level is named by the card it is drawn inside. Nothing here is part of
@@ -37,7 +53,7 @@ export const annotationWords = (layers: Layer[], levels: string[], nameOf: (card
     for (const { a, layer } of here) {
       const what = a.from
         ? `${called(a.kind)} from ${end(a.from)} to ${end(a.to)}${a.text ? `, saying "${a.text}"` : ''}`
-        : `${about(a)}${a.near ? `, beside ${nameOf(a.near.card)}` : ''}`
+        : `${about(a)}${a.near ? `, beside ${nameOf(a.near.card)}` : ''}${pointing(a)}`
       out.push(`  ${what} (layer ${layer.name}${layer.shown ? '' : ', hidden'})`)
     }
   }

@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { saveAnnotations } from '../src/features/save-annotations.js'
 import { showAnnotations } from '../src/features/show-annotations.js'
-import { useFolder as useAnnotations, type Layer } from '../src/modules/annotations/index.js'
+import { annotationWords, useFolder as useAnnotations, type Layer } from '../src/modules/annotations/index.js'
 import { addProject, addSoftwareSystem, useFolder as useProjects } from '../src/modules/projects/index.js'
 import { blankCard, newSketch, withNotesAsAnnotations } from '../src/modules/sketches/index.js'
 import { aMappedRepo, anAgentIn, closeYard, openYard, type Yard } from './yard.js'
@@ -98,6 +98,23 @@ describe('annotations over a map', () => {
     expect(said).toContain('  arrow from sticky note "Split the db?" to container db (layer Review)')
     expect(said).toContain('On the project Notes:')
     expect(said).toContain('  text "Mobile app?" (layer Ideas, hidden)')
+  })
+})
+
+describe('a sticky note’s arrows, in words', () => {
+  const level = 'p'
+  const with_ = (pointers: { dx: number; dy: number }[]): Layer[] => [
+    { id: 'l', name: 'Review', shown: true, snaps: true, items: [{ id: 's', at: level, kind: 'sticky', x: 0, y: 0, w: 100, h: 100, text: 'Look', color: '', pointers }] },
+  ]
+  const words = (layers: Layer[]) => annotationWords(layers, [level], () => 'the project').join('\n')
+
+  it('says which way each points, since it holds nothing', () => {
+    expect(words(with_([{ dx: 50, dy: 200 }]))).toContain('sticky note "Look", with an arrow pointing down (layer Review)')
+    expect(words(with_([{ dx: -100, dy: -100 }, { dx: 300, dy: 50 }]))).toContain('with arrows pointing up and left; right (layer Review)')
+  })
+
+  it('says nothing of arrows a note has not got', () => {
+    expect(words(with_([]))).not.toContain('arrow')
   })
 })
 
