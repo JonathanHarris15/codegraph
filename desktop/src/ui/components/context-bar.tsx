@@ -127,7 +127,7 @@ export const ContextBar = ({
       {picking.what !== 'many' && !locked ? (
         <Act
           glyph="edit"
-          name={picking.what === 'card' ? 'Rename (Enter)' : picking.what === 'wire' ? 'Say what it is for (Enter)' : 'Edit the note (Enter)'}
+          name={picking.what === 'card' ? 'Rename' : picking.what === 'wire' ? 'Say what it is for' : 'Edit the note'}
           onAct={() => onEdit(picking.id)}
         />
       ) : null}

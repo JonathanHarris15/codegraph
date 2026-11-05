@@ -101,7 +101,7 @@ export const KEY_GROUPS: { name: string; rows: { keys: string; says: string }[] 
   {
     name: 'What is picked',
     rows: [
-      { keys: 'Enter', says: 'Write on it' },
+      { keys: 'Double-click', says: 'Change a field on a card, or write on a wire or note' },
       { keys: 'Delete', says: 'Take it away' },
       { keys: 'Ctrl+Z', says: 'Undo' },
     ],
