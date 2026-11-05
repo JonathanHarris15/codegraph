@@ -108,7 +108,10 @@ export const SketchEditor = ({
     setPanelNow(open)
   }
 
-  const trail = walk(sketch.root, path)
+  /** The level being worked on: the one last pressed, among the cards open. */
+  const [levelId, setLevelId] = useState('')
+  const levelAt = path.indexOf(levelId)
+  const trail = walk(sketch.root, levelAt < 0 ? path : path.slice(0, levelAt + 1))
   const focus = trail.at(-1)!
   const here = trail.map((c) => c.id)
 
@@ -313,6 +316,9 @@ export const SketchEditor = ({
           canRedo: future.current.length > 0,
           onUndo: undo,
           onRedo: redo,
+          onLevel: setLevelId,
+          onRoom: (to, room, join) =>
+            keep({ ...now.current, root: changeAt(now.current.root, to, (card) => ({ ...card, room })) }, join ? 'join' : ''),
           onSelect: setSelected,
           onPin: (arrangement) => change((f) => pinAll(f, arrangement), '', true),
           onPlace: (at, kind, from) => {
@@ -399,7 +405,10 @@ export const SketchEditor = ({
                   <kbd>Shift</kbd> and drag a box on the board, or <kbd>Shift</kbd>-click
                 </dd>
                 <dt>Draw inside a card</dt>
-                <dd>Double-click it, the bar over it, or zoom into it</dd>
+                <dd>
+                  Double-click it, and it grows to give you room. Drag its corners to resize it; carry a card past its edge
+                  and it grows. The arrow by its name, or <kbd>Esc</kbd>, backs out
+                </dd>
                 <dt>Fill the screen with one card</dt>
                 <dd>
                   Point at it and press <kbd>F</kbd>
@@ -501,7 +510,7 @@ export const SketchEditor = ({
               ) : null}
               {picked.card.level !== 'code' ? (
                 <div className="ds-hint">
-                  To draw what is inside it, use the bar over the card, or zoom into it.
+                  To draw what is inside it, double-click it, or use the bar over the card.
                 </div>
               ) : null}
             </>

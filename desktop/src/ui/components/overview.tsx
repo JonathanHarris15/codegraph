@@ -5,9 +5,8 @@ import { boundsOf, type Box, type Placed } from './map-layout.js'
 const H = 128
 const PAD = 8
 
-/** Where you are on the level you are on: every card a block in its kind
- *  colour, the viewport a ring around them. It shows this level and no
- *  other — the trail is for levels. */
+/** Where you are on the board: every card on it a block in its kind colour,
+ *  open ones and what they hold included, the viewport a ring around them. */
 export const Overview = ({
   of: name,
   placed,

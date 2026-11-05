@@ -494,6 +494,7 @@ export const AnnotationPlacer = ({
   shift,
   cards,
   toWorld,
+  onPress,
   transform,
   onPlaced,
 }: {
@@ -506,6 +507,8 @@ export const AnnotationPlacer = ({
   shift: Spot
   cards: Card[]
   toWorld: (x: number, y: number) => Spot
+  /** A press landed here, so the canvas can work on the level it landed on. */
+  onPress?: (at: Spot) => void
   onPlaced: (layers: Layer[], id: string, keepGoing: boolean) => void
 }) => {
   const start = useRef<{ at: Spot; screen: Spot } | null>(null)
@@ -528,6 +531,7 @@ export const AnnotationPlacer = ({
         if (event.button !== 0) return
         event.stopPropagation()
         start.current = { at: toWorld(event.clientX, event.clientY), screen: { x: event.clientX, y: event.clientY } }
+        onPress?.(start.current.at)
         event.currentTarget.setPointerCapture(event.pointerId)
       }}
       onPointerMove={(event) => {

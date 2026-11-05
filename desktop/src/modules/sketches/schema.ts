@@ -47,6 +47,9 @@ export type SketchCard = {
   /** Where a person put it; left out, the canvas lays it out itself. */
   x?: number
   y?: number
+  /** How much room it has when open, in the space its insides are laid out
+   *  in; left out, it gets most of the screen. */
+  room?: { x: number; y: number; w: number; h: number }
   children: SketchCard[]
   wires: SketchWire[]
   notes: Note[]

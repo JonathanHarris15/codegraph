@@ -1,11 +1,11 @@
 // codegraph: module arrangements
-// codegraph: front door useFolder, readArrangement, writeArrangement, movedTo, forgetting, Arrangement, Spot
+// codegraph: front door useFolder, readArrangement, writeArrangement, movedTo, forgetting, roomKey, Arrangement, Spot
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { Arrangement } from './schema.js'
 
-export { forgetting, movedTo } from './schema.js'
+export { forgetting, movedTo, roomKey } from './schema.js'
 export type { Arrangement, Spot } from './schema.js'
 
 let folder = ''

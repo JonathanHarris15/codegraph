@@ -102,8 +102,8 @@ and have it describe what it sees.
 
 The MCP's `sketches` and `sketch` tools hand a sketch over in words, with
 the file of each mockup for the agent to open. A sketch drawn as a sketch
-can stop at any level; tunnelling into an empty card is how you draw inside
-it.
+can stop at any level; opening an empty card is how you draw inside it
+(ADR 0011).
 
 After the canvas design pass, drawing was rebuilt around how Lucidchart
 works: a card library beside the tools, dots on a card's sides to draw

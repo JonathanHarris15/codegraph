@@ -83,7 +83,7 @@ _Avoid_: hook, handler, entry point, cron
 
 **Canvas**:
 The one surface a project is drawn on; each project has its own. Moving
-between levels is zooming on it, never opening a new page.
+between levels is opening cards on it, never going to a new page.
 _Avoid_: board, diagram, graph, view
 
 **Map**:
@@ -104,16 +104,24 @@ the call. It reads as a sentence: who acts, how, on what, and what for —
 write-note uses notes to keep the note.
 _Avoid_: edge, arrow, link, connection, dependency
 
-**Tunnelling**:
-Moving down a level by zooming into a card, or by double-clicking it: it
-opens in place, its insides drawn within it, while the cards around it and
-their wires into it stay in view. Tunnelling out is the way back up.
-_Avoid_: drilling down, expanding, opening
+**Opening**:
+Double-clicking a card so it grows where it is into room to draw in, pushing
+the cards around it aside. Nothing else changes: what is around it stays on
+screen, at the same zoom, and can still be drawn on. Backing out is the way
+back; the card shrinks and the cards it pushed return.
+_Avoid_: tunnelling, drilling down, expanding, zooming in
+
+**Room**:
+How much of the canvas an open card has. A person can drag its corners or
+sides to change it, and it grows by itself to hold whatever is carried past
+its edge. It is kept with the card, and is never smaller than what it holds.
+_Avoid_: subcanvas, size, frame, viewport
 
 **Arrangement**:
-Where a person has moved a map's cards and its wires' sentences. No code
-says where anything sits, so an arrangement is kept beside the map, never
-in a repo, and moving something changes no code. A sketch holds its own.
+Where a person has moved a map's cards and its wires' sentences, and the room
+they have given its open cards. No code says where anything sits, so an
+arrangement is kept beside the map, never in a repo, and moving something
+changes no code. A sketch holds its own.
 _Avoid_: layout, positions, coordinates, pins
 
 **Framing**:
