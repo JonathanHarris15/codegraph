@@ -169,6 +169,12 @@ It can keep beside a card, or point at one, but no card ever lines up with
 or moves for an annotation.
 _Avoid_: note (for anything but a sticky note), comment, markup, decoration
 
+**Pointer**:
+An arrow a sticky note grows out of its own edge, to show what it means. It is
+part of the note: it moves, copies and goes with it. Unlike a line, it holds
+nothing at its tip, and stays where it is put.
+_Avoid_: tail, leader, connector, callout
+
 **Layer**:
 A set of annotations shown or hidden together. Each says whether its
 annotations line up with the diagram's cards. The diagram itself is never on

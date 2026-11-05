@@ -24,6 +24,8 @@ export const CardPalette = ({
   onClose: () => void
 }) => {
   const groups = kindGroups(level)
+  // Each card shows the key that picks it, counting down the whole list.
+  const all = groups.flatMap((group) => group.kinds)
   return (
     <aside className="map-palette" aria-label="Cards">
       <div className="map-palette-head">
@@ -57,6 +59,7 @@ export const CardPalette = ({
                 <span className="map-palette-name">{kind}</span>
                 <span className="map-palette-says">{kindHints[kind] ?? ''}</span>
               </span>
+              {all.indexOf(kind) < 9 ? <kbd className="map-palette-key">{all.indexOf(kind) + 1}</kbd> : null}
             </button>
           ))}
         </div>

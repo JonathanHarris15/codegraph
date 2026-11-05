@@ -5,6 +5,11 @@
  *  diagram, or another annotation. */
 export type AnnotationEnd = { x: number; y: number } | { card: string } | { annotation: string }
 
+/** An arrow a sticky note points with. It is a part of the note: its tip is
+ *  kept by how far it is from the note's corner, it holds nothing, and it
+ *  moves, copies and goes with the note. */
+export type Pointer = { dx: number; dy: number }
+
 /** Something drawn over a map or a sketch for people and agents to read:
  *  text, a sticky note, a shape, a line. It is not part of the diagram and
  *  never drives the code. */
@@ -28,6 +33,8 @@ export type Annotation = {
   /** The two ends of a line or an arrow. */
   from?: AnnotationEnd
   to?: AnnotationEnd
+  /** The arrows a sticky note points with. */
+  pointers?: Pointer[]
 }
 
 /** A set of annotations shown or hidden together. Whether its annotations

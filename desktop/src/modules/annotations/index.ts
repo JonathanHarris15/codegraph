@@ -1,5 +1,5 @@
 // codegraph: module annotations
-// codegraph: front door useFolder, readAnnotations, writeAnnotations, annotationWords, firstLayer, Annotation, AnnotationEnd, Layer
+// codegraph: front door useFolder, readAnnotations, writeAnnotations, annotationWords, firstLayer, Annotation, AnnotationEnd, Layer, Pointer
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -7,7 +7,7 @@ import type { Layer } from './schema.js'
 
 export { firstLayer } from './schema.js'
 export { annotationWords } from './words.js'
-export type { Annotation, AnnotationEnd, Layer } from './schema.js'
+export type { Annotation, AnnotationEnd, Layer, Pointer } from './schema.js'
 
 let folder = ''
 

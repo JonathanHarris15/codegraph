@@ -1,5 +1,5 @@
 // codegraph: component annotation-layer
-import type { Annotation, AnnotationEnd, Layer } from '../../modules/annotations/index.js'
+import type { Annotation, AnnotationEnd, Layer, Pointer } from '../../modules/annotations/index.js'
 import { shapeOf } from './annotation-shapes.js'
 
 export type Box = { x: number; y: number; w: number; h: number }
@@ -106,6 +106,36 @@ export const duplicateAnnotations = (layers: Layer[], ids: string[], by = 24): [
     return { ...l, items: [...l.items, ...copies] }
   })
   return [next, made]
+}
+
+const pointersOf = (layers: Layer[], id: string): Pointer[] =>
+  layers.flatMap((l) => l.items).find((a) => a.id === id)?.pointers ?? []
+
+/** A new arrow on a sticky note. Hands back which one it is. */
+export const addPointer = (layers: Layer[], id: string, tip: Pointer): [Layer[], number] => {
+  const had = pointersOf(layers, id)
+  return [changeAnnotation(layers, id, { pointers: [...had, tip] }), had.length]
+}
+
+export const movePointer = (layers: Layer[], id: string, index: number, tip: Pointer): Layer[] =>
+  changeAnnotation(layers, id, { pointers: pointersOf(layers, id).map((p, i) => (i === index ? tip : p)) })
+
+export const removePointer = (layers: Layer[], id: string, index: number): Layer[] =>
+  changeAnnotation(layers, id, { pointers: pointersOf(layers, id).filter((_, i) => i !== index) })
+
+/** Where the tips must be kept when a note's corner moves by this much, so
+ *  they stay pointing where they pointed. */
+export const holdPointers = (layers: Layer[], id: string, dx: number, dy: number): Layer[] =>
+  changeAnnotation(layers, id, { pointers: pointersOf(layers, id).map((p) => ({ dx: Math.round(p.dx - dx), dy: Math.round(p.dy - dy) })) })
+
+export type Side = 'n' | 'e' | 's' | 'w'
+
+/** A short arrow straight out of the middle of one edge. */
+export const pointerOut = (box: Box, side: Side, by = 60): Pointer => {
+  if (side === 'n') return { dx: box.w / 2, dy: -by }
+  if (side === 's') return { dx: box.w / 2, dy: box.h + by }
+  if (side === 'w') return { dx: -by, dy: box.h / 2 }
+  return { dx: box.w + by, dy: box.h / 2 }
 }
 
 /** The layer an annotation is in. */

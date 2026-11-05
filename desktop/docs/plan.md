@@ -155,8 +155,8 @@ systems is not proposed yet; that comes with checkpoint 6.
 Done after checkpoint 4, at Jonathan's ask. Maps and sketches carry
 annotations (ADR 0009): text, sticky notes, callouts, lines and arrows,
 frames, lists, code blocks, flowchart shapes, containers and shapes, from a
-library beside the tools (A) that is searched by name. Each sits on a layer
-(L), shown or hidden, and each layer says whether it lines up with the
+library beside the tools (Shift+A) that is searched by name. Each sits on a
+layer (Shift+L), shown or hidden, and each layer says whether it lines up with the
 diagram's cards. An annotation dropped by a card keeps beside it as the card
 moves; a line's end holds the card or annotation it lands on. Cards never
 line up with annotations. Frames and boxes sit behind the cards and are
@@ -178,6 +178,21 @@ into a card is now a double-click, since the single click picks it up, and
 pointing at a card and pressing F fills the screen with it. Hovering a card
 lights the wires into and out of it, with a dash running the way each
 arrow points.
+
+## Between checkpoints: keys like an art program
+
+One letter for each thing you reach for, and it works whatever is picked:
+V pick, H pan, Z zoom box, W wire, N sticky note, T text, A arrow, L line,
+R rectangle, O circle, D decision. 1 to 9 pick the cards of the level being
+drawn, in the card library's order, so the same key means the first kind at
+every level. [ and ] step through the annotation layers. ? lists them all.
+So letters can always pick tools, writing on a picked card is Enter or a
+double-click, no longer just starting to type.
+
+A sticky note has a dot on each edge. Drag one out and it points an arrow
+anywhere, or click it for a short one: a pointer, part of the note, holding
+nothing at its tip. Delete takes a picked pointer, not its note, and dragging
+its tip back on the note takes it too.
 
 ## Checkpoint 5: Codegraph sets itself up
 
