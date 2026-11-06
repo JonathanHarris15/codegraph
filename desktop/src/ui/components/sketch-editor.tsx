@@ -388,6 +388,10 @@ export const SketchEditor = ({
             if (fromCode.has(id)) return
             change((f) => (pick(f, id)?.kind === 'wire' ? changeWire(f, id, { kind }) : changeCard(f, id, { kind, look })))
           },
+          onLook: (id, look) => {
+            if (fromCode.has(id)) return
+            change((f) => changeCard(f, id, { look }))
+          },
           cardTypes,
           onCardTypes: keepCardTypes,
           onMockup: (id) => onAddMockup(id),

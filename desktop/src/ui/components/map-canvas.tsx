@@ -21,7 +21,8 @@ import { addLayer, changeAnnotation, changeLayer, duplicateAnnotations, layerOf,
 import { AnnotationLayer, AnnotationPlacer, drawnOn } from './annotation-layer.js'
 import { AnnotationLibrary, LayersPanel } from './annotation-library.js'
 import { COLOR_NAMES, COLORS, shapeOf } from './annotation-shapes.js'
-import { CARD_SHAPES, drawnShape, lookOf } from './card-looks.js'
+import { IconPick } from './card-look-editor.js'
+import { BLANK_LOOK, CARD_SHAPES, drawnShape, lookOf } from './card-looks.js'
 import { meetOutline, seamOf, textAreaOf } from './shape-outline.js'
 import { CanvasMenu, type MenuItem } from './canvas-menu.js'
 import { CardPalette } from './card-palette.js'
@@ -33,11 +34,13 @@ import {
   boundsOf,
   isFrame,
   layOut,
+  loopSides,
   openLevels,
   resized,
   roomAround,
   sentenceWidth,
   sizeOf,
+  reachingOpen,
   spread,
   wirePath,
   wireThrough,
@@ -103,6 +106,8 @@ export type Drawing = {
   onDuplicate: (ids: string[], by?: number) => string[]
   onSelectAll: () => void
   onKind: (id: string, kind: string, look?: CardLook) => void
+  /** How a card looks: its icon, shape and colour. */
+  onLook: (id: string, look: CardLook) => void
   /** The types of card a person has saved, and changing them. */
   cardTypes: CardType[]
   onCardTypes: (types: CardType[]) => void
@@ -361,6 +366,12 @@ type Hub = {
   wire: string
 }
 
+/** Whether a card's icon, type and colour are a person's to change. A database
+ *  and a page are their own kinds, and a card on the context level is one of
+ *  three. */
+const restyles = (card: DrawnCard): boolean =>
+  ownTypesAt(card.level) && card.kind !== 'database' && (card.role ?? card.kind) !== 'page'
+
 /** How wide a hub is on the board. */
 const HUB_SIZE = 16
 
@@ -381,12 +392,15 @@ const CardFace = ({
   selected,
   up,
   linked,
+  passing,
   target,
   handles,
   movable,
   drawing,
   agent,
   extra,
+  onIcon,
+  onType,
   onOpen,
   onPress,
   onHandle,
@@ -406,6 +420,11 @@ const CardFace = ({
   up: number
   /** Under the pointer, or wired to what is. */
   linked?: 'self' | 'wired'
+  /** Fading away as a card opens, or back as it closes. */
+  passing?: 'leaving' | 'arriving'
+  /** Clicked its icon, or the word for its type, to change them. */
+  onIcon?: () => void
+  onType?: () => void
   /** A wire being drawn would land here. */
   target: boolean
   /** Show the dots a wire can be drawn from. */
@@ -429,6 +448,7 @@ const CardFace = ({
   if (look) classes.push(lookClass(look))
   if (shape) classes.push('map-card--shaped', `map-card--shape-${shape}`)
   if (linked) classes.push(`map-card--${linked === 'self' ? 'hovered' : 'wired'}`)
+  if (passing) classes.push(`map-${passing}`)
   if (keeps(card.kind)) classes.push('map-card--keeps')
   if (!card.setUp || card.kind === 'shallow software system') classes.push('map-card--bare')
   if (card.kind === 'person') classes.push('map-card--person')
@@ -451,8 +471,40 @@ const CardFace = ({
   const words = (
     <>
       <div className="map-kind">
-        <span className="map-glyph">{look ? <LookGlyph icon={look.icon} /> : <KindGlyph kind={card.kind} />}</span>
-        <span className="map-kind-word">{kindWords(card)}</span>
+        {onIcon ? (
+          <button
+            type="button"
+            className="map-glyph map-restyle"
+            aria-label={`Change the icon of ${card.name || 'this card'}`}
+            title="Change the icon"
+            onClick={(event) => {
+              event.stopPropagation()
+              onIcon()
+            }}
+            onDoubleClick={(event) => event.stopPropagation()}
+          >
+            {look ? <LookGlyph icon={look.icon} /> : <KindGlyph kind={card.kind} />}
+          </button>
+        ) : (
+          <span className="map-glyph">{look ? <LookGlyph icon={look.icon} /> : <KindGlyph kind={card.kind} />}</span>
+        )}
+        {onType ? (
+          <button
+            type="button"
+            className="map-kind-word map-restyle"
+            aria-label={`Change the type of ${card.name || 'this card'}`}
+            title="Change the type"
+            onClick={(event) => {
+              event.stopPropagation()
+              onType()
+            }}
+            onDoubleClick={(event) => event.stopPropagation()}
+          >
+            {kindWords(card)}
+          </button>
+        ) : (
+          <span className="map-kind-word">{kindWords(card)}</span>
+        )}
       </div>
       <div className="map-name" onDoubleClick={onField(false)}>
         {card.name || <span className="map-more">Unnamed</span>}
@@ -738,6 +790,8 @@ export const MapCanvas = ({
   const [annoEditing, setAnnoEditing] = useState('')
   const [activeLayer, setActiveLayer] = useState('')
   const [annoFresh, setAnnoFresh] = useState('')
+  /** Where an annotation being dragged or sized has got to. */
+  const [annoPreview, setAnnoPreview] = useState<Map<string, Box> | null>(null)
   const [keysOpen, setKeysOpen] = useState(false)
   /** Says which layer a key just stepped to, for a moment. */
   const [layerSaid, setLayerSaid] = useState('')
@@ -771,7 +825,11 @@ export const MapCanvas = ({
     first?: boolean
     /** A card's second line, what it is for, rather than its name. */
     says?: boolean
+    /** A card's type, rather than its name. */
+    type?: boolean
   } | null>(null)
+  /** The card whose icon is being picked. */
+  const [iconsFor, setIconsFor] = useState('')
   /** The menu a right-click opened, and what it was over. */
   const [menu, setMenu] = useState<{ screen: Spot; inside: Spot; ids: string[] } | null>(null)
   /** Asking what to put where a wire was dropped, or the board double-clicked. */
@@ -954,7 +1012,20 @@ export const MapCanvas = ({
     () => shown.flatMap((level, depth) => level.placed.map((p) => ({ ...p, depth }))).reverse(),
     [shown],
   )
-  const outside = useMemo(() => everyCard.filter((p) => p.depth !== workAt).reverse(), [everyCard, workAt])
+  /** What really reaches the open card from around it. The other cards around
+   *  it are not drawn. */
+  const reaching = useMemo(() => reachingOpen(shown), [shown])
+  const unwired = reaching.notDrawn
+  /** What is fading away or back for as long as the cards take to settle. */
+  const [passing, setPassing] = useState<{ leaving: Set<string>; arriving: Set<string> } | null>(null)
+  /** What is not on the board at all right now. */
+  const notDrawn = useMemo(() => {
+    if (!passing) return unwired
+    return new Set([...unwired].filter((id) => !passing.leaving.has(id)))
+  }, [unwired, passing])
+  const passingOf = (id: string): 'leaving' | 'arriving' | undefined =>
+    passing?.leaving.has(id) ? 'leaving' : passing?.arriving.has(id) ? 'arriving' : undefined
+  const outside = useMemo(() => everyCard.filter((p) => p.depth !== workAt && !notDrawn.has(p.card.id)).reverse(), [everyCard, workAt, notDrawn])
   const everyNote = useMemo(() => shown.flatMap((level, depth) => level.noteBoxes.map((n) => ({ ...n, depth }))), [shown])
 
   // A sketch keeps every card where the canvas first showed it, so moving one
@@ -1013,17 +1084,24 @@ export const MapCanvas = ({
         const d = shapedAt.get(id)
         return d ? (at) => meetOutline(d, box, at) : undefined
       }
+      const loops = loopSides(level.wires, boxes, cardBoxes)
       const rows = level.wires.flatMap((wire) => {
         const from = boxes.get(wire.from)
         const to = boxes.get(wire.to)
         if (!from || !to) return []
+        // Around an open card, only the wires that reach it are drawn.
+        if (level.open && !reaching.wires.has(wire)) {
+          const wasShowing = passing && (notDrawn.has(wire.from) || notDrawn.has(wire.to) || passing.leaving.has(wire.from) || passing.leaving.has(wire.to))
+          if (!wasShowing) return []
+        }
+        if (notDrawn.has(wire.from) || notDrawn.has(wire.to)) return []
         const key = keyOf(wire)
         return [
           {
             wire,
             key,
             depth,
-            shape: wirePath(from, to, slots(wire.from, wire.to), cardBoxes, { from: fitTo(wire.from, from), to: fitTo(wire.to, to) }),
+            shape: wirePath(from, to, slots(wire.from, wire.to), cardBoxes, { from: fitTo(wire.from, from), to: fitTo(wire.to, to) }, loops.get(wire)),
             small: (ins.get(wire.to) ?? []).length > BUSY,
             said: sentenceOf(names.get(wire.from) ?? '', wire.kind, names.get(wire.to) ?? '', wire.words),
           },
@@ -1069,12 +1147,12 @@ export const MapCanvas = ({
           fixed: Boolean(held) || put,
         }
       }),
-      [...everyCard.map((p) => p.box), ...everyNote.map((n) => n.box)],
+      [...everyCard.filter((p) => !notDrawn.has(p.card.id)).map((p) => p.box), ...everyNote.map((n) => n.box)],
     )
     // The wire is drawn through its sentence, wherever that ended up.
     const at = all.map((one, i) => ({ ...one, at: spots[i]!, shape: { ...one.shape, d: wireThrough(one.shape, spots[i]!) } }))
     return { all: at, outer: at.filter((one) => one.depth !== workAt), inner: at.filter((one) => one.depth === workAt), hubs, boxes }
-  }, [shown, where, cardBoxes, shapedAt, canDraw, nameOf, sizes, everyCard, everyNote, workAt, live.moves])
+  }, [shown, where, cardBoxes, shapedAt, canDraw, nameOf, sizes, everyCard, everyNote, workAt, live.moves, notDrawn, passing, reaching])
 
   /** The hubs on the border of the card open now: the only ones in reach. */
   const hubsHere = useMemo(() => shapes.hubs.filter((hub) => hub.depth + 1 === workAt), [shapes.hubs, workAt])
@@ -1116,8 +1194,11 @@ export const MapCanvas = ({
           .map((one) => {
             const into = one.wire.to === id
             const meets = into ? one.shape.head : one.shape.tail
+            // Further out than the level around the open card, a wire is only
+            // carried on through the card it comes on through.
+            const onward = depth + 1 < workAt ? within.open?.card.id : undefined
             const reached = [
-              ...new Set((one.wire.ends ?? []).map((end) => holder.get(into ? end.to : end.from)).filter((held): held is string => Boolean(held))),
+              ...new Set((one.wire.ends ?? []).map((end) => holder.get(into ? end.to : end.from)).filter((held): held is string => Boolean(held) && (!onward || held === onward))),
             ]
             const through = reached.flatMap((held) => {
               const box = where.get(held)
@@ -1221,6 +1302,7 @@ export const MapCanvas = ({
   const pathKey = path.join('/')
   const drawnPath = useRef(path)
   const drawnAt = useRef(new Map<string, Box>())
+  const drawnUnwired = useRef(new Set<string>())
   const viewsAt = useRef(new Map<string, View>())
   useLayoutEffect(() => {
     const was = drawnPath.current
@@ -1231,6 +1313,10 @@ export const MapCanvas = ({
       const opened = path.filter((id) => !was.includes(id))
       for (const id of opened) viewsAt.current.set(id, now)
       setSettling({ from: drawnAt.current, t: 0 })
+      setPassing({
+        leaving: new Set([...unwired].filter((id) => !drawnUnwired.current.has(id))),
+        arriving: new Set([...drawnUnwired.current].filter((id) => !unwired.has(id))),
+      })
       drawing?.onLevel(path[path.length - 1] ?? '')
       select([])
       setAnnoPicked([])
@@ -1268,12 +1354,17 @@ export const MapCanvas = ({
       }
     }
     drawnPath.current = path
+    drawnUnwired.current = unwired
     drawnAt.current = new Map([
       ...where,
       ...everyNote.map((n) => [n.note.id, n.box] as const),
       ...shown.flatMap((level) => [...level.annoBoxes]),
     ])
   })
+
+  useEffect(() => {
+    if (!settling) setPassing(null)
+  }, [settling])
 
   useEffect(() => {
     if (!settling) return
@@ -1428,12 +1519,24 @@ export const MapCanvas = ({
   const finishEditing = useCallback(
     (keep: boolean): void => {
       if (!editing || !drawing) return
-      if (keep && editing.text !== editing.was)
-        drawing.onText(editing.id, editing.text, editing.first, editing.says ? 'says' : undefined)
+      if (keep && editing.text !== editing.was) {
+        if (editing.type) {
+          const card = children.find((c) => c.id === editing.id)
+          if (card) drawing.onKind(editing.id, editing.text.trim() || 'card', lookOf(card) ?? BLANK_LOOK)
+        } else drawing.onText(editing.id, editing.text, editing.first, editing.says ? 'says' : undefined)
+      }
       setEditing(null)
     },
-    [editing, drawing],
+    [editing, drawing, children],
   )
+
+  /** Starts writing a card's type where it is shown. A blank card has none yet,
+   *  so the box starts empty rather than saying "card". */
+  const startTyping = (card: DrawnCard): void => {
+    const was = card.kind === 'card' ? '' : card.kind
+    setIconsFor('')
+    setEditing({ id: card.id, text: was, was, type: true, since: Date.now() })
+  }
 
   /** Writing starts once the press that made the thing has finished, or
    *  the press would take the typing away from it as it lands. */
@@ -1512,7 +1615,8 @@ export const MapCanvas = ({
       if (typing(event.target)) return
       const plain = !event.ctrlKey && !event.metaKey && !event.altKey
       if (event.key === 'Escape') {
-        if (keysOpen) setKeysOpen(false)
+        if (iconsFor) setIconsFor('')
+        else if (keysOpen) setKeysOpen(false)
         else if (annoArmed) setAnnoArmed('')
         else if (annoPicked.length) setAnnoPicked([])
         else if (quick) setQuick(null)
@@ -1570,7 +1674,7 @@ export const MapCanvas = ({
       window.removeEventListener('keydown', down)
       window.removeEventListener('keyup', up)
     }
-  }, [backOut, drawing, fit, zoomBy, quick, armed, tool, selected, startEditing, hover, frameOn, annotating, annoArmed, annoPicked, select, keysOpen, focus.level, ready, choices])
+  }, [backOut, drawing, fit, zoomBy, quick, armed, tool, selected, startEditing, hover, frameOn, annotating, annoArmed, annoPicked, select, keysOpen, focus.level, ready, choices, iconsFor])
 
   useEffect(() => {
     if (!layerSaid) return
@@ -1630,6 +1734,7 @@ export const MapCanvas = ({
     if (!canMove || event.button !== 0 || space.current || tool === 'pan') return
     event.stopPropagation()
     setQuick(null)
+    setIconsFor('')
     if (editing && editing.id !== id) finishEditing(true)
     if (drawing && tool === 'wire' && children.some((c) => c.id === id)) {
       gesture.current = { type: 'connect', from: id, side: null, moved: false, sx: event.clientX, sy: event.clientY }
@@ -1809,6 +1914,7 @@ export const MapCanvas = ({
     }
     setAnnoPicked([])
     setQuick(null)
+    setIconsFor('')
     if (editing) finishEditing(true)
     setMenu(null)
     const panning = event.button === 1 || event.button === 2 || space.current || tool === 'pan'
@@ -2151,7 +2257,8 @@ export const MapCanvas = ({
           what: 'card',
           id,
           kind: card.card.kind,
-          look: lookOf(card.card),
+          look: lookOf(card.card) ?? (restyles(card.card) ? BLANK_LOOK : undefined),
+          restyles: restyles(card.card),
           level: card.card.level,
           page: card.card.kind === 'page',
           opens: canOpen(card.card),
@@ -2514,6 +2621,9 @@ export const MapCanvas = ({
                   cards={annoCardsOf(level)}
                   moved={level.annoBoxes}
                   up={workAt - depth}
+                  notDrawn={notDrawn}
+                  preview={annoPreview}
+                  onPreview={setAnnoPreview}
                   k={view.k}
                   selected={annoPicked.filter((id) => annoLevel.get(id) === level.card.id)}
                   editing={annoEditing}
@@ -2532,8 +2642,9 @@ export const MapCanvas = ({
               ))
             : null}
 
-          {/* The cards around the open card stay in view, faded by how far out
-              they are, and cannot be touched until a person backs out to them. */}
+          {/* The cards around the open card that are wired to it stay in view,
+              faded by how far out they are, and cannot be touched until a person
+              backs out to them. The rest are not drawn at all. */}
           {outside.map((p) => (
             <CardFace
               key={p.card.id}
@@ -2543,6 +2654,7 @@ export const MapCanvas = ({
               selected={false}
               up={workAt - p.depth}
               linked={linked.has(p.card.id) ? 'wired' : undefined}
+              passing={passingOf(p.card.id)}
               target={false}
               handles={false}
               drawing={Boolean(drawing)}
@@ -2563,6 +2675,9 @@ export const MapCanvas = ({
                 selected={picked}
                 up={0}
                 linked={p.card.id === hover ? 'self' : linked.has(p.card.id) ? 'wired' : undefined}
+                passing={passingOf(p.card.id)}
+                onIcon={drawing && restyles(p.card) && !drawing.locked?.includes(p.card.id) ? () => setIconsFor(p.card.id) : undefined}
+                onType={drawing && restyles(p.card) && !drawing.locked?.includes(p.card.id) ? () => startTyping(p.card) : undefined}
                 target={live.line?.target === p.card.id}
                 handles={Boolean(drawing) && (tool === 'pick' || tool === 'wire') && !armed && (hover === p.card.id || (picked && selected.length === 1)) && !live.moves}
                 movable={canMove}
@@ -2670,6 +2785,9 @@ export const MapCanvas = ({
                   cards={annoCardsOf(level)}
                   moved={level.annoBoxes}
                   up={workAt - depth}
+                  notDrawn={notDrawn}
+                  preview={annoPreview}
+                  onPreview={setAnnoPreview}
                   k={view.k}
                   selected={annoPicked.filter((id) => annoLevel.get(id) === level.card.id)}
                   editing={annoEditing}
@@ -2753,6 +2871,37 @@ export const MapCanvas = ({
                 onKeyDown={(event) => {
                   event.stopPropagation()
                   if (event.key === 'Enter') finishEditing(true)
+                  if (event.key === 'Escape') finishEditing(false)
+                }}
+              />
+            ) : editingBox && editing.type ? (
+              <input
+                ref={focusQuietly}
+                className="map-edit map-edit--type"
+                aria-label="Type name"
+                style={
+                  editingArea
+                    ? { left: editingBox.x + editingArea.x * editingBox.w, top: editingBox.y + editingArea.y * editingBox.h, width: editingArea.w * editingBox.w }
+                    : { left: editingBox.x + 44, top: editingBox.y + 10, width: editingBox.w - 60 }
+                }
+                value={editing.text}
+                placeholder="What type is it?"
+                onPointerDown={(event) => event.stopPropagation()}
+                onChange={(event) => setEditing({ ...editing, text: event.target.value })}
+                onBlur={(event) => {
+                  if (Date.now() - (editing.since ?? 0) < 250) {
+                    const box = event.currentTarget
+                    setTimeout(() => box.focus({ preventScroll: true }), 0)
+                    return
+                  }
+                  finishEditing(true)
+                }}
+                onKeyDown={(event) => {
+                  event.stopPropagation()
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    finishEditing(true)
+                  }
                   if (event.key === 'Escape') finishEditing(false)
                 }}
               />
@@ -2885,7 +3034,7 @@ export const MapCanvas = ({
               setAnnoPicked([id])
               if (!keepGoing) setAnnoArmed('')
               setAnnoFresh(id)
-              if (['text', 'sticky', 'callout', 'process', 'decision', 'terminator', 'list', 'code', 'frame'].includes(annoArmed) && !keepGoing)
+              if (['text', 'sticky', 'callout', 'rect', 'diamond', 'terminator', 'list', 'code', 'frame', 'lane', 'column', 'wire'].includes(annoArmed) && !keepGoing)
                 setTimeout(() => setAnnoEditing(id), 0)
             }}
           />
@@ -3009,6 +3158,7 @@ export const MapCanvas = ({
             }}
             choices={choices}
             onKind={(id, kind, look) => drawing?.onKind(id, kind, look)}
+            onLook={(id, look) => drawing?.onLook(id, look)}
             onEdit={(id) => startEditing(id)}
             onOpen={(id) => {
               const card = placed.find((p) => p.card.id === id)
@@ -3024,6 +3174,32 @@ export const MapCanvas = ({
             }}
           />
         ) : null}
+
+        {iconsFor && drawing && where.get(iconsFor) ? (() => {
+          const box = where.get(iconsFor)!
+          const card = children.find((c) => c.id === iconsFor)
+          if (!card) return null
+          const look = lookOf(card) ?? BLANK_LOOK
+          return (
+            <div
+              className="map-look-pop"
+              role="radiogroup"
+              aria-label="Icon"
+              style={{ left: Math.max(8, view.x + box.x * view.k), top: view.y + (box.y + 38) * view.k }}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
+              onDoubleClick={(event) => event.stopPropagation()}
+            >
+              <IconPick
+                icon={look.icon}
+                onPick={(icon) => {
+                  drawing.onLook(iconsFor, { ...look, icon })
+                  setIconsFor('')
+                }}
+              />
+            </div>
+          )
+        })() : null}
 
         {menu && canMove ? (
           <CanvasMenu
@@ -3060,7 +3236,7 @@ export const MapCanvas = ({
         />
         <Overview
           of={focus.name || 'This level'}
-          placed={[...everyCard, ...shown.flatMap((level) => (level.open ? [level.open] : []))]}
+          placed={[...everyCard.filter((p) => !notDrawn.has(p.card.id)), ...shown.flatMap((level) => (level.open ? [level.open] : []))]}
           view={screen}
           shut={shutOverview}
           onToggle={() => setShutOverview(!shutOverview)}

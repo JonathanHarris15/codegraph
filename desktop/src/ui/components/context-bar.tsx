@@ -2,12 +2,13 @@
 import { useState, type ReactNode } from 'react'
 import type { Level } from '../../features/show-map.js'
 import type { CardLook } from '../../modules/sketches/schema.js'
+import { ColorPick } from './card-look-editor.js'
 import { CardMark, Glyph, type ToolGlyph } from './kind-glyph.js'
 import { wireKinds, type Alignment, type CardChoice } from './sketch-edits.js'
 
 /** What is picked, as the bar over it needs to know. */
 export type Picking =
-  | { what: 'card'; id: string; kind: string; look?: CardLook; level: Level; page: boolean; opens: boolean }
+  | { what: 'card'; id: string; kind: string; look?: CardLook; restyles?: boolean; level: Level; page: boolean; opens: boolean }
   | { what: 'wire'; id: string; kind: string }
   | { what: 'note'; id: string }
   | { what: 'many'; ids: string[]; cards: number }
@@ -47,6 +48,7 @@ export const ContextBar = ({
   below = false,
   choices: cardChoices,
   onKind,
+  onLook,
   onEdit,
   onOpen,
   onMockup,
@@ -63,6 +65,7 @@ export const ContextBar = ({
   /** What a card here can be changed to. */
   choices: CardChoice[]
   onKind: (id: string, kind: string, look?: CardLook) => void
+  onLook: (id: string, look: CardLook) => void
   onEdit: (id: string) => void
   onOpen: (id: string) => void
   onMockup: (id: string) => void
@@ -124,6 +127,12 @@ export const ContextBar = ({
         </span>
       ) : null}
 
+      {picking.what === 'card' && picking.restyles && picking.look && !locked ? (
+        <>
+          <ColorPick color={picking.look.color} onPick={(color) => onLook(picking.id, { ...picking.look!, color })} />
+          <span className="map-context-rule" />
+        </>
+      ) : null}
       {picking.what !== 'many' && !locked ? (
         <Act
           glyph="edit"

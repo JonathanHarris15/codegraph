@@ -2,12 +2,176 @@
 import { describe, expect, it } from 'vitest'
 import { blankProposal, proposalFrom, type DrawnCard as ReadCard } from '../src/modules/reader/index.js'
 import { blankCard, hubOf, type SketchCard } from '../src/modules/sketches/schema.js'
-import { annotationsClear, openLevels, roomAround, wirePath, wireThrough, type Box, type DrawnCard } from '../src/ui/components/map-layout.js'
+import { annotationsClear, flowOf, layOut, loopSides, openLevels, reachingOpen, roomAround, wirePath, wireThrough, type Box, type DrawnCard, type DrawnWire } from '../src/ui/components/map-layout.js'
 import { TEMPLATES, lookOf } from '../src/ui/components/card-looks.js'
 import { addWire, choicesAt, copyOf, paste, placeCard, remove, rewire } from '../src/ui/components/sketch-edits.js'
 
 const a: Box = { x: 0, y: 0, w: 200, h: 100 }
 const b: Box = { x: 600, y: 0, w: 200, h: 100 }
+
+const part = (id: string, kind: string): DrawnCard => blankCard(id, id, 'component', kind) as unknown as DrawnCard
+const link = (from: string, to: string, kind = 'uses'): DrawnWire => ({ from, to, kind, words: '' })
+
+describe('a level with wires lays itself out as a grid', () => {
+  const cards = [part('m', 'module'), part('home', 'page'), part('add', 'feature'), part('db', 'module'), part('list', 'page'), part('drop', 'feature')]
+  const wires = [link('home', 'add', 'asks'), link('list', 'drop', 'asks'), link('add', 'm'), link('drop', 'm'), link('m', 'db')]
+
+  it('runs left to right along the wires, from pages through features to modules', () => {
+    const flow = flowOf(cards, wires)!
+    for (const wire of wires) expect(flow.get(wire.to)!.column).toBeGreaterThan(flow.get(wire.from)!.column)
+  })
+
+  it('keeps a kind in its column even with no wire saying so', () => {
+    const flow = flowOf([part('p', 'page'), part('f', 'feature'), part('lone', 'feature'), part('m', 'module')], [link('p', 'f'), link('f', 'm')])!
+    expect(flow.get('lone')!.column).toBe(flow.get('f')!.column)
+  })
+
+  it('puts a chain on one straight row', () => {
+    const flow = flowOf([part('a', 'page'), part('b', 'feature'), part('c', 'module')], [link('a', 'b'), link('b', 'c')])!
+    expect(new Set([...flow.values()].map((spot) => spot.row)).size).toBe(1)
+  })
+
+  it('sits a card level with what it is wired to, so two chains do not cross', () => {
+    const shuffled = [part('p1', 'page'), part('p2', 'page'), part('f2', 'feature'), part('f1', 'feature')]
+    const flow = flowOf(shuffled, [link('p1', 'f1'), link('p2', 'f2')])!
+    expect(flow.get('p1')!.row).toBe(flow.get('f1')!.row)
+    expect(flow.get('p2')!.row).toBe(flow.get('f2')!.row)
+  })
+
+  it('never puts two cards in one spot, and draws no two on top of each other', () => {
+    const flow = flowOf(cards, wires)!
+    expect(new Set([...flow.values()].map((spot) => `${spot.column}:${spot.row}`)).size).toBe(cards.length)
+    const boxes = layOut(cards, wires).map((p) => p.box)
+    boxes.forEach((a, i) =>
+      boxes.slice(i + 1).forEach((b) => expect(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y).toBe(true)),
+    )
+  })
+
+  it('lines cards of a column up, and rows across columns', () => {
+    const boxes = layOut(cards, wires).map((p) => p.box)
+    expect(new Set(boxes.map((box) => box.x)).size).toBeLessThan(boxes.length)
+    expect(new Set(boxes.map((box) => box.y)).size).toBeLessThan(boxes.length)
+  })
+
+  it('copes with wires in a loop', () => {
+    const flow = flowOf([part('a', 'module'), part('b', 'module')], [link('a', 'b'), link('b', 'a')])!
+    expect(flow.get('a')!.column).not.toBe(flow.get('b')!.column)
+  })
+
+  it('does not treat one page leading to another as a step', () => {
+    expect(flowOf([part('a', 'page'), part('b', 'page')], [link('a', 'b', 'leads to')])).toBeNull()
+  })
+
+  it('leaves a card a person put where they put it', () => {
+    const pinned = { ...part('home', 'page'), x: 900, y: 900 }
+    expect(layOut([pinned, part('add', 'feature')], [link('home', 'add')])[0]!.box).toMatchObject({ x: 900, y: 900 })
+  })
+})
+
+describe('wires between cards stacked in a column', () => {
+  const card = (row: number): Box => ({ x: 0, y: row * 240, w: 260, h: 200 })
+  const boxes = new Map<string, Box>([
+    ['login', card(0)],
+    ['join', card(1)],
+    ['home', card(2)],
+    ['feature', { x: 600, y: 240, w: 240, h: 104 }],
+  ])
+  const all = [...boxes.values()]
+
+  it('takes the side away from the column’s other wires', () => {
+    const across = link('login', 'feature')
+    const across2 = link('home', 'feature')
+    const stacked = link('login', 'home', 'leads to')
+    expect(loopSides([across, across2, stacked], boxes, all).get(stacked)?.side).toBe('w')
+  })
+
+  it('shares several out between the two sides', () => {
+    const wires = [link('login', 'home', 'leads to'), link('home', 'login', 'leads to'), link('login', 'home', 'reads'), link('home', 'login', 'reads')]
+    const sides = [...loopSides(wires, boxes, all).values()].map((loop) => loop.side)
+    expect(sides).toContain('e')
+    expect(sides).toContain('w')
+  })
+
+  it('leaves two sharing a side at different places on the card', () => {
+    const wires = [link('login', 'home', 'leads to'), link('home', 'login', 'leads to'), link('login', 'home', 'reads')]
+    const loops = [...loopSides(wires, boxes, all).entries()].filter(([, loop]) => loop.side === 'e')
+    expect(new Set(loops.map(([wire, loop]) => (wire.from === 'login' ? loop.from : loop.to))).size).toBe(loops.length)
+  })
+
+  it('needs no loop for two next to each other with a clear run between them', () => {
+    const near = new Map<string, Box>([['a', card(0)], ['b', card(1)]])
+    expect(loopSides([link('a', 'b')], near, [...near.values()]).size).toBe(0)
+  })
+
+  it('draws the loop on the side it was given', () => {
+    const shape = wirePath(card(0), card(2), { from: 0.5, to: 0.5 }, all, {}, { side: 'w', from: 0.25, to: 0.75 })
+    expect(shape.tail).toEqual({ x: 0, y: 50 })
+    expect(shape.head).toEqual({ x: 0, y: 630 })
+    expect(shape.c1.x).toBeLessThan(0)
+  })
+})
+
+describe('what is drawn around the card open now', () => {
+  const at = (id: string, children: DrawnCard[] = []) => ({ card: { ...part(id, 'module'), children }, box: a })
+
+  it('on the level around it, is whatever is wired to it', () => {
+    const wires = [link('in', 'open'), link('open', 'out'), link('in', 'far')]
+    const { notDrawn, wires: shown } = reachingOpen([
+      { open: at('open'), placed: [at('in'), at('out'), at('far')], wires },
+      { open: null, placed: [at('inside')], wires: [] },
+    ])
+    expect([...notDrawn]).toEqual(['far'])
+    expect(shown.has(wires[2]!)).toBe(false)
+  })
+
+  const now = part('now', 'feature')
+  const web = { ...part('web', 'container'), children: [now, part('notes', 'module')] }
+  const levels = (outer: DrawnWire[], inner: DrawnWire[] = []) => [
+    { open: { card: web, box: a }, placed: [at('db'), at('cdn')], wires: outer },
+    { open: { card: now, box: a }, placed: [], wires: inner },
+    { open: null, placed: [], wires: [] },
+  ]
+
+  it('further out, leaves out a wire to the outer card that does not come on to it', () => {
+    // On a map, web keeps things in db only by way of notes, not this card.
+    const toDb = { ...link('web', 'db', 'keeps'), ends: [{ from: 'notes', to: 'db' }] }
+    const { notDrawn, wires } = reachingOpen(levels([toDb]))
+    expect([...notDrawn]).toEqual(['db', 'cdn'])
+    expect(wires.has(toDb)).toBe(false)
+  })
+
+  it('further out, keeps a wire whose real end is the card open now', () => {
+    const toDb = { ...link('web', 'db', 'keeps'), ends: [{ from: 'now', to: 'db' }, { from: 'notes', to: 'db' }] }
+    const { notDrawn, wires } = reachingOpen(levels([toDb]))
+    expect([...notDrawn]).toEqual(['cdn'])
+    expect(wires.has(toDb)).toBe(true)
+  })
+
+  it('counts an end inside the card open now', () => {
+    const deep = { ...part('now', 'feature'), children: [part('now/file', 'file')] }
+    const wire = { ...link('web', 'db'), ends: [{ from: 'now/file', to: 'db' }] }
+    const { wires } = reachingOpen([
+      { open: { card: web, box: a }, placed: [at('db')], wires: [wire] },
+      { open: { card: deep, box: a }, placed: [], wires: [] },
+      { open: null, placed: [], wires: [] },
+    ])
+    expect(wires.has(wire)).toBe(true)
+  })
+
+  it('on a drawing, keeps an outer wire only if a wire inside comes on from its hub', () => {
+    const outer: DrawnWire = { ...link('db', 'web'), id: 'w' }
+    const other: DrawnWire = { ...link('cdn', 'web'), id: 'x' }
+    const inner: DrawnWire = { ...link(hubOf('w'), 'now'), id: 'i' }
+    const { notDrawn, wires } = reachingOpen(levels([outer, other], [inner]))
+    expect(wires.has(outer)).toBe(true)
+    expect(wires.has(other)).toBe(false)
+    expect([...notDrawn]).toEqual(['cdn'])
+  })
+
+  it('draws everything when nothing is open', () => {
+    expect([...reachingOpen([{ open: null, placed: [at('a')], wires: [] }]).notDrawn]).toEqual([])
+  })
+})
 
 describe('a wire runs through its sentence', () => {
   it('stays the plain curve when the sentence is at its middle', () => {

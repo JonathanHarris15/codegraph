@@ -845,6 +845,29 @@ h3 {
   pointer-events: none !important;
 }
 
+/* A card with no wire into the one opening fades away, then is not drawn. */
+.map-card.map-leaving {
+  animation: map-card-leave 320ms ease-out forwards;
+  pointer-events: none;
+}
+
+.map-card.map-arriving {
+  animation: map-card-arrive 320ms ease-out;
+}
+
+@keyframes map-card-leave {
+  to { opacity: 0; }
+}
+
+@keyframes map-card-arrive {
+  from { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-card.map-leaving { animation: none; opacity: 0; }
+  .map-card.map-arriving { animation: none; }
+}
+
 .map-up--1 { opacity: var(--opacity-up-1); }
 .map-up--2 { opacity: var(--opacity-up-2); }
 .map-up--3 { opacity: var(--opacity-up-3); }
@@ -3500,15 +3523,43 @@ kbd {
   overflow: visible;
 }
 
-.map-anno-outline path {
+.map-anno-edge {
   fill: var(--anno-fill);
   stroke: var(--anno-line);
   stroke-width: 1.5;
   stroke-linejoin: round;
 }
 
-/* A sticky note is paper: filled, with no outline, a little lifted. */
-.map-anno--sticky .map-anno-outline path {
+/* A strip inside a shape: a code block's header, a swimlane's side, the two
+   sides of a predefined process. It is not the shape's edge. */
+.map-anno-band {
+  fill: color-mix(in srgb, var(--anno-line) 16%, transparent);
+  stroke: var(--anno-line);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+/* Strokes drawn inside a shape: the rules on a note, the bullets of a list,
+   the cross in a junction. Never filled. */
+.map-anno-marks {
+  fill: none;
+  stroke: var(--anno-line);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  opacity: 0.55;
+}
+
+/* The wide invisible stroke a frame is picked by. */
+.map-anno-grab {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 10;
+  pointer-events: visibleStroke;
+}
+
+/* A sticky note is paper: filled, with no outline, a little lifted, and its
+   rules are the faint ghost of lines someone wrote on. */
+.map-anno--sticky .map-anno-edge {
   stroke: none;
 }
 
@@ -3517,11 +3568,18 @@ kbd {
 }
 
 /* Brackets and braces are open marks, never filled. */
-.map-anno--braceleft .map-anno-outline path,
-.map-anno--braceright .map-anno-outline path,
-.map-anno--bracket .map-anno-outline path,
-.map-anno--braces .map-anno-outline path {
+.map-anno--braceleft .map-anno-edge,
+.map-anno--braceright .map-anno-edge,
+.map-anno--bracket .map-anno-edge,
+.map-anno--braces .map-anno-edge {
   fill: none;
+}
+
+.map-anno--braceleft .map-anno-marks,
+.map-anno--braceright .map-anno-marks,
+.map-anno--bracket .map-anno-marks,
+.map-anno--braces .map-anno-marks {
+  opacity: 1;
 }
 
 /* A shape's words sit in the biggest rectangle that fits inside its outline,
@@ -3590,7 +3648,7 @@ kbd {
   font-size: 12px;
 }
 
-.map-anno--code .map-anno-outline path {
+.map-anno--code .map-anno-edge {
   fill: color-mix(in srgb, var(--anno-fill) 60%, var(--surface-sunken));
 }
 
@@ -3602,43 +3660,49 @@ kbd {
   pointer-events: none;
 }
 
-.map-anno--behind .map-anno-outline path {
+/* A frame's edge is dashed, whatever its shape: it is drawn round what it
+   holds, not round words of its own. */
+.map-anno--behind .map-anno-edge {
   fill: color-mix(in srgb, var(--anno-fill) 45%, transparent);
+  stroke: var(--anno-line);
+  stroke-width: 1.5;
   stroke-dasharray: 6 5;
-  pointer-events: visibleStroke;
-  stroke-width: 10;
-  stroke: transparent;
+  pointer-events: none;
 }
 
 .map-anno--behind .map-anno-outline {
   pointer-events: none;
 }
 
-.map-anno--behind .map-anno-outline::before {
-  content: none;
-}
-
-/* the visible edge, drawn over the wide invisible one that is picked */
-.map-anno--behind::after {
-  content: '';
+/* A strip stays the same thickness whatever size the shape is: a code
+   block's header, a swimlane's side, a column's head. On a frame it is solid
+   where the edge is dashed, and it is where you take hold. */
+.map-anno-strip {
   position: absolute;
-  inset: 0;
-  border: 1.5px dashed var(--anno-line);
-  border-radius: 6px;
+  background: color-mix(in srgb, var(--anno-line) 12%, transparent);
+  border: 0 solid var(--anno-line);
   pointer-events: none;
 }
 
-.map-anno--oval::after,
-.map-anno--braces::after,
-.map-anno--bracket::after {
-  display: none;
+.map-anno-strip--top {
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 22px;
+  border-bottom-width: 1.5px;
 }
 
-.map-anno--oval .map-anno-outline path,
-.map-anno--braces .map-anno-outline path,
-.map-anno--bracket .map-anno-outline path {
-  stroke: var(--anno-line);
-  stroke-width: 1.5;
+.map-anno-strip--left {
+  left: 0;
+  top: 0;
+  width: 22px;
+  height: 100%;
+  border-right-width: 1.5px;
+}
+
+.map-anno--behind .map-anno-strip {
+  pointer-events: auto;
+  cursor: move;
 }
 
 .map-anno-title {
@@ -3654,6 +3718,36 @@ kbd {
   pointer-events: auto;
   cursor: move;
   white-space: nowrap;
+}
+
+/* A column's name runs along its head strip; a swimlane's turns to run down
+   its side one. Either way the name sits in the strip, not over the cards,
+   which is what makes a lane a lane and not another frame. */
+.map-anno-title--in-top,
+.map-anno-title--in-left {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  left: 0;
+  top: 0;
+  padding: 0 8px;
+  border-radius: 0;
+  background: none;
+  overflow: hidden;
+}
+
+.map-anno-title--in-top {
+  width: 100%;
+  height: 22px;
+}
+
+/* The name runs down the strip the same way whether it is being read or
+   typed, so it does not flip over the moment someone double-clicks it. */
+.map-anno-title--in-left {
+  width: 22px;
+  height: 100%;
+  padding: 8px 0;
+  writing-mode: vertical-rl;
 }
 
 .map-anno--picked {
@@ -3707,6 +3801,63 @@ kbd {
   font-size: 13px;
   line-height: 18px;
   cursor: text;
+}
+
+/* Writing on a shape looks like reading it. A code block stays mono, a note
+   stays hand-written, a text annotation stays big: the shape you are typing
+   into is the shape you will see when you stop. */
+.map-anno-edit--code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-align: left;
+}
+
+.map-anno-edit--sticky,
+.map-anno-edit--callout {
+  font-family: var(--font-hand, inherit);
+}
+
+.map-anno-edit--text {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.map-anno-edit--list {
+  text-align: left;
+}
+
+/* A frame's name is typed where it is read: on its tab, or in its strip,
+   never spread over everything the frame holds. */
+.map-anno-edit--on-tab {
+  inset: auto;
+  left: 6px;
+  top: 6px;
+  width: min(65%, 240px);
+  height: 24px;
+  padding: 1px 8px;
+}
+
+.map-anno-edit--in-top {
+  inset: auto;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 0;
+  text-align: center;
+}
+
+.map-anno-edit--in-left {
+  inset: auto;
+  left: 0;
+  top: 0;
+  width: 22px;
+  height: 100%;
+  padding: 8px 0;
+  border-radius: 0;
+  writing-mode: vertical-rl;
+  text-align: center;
 }
 
 .map-anno-seam {
@@ -3857,6 +4008,16 @@ kbd {
   padding: 0 var(--space-2) var(--space-3);
 }
 
+/* What the group promises its shapes do. It is the reason the group is a
+   group: a note carries words, a line joins, a frame goes round, a shape is
+   an outline you label. */
+.map-anno-group-says {
+  padding: 0 var(--space-1) var(--space-2);
+  color: var(--ink-200);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
 .map-anno-group-head {
   display: flex;
   align-items: center;
@@ -3922,6 +4083,27 @@ kbd {
 .map-anno-icon .map-anno-icon--sticky {
   fill: var(--anno-yellow);
   stroke: none;
+}
+
+/* A strip or a name tab in the button, so a container reads as a container
+   and a code block as a code block before it is ever put down. */
+.map-anno-icon .map-anno-icon--band {
+  fill: color-mix(in srgb, currentColor 22%, transparent);
+  stroke: currentColor;
+  stroke-width: 5;
+}
+
+/* The marks that are part of a shape, and the hints that say what a shape
+   is for: thinner than its edge, so the edge still reads first. */
+.map-anno-icon .map-anno-icon--marks {
+  stroke-width: 5;
+  opacity: 0.7;
+}
+
+.map-anno-icon .map-anno-icon--hint {
+  stroke-width: 7;
+  stroke-linecap: round;
+  opacity: 0.42;
 }
 
 /* The bar over a picked annotation. */
@@ -4445,4 +4627,86 @@ input.map-layers-name:focus {
 
 .map-look-color--on {
   box-shadow: 0 0 0 2px var(--surface-000), 0 0 0 4px var(--focus-ring);
+}
+
+/* A card's icon and type are pressed where they are shown, to change them. */
+button.map-restyle {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+button.map-glyph.map-restyle {
+  background: var(--kw);
+  color: var(--k);
+}
+
+button.map-restyle:hover {
+  box-shadow: 0 0 0 2px var(--focus-ring);
+  border-radius: var(--radius-md);
+}
+
+.map-edit--type {
+  height: 24px;
+  padding: 0 6px;
+  font-size: 12px;
+}
+
+.map-look-pop {
+  position: absolute;
+  z-index: 6;
+  width: 232px;
+  padding: var(--space-2);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-lg);
+  background: var(--surface-000);
+  box-shadow: var(--shadow-float);
+}
+
+.map-context .map-look-grid {
+  flex-wrap: nowrap;
+  align-items: center;
+  padding: 0 var(--space-1);
+}
+
+.map-context .map-look-color {
+  width: 18px;
+  height: 18px;
+}
+
+/* A wire with words: the line runs through them, as a wire does its sentence. */
+.map-anno-wire-words {
+  position: absolute;
+  z-index: 3;
+  width: max-content;
+  max-width: 260px;
+  padding: 3px var(--space-2);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-md);
+  background: var(--wire-chip);
+  box-shadow: var(--shadow-chip);
+  color: var(--anno-ink);
+  font-size: 11.5px;
+  line-height: 15px;
+  overflow-wrap: anywhere;
+  transform: translate(-50%, -50%);
+  cursor: move;
+  user-select: none;
+}
+
+.map-anno-wire-words--picked {
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus-ring) 30%, transparent);
+}
+
+.map-anno-icon--words {
+  fill: var(--surface-000);
+  stroke: currentColor;
+}
+
+.map-anno-lines--live path {
+  stroke: var(--focus-ring);
+  stroke-width: 2;
 }

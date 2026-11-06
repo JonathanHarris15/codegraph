@@ -50,7 +50,7 @@ describe('the keys that pick an annotation', () => {
       expect(hotkeyFor(press('l'), where)).toEqual({ do: 'shape', kind: 'line' })
       expect(hotkeyFor(press('r'), where)).toEqual({ do: 'shape', kind: 'rect' })
       expect(hotkeyFor(press('o'), where)).toEqual({ do: 'shape', kind: 'circle' })
-      expect(hotkeyFor(press('d'), where)).toEqual({ do: 'shape', kind: 'decision' })
+      expect(hotkeyFor(press('d'), where)).toEqual({ do: 'shape', kind: 'diamond' })
     }
   })
 

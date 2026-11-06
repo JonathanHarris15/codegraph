@@ -1,6 +1,6 @@
 // codegraph: component map-canvas
 import type { Card } from '../../features/show-map.js'
-import type { CardLook } from '../../modules/sketches/schema.js'
+import { hubOf, type CardLook } from '../../modules/sketches/schema.js'
 import { CARD_SHAPES, drawnShape } from './card-looks.js'
 
 /** A wire as the canvas draws it, from the map or from a sketch. */
@@ -103,6 +103,110 @@ const columnOf = (card: DrawnCard): number => {
   return 0
 }
 
+/** The air between one row of a wired level and the next, for the wires'
+ *  sentences to sit in. */
+const ROW_GAP = 56
+
+/** Where each card goes on a level with wires: a column for how far along the
+ *  flow it is, and a row, so the level reads as a grid from left to right. A
+ *  card is always in a column right of what reaches it, but never left of where
+ *  its kind belongs. Within a column, cards sit level with what they are wired
+ *  to, so wires run as straight as they can and cross as little as they can.
+ *  Left out if nothing here is wired. */
+export const flowOf = (cards: DrawnCard[], wires: DrawnWire[]): Map<string, { column: number; row: number }> | null => {
+  const ids = new Set(cards.map((card) => card.id))
+  // One page leading to another is getting around, not a step along the flow.
+  const seen = new Set<string>()
+  const wanted = wires.filter((wire) => {
+    const key = `${wire.from}>${wire.to}`
+    if (seen.has(key) || wire.from === wire.to || wire.kind === 'leads to' || !ids.has(wire.from) || !ids.has(wire.to)) return false
+    seen.add(key)
+    return true
+  })
+  if (wanted.length === 0) return null
+
+  // A wire that loops back to where it came from says nothing about the order.
+  const outOf = new Map<string, string[]>()
+  for (const wire of wanted) outOf.set(wire.from, [...(outOf.get(wire.from) ?? []), wire.to])
+  const edges: { from: string; to: string }[] = []
+  const walking = new Set<string>()
+  const walked = new Set<string>()
+  const walk = (id: string): void => {
+    walking.add(id)
+    for (const to of outOf.get(id) ?? []) {
+      if (walking.has(to)) continue
+      edges.push({ from: id, to })
+      if (!walked.has(to)) walk(to)
+    }
+    walking.delete(id)
+    walked.add(id)
+  }
+  for (const card of cards) if (!walked.has(card.id)) walk(card.id)
+
+  const rank = new Map(cards.map((card) => [card.id, columnOf(card)]))
+  for (let pass = 0, moved = true; moved && pass <= cards.length; pass += 1) {
+    moved = false
+    for (const { from, to } of edges)
+      if (rank.get(to)! <= rank.get(from)!) {
+        rank.set(to, rank.get(from)! + 1)
+        moved = true
+      }
+  }
+  const steps = [...new Set(rank.values())].sort((a, b) => a - b)
+  const columns: string[][] = steps.map((step) => cards.filter((card) => rank.get(card.id) === step).map((card) => card.id))
+
+  const neighbours = new Map<string, string[]>()
+  for (const { from, to } of edges) {
+    neighbours.set(from, [...(neighbours.get(from) ?? []), to])
+    neighbours.set(to, [...(neighbours.get(to) ?? []), from])
+  }
+  const meanOf = (id: string, at: Map<string, number>): number | null => {
+    const near = (neighbours.get(id) ?? []).flatMap((other) => (at.has(other) ? [at.get(other)!] : []))
+    return near.length ? near.reduce((sum, one) => sum + one, 0) / near.length : null
+  }
+
+  // Each column in turn sorts itself by where its neighbours are, there and back.
+  const place = new Map<string, number>()
+  for (const column of columns) column.forEach((id, i) => place.set(id, i))
+  for (let sweep = 0; sweep < 6; sweep += 1) {
+    const order = sweep % 2 === 0 ? columns : [...columns].reverse()
+    for (const column of order) {
+      const own = new Map(column.map((id) => [id, place.get(id)!]))
+      const others = new Map([...place].filter(([id]) => !own.has(id)))
+      // What is wired comes first; a card with no wires waits at the bottom.
+      const key = (id: string): number => meanOf(id, others) ?? Number.MAX_SAFE_INTEGER / 2 + own.get(id)!
+      column.sort((a, b) => key(a) - key(b))
+      column.forEach((id, i) => place.set(id, i))
+    }
+  }
+
+  // Then rows: as level with its neighbours as the column's order lets it be.
+  const rows = new Map<string, number>()
+  for (const column of columns) column.forEach((id, i) => rows.set(id, i))
+  for (let sweep = 0; sweep < 6; sweep += 1) {
+    const order = sweep % 2 === 0 ? columns : [...columns].reverse()
+    for (const column of order) {
+      const own = new Set(column)
+      const others = new Map([...rows].filter(([id]) => !own.has(id)))
+      const wish = column.map((id) => meanOf(id, others))
+      let next = Number.NEGATIVE_INFINITY
+      const put = column.map((id, i) => {
+        const row = Math.max(Math.round(wish[i] ?? next + 1), next + 1)
+        next = row
+        return { id, row: Number.isFinite(row) ? row : rows.get(id)! }
+      })
+      // Pushed down by those above, the column settles back as a whole.
+      const off = put.flatMap((one, i) => (wish[i] === null ? [] : [wish[i]! - one.row]))
+      const by = off.length ? Math.round(off.reduce((sum, one) => sum + one, 0) / off.length) : 0
+      for (const one of put) rows.set(one.id, one.row + by)
+    }
+  }
+  const top = Math.min(...rows.values())
+  const out = new Map<string, { column: number; row: number }>()
+  columns.forEach((column, i) => column.forEach((id) => out.set(id, { column: i, row: rows.get(id)! - top })))
+  return out
+}
+
 const ROW_LIMIT = 4
 
 /** A column taller than this is split into columns side by side, so a busy
@@ -124,6 +228,36 @@ export const layOut = (all: DrawnCard[], wires: DrawnWire[] = []): Placed[] => {
     .map((card) => ({ card, box: { x: card.x!, y: card.y!, ...sizeOf(card) } }))
   const cards = all.filter((card) => card.x === undefined || card.y === undefined)
   if (cards.length === 0) return put
+
+  const flow = flowOf(cards, wires)
+  if (flow) {
+    const widths = new Map<number, number>()
+    for (const card of cards) {
+      const { column } = flow.get(card.id)!
+      widths.set(column, Math.max(widths.get(column) ?? 0, sizeOf(card).w))
+    }
+    const pitch = Math.max(...cards.map((card) => sizeOf(card).h)) + ROW_GAP
+    const lefts = new Map<number, number>()
+    let across = 0
+    for (const column of [...widths.keys()].sort((a, b) => a - b)) {
+      lefts.set(column, across)
+      across += widths.get(column)! + gap
+    }
+    const grid = cards.map((card): Placed => {
+      const { column, row } = flow.get(card.id)!
+      const { w, h } = sizeOf(card)
+      return { card, box: { x: lefts.get(column)! + (widths.get(column)! - w) / 2, y: row * pitch + (pitch - ROW_GAP - h) / 2, w, h } }
+    })
+    const around = boundsOf(grid.map((p) => p.box))
+    return [
+      ...put,
+      ...grid.map((p) => ({
+        ...p,
+        box: { ...p.box, x: Math.round(p.box.x - around.x - around.w / 2), y: Math.round(p.box.y - around.y - around.h / 2) },
+      })),
+    ]
+  }
+
   const columns = new Map<number, DrawnCard[]>()
   for (const card of cards) columns.set(columnOf(card), [...(columns.get(columnOf(card)) ?? []), card])
 
@@ -257,6 +391,42 @@ export const roomAround = (inside: Box | null, least: { w: number; h: number }):
   const h = Math.max(least.h, inside?.h ?? 0)
   const middle = inside ? middleOfBox(inside) : { x: 0, y: 0 }
   return { x: Math.round(middle.x - w / 2), y: Math.round(middle.y - h / 2), w, h }
+}
+
+const holdsId = (card: DrawnCard, id: string): boolean => card.id === id || card.children.some((child) => holdsId(child, id))
+
+/** What is drawn around the card open now: only what really reaches it (ADR
+ *  0012). On the level around it, that is whatever is wired to it. Further out,
+ *  a wire to the open card there counts only if it comes on to the card open now:
+ *  read from code, it says so in its real ends; on a drawing, a wire inside ends
+ *  at its hub. The rest fades away and is not drawn until a person backs out. */
+export const reachingOpen = (levels: Pick<OpenLevel, 'open' | 'placed' | 'wires'>[]): { wires: Set<DrawnWire>; notDrawn: Set<string> } => {
+  const wires = new Set<DrawnWire>()
+  const notDrawn = new Set<string>()
+  const opens = levels.filter((level) => level.open)
+  const now = opens.at(-1)?.open?.card
+  if (!now) return { wires, notDrawn }
+  let inside: DrawnWire[] = []
+  for (let at = opens.length - 1; at >= 0; at -= 1) {
+    const level = opens[at]!
+    const open = level.open!.card.id
+    const touching = level.wires.filter((wire) => wire.from === open || wire.to === open)
+    const reaching =
+      at === opens.length - 1
+        ? touching
+        : touching.filter((wire) => {
+            const here = wire.to === open ? 'to' : 'from'
+            if (wire.ends?.some((end) => holdsId(now, end[here]))) return true
+            if (!wire.id) return false
+            const hub = hubOf(wire.id)
+            return inside.some((one) => one.from === hub || one.to === hub)
+          })
+    const wired = new Set(reaching.flatMap((wire) => [wire.from, wire.to]))
+    for (const wire of reaching) wires.add(wire)
+    for (const { card } of level.placed) if (!wired.has(card.id)) notDrawn.add(card.id)
+    inside = reaching
+  }
+  return { wires, notDrawn }
 }
 
 /** Which edges of an open card a handle moves: a corner, or one side. */
@@ -523,6 +693,78 @@ const middleOf = (
   y: (a.y + 3 * b.y + 3 * c.y + d.y) / 8,
 })
 
+/** How a wire between two cards stacked in a column loops round them: which
+ *  side, and where along that side it leaves and arrives. */
+export type Loop = { side: 'e' | 'w'; from: number; to: number }
+
+const isSideways = (from: Box, to: Box): boolean => {
+  const across = Math.abs(to.x + to.w / 2 - (from.x + from.w / 2))
+  const down = Math.abs(to.y + to.h / 2 - (from.y + from.h / 2))
+  const open = across - (from.w + to.w) / 2
+  const gap = down - (from.h + to.h) / 2
+  return !(gap > 24 && gap > open) && across > Math.max(from.w, to.w) / 2
+}
+
+/** Shares out the wires between stacked cards between the two sides of their
+ *  column, so they do not all pile up on one. The shortest choose first, each
+ *  taking whichever side is less busy at its two cards, counting the wires that
+ *  already leave that way. A wire with a clear run straight down needs no loop. */
+export const loopSides = <W extends { from: string; to: string }>(wires: W[], boxes: Map<string, Box>, others: Box[] = []): Map<W, Loop> => {
+  const busy = new Map<string, number>()
+  const load = (id: string, side: string): number => busy.get(`${id}:${side}`) ?? 0
+  const add = (id: string, side: string): void => {
+    busy.set(`${id}:${side}`, load(id, side) + 1)
+  }
+  const stacked: { wire: W; from: Box; to: Box }[] = []
+  for (const wire of wires) {
+    const from = boxes.get(wire.from)
+    const to = boxes.get(wire.to)
+    if (!from || !to || wire.from === wire.to) continue
+    if (isSideways(from, to)) {
+      const forward = to.x > from.x
+      add(wire.from, forward ? 'e' : 'w')
+      add(wire.to, forward ? 'w' : 'e')
+      continue
+    }
+    const top = Math.min(from.y + from.h, to.y + to.h)
+    const bottom = Math.max(from.y, to.y)
+    const left = Math.min(from.x + from.w / 2, to.x + to.w / 2) - 8
+    const right = Math.max(from.x + from.w / 2, to.x + to.w / 2) + 8
+    const blocked = others.some((o) => o !== from && o !== to && o.x < right && o.x + o.w > left && o.y < bottom && o.y + o.h > top)
+    if (bottom - top > 24 && !blocked) continue
+    stacked.push({ wire, from, to })
+  }
+  const span = (one: { from: Box; to: Box }): number => Math.abs(one.to.y - one.from.y)
+  const sides = new Map<W, 'e' | 'w'>()
+  for (const one of [...stacked].sort((a, b) => span(a) - span(b))) {
+    const score = (side: string): number => load(one.wire.from, side) + load(one.wire.to, side)
+    const side = score('w') < score('e') ? 'w' : 'e'
+    sides.set(one.wire, side)
+    add(one.wire.from, side)
+    add(one.wire.to, side)
+  }
+  // Where each leaves its card along that side, in the order of where it goes,
+  // so the ones sharing a side do not start from one spot or cross near the card.
+  const atCard = new Map<string, { wire: W; end: 'from' | 'to'; toward: number }[]>()
+  for (const one of stacked) {
+    const side = sides.get(one.wire)!
+    for (const end of ['from', 'to'] as const) {
+      const key = `${one.wire[end]}:${side}`
+      const other = end === 'from' ? one.to : one.from
+      atCard.set(key, [...(atCard.get(key) ?? []), { wire: one.wire, end, toward: other.y }])
+    }
+  }
+  const shares = new Map<W, { from: number; to: number }>()
+  for (const list of atCard.values()) {
+    list.sort((a, b) => a.toward - b.toward)
+    list.forEach((entry, i) => {
+      const share = (i + 1) / (list.length + 1)
+      shares.set(entry.wire, { ...(shares.get(entry.wire) ?? { from: 0.5, to: 0.5 }), [entry.end]: share })
+    })
+  }
+  return new Map(stacked.map((one) => [one.wire, { side: sides.get(one.wire)!, ...shares.get(one.wire)! }]))
+}
+
 /** A curved path from one card to another, leaving and arriving on the
  *  sides that face each other. One card above another goes straight down
  *  between them when nothing is in the way; otherwise it loops round the
@@ -535,6 +777,8 @@ export const wirePath = (
   /** Where a spot on a card's box lands on the card's real edge, for a card
    *  that is not a plain box. */
   fit: { from?: (at: { x: number; y: number }) => { x: number; y: number }; to?: (at: { x: number; y: number }) => { x: number; y: number } } = {},
+  /** How it loops round, if the two are stacked and it has to. */
+  loop?: Loop,
 ): WireShape => {
   const finish = (
     rawA: { x: number; y: number },
@@ -586,11 +830,13 @@ export const wirePath = (
     const bend = Math.max(40, Math.abs(b.x - a.x) / 2) * (forward ? 1 : -1)
     return finish(a, { x: a.x + bend, y: a.y }, { x: b.x - bend, y: b.y }, b)
   }
-  // Stacked in one column: loop out to the right and back in.
+  // Stacked in one column: loop out to one side and back in.
   const down = toMid.y > fromMid.y
-  const a = { x: from.x + from.w, y: from.y + from.h * (down ? 0.7 : 0.3) }
-  const b = { x: to.x + to.w, y: to.y + to.h * (down ? 0.3 : 0.7) }
-  const out = Math.max(a.x, b.x) + 50 + Math.abs(b.y - a.y) * 0.12
+  const east = (loop?.side ?? 'e') === 'e'
+  const a = { x: east ? from.x + from.w : from.x, y: from.y + from.h * (loop?.from ?? (down ? 0.7 : 0.3)) }
+  const b = { x: east ? to.x + to.w : to.x, y: to.y + to.h * (loop?.to ?? (down ? 0.3 : 0.7)) }
+  const reach = 50 + Math.abs(b.y - a.y) * 0.12
+  const out = east ? Math.max(a.x, b.x) + reach : Math.min(a.x, b.x) - reach
   return finish(a, { x: out, y: a.y }, { x: out, y: b.y }, b)
 }
 

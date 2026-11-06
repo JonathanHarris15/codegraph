@@ -91,6 +91,14 @@ describe('opening a card in the real app', () => {
     const area = await board()
     await addAt({ x: area.x + area.width * 0.3, y: area.y + area.height * 0.5 }, 'software system', 'Beside')
     await addAt({ x: area.x + area.width * 0.6, y: area.y + area.height * 0.5 }, 'software system', 'Main')
+    await addAt({ x: area.x + area.width * 0.3, y: area.y + area.height * 0.15 }, 'software system', 'Apart')
+    await page.mouse.move(area.x + 8, area.y + 8)
+    await settle()
+    // Only a card wired to the one that opens stays around it.
+    const from = await boxOf(card('Beside'))
+    await page.mouse.move(middle(from).x, middle(from).y)
+    await drag(middle(await boxOf(card('Beside').locator('.map-handle--e'))), middle(await boxOf(card('Main'))))
+    await page.keyboard.press('Escape')
     await settle()
     await picture('open-1-before')
     const scale = await worldScale()
@@ -111,6 +119,7 @@ describe('opening a card in the real app', () => {
     const pushed = await boxOf(card('Beside'))
     expect(pushed.x + pushed.width).toBeLessThanOrEqual(open.x)
     expect(pushed.x).toBeLessThan(beside.x)
+    expect(await card('Apart').count()).toBe(0)
   })
 
   it('draws inside it, and leaves what is outside it alone', async () => {
@@ -136,7 +145,7 @@ describe('opening a card in the real app', () => {
     await page.waitForTimeout(100)
     expect(await page.getByRole('dialog', { name: 'Add to the board' }).count()).toBe(0)
     expect(k).toBeGreaterThan(0)
-    await expect.poll(() => kept().root.children.map((c) => c.name).sort(), { timeout: PATIENCE }).toEqual(['Beside', 'Main'])
+    await expect.poll(() => kept().root.children.map((c) => c.name).sort(), { timeout: PATIENCE }).toEqual(['Apart', 'Beside', 'Main'])
   })
 
   it('keeps growing when a card is carried past its edge', async () => {
@@ -200,6 +209,8 @@ describe('opening a card in the real app', () => {
     await settle()
     expect(await page.locator('.map-card--open').count()).toBe(0)
     await card('Main').waitFor({ timeout: PATIENCE })
+    // What was not drawn while it was open comes back.
+    await card('Apart').waitFor({ timeout: PATIENCE })
     await picture('open-9-closed')
   })
 

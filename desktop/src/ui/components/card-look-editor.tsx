@@ -2,6 +2,44 @@
 import { CARD_SHAPES, LOOK_COLORS, SHAPE_NAMES, type CardLook } from './card-looks.js'
 import { LOOK_ICONS, LookGlyph, lookClass } from './kind-glyph.js'
 
+/** The icons a card can have, to pick one. */
+export const IconPick = ({ icon, onPick }: { icon: string; onPick: (icon: string) => void }) => (
+  <div className="map-look-grid">
+    {Object.keys(LOOK_ICONS).map((name) => (
+      <button
+        key={name}
+        type="button"
+        role="radio"
+        aria-checked={icon === name}
+        aria-label={`Icon: ${name}`}
+        title={name}
+        className={icon === name ? 'map-look-pick map-look-pick--on' : 'map-look-pick'}
+        onClick={() => onPick(name)}
+      >
+        <LookGlyph icon={name} size={15} />
+      </button>
+    ))}
+  </div>
+)
+
+/** The colours a card can be, to pick one. */
+export const ColorPick = ({ color, onPick }: { color: string; onPick: (color: string) => void }) => (
+  <div className="map-look-grid" role="radiogroup" aria-label="Colour">
+    {LOOK_COLORS.map((name) => (
+      <button
+        key={name}
+        type="button"
+        role="radio"
+        aria-checked={color === name}
+        aria-label={`Colour: ${name}`}
+        title={name}
+        className={`map-look-color ${lookClass({ color: name })}${color === name ? ' map-look-color--on' : ''}`}
+        onClick={() => onPick(name)}
+      />
+    ))}
+  </div>
+)
+
 /** Says what a card of a person's own type is and how it looks: its type's
  *  name, which is not the card's own name, then an icon, a shape and a colour.
  *  The card library uses it to make a type, the side panel to change a card. */
@@ -34,22 +72,7 @@ export const CardLookEditor = ({
     </label>
     <div className="map-look-group" role="radiogroup" aria-label="Icon">
       <span className="ds-label">Icon</span>
-      <div className="map-look-grid">
-        {Object.keys(LOOK_ICONS).map((icon) => (
-          <button
-            key={icon}
-            type="button"
-            role="radio"
-            aria-checked={look.icon === icon}
-            aria-label={`Icon: ${icon}`}
-            title={icon}
-            className={look.icon === icon ? 'map-look-pick map-look-pick--on' : 'map-look-pick'}
-            onClick={() => onLook({ ...look, icon })}
-          >
-            <LookGlyph icon={icon} size={15} />
-          </button>
-        ))}
-      </div>
+      <IconPick icon={look.icon} onPick={(icon) => onLook({ ...look, icon })} />
     </div>
     <div className="map-look-group" role="radiogroup" aria-label="Shape">
       <span className="ds-label">Shape</span>
@@ -72,22 +95,9 @@ export const CardLookEditor = ({
         ))}
       </div>
     </div>
-    <div className="map-look-group" role="radiogroup" aria-label="Colour">
+    <div className="map-look-group">
       <span className="ds-label">Colour</span>
-      <div className="map-look-grid">
-        {LOOK_COLORS.map((color) => (
-          <button
-            key={color}
-            type="button"
-            role="radio"
-            aria-checked={look.color === color}
-            aria-label={`Colour: ${color}`}
-            title={color}
-            className={`map-look-color ${lookClass({ color })}${look.color === color ? ' map-look-color--on' : ''}`}
-            onClick={() => onLook({ ...look, color })}
-          />
-        ))}
-      </div>
+      <ColorPick color={look.color} onPick={(color) => onLook({ ...look, color })} />
     </div>
     {canSave && onSave ? (
       <button type="button" className="ds-button" onClick={onSave}>

@@ -135,7 +135,7 @@ describe('the canvas in the real app', () => {
     const branch = page.getByRole('button', { name: 'Branch of notes' })
     await expect.poll(async () => branch.textContent(), { timeout: PATIENCE }).not.toContain('not checked out')
     await expect.poll(async () => branch.textContent(), { timeout: PATIENCE }).toContain('add-search')
-    expect(await page.getByRole('button', { name: /^Switch folder/ }).count()).toBe(0)
+    await expect.poll(() => page.getByRole('button', { name: /^Switch folder/ }).count(), { timeout: PATIENCE }).toBe(0)
   })
 
   it('opens on the branch picked for a repo on the projects page', async () => {

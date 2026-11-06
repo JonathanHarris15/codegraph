@@ -6,6 +6,7 @@ import {
   addPointer,
   duplicateAnnotations,
   edgeToward,
+  linePath,
   holdPointers,
   movePointer,
   nearestCard,
@@ -156,5 +157,25 @@ describe('a sticky note pointing with arrows', () => {
     const [one] = addPointer(note, 's', { dx: 90, dy: 200 })
     const [next, [made]] = duplicateAnnotations(one, ['s'])
     expect(next[0]?.items.find((a) => a.id === made)?.pointers).toEqual([{ dx: 90, dy: 200 }])
+  })
+})
+
+describe('the path of a line', () => {
+  const a = { x: 0, y: 0 }
+  const b = { x: 200, y: 100 }
+
+  it('runs straight for a straight line', () => {
+    expect(linePath('arrow', a, b)).toEqual({ d: 'M 0 0 L 200 100', mid: { x: 100, y: 50 } })
+  })
+
+  it('curves for a bending line, leaving out of the seam each end holds', () => {
+    const { d, mid } = linePath('curve', a, b, ['s', 'n'])
+    expect(d.startsWith('M 0 0 C 0 ')).toBe(true)
+    expect(d.endsWith('200 100')).toBe(true)
+    expect(mid).toEqual({ x: 100, y: 50 })
+  })
+
+  it('leaves a loose end toward the other end', () => {
+    expect(linePath('wire', a, b).d).toMatch(/^M 0 0 C [\d.]+ 0, /)
   })
 })
