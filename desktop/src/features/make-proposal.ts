@@ -1,7 +1,8 @@
 // codegraph: feature make-proposal in agent
-// codegraph: uses reader, projects, sketches, repo, machine
+// codegraph: uses reader, projects, sketches, repo, machine, card-types
 // codegraph: command propose
 import { extname } from 'node:path'
+import { rememberLooks } from '../modules/card-types/index.js'
 import { sameFolder } from '../modules/machine/index.js'
 import { listProjects, type Project, type SoftwareSystem } from '../modules/projects/index.js'
 import {
@@ -14,7 +15,7 @@ import {
   type Proposal,
 } from '../modules/reader/index.js'
 import { headOf, readSoftwareSystem, writeProposal, type Picture } from '../modules/repo/index.js'
-import { listSketches, mockupFile, readSketch, type Sketch, type SketchCard } from '../modules/sketches/index.js'
+import { looksDrawn, listSketches, mockupFile, readSketch, type Sketch, type SketchCard } from '../modules/sketches/index.js'
 
 /** The system card a sketch draws for one software system: by the id a
  *  snapshot of the map kept, or else by name. */
@@ -35,7 +36,7 @@ const counted = (proposal: Proposal): string => {
 const listOf = (proposal: Proposal): string[] => [
   ...proposal.containers.map((c) => `- ${c.gone ? 'take away' : 'build'} container ${c.name}${c.kind ? ` (${c.kind})` : ''}${c.says ? `: ${c.says}` : ''}`),
   ...proposal.components.map(
-    (c) => `- ${c.gone ? 'take away' : 'build'} ${c.container}/${c.kind} ${c.name}${c.at ? ` at ${c.at}` : ''}${c.says ? `: ${c.says}` : ''}${c.mockup ? ` (mockup ${c.mockup})` : ''}`,
+    (c) => `- ${c.gone ? 'take away' : 'build'} ${c.container}/${c.kind} ${c.name}${c.type ? `, tagged as ${c.type}` : ''}${c.at ? ` at ${c.at}` : ''}${c.says ? `: ${c.says}` : ''}${c.mockup ? ` (mockup ${c.mockup})` : ''}`,
   ),
   ...proposal.wires.map((w) => `- ${w.gone ? 'take away' : 'build'} the wire ${w.from} ${w.kind} ${w.to}${w.words ? `: ${w.words}` : ''}`),
 ]
@@ -109,6 +110,7 @@ export const makeProposal = async (repo: string, name: string, shortName = '', r
   if (!changesAnything(proposal))
     return [`The sketch "${sketch.name}" changes nothing in ${system.name}; no proposal was written.`, ...elsewhere].join('\n')
 
+  rememberLooks(looksDrawn(drawn))
   writeProposal(repo, proposal, pictures)
   return [
     `Wrote the proposal to ${PROPOSAL} on ${facts.branch}: ${counted(proposal)}.`,

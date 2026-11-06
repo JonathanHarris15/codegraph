@@ -43,6 +43,9 @@ export type Component = {
   id: string
   name: string
   kind: ComponentKind
+  /** What the team calls it, written after `as` in its tag, like a queue or a
+   *  gateway; '' for none. Its kind still says what rules it keeps to. */
+  type: string
   container: string
   files: CodeFile[]
   /** A page's address, where it has one. */

@@ -1,5 +1,5 @@
 // codegraph: module card-types
-// codegraph: front door useFolder, readCardTypes, writeCardTypes, CardType
+// codegraph: front door useFolder, readCardTypes, writeCardTypes, rememberLooks, CardType
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -29,6 +29,16 @@ export const readCardTypes = (): CardType[] => {
   } catch {
     return []
   }
+}
+
+/** Keeps the look of any type about to go into the code that is not saved yet,
+ *  so it is drawn the same once it is read back. A saved type stays as it is. */
+export const rememberLooks = (drawn: { name: string; icon: string; shape: CardType['shape']; color: string }[]): void => {
+  const kept = readCardTypes()
+  const added: CardType[] = []
+  for (const type of drawn)
+    if (type.name && ![...kept, ...added].some((one) => one.name === type.name)) added.push({ id: randomUUID(), ...type })
+  if (added.length) writeCardTypes([...kept, ...added])
 }
 
 /** Written to a neighbour first, then moved over, so a crash cannot shred it. */

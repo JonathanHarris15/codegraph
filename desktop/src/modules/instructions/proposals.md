@@ -28,6 +28,11 @@ container by its name, `web`, and a component inside one, `web/page search`.
 }
 ```
 
+A component with a `"type"` was drawn as a card type the person chose, like a
+queue. Tag it with that type: `// codegraph: module jobs as queue`. It is not
+built until it is tagged that way. A container's `kind` is written into the
+config as it stands.
+
 `"gone": true` crosses a card or wire out: it is to be taken away, and its
 wires go with it. A wire between two containers stands for any wire between
 what they hold. A `calls` wire to a name that is no container is a call out
@@ -45,6 +50,21 @@ where the person put each card while drawing; leave it as it is.
    changes. Each needs a proposal of its own, made in its own repo on its
    own branch. A system with no repo yet needs the repo made first.
 4. Read what it wrote back to the person in a line or two before building.
+
+## When you think something else makes more sense
+
+What the person drew is what gets built and tagged, until you and they agree
+otherwise. You know the code, so say what you see:
+
+- A component with a `type` starts as a `module`, because a drawing does not
+  say which rules it keeps to. Choose the kind that fits what it does, and
+  change `kind` in the proposal. This needs no asking, but say what you chose.
+- If a type, a kind that goes against what they plainly meant, a split or a merge
+  would serve better, tell the person what and why before building that card.
+  If they agree, change the proposal to match. If they do not, build what they
+  drew. Never quietly tag something else: the check holds you to the proposal.
+- A container of kind `card`, or a component left as a blank `card`, has no type
+  yet. Suggest one, and write it in once they agree.
 
 ## Building one
 

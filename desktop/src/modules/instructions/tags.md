@@ -58,6 +58,10 @@ component.
 // codegraph: tooling                              (config, build scripts, helpers for tests)
 ```
 
+- `as <type>` says what the team calls a component, after its name: `module
+  jobs as queue`, `feature send as webhook uses mail`, `page home as landing at
+  /`, `trigger tidy schedule as cron`. It changes what the map calls it, never
+  which rules it keeps to: those come from module, feature, page or trigger.
 - `front door` goes once per module and lists every name other components
   may take from it.
 - `uses` on a feature lists exactly the modules it imports.

@@ -3,7 +3,7 @@ import type { Level, Note, SketchCard, SketchWire } from '../../modules/sketches
 import type { CardType } from '../../modules/card-types/schema.js'
 import { blankCard, isHub, wireOfHub, hubOf, type CardLook } from '../../modules/sketches/schema.js'
 import type { Arrangement } from '../../modules/arrangements/schema.js'
-import { BLANK_LOOK } from './card-looks.js'
+import { BLANK_LOOK, TEMPLATES } from './card-looks.js'
 import { sizeOf, wordsWidth } from './map-layout.js'
 
 export type { Arrangement }
@@ -19,9 +19,9 @@ export const levelInside: Record<Level, Level> = {
 
 /** The kinds a card can be at each level, the usual first. A person is drawn
  *  beside the software systems and never read from code, so it is only ever
- *  on a sketch. Inside a software system a sketch's cards are a person's own
- *  types (ADR 0013): a blank card to make one from, and the kinds that do more
- *  than look a certain way, a database and a page. */
+ *  on a sketch. Inside a software system these are the blank card, and the
+ *  kinds that do more than look a certain way, a database and a page. The rest
+ *  are templates (ADR 0013). */
 export const kindsAt: Record<Level, string[]> = {
   project: ['project'],
   system: ['software system', 'shallow software system', 'person'],
@@ -30,7 +30,7 @@ export const kindsAt: Record<Level, string[]> = {
   code: ['file'],
 }
 
-/** The kinds a card can be when it is going to be built: what the code can say. */
+/** The kinds code already has words for, each a template. */
 const kindsInCode: Partial<Record<Level, string[]>> = {
   container: ['web app', 'browser app', 'server', 'desktop app', 'mobile app', 'database', 'files on disk', 'function', 'command-line tool'],
   component: ['page', 'feature', 'module', 'trigger'],
@@ -49,10 +49,13 @@ export type CardChoice = { key: string; kind: string; look?: CardLook; hint: str
 
 /** What can be put on a level, in groups: what the app knows, then the types
  *  a person has saved. */
-export const choicesAt = (level: Level, types: CardType[] = [], codeKinds = false): { name: string; choices: CardChoice[] }[] => {
-  // Over the map, what is drawn gets built, so it has to be a kind code can have.
-  if (codeKinds && ownTypesAt(level))
-    return [{ name: '', choices: kindsInCode[level]!.map((kind) => ({ key: kind, kind, hint: kindHints[kind] ?? '' })) }]
+export const choicesAt = (level: Level, types: CardType[] = []): { name: string; choices: CardChoice[] }[] => {
+  const fromCode = (kind: string): CardChoice => ({
+    key: kind,
+    kind,
+    ...(TEMPLATES[kind] ? { look: TEMPLATES[kind] } : {}),
+    hint: kindHints[kind] ?? '',
+  })
   const known = kindGroups(level).map((group) => ({
     name: group.name,
     choices: group.kinds.map((kind): CardChoice => ({
@@ -62,18 +65,25 @@ export const choicesAt = (level: Level, types: CardType[] = [], codeKinds = fals
       hint: kindHints[kind] ?? '',
     })),
   }))
-  if (!ownTypesAt(level) || types.length === 0) return known
+  if (!ownTypesAt(level)) return known
+  const templates = kindsInCode[level]!.filter((kind) => TEMPLATES[kind])
   return [
     ...known,
-    {
-      name: 'Your types',
-      choices: types.map((type): CardChoice => ({
-        key: `type:${type.id}`,
-        kind: type.name,
-        look: { icon: type.icon, shape: type.shape, color: type.color },
-        hint: 'Your own type',
-      })),
-    },
+    { name: 'Templates', choices: templates.map(fromCode) },
+    ...(types.some((type) => !TEMPLATES[type.name]) && types.length
+      ? [
+          {
+            name: 'Your types',
+            // A template's look kept from the code is still that template.
+            choices: types.filter((type) => !TEMPLATES[type.name]).map((type): CardChoice => ({
+              key: `type:${type.id}`,
+              kind: type.name,
+              look: { icon: type.icon, shape: type.shape, color: type.color },
+              hint: 'Your own type',
+            })),
+          },
+        ]
+      : []),
   ]
 }
 

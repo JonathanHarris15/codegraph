@@ -21,6 +21,8 @@ export type DrawnCard = {
   name: string
   level: string
   kind: string
+  /** A component's kind, when what it is drawn as is another type. */
+  role?: string
   says: string
   at: string
   start: boolean
@@ -78,27 +80,30 @@ export const proposalFrom = (system: DrawnCard, map: SystemMap, how: FromDrawing
     const drawn = new Set<string>()
     for (const inner of card.children) {
       if (!inner.name.trim()) continue
-      // A type a person made up is not one code can say, so it is built as a
-      // module, the one kind that makes no promise about how it is reached,
-      // and its type goes in what it is for.
-      const own = !KINDS.has(inner.kind) && inner.kind && inner.kind !== 'card' ? inner.kind : ''
-      const kind = (KINDS.has(inner.kind) ? inner.kind : 'module') as ComponentKind
+      // A type a person made up goes into the tag as it is. What rules it keeps
+      // to is not something a drawing says, so it starts as a module, which
+      // promises least, for the agent building it to settle (ADR 0013).
+      const type = !KINDS.has(inner.kind) && inner.kind !== 'card' ? inner.kind.trim() : ''
+      const kind = (KINDS.has(inner.role ?? inner.kind) ? (inner.role ?? inner.kind) : 'module') as ComponentKind
       const component = { container: name, kind, name: inner.name.trim() }
       const full = componentName(component)
       nameOf.set(inner.id, full)
       layout(inner, full)
       drawn.add(full)
-      const is = map.components.some((c) => componentName(c) === full)
+      const found = map.components.find((c) => componentName(c) === full)
+      // In the code as another type, it has changing to do.
+      const is = Boolean(found) && (!type || found!.type === type)
       const entry: ProposedComponent = {
         ...component,
-        says: own ? [`(${own})`, inner.says].filter(Boolean).join(' ') : inner.says,
+        ...(type ? { type } : {}),
+        says: inner.says,
         at: inner.at,
         ...(inner.start ? { start: true } : {}),
         mockup: inner.mockup && how.mockupName ? how.mockupName(inner, full) : '',
       }
       if (inner.state === 'gone') {
         goneNames.add(full)
-        if (is) proposal.components.push({ ...entry, mockup: '', gone: true })
+        if (found) proposal.components.push({ ...entry, mockup: '', gone: true })
       } else if (!is || listedBefore(full)) proposal.components.push(entry)
     }
     if (how.absentIsGone)

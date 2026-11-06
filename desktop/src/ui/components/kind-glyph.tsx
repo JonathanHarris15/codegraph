@@ -133,7 +133,7 @@ export type ToolGlyph = keyof typeof TOOL_GLYPHS
 
 /** What a card of this kind is drawn in. The colour itself lives in the
  *  `kind-of--…` classes; this only says which cards are shaped like a store. */
-export const keeps = (kind: string): boolean => /^(database|files on disk)$/.test(kind)
+export const keeps = (kind: string): boolean => kind === 'database'
 
 export const kindClass = (kind: string): string => `kind-of--${(kind || 'container').replace(/\s+/g, '-')}`
 

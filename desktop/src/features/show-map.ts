@@ -1,7 +1,8 @@
 // codegraph: feature show-map in workspace
-// codegraph: uses projects, reader, agents, cards
+// codegraph: uses projects, reader, agents, cards, card-types
 import { whereIs } from '../modules/agents/index.js'
-import { card, join, systemCard, type Card } from '../modules/cards/index.js'
+import { readCardTypes } from '../modules/card-types/index.js'
+import { card, join, systemCard, withLooks, type Card } from '../modules/cards/index.js'
 import { chooseBranch, listProjects } from '../modules/projects/index.js'
 import { idOfName, pointFor, proposalProgress, readMap, type Point, type Progress } from '../modules/reader/index.js'
 
@@ -90,5 +91,5 @@ export const showMap = async (projectId: string, points: Record<string, Point> =
       else if (!reached) suggestions.add(name)
     }
 
-  return { card: top, systems, suggestions: [...suggestions] }
+  return { card: withLooks(top, readCardTypes()), systems, suggestions: [...suggestions] }
 }

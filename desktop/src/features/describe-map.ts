@@ -35,7 +35,7 @@ export const describeMap = async (repo: string, point: Point = live): Promise<st
         c.trigger ? `on a ${c.trigger}` : '',
         c.frontDoor.length ? `front door ${c.frontDoor.join(', ')}` : '',
       ].filter(Boolean)
-      out.push(`  ${c.kind} ${c.name}${extra.length ? ` (${extra.join('; ')})` : ''}`)
+      out.push(`  ${c.kind} ${c.name}${c.type ? ` as ${c.type}` : ''}${extra.length ? ` (${extra.join('; ')})` : ''}`)
       for (const file of c.files) out.push(`    ${file.path}`)
     }
     out.push('')

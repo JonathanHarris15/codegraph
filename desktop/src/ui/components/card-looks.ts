@@ -30,6 +30,26 @@ export const LOOK_COLORS = ['gray', 'blue', 'teal', 'green', 'yellow', 'orange',
 
 export const BLANK_LOOK: CardLook = { icon: 'package', shape: 'square', color: 'gray' }
 
+/** The kinds the code can name, each only a card with a ready-made look. A
+ *  database and a page are not here: they do more than look a certain way. */
+export const TEMPLATES: Record<string, CardLook> = {
+  'web app': { icon: 'globe', shape: 'square', color: 'blue' },
+  'browser app': { icon: 'window', shape: 'square', color: 'blue' },
+  server: { icon: 'server', shape: 'square', color: 'blue' },
+  'desktop app': { icon: 'monitor', shape: 'square', color: 'blue' },
+  'mobile app': { icon: 'phone', shape: 'square', color: 'blue' },
+  'files on disk': { icon: 'disk', shape: 'square', color: 'yellow' },
+  function: { icon: 'function', shape: 'square', color: 'teal' },
+  'command-line tool': { icon: 'terminal', shape: 'square', color: 'teal' },
+  feature: { icon: 'play', shape: 'square', color: 'green' },
+  module: { icon: 'package', shape: 'square', color: 'purple' },
+  trigger: { icon: 'clock', shape: 'square', color: 'orange' },
+}
+
+/** How a card looks: its own look, or else its template's, so a card made
+ *  before templates, or read from code, is drawn the same way. */
+export const lookOf = (card: { kind: string; look?: CardLook }): CardLook | undefined => card.look ?? TEMPLATES[card.kind]
+
 /** The shape a card is drawn in, if it is anything but a plain card. A person
  *  on the context level always has the person shape. */
 export const drawnShape = (card: { kind: string; look?: CardLook }): CardShape | null => {

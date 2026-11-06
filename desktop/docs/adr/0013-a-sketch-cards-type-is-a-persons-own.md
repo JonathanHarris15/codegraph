@@ -21,6 +21,12 @@ can save one to the card library and use it again. Saved types are kept in one
 file for the whole app, and a card carries its own copy of its look, so forgetting
 a type changes no drawing.
 
+The kinds the code can name, such as web app, server, feature and module, are
+**templates**: the same card with a ready-made icon, shape and colour, offered in
+the card library beside a person's own types and changed the same way. A card with
+no look of its own is drawn as its template, so older sketches and maps read from
+code look the same.
+
 Two kinds stay what they are, because they do more than look a certain way. A
 **database** will gain the means to define and read data structures, so it is
 never a look, and its icon is not offered to card types. A **page** holds a
@@ -30,12 +36,23 @@ A person on the context level is drawn as the little person icon.
 
 ## Consequences
 
-A map read from code keeps its kinds, since the code says what they are. A proposal
-drawn over a map keeps them too: what it draws gets built, so a card has to be a
-kind the code can have.
+A card type is what gets tagged. A container's type goes in the config, which takes
+any words. A component's goes in its tag after `as`: `module jobs as queue`. The map
+reads it back and shows a queue, in the look saved for that type; making a proposal
+saves the look if it is not saved yet.
 
-Making a proposal from a sketch has to turn a person's own type into something the
-code can have. It becomes a module, the kind that promises least about how it is
-reached, and its type goes in what it is for, so the agent can still see it. The
-glossary's four kinds of component still describe what is built; a card type only
-describes what is drawn.
+A component still has one of the four kinds, because the check's rules hang on them:
+what may reach what, who may touch a store. So a type never replaces the kind; it
+says what the team calls the thing. Considered: letting `queue jobs` be a tag of its
+own. It reads better, but the reader could not tell a new type from a typo, and the
+check would have no rules to hold a queue to.
+
+A drawing does not say which rules a card keeps to, so a proposal starts a type as
+a module, the kind that promises least, and the agent building it settles it.
+
+The agent may know better than the drawing. It says so, and the person decides;
+what they agree goes in the proposal. The check holds the code to the proposal, type
+included, so nothing is quietly tagged as something else.
+
+A card from a template keeps its kind, so an agent building a sketch's feature
+builds a feature. A proposal drawn over a map offers the same cards as a sketch.

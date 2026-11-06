@@ -6,7 +6,7 @@ import { Button, Field, Select } from '../design-system/kit.js'
 import type { CardType } from '../../modules/card-types/schema.js'
 import { wireOfHub, type CardLook } from '../../modules/sketches/schema.js'
 import { CardLookEditor } from './card-look-editor.js'
-import { BLANK_LOOK } from './card-looks.js'
+import { BLANK_LOOK, TEMPLATES, lookOf } from './card-looks.js'
 import { Glyph } from './kind-glyph.js'
 import { MapCanvas, remember, remembered, walk } from './map-canvas.js'
 import {
@@ -390,7 +390,6 @@ export const SketchEditor = ({
           },
           cardTypes,
           onCardTypes: keepCardTypes,
-          codeKinds: proposing,
           onMockup: (id) => onAddMockup(id),
           onRemove: (ids) => change((f) => takeAway(f, ids)),
           onAlign: (ids, how) => change((f) => align(f, ids, how)),
@@ -503,7 +502,7 @@ export const SketchEditor = ({
                 value={picked.card.name}
                 onChange={(name) => change((f) => changeCard(f, picked.card.id, { name }), `name:${picked.card.id}`)}
               />
-              {ownTypesAt(picked.card.level) && !proposing ? (
+              {ownTypesAt(picked.card.level) ? (
                 picked.card.kind === 'database' || picked.card.kind === 'page' ? (
                   <div className="ds-hint">
                     {picked.card.kind === 'database' ? 'A database is its own kind of card, not a look.' : 'A page holds a mockup, so it is its own kind of card.'}
@@ -511,12 +510,12 @@ export const SketchEditor = ({
                 ) : (
                   <CardLookEditor
                     kind={picked.card.kind}
-                    look={picked.card.look ?? BLANK_LOOK}
-                    canSave={Boolean(picked.card.kind.trim()) && picked.card.kind !== 'card' && !cardTypes.some((type) => type.name === picked.card.kind)}
-                    onKind={(kind) => change((f) => changeCard(f, picked.card.id, { kind, look: picked.card.look ?? BLANK_LOOK }), `kind:${picked.card.id}`)}
+                    look={lookOf(picked.card) ?? BLANK_LOOK}
+                    canSave={Boolean(picked.card.kind.trim()) && picked.card.kind !== 'card' && !TEMPLATES[picked.card.kind] && !cardTypes.some((type) => type.name === picked.card.kind)}
+                    onKind={(kind) => change((f) => changeCard(f, picked.card.id, { kind, look: lookOf(picked.card) ?? BLANK_LOOK }), `kind:${picked.card.id}`)}
                     onLook={(look: CardLook) => change((f) => changeCard(f, picked.card.id, { look }))}
                     onSave={() =>
-                      keepCardTypes([...cardTypes, { id: crypto.randomUUID(), name: picked.card.kind.trim(), ...(picked.card.look ?? BLANK_LOOK) }])
+                      keepCardTypes([...cardTypes, { id: crypto.randomUUID(), name: picked.card.kind.trim(), ...(lookOf(picked.card) ?? BLANK_LOOK) }])
                     }
                   />
                 )
@@ -527,10 +526,10 @@ export const SketchEditor = ({
                   options={[
                     ...new Set([
                       picked.card.kind,
-                      ...choicesAt(picked.card.level, [], proposing).flatMap((group) => group.choices.map((choice) => choice.kind)),
+                      ...choicesAt(picked.card.level).flatMap((group) => group.choices.map((choice) => choice.kind)),
                     ]),
                   ].filter(Boolean)}
-                  onChange={(kind) => change((f) => changeCard(f, picked.card.id, { kind }))}
+                  onChange={(kind) => change((f) => changeCard(f, picked.card.id, { kind, look: undefined }))}
                 />
               )}
               <label className="ds-field">

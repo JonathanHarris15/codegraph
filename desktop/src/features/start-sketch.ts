@@ -10,6 +10,8 @@ export type MapCard = {
   name: string
   level: Level
   kind: string
+  role?: string
+  look?: SketchCard['look']
   says: string
   at: string
   start: boolean
@@ -23,6 +25,8 @@ export type MapCard = {
  *  notes, and no screenshot, since a sketch is not the code. */
 const fromMap = (card: MapCard): SketchCard => ({
   ...blankCard(card.id, card.name, card.level, card.kind),
+  ...(card.role ? { role: card.role } : {}),
+  ...(card.look ? { look: card.look } : {}),
   says: card.says,
   at: card.at,
   start: card.start,

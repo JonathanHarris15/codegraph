@@ -49,6 +49,8 @@ export type SketchCard = {
   level: Level
   /** Its type: a kind the app knows, or a name a person gave it. */
   kind: string
+  /** A component's kind in the code, when its type is another word for it. */
+  role?: string
   /** How a card of a person's own type looks; left out, its kind decides. */
   look?: CardLook
   says: string
@@ -85,6 +87,13 @@ export type Sketch = {
   /** What is drawn over it that is not the diagram; left out, none. */
   layers?: Layer[]
 }
+
+/** The types of card a drawing uses that a person chose the look of, all the
+ *  way down. */
+export const looksDrawn = (card: SketchCard): ({ name: string } & CardLook)[] => [
+  ...(card.look && card.kind !== 'card' ? [{ name: card.kind.trim(), ...card.look }] : []),
+  ...card.children.flatMap(looksDrawn),
+]
 
 export const blankCard = (id: string, name: string, level: Level, kind = ''): SketchCard => ({
   id,
