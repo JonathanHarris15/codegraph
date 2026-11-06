@@ -82,9 +82,12 @@ describe('annotating a map', () => {
   it('opens the library of annotations from the tools', async () => {
     await page.getByRole('button', { name: 'Annotate' }).click()
     const library = page.getByRole('complementary', { name: 'Annotations' })
-    for (const group of ['Standard', 'Flowchart', 'Containers', 'Shapes']) expect(await shown(library)).toContain(group)
+    // Each group is named for what its shapes do, and says so under its name.
+    for (const group of ['Notes', 'Lines', 'Frames', 'Shapes'])
+      expect(await library.getByRole('button', { name: group, exact: true }).count()).toBe(1)
+    expect(await shown(library)).toContain('Drawn round what they hold')
     await page.getByLabel('Search shapes').fill('diamond')
-    expect(await page.getByRole('button', { name: 'Add decision' }).count()).toBe(1)
+    expect(await page.getByRole('button', { name: 'Add diamond' }).count()).toBe(1)
     expect(await page.getByRole('button', { name: 'Add sticky note' }).count()).toBe(0)
     await page.getByLabel('Search shapes').fill('')
   })
@@ -321,7 +324,7 @@ describe('annotating a sketch', () => {
     await page.getByLabel('Card name').waitFor({ timeout: PATIENCE })
     await page.keyboard.type('made with a key')
     await page.keyboard.press('Enter')
-    await page.locator('.map-world').getByRole('button', { name: 'made with a key' }).waitFor({ timeout: PATIENCE })
+    await page.locator('.map-world').getByRole('button', { name: 'made with a key', exact: true }).waitFor({ timeout: PATIENCE })
     // With that card still picked, a letter picks a tool rather than writing on it.
     await page.keyboard.press('w')
     expect(await page.getByRole('button', { name: 'Wire', exact: true }).getAttribute('aria-pressed')).toBe('true')

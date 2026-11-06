@@ -4,8 +4,10 @@ import { useState } from 'react'
 import type { Layer } from '../../modules/annotations/index.js'
 import { SHAPE_GROUPS, type AnnotationShape } from './annotation-shapes.js'
 
-/** A shape as its library button draws it: its outline, or a mark for text
- *  and lines. */
+/** A shape as its library button draws it. It draws what the board draws —
+ *  the outline, the strip and the strokes inside it, the dashed edge and
+ *  name tab of a frame — so two shapes that differ on the board differ
+ *  here, and two that look alike here are the same shape. */
 export const ShapeIcon = ({ shape, size = 26 }: { shape: AnnotationShape; size?: number }) => (
   <svg width={size} height={size} viewBox="-6 -6 112 112" aria-hidden="true" className="map-anno-icon">
     {shape.kind === 'text' ? (
@@ -13,13 +15,31 @@ export const ShapeIcon = ({ shape, size = 26 }: { shape: AnnotationShape; size?:
         T
       </text>
     ) : shape.line ? (
-      <path
-        d="M8 92 L92 8"
-        strokeDasharray={shape.kind === 'dashed' ? '12 10' : undefined}
-        markerEnd={shape.kind === 'arrow' ? 'url(#map-anno-icon-head)' : undefined}
-      />
+      <>
+        <path
+          d={shape.bends ? 'M8 86 C58 86, 42 14, 92 14' : 'M8 92 L92 8'}
+          strokeDasharray={shape.kind === 'dashed' ? '12 10' : undefined}
+          markerEnd={shape.kind === 'arrow' || shape.bends ? 'url(#map-anno-icon-head)' : undefined}
+        />
+        {shape.kind === 'wire' ? <rect x="26" y="38" width="48" height="24" rx="6" className="map-anno-icon--words" /> : null}
+      </>
     ) : (
-      <path d={shape.d} className={shape.kind === 'sticky' ? 'map-anno-icon--sticky' : undefined} />
+      <>
+        {shape.d ? (
+          <path
+            d={shape.d}
+            className={shape.kind === 'sticky' ? 'map-anno-icon--sticky' : undefined}
+            strokeDasharray={shape.behind ? '9 7' : undefined}
+          />
+        ) : null}
+        {shape.band ? <path d={shape.band} className="map-anno-icon--band" /> : null}
+        {/* A shape with no outline is its marks, so they are drawn as its edge. */}
+        {shape.marks ? <path d={shape.marks} className={shape.d ? 'map-anno-icon--marks' : undefined} /> : null}
+        {shape.hint ? <path d={shape.hint} className="map-anno-icon--hint" /> : null}
+        {shape.strip === 'top' ? <path d="M2 2 H98 V22 H2 Z" className="map-anno-icon--band" /> : null}
+        {shape.strip === 'left' ? <path d="M2 2 H22 V98 H2 Z" className="map-anno-icon--band" /> : null}
+        {shape.title === 'tab' ? <path d="M2 2 H44 V20 H2 Z" className="map-anno-icon--band" /> : null}
+      </>
     )}
   </svg>
 )
@@ -78,6 +98,7 @@ export const AnnotationLibrary = ({
                 {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                 {g.name}
               </button>
+              {open ? <div className="map-anno-group-says">{g.says}</div> : null}
               {open ? (
                 <div className="map-anno-grid">
                   {g.shapes.map((shape) => (
@@ -87,7 +108,13 @@ export const AnnotationLibrary = ({
                       className={armed === shape.kind ? 'map-anno-pick map-anno-pick--on' : 'map-anno-pick'}
                       aria-label={`Add ${shape.name.toLowerCase()}`}
                       aria-pressed={armed === shape.kind}
-                      title={shape.line ? `${shape.name}: drag from one place to another` : `${shape.name}: click the board, or drag to size it`}
+                      title={
+                        shape.line
+                          ? `${shape.name}: drag from one place to another`
+                          : shape.behind
+                            ? `${shape.name}: drag it round what it holds. It sits behind the cards and grows as they do.`
+                            : `${shape.name}: click the board, or drag to size it`
+                      }
                       onClick={() => onArm(armed === shape.kind ? '' : shape.kind)}
                     >
                       <ShapeIcon shape={shape} />

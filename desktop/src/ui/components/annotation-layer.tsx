@@ -6,6 +6,7 @@ import {
   changeAnnotation,
   duplicateAnnotations,
   holdPointers,
+  linePath,
   movePointer,
   nearestCard,
   placeAnnotation,
@@ -26,7 +27,14 @@ type Card = { id: string; box: Box; d?: string }
 
 /** One annotation as drawn now: where it sits on the board, and for a line,
  *  its two ends. */
-export type Drawn = { a: Annotation; layer: Layer; box: Box; ends?: [Spot, Spot] }
+export type Drawn = {
+  a: Annotation
+  layer: Layer
+  box: Box
+  ends?: [Spot, Spot]
+  /** Which seam each end of a line holds; none for a loose end. */
+  ways?: [Seam | null, Seam | null]
+}
 
 const inBox = (p: Spot, b: Box): boolean => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h
 
@@ -77,13 +85,19 @@ export const drawnOn = (layers: Layer[], level: string, shift: Spot, cards: Card
       if (!roughFrom || !roughTo) continue
       const from = point(a.from, looseFrom, roughTo)!
       const to = point(a.to, looseTo, roughFrom)!
+      const wayOf = (end: AnnotationEnd | undefined, other: Spot): Seam | null => {
+        if (!end || 'x' in end) return null
+        if (end.seam) return end.seam
+        const held = outlineAt(end)
+        return held ? seamFacing(held.box, other) : null
+      }
       const box = {
         x: Math.min(from.x, to.x),
         y: Math.min(from.y, to.y),
         w: Math.abs(to.x - from.x),
         h: Math.abs(to.y - from.y),
       }
-      boxes.push({ a, layer, box, ends: [from, to] })
+      boxes.push({ a, layer, box, ends: [from, to], ways: [wayOf(a.from, to), wayOf(a.to, from)] })
     }
   }
   return boxes
@@ -146,6 +160,19 @@ const SeamDots = ({ box, d, at, k }: { box: Box; d: string; at: Spot; k: number 
 const wordsAreaOf = (kind: AnnotationShape): { x: number; y: number; w: number; h: number } =>
   kind.text ?? (kind.d ? textAreaOf(kind.d) : { x: 0, y: 0, w: 1, h: 1 })
 
+/** How thick a strip is: the same at any size, so a code block's header and
+ *  a swimlane's side stay a header and a side however far they are pulled. */
+export const STRIP = 22
+
+/** Where a shape's words sit inside it, in pixels, keeping clear of a strip
+ *  that does not grow with the shape. */
+const wordsBoxOf = (kind: AnnotationShape, b: Box): Box => {
+  if (kind.strip === 'top') return { x: 0, y: STRIP, w: b.w, h: Math.max(0, b.h - STRIP) }
+  if (kind.strip === 'left') return { x: STRIP, y: 0, w: Math.max(0, b.w - STRIP), h: b.h }
+  const area = wordsAreaOf(kind)
+  return { x: area.x * b.w, y: area.y * b.h, w: area.w * b.w, h: area.h * b.h }
+}
+
 /** How tall one line of a shape's words is. */
 const lineHeightOf = (kind: string): number => (kind === 'text' ? 20 : 18)
 /** The air kept round a shape's words, up and down. */
@@ -178,6 +205,9 @@ export const AnnotationLayer = ({
   cards,
   moved,
   up: levelsOut = 0,
+  notDrawn,
+  preview,
+  onPreview: setPreview,
   k,
   selected,
   editing,
@@ -193,6 +223,12 @@ export const AnnotationLayer = ({
   /** How many levels out from the one in hand this is. Past none, its
    *  annotations are faded and cannot be touched. */
   up?: number
+  /** Cards not on the board right now: what keeps beside or holds one goes too. */
+  notDrawn?: Set<string>
+  /** Where what is being dragged or sized has got to. It is shared, because a
+   *  shape behind the cards is drawn apart from the lines holding it. */
+  preview: Map<string, Box> | null
+  onPreview: (preview: Map<string, Box> | null) => void
   /** Frames and boxes, drawn behind the cards, or everything else, over
    *  them: the canvas draws the layer twice, once on each side. */
   part: 'behind' | 'front'
@@ -212,10 +248,13 @@ export const AnnotationLayer = ({
   onEdit: (id: string) => void
   onChange: (layers: Layer[], step?: string) => void
 }) => {
-  const drawn = useMemo(() => drawnOn(layers, level, shift, cards, moved), [layers, level, shift, cards, moved])
+  const drawn = useMemo(() => {
+    const gone = (end: AnnotationEnd | undefined): boolean => Boolean(end && 'card' in end && notDrawn?.has(end.card))
+    return drawnOn(layers, level, shift, cards, moved).filter((d) => !(d.a.near && notDrawn?.has(d.a.near.card)) && !gone(d.a.from) && !gone(d.a.to))
+  }, [layers, level, shift, cards, moved, notDrawn])
   const upped = levelsOut > 0 ? ` map-up map-up--${Math.min(levelsOut, 3)} map-anno--locked` : ''
   const drag = useRef<Drag | null>(null)
-  const [preview, setPreview] = useState<Map<string, Box> | null>(null)
+
   const [endAt, setEndAt] = useState<{ id: string; end: 'from' | 'to'; at: Spot } | null>(null)
   const [guides, setGuides] = useState<Guides>({ x: [], y: [] })
   /** A sticky note's arrow on its way: a new one being pulled out, or one
@@ -444,12 +483,12 @@ export const AnnotationLayer = ({
     if (picked) classes.push('map-anno--picked')
     if (d.a.near) classes.push('map-anno--kept')
     const words = d.a.text
-    const area = wordsAreaOf(kind)
-    const inArea = { left: `${area.x * 100}%`, top: `${area.y * 100}%`, width: `${area.w * 100}%`, height: `${area.h * 100}%` }
+    const words_ = wordsBoxOf(kind, b)
+    const inArea = { left: words_.x, top: words_.y, width: words_.w, height: words_.h }
     // As many lines as the shape has room for at this size, so the words are
     // cut with an ellipsis, and more show the moment it grows.
     const lineHeight = lineHeightOf(d.a.kind)
-    const lines = Math.max(1, Math.floor((b.h * area.h - WORDS_AIR * 2) / lineHeight))
+    const lines = Math.max(1, Math.floor((words_.h - WORDS_AIR * 2) / lineHeight))
     const shownWords = d.a.kind === 'list' ? (words || 'A list').split('\n').map((line) => `•  ${line}`).join('\n') : words || (d.a.kind === 'text' ? 'Text' : '')
     return (
       <div
@@ -468,15 +507,26 @@ export const AnnotationLayer = ({
           onEdit(d.a.id)
         }}
       >
-        {kind.d ? (
+        {kind.d || kind.band || kind.marks ? (
           <svg className="map-anno-outline" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-            <path d={kind.d} vectorEffect="non-scaling-stroke" />
+            {kind.d ? <path className="map-anno-edge" d={kind.d} vectorEffect="non-scaling-stroke" /> : null}
+            {kind.band ? <path className="map-anno-band" d={kind.band} vectorEffect="non-scaling-stroke" /> : null}
+            {kind.marks ? <path className="map-anno-marks" d={kind.marks} vectorEffect="non-scaling-stroke" /> : null}
+            {/* A frame is picked by a wide invisible stroke along its edge,
+                so the board inside it still pans and picks cards. */}
+            {kind.behind ? <path className="map-anno-grab" d={kind.d || kind.marks || ''} vectorEffect="non-scaling-stroke" /> : null}
           </svg>
         ) : null}
-        {kind.behind ? <div className="map-anno-title">{words || kind.name}</div> : null}
+        {kind.strip ? <div className={`map-anno-strip map-anno-strip--${kind.strip}`} aria-hidden="true" /> : null}
+        {kind.behind ? (
+          <div className={kind.title === 'strip' ? `map-anno-title map-anno-title--in-${kind.strip}` : 'map-anno-title'}>{words || kind.name}</div>
+        ) : null}
         {editing === d.a.id ? (
           <textarea
-            className="map-anno-edit"
+            // Writing on a shape looks like reading it: a code block stays
+            // mono, a note stays hand-written, a frame's name stays on its
+            // tab or in its strip.
+            className={`map-anno-edit map-anno-edit--${d.a.kind}${kind.title === 'strip' ? ` map-anno-edit--in-${kind.strip}` : kind.title === 'tab' ? ' map-anno-edit--on-tab' : ''}`}
             aria-label="Annotation text"
             autoFocus
             style={kind.behind ? undefined : { ...inArea, inset: 'auto' }}
@@ -556,10 +606,10 @@ export const AnnotationLayer = ({
     if (!preview) return null
     const carried = new Map(moved ?? [])
     for (const [id, box] of preview) carried.set(id, box)
-    return new Map(drawnOn(layers, level, shift, cards, carried).flatMap((d) => (d.ends ? [[d.a.id, d.ends] as const] : [])))
+    return new Map(drawnOn(layers, level, shift, cards, carried).flatMap((d) => (d.ends ? [[d.a.id, d] as const] : [])))
   }, [preview, moved, layers, level, shift, cards])
   const lineEnds = (d: Drawn): [Spot, Spot] => {
-    const [from, to] = liveEnds?.get(d.a.id) ?? d.ends!
+    const [from, to] = liveEnds?.get(d.a.id)?.ends ?? d.ends!
     const carried = preview?.get(d.a.id)
     const dx = carried ? carried.x - d.box.x : 0
     const dy = carried ? carried.y - d.box.y : 0
@@ -568,6 +618,13 @@ export const AnnotationLayer = ({
     let b = loose(d.a.to, to)
     if (endAt?.id === d.a.id) endAt.end === 'from' ? (a = endAt.at) : (b = endAt.at)
     return [a, b]
+  }
+  /** A line's path as drawn now. An end being dragged holds no seam yet. */
+  const pathOf = (d: Drawn): { d: string; mid: Spot } => {
+    const [a, b] = lineEnds(d)
+    const ways = liveEnds?.get(d.a.id)?.ways ?? d.ways ?? [null, null]
+    const dragged = endAt?.id === d.a.id ? endAt.end : null
+    return linePath(d.a.kind, a, b, [dragged === 'from' ? null : ways[0], dragged === 'to' ? null : ways[1]])
   }
   /** The shape a line's end being dragged is over, to show what it can hold. */
   const endOver = endAt ? endLanding(endAt.at, endAt.id, layerSnaps(endAt.id), cards, drawn, k) : null
@@ -586,14 +643,15 @@ export const AnnotationLayer = ({
         {lines.map((d) => {
           const [a, b] = lineEnds(d)
           const picked = selected.includes(d.a.id)
+          const path = pathOf(d).d
           return (
             <g
               key={d.a.id}
               className={`map-anno-line map-anno-line--${d.a.kind}${picked ? ' map-anno-line--picked' : ''}${d.a.color ? ` map-anno-fill--${d.a.color}` : ''}`}
             >
-              <path d={`M ${a.x} ${a.y} L ${b.x} ${b.y}`} markerEnd={d.a.kind === 'arrow' ? 'url(#map-anno-head)' : undefined} />
+              <path d={path} markerEnd={d.a.kind === 'arrow' || shapeOf(d.a.kind).bends ? 'url(#map-anno-head)' : undefined} />
               <path
-                d={`M ${a.x} ${a.y} L ${b.x} ${b.y}`}
+                d={path}
                 className="map-anno-line-hit"
                 data-anno={d.a.id}
                 role="button"
@@ -671,8 +729,7 @@ export const AnnotationLayer = ({
         {endAt && endOver ? <SeamDots box={endOver.box} d={endOver.d} at={endAt.at} k={k} /> : null}
       </svg>
       {lines.map((d) => {
-        const [a, b] = lineEnds(d)
-        const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+        const { mid } = pathOf(d)
         return editing === d.a.id ? (
           <textarea
             key={d.a.id}
@@ -692,6 +749,24 @@ export const AnnotationLayer = ({
               onEdit('')
             }}
           />
+        ) : d.a.kind === 'wire' ? (
+          // The line runs through its words, which are the wire's handle too.
+          <div
+            key={d.a.id}
+            className={`map-anno-wire-words${selected.includes(d.a.id) ? ' map-anno-wire-words--picked' : ''}${upped}`}
+            style={{ left: mid.x, top: mid.y }}
+            role="button"
+            aria-label={`Wire words: ${d.a.text || 'none yet'}`}
+            onPointerDown={press(d)}
+            onPointerMove={move}
+            onPointerUp={up}
+            onDoubleClick={(event) => {
+              event.stopPropagation()
+              onEdit(d.a.id)
+            }}
+          >
+            {d.a.text || <span className="map-said-ask">what is it for?</span>}
+          </div>
         ) : d.a.text ? (
           <div key={d.a.id} className={`map-anno-line-words${upped}`} style={{ left: mid.x, top: mid.y }}>
             {d.a.text}
@@ -809,7 +884,7 @@ export const AnnotationPlacer = ({
       {box ? (
         shape.line ? (
           <svg className="map-anno-lines map-anno-lines--live" width="1" height="1">
-            <line x1={box.a.x} y1={box.a.y} x2={box.b.x} y2={box.b.y} />
+            <path d={linePath(kind, box.a, box.b).d} fill="none" />
           </svg>
         ) : (
           <div

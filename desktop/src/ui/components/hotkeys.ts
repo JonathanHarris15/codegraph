@@ -47,7 +47,7 @@ const SHAPE_KEYS: Record<string, string> = {
   l: 'line',
   r: 'rect',
   o: 'circle',
-  d: 'decision',
+  d: 'diamond',
 }
 
 /** Every key, for the list a person opens with `?`. */
@@ -79,7 +79,7 @@ export const KEY_GROUPS: { name: string; rows: { keys: string; says: string }[] 
       { keys: 'L', says: 'Line' },
       { keys: 'R', says: 'Rectangle' },
       { keys: 'O', says: 'Circle' },
-      { keys: 'D', says: 'Decision' },
+      { keys: 'D', says: 'Diamond' },
       { keys: 'Shift+A', says: 'Every shape' },
     ],
   },

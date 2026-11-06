@@ -173,6 +173,42 @@ describe('inside a software system', () => {
     expect(types.types.map((t) => t.name)).toEqual(['queue'])
   })
 
+  it('changes a card’s icon, type and colour right on it', async () => {
+    const worker = () => kept().root.children.find((c) => c.name === 'Notes app')?.children.find((c) => c.name === 'Worker')
+    await page.getByRole('button', { name: 'Change the icon of Worker' }).click()
+    await page.locator('.map-look-pop').getByRole('radio', { name: 'Icon: bolt' }).click()
+    await expect.poll(() => worker()?.look?.icon, { timeout: PATIENCE }).toBe('bolt')
+    expect(await page.locator('.map-look-pop').count()).toBe(0)
+
+    await page.getByRole('toolbar', { name: 'What to do with what is picked' }).getByRole('radio', { name: 'Colour: orange' }).click()
+    await expect.poll(() => worker()?.look?.color, { timeout: PATIENCE }).toBe('orange')
+
+    await page.getByRole('button', { name: 'Change the type of Worker' }).click()
+    const type = page.getByRole('textbox', { name: 'Type name' }).first()
+    await type.waitFor({ timeout: PATIENCE })
+    // A blank card has no type to edit yet, so the box starts empty.
+    expect(await type.inputValue()).toBe('')
+    await page.waitForTimeout(300)
+    await page.keyboard.type('worker pool')
+    await page.keyboard.press('Enter')
+    await expect.poll(() => worker()?.kind, { timeout: PATIENCE }).toBe('worker pool')
+    expect(worker()?.look).toMatchObject({ icon: 'bolt', color: 'orange' })
+    await settle()
+    await picture('draw-5a-restyled')
+    await away()
+  })
+
+  it('leaves a database’s icon and type alone', async () => {
+    const open = await boxOf(openBox('Notes app'))
+    await addAt({ x: open.x + open.width * 0.5, y: open.y + open.height * 0.82 }, 'database', 'Store')
+    await away()
+    expect(await page.getByRole('button', { name: 'Change the icon of Store' }).count()).toBe(0)
+    expect(await page.getByRole('button', { name: 'Change the type of Store' }).count()).toBe(0)
+    await page.keyboard.press('Control+z')
+    await page.keyboard.press('Control+z')
+    await settle()
+  })
+
   it('stops a wire at the diamond’s real edge', async () => {
     await wire('Jobs', 'Worker')
     await settle()
@@ -283,6 +319,65 @@ describe('annotations', () => {
     // diamond's left tip.
     expect(m.a * end[0]! + m.e + area.x).toBeCloseTo(shape.x + shape.width * 0.02, -1)
     expect(m.d * end[1]! + m.f + area.y).toBeCloseTo(middle(shape).y, -1)
+  })
+
+  it('keeps a line on a frame the whole way while the frame is dragged', async () => {
+    await away()
+    await page.getByRole('button', { name: 'Add frame', exact: true }).click()
+    const open = await boxOf(openBox('Notes app'))
+    const start = { x: open.x + open.width * 0.3, y: open.y + open.height * 0.72 }
+    await page.mouse.click(start.x, start.y)
+    await page.keyboard.press('Escape')
+    await away()
+    const frame = page.locator('.map-anno--frame')
+    const title = await boxOf(frame.locator('.map-anno-title'))
+    await page.getByRole('button', { name: 'Add arrow', exact: true }).click()
+    const shape = await boxOf(page.locator('.map-anno--diamond'))
+    await drag(middle(shape), middle(await boxOf(frame)))
+    await settle()
+    const line = page.locator('.map-anno-line--arrow > path:first-child').last()
+    const before = await line.getAttribute('d')
+    await page.mouse.move(middle(title).x, middle(title).y)
+    await page.mouse.down()
+    await page.mouse.move(middle(title).x - 60, middle(title).y - 50, { steps: 8 })
+    await page.waitForTimeout(100)
+    // Still held: the line has already gone with it.
+    expect(await line.getAttribute('d')).not.toBe(before)
+    await page.mouse.up()
+    await settle()
+    await page.keyboard.press('Control+z')
+    await settle()
+  })
+
+  it('draws a bending line, and a wire with words typed through its middle', async () => {
+    await away()
+    await page.getByRole('button', { name: 'Add bending line', exact: true }).click()
+    const open = await boxOf(openBox('Notes app'))
+    const at = (x: number, y: number) => ({ x: open.x + open.width * x, y: open.y + open.height * y })
+    await drag(at(0.05, 0.05), at(0.3, 0.2))
+    await settle()
+    expect(await page.locator('.map-anno-line--curve > path:first-child').getAttribute('d')).toContain(' C ')
+
+    await page.getByRole('button', { name: 'Add wire with words', exact: true }).click()
+    await drag(at(0.35, 0.05), at(0.62, 0.2))
+    await page.getByRole('textbox', { name: 'Annotation text' }).waitFor({ timeout: PATIENCE })
+    await page.keyboard.type('hands the job over')
+    await page.keyboard.press('Enter')
+    await settle()
+    await picture('draw-10b-wires')
+    const words = page.getByRole('button', { name: 'Wire words: hands the job over' })
+    const chip = await boxOf(words)
+    const d = (await page.locator('.map-anno-line--wire > path:first-child').getAttribute('d'))!
+    const n = d.replace(/[MC,]/g, ' ').trim().split(/\s+/).map(Number)
+    const m = await page.locator('.map-world').evaluate((el) => new DOMMatrix(getComputedStyle(el).transform))
+    const area = await board()
+    const midX = (n[0]! + 3 * n[2]! + 3 * n[4]! + n[6]!) / 8
+    // The line passes through the middle of its words.
+    expect(m.a * midX + m.e + area.x).toBeCloseTo(middle(chip).x, -1)
+    await expect
+      .poll(() => (kept().layers ?? []).flatMap((l) => l.items).find((a) => a.kind === 'wire')?.text, { timeout: PATIENCE })
+      .toBe('hands the job over')
+    await away()
   })
 
   it('moves out of the way when a card opens, and comes back when it closes', async () => {

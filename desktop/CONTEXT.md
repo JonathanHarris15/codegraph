@@ -113,10 +113,10 @@ _Avoid_: port (for this), junction, socket, connector
 
 **Opening**:
 Double-clicking a card so it grows where it is into room to draw in, pushing
-the cards and annotations around it aside. What is around it stays on screen, at
-the same zoom, but fades, further the further out it is, and cannot be touched
-until a person backs out to it. Backing out is the way back; the card shrinks and
-what it pushed returns.
+the cards and annotations around it aside. The cards wired to it stay on screen, at
+the same zoom, but fade, further the further out they are, and cannot be touched
+until a person backs out to them. Cards not wired to it are not drawn at all.
+Backing out is the way back; the card shrinks and what it pushed returns.
 _Avoid_: tunnelling, drilling down, expanding, zooming in
 
 **Room**:
@@ -189,6 +189,20 @@ and agents to read. It is not part of the diagram and never changes the code.
 It can keep beside a card, or point at one, but no card ever lines up with
 or moves for an annotation. An annotation does move for a card that opens.
 _Avoid_: note (for anything but a sticky note), comment, markup, decoration
+
+**Note**:
+An annotation that carries words of its own: text, a sticky note, a callout,
+a list, a code block. It shows on its face what goes in it, so an empty one
+still says what it is for.
+_Avoid_: label, comment, markup
+
+**Frame**:
+An annotation drawn round what it holds. It sits behind the cards, so the
+board inside it still pans and picks, and it grows as the cards inside it do.
+Its name sits on a tab at its corner, or along the strip of a swimlane or a
+column. Nothing it holds belongs to it: it says what a group of cards is, and
+the cards never move for it.
+_Avoid_: container (that is what runs on its own), group, region, zone
 
 **Pointer**:
 An arrow a sticky note grows out of its own edge, to show what it means. It is

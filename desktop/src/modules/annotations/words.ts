@@ -9,15 +9,24 @@ const CALLED: Record<string, string> = {
   arrow: 'arrow',
   line: 'line',
   dashed: 'dashed line',
+  curve: 'bending line',
+  wire: 'wire',
   frame: 'frame',
+  lane: 'swimlane',
+  column: 'column',
   list: 'list',
   code: 'code block',
-  decision: 'decision',
+  rect: 'box',
+  diamond: 'diamond',
   terminator: 'start or end',
   database: 'database shape',
 }
 
-const called = (kind: string): string => CALLED[kind] ?? `${kind} shape`
+/** Shapes the library once listed twice. An annotation drawn under the old
+ *  name still says what it always said. */
+const WAS: Record<string, string> = { box: 'frame', process: 'rect', decision: 'diamond', connector: 'circle', preparation: 'hexagon' }
+
+const called = (kind: string): string => CALLED[kind] ?? CALLED[WAS[kind] ?? ''] ?? `${WAS[kind] ?? kind} shape`
 
 /** Which way an arrow goes out of its note, in words: it holds nothing, so
  *  the way it points is all there is to say. */

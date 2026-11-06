@@ -203,6 +203,32 @@ export const snapBox = (box: Box, others: Box[], within: number): { dx: number; 
   return { dx, dy, guides }
 }
 
+const WAY: Record<Side, { x: number; y: number }> = { n: { x: 0, y: -1 }, e: { x: 1, y: 0 }, s: { x: 0, y: 1 }, w: { x: -1, y: 0 } }
+
+/** A line's path between its two ends, and its middle. A bending line leaves
+ *  each end straight out of the seam it holds, the way a wire leaves a card; a
+ *  loose end leaves toward the other end. */
+export const linePath = (
+  kind: string,
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  ways: [Side | null, Side | null] = [null, null],
+): { d: string; mid: { x: number; y: number } } => {
+  if (!shapeOf(kind).bends) return { d: `M ${a.x} ${a.y} L ${b.x} ${b.y}`, mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } }
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const across = Math.abs(dx) >= Math.abs(dy)
+  const out = ways[0] ? WAY[ways[0]] : across ? { x: Math.sign(dx) || 1, y: 0 } : { x: 0, y: Math.sign(dy) || 1 }
+  const into = ways[1] ? WAY[ways[1]] : across ? { x: -(Math.sign(dx) || 1), y: 0 } : { x: 0, y: -(Math.sign(dy) || 1) }
+  const bend = Math.max(30, Math.hypot(dx, dy) / 2)
+  const c1 = { x: a.x + out.x * bend, y: a.y + out.y * bend }
+  const c2 = { x: b.x + into.x * bend, y: b.y + into.y * bend }
+  return {
+    d: `M ${a.x} ${a.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${b.x} ${b.y}`,
+    mid: { x: (a.x + 3 * c1.x + 3 * c2.x + b.x) / 8, y: (a.y + 3 * c1.y + 3 * c2.y + b.y) / 8 },
+  }
+}
+
 /** Where a line leaves a box toward a spot: the point on its edge. */
 export const edgeToward = (b: Box, to: { x: number; y: number }): { x: number; y: number } => {
   const cx = b.x + b.w / 2
