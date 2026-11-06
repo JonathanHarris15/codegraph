@@ -26,6 +26,20 @@ export type CardState = 'proposed' | 'built' | 'gone'
 /** Words a person puts anywhere on a level of a sketch. */
 export type Note = { id: string; text: string; x: number; y: number }
 
+/** How a card of a person's own type looks: an icon by name, the shape it is
+ *  drawn in, and a colour by name. */
+export type CardShape = 'square' | 'pill' | 'circle' | 'diamond' | 'triangle' | 'hexagon' | 'parallelogram' | 'person'
+export type CardLook = { icon: string; shape: CardShape; color: string }
+
+/** A hub is where a wire to an open card meets its border. A wire drawn inside
+ *  that card names the hub as one of its ends, to say which part inside the
+ *  wire really reaches. Its name is the wire's id with a mark in front. */
+const HUB = 'hub:'
+export const hubOf = (wireId: string): string => `${HUB}${wireId}`
+export const isHub = (id: string): boolean => id.startsWith(HUB)
+/** The wire a hub belongs to; '' for anything that is not a hub. */
+export const wireOfHub = (id: string): string => (isHub(id) ? id.slice(HUB.length) : '')
+
 /** One card in a sketch, with what is drawn inside it. It has the same shape
  *  as a card on the map, so the canvas draws both, and a snapshot of the map
  *  is a sketch as it stands. */
@@ -33,7 +47,10 @@ export type SketchCard = {
   id: string
   name: string
   level: Level
+  /** Its type: a kind the app knows, or a name a person gave it. */
   kind: string
+  /** How a card of a person's own type looks; left out, its kind decides. */
+  look?: CardLook
   says: string
   at: string
   start: boolean

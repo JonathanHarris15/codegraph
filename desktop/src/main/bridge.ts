@@ -4,6 +4,8 @@ import { addMockup } from '../features/add-mockup.js'
 import { saveAnnotations } from '../features/save-annotations.js'
 import { showAnnotations } from '../features/show-annotations.js'
 import { saveArrangement } from '../features/save-arrangement.js'
+import { saveCardTypes } from '../features/save-card-types.js'
+import { showCardTypes } from '../features/show-card-types.js'
 import { showArrangement } from '../features/show-arrangement.js'
 import { addProposalMockup } from '../features/add-proposal-mockup.js'
 import { agreeShallowSystem } from '../features/agree-shallow-system.js'
@@ -29,6 +31,7 @@ import { watchProject } from '../features/watch-project.js'
 import type { DrawnCard, Point } from '../modules/reader/index.js'
 import type { Layer } from '../modules/annotations/index.js'
 import type { Arrangement } from '../modules/arrangements/index.js'
+import type { CardType } from '../modules/card-types/index.js'
 import type { Sketch } from '../modules/sketches/index.js'
 
 /** The only crossing between the window and the features. Each channel is
@@ -80,6 +83,8 @@ export const openBridge = (): void => {
   })
   ipcMain.handle('annotations:show', (_event, projectId: string) => showAnnotations(projectId))
   ipcMain.handle('annotations:save', (_event, projectId: string, layers: Layer[]) => saveAnnotations(projectId, layers))
+  ipcMain.handle('card-types:show', () => showCardTypes())
+  ipcMain.handle('card-types:save', (_event, types: CardType[]) => saveCardTypes(types))
   ipcMain.handle('arrangement:show', (_event, projectId: string) => showArrangement(projectId))
   ipcMain.handle('arrangement:save', (_event, projectId: string, arrangement: Arrangement) =>
     saveArrangement(projectId, arrangement),

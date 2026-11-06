@@ -21,7 +21,8 @@ const picture = async (name: string): Promise<void> => {
 }
 const settle = (): Promise<void> => page.waitForTimeout(700)
 const board = async (): Promise<Box> => (await page.locator('.map-frame-area').boundingBox())!
-const card = (name: string): Locator => page.locator('.map-world').getByRole('button', { name, exact: true })
+/** A card by its name, whether it can be touched now or is faded out. */
+const card = (name: string): Locator => page.locator(`.map-world [data-card][aria-label="${name}"]`)
 const boxOf = async (locator: Locator): Promise<Box> => {
   await locator.first().waitFor({ state: 'visible', timeout: PATIENCE })
   return (await locator.first().boundingBox())!
@@ -112,21 +113,30 @@ describe('opening a card in the real app', () => {
     expect(pushed.x).toBeLessThan(beside.x)
   })
 
-  it('draws inside it and outside it, each on its own level', async () => {
+  it('draws inside it, and leaves what is outside it alone', async () => {
     const open = await boxOf(openBox('Main'))
-    await addAt({ x: open.x + 200, y: open.y + 160 }, 'web app', 'Inner')
+    await addAt({ x: open.x + 200, y: open.y + 160 }, 'card', 'Inner')
     await settle()
     expect((await boxOf(card('Inner'))).x).toBeGreaterThan(open.x)
-    await addAt({ x: open.x - 50, y: open.y + 40 }, 'shallow software system', 'Outer')
-    await settle()
     await picture('open-4-both')
-    await expect.poll(() => kept().root.children.map((c) => c.name).sort(), { timeout: PATIENCE }).toEqual(['Beside', 'Main', 'Outer'])
     await expect.poll(() => kept().root.children.find((c) => c.name === 'Main')?.children.map((c) => c.name), { timeout: PATIENCE }).toEqual(['Inner'])
-    // Pressing a card outside picks it up at once, with no second click.
-    const outer = await boxOf(card('Outer'))
-    await drag(middle(outer), { x: middle(outer).x, y: middle(outer).y + 30 })
+    // A card outside is faded, and a press on it neither picks it up nor adds anything.
+    const beside = await boxOf(card('Beside'))
+    expect(await card('Beside').evaluate((el) => el.classList.contains('map-up'))).toBe(true)
+    await page.mouse.click(middle(beside).x, middle(beside).y)
+    expect(await card('Beside').getAttribute('aria-pressed')).toBe(null)
+    const k = await worldScale()
+    await drag(middle(beside), { x: middle(beside).x, y: middle(beside).y + 30 })
     await settle()
-    expect(Math.round((await boxOf(card('Outer'))).y - outer.y)).toBeGreaterThan(10)
+    // That drag moved the board, not the card: the two go together.
+    const after = await boxOf(card('Beside'))
+    const openAfter = await boxOf(openBox('Main'))
+    expect(Math.round(after.y - openAfter.y)).toBe(Math.round(beside.y - open.y))
+    await page.mouse.dblclick(middle(after).x, middle(after).y)
+    await page.waitForTimeout(100)
+    expect(await page.getByRole('dialog', { name: 'Add to the board' }).count()).toBe(0)
+    expect(k).toBeGreaterThan(0)
+    await expect.poll(() => kept().root.children.map((c) => c.name).sort(), { timeout: PATIENCE }).toEqual(['Beside', 'Main'])
   })
 
   it('keeps growing when a card is carried past its edge', async () => {
@@ -174,7 +184,7 @@ describe('opening a card in the real app', () => {
     const area = await board()
     expect(nested.width).toBeGreaterThan(area.width * 0.5)
     expect(await page.getByRole('navigation', { name: 'Where you are' }).textContent()).toContain('Inner')
-    await addAt({ x: nested.x + 120, y: nested.y + 120 }, 'module', 'Deep').catch(async () => {
+    await addAt({ x: nested.x + 120, y: nested.y + 120 }, 'card', 'Deep').catch(async () => {
       await page.keyboard.press('Escape')
     })
     await settle()

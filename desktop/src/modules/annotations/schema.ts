@@ -3,7 +3,11 @@
 
 /** Where one end of a line sits: a spot on the level, a card of the
  *  diagram, or another annotation. */
-export type AnnotationEnd = { x: number; y: number } | { card: string } | { annotation: string }
+export type AnnotationEnd = { x: number; y: number } | { card: string; seam?: Seam } | { annotation: string; seam?: Seam }
+
+/** The place on a shape a line is held at. Left out, whichever faces the other
+ *  end of the line. */
+export type Seam = 'n' | 'e' | 's' | 'w'
 
 /** An arrow a sticky note points with. It is a part of the note: its tip is
  *  kept by how far it is from the note's corner, it holds nothing, and it

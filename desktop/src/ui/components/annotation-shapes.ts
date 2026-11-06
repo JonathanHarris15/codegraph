@@ -18,6 +18,9 @@ export type AnnotationShape = {
   color?: string
   /** Words other than the name to find it by. */
   also?: string
+  /** Where its words go, as shares of its box, when its outline alone does not
+   *  say: a shape with marks drawn inside it. */
+  text?: { x: number; y: number; w: number; h: number }
 }
 
 const box = 'M2 2 H98 V98 H2 Z'
@@ -43,15 +46,15 @@ export const SHAPE_GROUPS: { name: string; shapes: AnnotationShape[] }[] = [
       { kind: 'process', name: 'Process', d: box, w: 140, h: 80 },
       { kind: 'decision', name: 'Decision', d: 'M50 2 L98 50 L50 98 L2 50 Z', w: 140, h: 100, also: 'diamond' },
       { kind: 'terminator', name: 'Start or end', d: 'M25 2 H75 A23 48 0 0 1 75 98 H25 A23 48 0 0 1 25 2 Z', w: 140, h: 60, also: 'terminator pill' },
-      { kind: 'predefined', name: 'Predefined process', d: 'M2 2 H98 V98 H2 Z M14 2 V98 M86 2 V98', w: 150, h: 80, also: 'subroutine' },
+      { kind: 'predefined', name: 'Predefined process', d: 'M2 2 H98 V98 H2 Z M14 2 V98 M86 2 V98', w: 150, h: 80, also: 'subroutine', text: { x: 0.15, y: 0.04, w: 0.7, h: 0.92 } },
       { kind: 'document', name: 'Document', d: 'M2 2 H98 V82 C75 70 60 100 40 92 C25 86 12 84 2 88 Z', w: 140, h: 90 },
       { kind: 'documents', name: 'Many documents', d: 'M12 2 H98 V72 H90 M6 8 H92 V78 H84 M2 14 H86 V84 C66 76 52 100 34 92 C20 87 10 86 2 90 Z', w: 150, h: 100 },
       { kind: 'input', name: 'Manual input', d: 'M2 30 L98 2 V98 H2 Z', w: 140, h: 80 },
       { kind: 'preparation', name: 'Preparation', d: 'M20 2 H80 L98 50 L80 98 H20 L2 50 Z', w: 150, h: 80, also: 'hexagon' },
       { kind: 'data', name: 'Data', d: 'M22 2 H98 L78 98 H2 Z', w: 150, h: 80, also: 'parallelogram input output' },
-      { kind: 'database', name: 'Database', d: 'M2 14 A48 12 0 0 1 98 14 V86 A48 12 0 0 1 2 86 Z M2 14 A48 12 0 0 0 98 14', w: 110, h: 120, also: 'cylinder store' },
+      { kind: 'database', name: 'Database', d: 'M2 14 A48 12 0 0 1 98 14 V86 A48 12 0 0 1 2 86 Z M2 14 A48 12 0 0 0 98 14', w: 110, h: 120, also: 'cylinder store', text: { x: 0.04, y: 0.27, w: 0.92, h: 0.62 } },
       { kind: 'stored', name: 'Stored data', d: 'M18 2 H98 A16 48 0 0 0 98 98 H18 A16 48 0 0 1 18 2 Z', w: 140, h: 80 },
-      { kind: 'internal', name: 'Internal storage', d: 'M2 2 H98 V98 H2 Z M16 2 V98 M2 16 H98', w: 120, h: 100 },
+      { kind: 'internal', name: 'Internal storage', d: 'M2 2 H98 V98 H2 Z M16 2 V98 M2 16 H98', w: 120, h: 100, text: { x: 0.17, y: 0.17, w: 0.8, h: 0.8 } },
       { kind: 'delay', name: 'Delay', d: 'M2 2 H60 A38 48 0 0 1 60 98 H2 Z', w: 130, h: 80 },
       { kind: 'display', name: 'Display', d: 'M2 50 L22 2 H76 A22 48 0 0 1 76 98 H22 Z', w: 150, h: 80 },
       { kind: 'manual', name: 'Manual operation', d: 'M2 2 H98 L80 98 H20 Z', w: 140, h: 80, also: 'trapezoid' },

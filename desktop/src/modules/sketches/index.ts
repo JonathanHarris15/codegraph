@@ -1,12 +1,12 @@
 // codegraph: module sketches
-// codegraph: front door useFolder, sketchesFolder, listSketches, newSketch, readSketch, writeSketch, removeSketch, withNotesAsAnnotations, keepMockup, mockupFile, mockupUrl, blankCard, Sketch, SketchCard, SketchWire, Note, Level, CardState
+// codegraph: front door useFolder, sketchesFolder, listSketches, newSketch, readSketch, writeSketch, removeSketch, withNotesAsAnnotations, keepMockup, mockupFile, mockupUrl, blankCard, hubOf, isHub, wireOfHub, Sketch, SketchCard, SketchWire, Note, Level, CardState, CardLook, CardShape
 import { randomUUID } from 'node:crypto'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, extname, join } from 'node:path'
 import type { Sketch, SketchCard } from './schema.js'
 
-export { blankCard } from './schema.js'
-export type { CardState, Level, Note, Sketch, SketchCard, SketchWire } from './schema.js'
+export { blankCard, hubOf, isHub, wireOfHub } from './schema.js'
+export type { CardLook, CardShape, CardState, Level, Note, Sketch, SketchCard, SketchWire } from './schema.js'
 
 let folder = ''
 

@@ -29,7 +29,10 @@ beforeAll(async () => {
   web.wires.push({ id: 'w1', from: 'page-search', to: 'feature-find', kind: 'asks', words: 'finds notes with these words' })
   web.notes.push({ id: 'n1', text: 'Search as you type?', x: 0, y: 0 })
   const system = blankCard('notes', 'notes', 'system', 'software system')
-  system.children.push(web)
+  system.children.push(web, blankCard('phone', 'phone', 'container', 'mobile app'))
+  // A wire from outside, and a part inside wired to the hub it makes on the border.
+  system.wires.push({ id: 'outer', from: 'phone', to: 'web', kind: 'calls', words: 'syncs notes' })
+  web.wires.push({ id: 'w2', from: 'hub:outer', to: 'feature-find', kind: 'calls', words: 'looks up on the phone' })
   const root = blankCard(project.id, 'Notes', 'project', 'project')
   root.children.push(system)
   const sketch = newSketch(project.id, 'Search', root)
@@ -45,6 +48,14 @@ beforeAll(async () => {
 afterAll(async () => {
   await agent.close()
   closeYard(yard)
+})
+
+describe('a wire to a hub', () => {
+  it('reads as a wire to the card at the far end', async () => {
+    const said = await describeSketch(repo, 'Search')
+    expect(said).toContain('container phone (mobile app) calls feature find-notes')
+    expect(said).not.toContain('hub:')
+  })
 })
 
 describe('an agent reading a sketch', () => {

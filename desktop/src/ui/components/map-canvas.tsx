@@ -15,16 +15,20 @@ import { sentenceOf, type Said } from '../../modules/wording/index.js'
 import { ArrowLeft, Copy as CopyIcon, Trash2 } from 'lucide-react'
 import { roomKey } from '../../modules/arrangements/schema.js'
 import type { Layer } from '../../modules/annotations/index.js'
+import type { CardType } from '../../modules/card-types/schema.js'
+import type { CardLook } from '../../modules/sketches/schema.js'
 import { addLayer, changeAnnotation, changeLayer, duplicateAnnotations, layerOf, placeAnnotation, removeAnnotations, removeLayer } from './annotation-edits.js'
 import { AnnotationLayer, AnnotationPlacer, drawnOn } from './annotation-layer.js'
 import { AnnotationLibrary, LayersPanel } from './annotation-library.js'
 import { COLOR_NAMES, COLORS, shapeOf } from './annotation-shapes.js'
+import { CARD_SHAPES, drawnShape } from './card-looks.js'
+import { meetOutline, seamOf, textAreaOf } from './shape-outline.js'
 import { CanvasMenu, type MenuItem } from './canvas-menu.js'
 import { CardPalette } from './card-palette.js'
 import { hotkeyFor } from './hotkeys.js'
 import { KeyList } from './key-list.js'
 import { ContextBar, type Picking } from './context-bar.js'
-import { Glyph, KindGlyph, keeps, kindClass } from './kind-glyph.js'
+import { Glyph, KindGlyph, LookGlyph, keeps, kindClass, lookClass } from './kind-glyph.js'
 import {
   boundsOf,
   isFrame,
@@ -36,6 +40,8 @@ import {
   sizeOf,
   spread,
   wirePath,
+  wireThrough,
+  type AnnoThing,
   type Box,
   type DrawnCard,
   type DrawnNote,
@@ -47,7 +53,7 @@ import {
 } from './map-layout.js'
 import { Overview } from './overview.js'
 import { QuickAdd } from './quick-add.js'
-import { kindGroups, levelInside, type Alignment, type Arrangement } from './sketch-edits.js'
+import { choicesAt, endsAtHub, hubOfWire, levelInside, ownTypesAt, type Alignment, type Arrangement, type CardChoice } from './sketch-edits.js'
 import { ToolRail } from './tool-rail.js'
 import { ZoomBar } from './zoom-bar.js'
 
@@ -74,14 +80,14 @@ export type Drawing = {
   onSelect: (ids: string[]) => void
   /** Pins every card on a level where the canvas laid it out, so it stays. */
   onPin: (arrangement: Arrangement) => void
-  /** A card of a kind, centred on a spot, wired from another card if given.
-   *  Hands back the new card's id. */
-  onPlace: (at: Spot, kind: string, from?: string) => string
+  /** A card of a kind, centred on a spot, wired from another card if given,
+   *  or to a hub the way the hub's wire runs. Hands back the new card's id. */
+  onPlace: (at: Spot, kind: string, from?: string, hub?: { into: boolean; kind: string }, look?: CardLook) => string
   onNote: (at: Spot) => string
   /** Puts things down where they were dragged. Joining makes the move one
    *  step with the one before, as when Alt and drag copied what it carries. */
   onMove: (moves: Arrangement, join?: boolean) => void
-  onWire: (from: string, to: string) => string
+  onWire: (from: string, to: string, kind?: string) => string
   onRewire: (id: string, end: 'from' | 'to', card: string) => void
   /** A card's name, a wire's words, or a note's words; or, for a card,
    *  what it is for. Writing the first words of something just made joins
@@ -96,7 +102,13 @@ export type Drawing = {
   /** Copies things where they are, and hands back the copies' ids. */
   onDuplicate: (ids: string[], by?: number) => string[]
   onSelectAll: () => void
-  onKind: (id: string, kind: string) => void
+  onKind: (id: string, kind: string, look?: CardLook) => void
+  /** The types of card a person has saved, and changing them. */
+  cardTypes: CardType[]
+  onCardTypes: (types: CardType[]) => void
+  /** Over the map, what is drawn gets built, so a card has to be a kind the
+   *  code can have. Left out, a person makes up their own types. */
+  codeKinds?: boolean
   onMockup: (id: string) => void
   onRemove: (ids: string[]) => void
   onAlign: (ids: string[], how: Alignment) => void
@@ -331,6 +343,37 @@ const Inside = ({ card }: { card: DrawnCard }) => {
 
 const SIDES: Side[] = ['n', 'e', 's', 'w']
 
+/** The outline of a card that is not a plain box, if it is one. */
+const outlineOf = (card: DrawnCard): string => {
+  const shape = drawnShape(card)
+  return shape ? CARD_SHAPES[shape].d : ''
+}
+
+/** A place on the border of an open card that a wire from outside meets, for
+ *  the parts inside to wire to. */
+type Hub = {
+  id: string
+  at: Spot
+  /** The wire comes in here, rather than going out. */
+  into: boolean
+  kind: string
+  /** The card at the other end of the wire. */
+  name: string
+  /** The level the open card sits on. */
+  depth: number
+  wire: string
+}
+
+/** How wide a hub is on the board. */
+const HUB_SIZE = 16
+
+/** How far a level is from the one in hand: how faded it is. */
+const upClass = (up: number): string => (up > 0 ? ` map-up map-up--${Math.min(up, 3)}` : '')
+
+/** Everything the library offers on a level, in one list. */
+const pickChoice = (level: Parameters<typeof choicesAt>[0], types: CardType[], codeKinds: boolean): CardChoice[] =>
+  choicesAt(level, types, codeKinds).flatMap((group) => group.choices)
+
 /** What a card's mark says, drawn over the map by a proposal. */
 const STATE_WORDS: Record<string, string> = { proposed: 'To build', built: 'Built', gone: 'To remove' }
 
@@ -339,7 +382,8 @@ const CardFace = ({
   picture,
   opens,
   selected,
-  receded,
+  up,
+  linked,
   target,
   handles,
   movable,
@@ -360,7 +404,11 @@ const CardFace = ({
   agent?: string
   opens: boolean
   selected: boolean
-  receded: boolean
+  /** How many levels out from the one in hand it is. Past none, it cannot be
+   *  touched until a person has backed out to it. */
+  up: number
+  /** Under the pointer, or wired to what is. */
+  linked?: 'self' | 'wired'
   /** A wire being drawn would land here. */
   target: boolean
   /** Show the dots a wire can be drawn from. */
@@ -375,47 +423,77 @@ const CardFace = ({
   onEdit?: (says?: boolean) => void
 }) => {
   const { card, box } = placed
+  const locked = up > 0
+  const reachable = !locked && (opens || drawing)
+  const shape = drawnShape(card)
+  const area = shape ? textAreaOf(CARD_SHAPES[shape].d) : null
   const classes = ['map-card', `map-card--${card.level}`, kindClass(card.kind)]
+  if (card.look) classes.push(lookClass(card.look))
+  if (shape) classes.push('map-card--shaped', `map-card--shape-${shape}`)
+  if (linked) classes.push(`map-card--${linked === 'self' ? 'hovered' : 'wired'}`)
   if (keeps(card.kind)) classes.push('map-card--keeps')
   if (!card.setUp || card.kind === 'shallow software system') classes.push('map-card--bare')
   if (card.kind === 'person') classes.push('map-card--person')
   if (isFrame(card)) classes.push('map-frame')
   if (selected) classes.push('map-card--selected')
-  if (receded) classes.push('map-card--outside')
+  if (locked) classes.push('map-up', `map-up--${Math.min(up, 3)}`)
   if (target) classes.push('map-card--target')
   if (drawing) classes.push('map-card--drawn')
-  if (movable) classes.push('map-card--movable')
+  if (movable && !locked) classes.push('map-card--movable')
   if (card.state) classes.push(`map-card--${card.state}`)
   if (agent !== undefined) classes.push('map-card--agent')
   const mockup = drawing ? '' : (card.mockup ?? '')
   const onField = (says: boolean) =>
-    drawing && onEdit
+    drawing && onEdit && !locked
       ? (event: { stopPropagation: () => void }): void => {
           event.stopPropagation()
           onEdit(says)
         }
       : undefined
+  const words = (
+    <>
+      <div className="map-kind">
+        <span className="map-glyph">{card.look ? <LookGlyph icon={card.look.icon} /> : <KindGlyph kind={card.kind} />}</span>
+        <span className="map-kind-word">{kindWords(card)}</span>
+      </div>
+      <div className="map-name" onDoubleClick={onField(false)}>
+        {card.name || <span className="map-more">Unnamed</span>}
+      </div>
+      {card.says ? (
+        <div className="map-says" onDoubleClick={onField(true)}>
+          {card.says}
+        </div>
+      ) : null}
+      {shape ? null : <Inside card={card} />}
+    </>
+  )
   return (
     <div
       className={classes.join(' ')}
       data-card={card.id}
       style={{ left: box.x, top: box.y, width: box.w, height: box.h }}
-      role={opens || drawing ? 'button' : undefined}
+      role={reachable ? 'button' : undefined}
       aria-label={drawing ? card.name || 'Unnamed card' : opens ? `Open ${card.name}` : card.name}
-      aria-pressed={drawing ? selected : undefined}
-      tabIndex={opens || drawing ? 0 : undefined}
-      onPointerDown={onPress}
+      aria-pressed={drawing && !locked ? selected : undefined}
+      aria-disabled={locked || undefined}
+      tabIndex={reachable ? 0 : undefined}
+      onPointerDown={locked ? undefined : onPress}
       onClick={(event) => event.stopPropagation()}
       onDoubleClick={(event) => {
         event.stopPropagation()
-        if (opens) onOpen()
+        if (opens && !locked) onOpen()
       }}
       onKeyDown={(event) => {
         // Enter is the way in without a mouse. While drawing it does nothing:
         // a card's fields open with a double-click.
-        if (!drawing && opens && event.key === 'Enter') onOpen()
+        if (!drawing && opens && !locked && event.key === 'Enter') onOpen()
       }}
     >
+      {shape ? (
+        <svg className="map-card-outline" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <path d={CARD_SHAPES[shape].d} vectorEffect="non-scaling-stroke" />
+        </svg>
+      ) : null}
       {isFrame(card) ? (
         <>
           <div className="map-frame-bar">
@@ -456,24 +534,15 @@ const CardFace = ({
             <span className="map-name">{card.name || <span className="map-more">Unnamed</span>}</span>
           </div>
         </>
+      ) : area ? (
+        <div
+          className="map-card-words"
+          style={{ left: `${area.x * 100}%`, top: `${area.y * 100}%`, width: `${area.w * 100}%`, height: `${area.h * 100}%` }}
+        >
+          {words}
+        </div>
       ) : (
-        <>
-          <div className="map-kind">
-            <span className="map-glyph">
-              <KindGlyph kind={card.kind} />
-            </span>
-            <span className="map-kind-word">{kindWords(card)}</span>
-          </div>
-          <div className="map-name" onDoubleClick={onField(false)}>
-            {card.name || <span className="map-more">Unnamed</span>}
-          </div>
-          {card.says ? (
-            <div className="map-says" onDoubleClick={onField(true)}>
-              {card.says}
-            </div>
-          ) : null}
-          <Inside card={card} />
-        </>
+        words
       )}
       {extra ? (
         <span
@@ -494,11 +563,20 @@ const CardFace = ({
           {agent || 'Agent working here'}
         </span>
       ) : null}
-      {handles && onHandle
+      {handles && onHandle && !locked
         ? SIDES.map((side) => (
             <span
               key={side}
               className={`map-handle map-handle--${side}`}
+              // On a shape, a dot sits on the shape's real edge.
+              style={
+                shape
+                  ? (() => {
+                      const seam = seamOf(CARD_SHAPES[shape].d, { x: 0, y: 0, w: box.w, h: box.h }, side)
+                      return { left: seam.x, top: seam.y }
+                    })()
+                  : undefined
+              }
               title="Click to add a card here, wired; drag to wire it to another card"
               onPointerDown={(event) => {
                 event.stopPropagation()
@@ -524,6 +602,7 @@ const Sentence = ({
   selected,
   pickable,
   lit,
+  up,
   movable,
   hidden,
   measure,
@@ -544,6 +623,8 @@ const Sentence = ({
   pickable: boolean
   /** The card at one end of its wire is under the pointer. */
   lit: boolean
+  /** How many levels out from the one in hand it is. */
+  up: number
   /** It can be dragged out of the way. */
   movable: boolean
   hidden: boolean
@@ -559,6 +640,7 @@ const Sentence = ({
   if (pickable) classes.push('map-sentence--pickable')
   if (movable) classes.push('map-sentence--movable')
   if (lit) classes.push('map-sentence--lit')
+  if (up > 0) classes.push('map-up', `map-up--${Math.min(up, 3)}`)
   const words = said.map((part) => part.text).join('')
   return (
     <div
@@ -646,7 +728,7 @@ export const MapCanvas = ({
       remember('codegraph-palette', next)
       return next
     })
-  /** A kind waiting to be placed with a click on the board. */
+  /** Something from the library waiting to be placed with a click, by its key. */
   const [armed, setArmed] = useState('')
   // Annotations: the library and the layers list, a shape waiting to be put
   // down, what is picked and what is being typed into, and which layer new
@@ -722,14 +804,17 @@ export const MapCanvas = ({
   /** Things can be moved about on a sketch, and on a map that says so. */
   const canMove = Boolean(drawing) || Boolean(rearranging)
   const trail = useMemo(() => walk(root, path), [root, path])
-  /** The level being worked on: the one last pressed, among the cards open.
-   *  Everything drawn or moved goes there. */
-  const [workId, setWorkId] = useState('')
-  const workAt = ((): number => {
-    const at = trail.findIndex((card) => card.id === workId)
-    return at < 0 ? trail.length - 1 : at
-  })()
+  /** The level in hand: the innermost card open. Everything drawn or moved
+   *  goes there, and nothing outside it can be touched until a person has
+   *  backed out to it (ADR 0012). */
+  const workAt = trail.length - 1
   const focus = trail[workAt]!
+  const typesHere = drawing?.cardTypes
+  /** What the library and the quick menu offer on this level. */
+  const choices = useMemo(
+    () => (drawing ? pickChoice(levelInside[focus.level], typesHere ?? [], Boolean(drawing.codeKinds)) : []),
+    [drawing?.codeKinds, Boolean(drawing), focus.level, typesHere],
+  )
 
   // Where a person has moved a map's cards and sentences. It is laid over the
   // map rather than written into it, so re-reading the code leaves it alone.
@@ -749,6 +834,25 @@ export const MapCanvas = ({
       }
     },
     [spotsAt],
+  )
+
+  /** The annotations on a level, for it to keep them clear of an open card. A
+   *  line is only as much as its loose ends: an end holding something goes
+   *  with whatever it holds. */
+  const annosOf = useCallback(
+    (level: string): AnnoThing[] =>
+      (annotating?.layers ?? [])
+        .filter((layer) => layer.shown)
+        .flatMap((layer) => layer.items)
+        .filter((a) => a.at === level)
+        .flatMap((a): AnnoThing[] => {
+          if (!a.from) return [{ id: a.id, box: { x: a.x, y: a.y, w: a.w, h: a.h }, near: a.near, around: Boolean(shapeOf(a.kind).behind) }]
+          const ends: AnnoThing[] = []
+          if ('x' in a.from) ends.push({ id: `${a.id}:from`, box: { x: a.from.x, y: a.from.y, w: 0, h: 0 } })
+          if (a.to && 'x' in a.to) ends.push({ id: `${a.id}:to`, box: { x: a.to.x, y: a.to.y, w: 0, h: 0 } })
+          return ends
+        }),
+    [annotating?.layers],
   )
 
   // What is on each level of the cards that are open, with anything being
@@ -774,9 +878,10 @@ export const MapCanvas = ({
             const to = moves?.get(note.id)
             return to ? { ...note, x: to.x, y: to.y } : note
           }),
+          annos: annosOf(card.id),
         }
       }),
-    [trail, workAt, asPut, live.moves],
+    [trail, workAt, asPut, live.moves, annosOf],
   )
 
   const anchors = useRef(new Map<string, Spot>())
@@ -834,6 +939,7 @@ export const MapCanvas = ({
       placed: level.placed.map((p) => ({ card: p.card, box: slide(p.card.id, p.box) })),
       noteBoxes: level.noteBoxes.map((n) => ({ note: n.note, box: slide(n.note.id, n.box) })),
       open: level.open ? { card: level.open.card, box: slide(level.open.card.id, level.open.box) } : null,
+      annoBoxes: new Map([...level.annoBoxes].map(([id, box]) => [id, slide(id, box)])),
     }))
   }, [levels, settling])
 
@@ -873,12 +979,28 @@ export const MapCanvas = ({
     return all
   }, [shown])
 
-  /** Every wire on screen, with its curve, its sentence, and where that sits. */
+  const canDraw = Boolean(drawing)
+  const cardBoxes = useMemo(() => [...where.values()], [where])
+  const shapedAt = useMemo(() => {
+    const all = new Map<string, string>()
+    for (const p of everyCard) {
+      const d = outlineOf(p.card)
+      if (d) all.set(p.card.id, d)
+    }
+    return all
+  }, [everyCard])
+
+  /** Every wire on screen, with its curve, its sentence, and where that sits,
+   *  and the hubs where those wires meet the border of an open card. A level's
+   *  hubs are worked out before the level inside it, whose wires end there. */
   const shapes = useMemo(() => {
+    const boxes = new Map(where)
+    const names = new Map(nameOf)
+    const hubs: Hub[] = []
     const draw = (level: OpenLevel, depth: number) => {
       const outs = new Map<string, string[]>()
       const ins = new Map<string, string[]>()
-      const height = (id: string): number => where.get(id)?.y ?? 0
+      const height = (id: string): number => boxes.get(id)?.y ?? 0
       for (const wire of level.wires) {
         outs.set(wire.from, [...(outs.get(wire.from) ?? []), wire.to])
         ins.set(wire.to, [...(ins.get(wire.to) ?? []), wire.from])
@@ -889,9 +1011,13 @@ export const MapCanvas = ({
         return (list.indexOf(other) + 1) / (list.length + 1)
       }
       const slots = (from: string, to: string): Slots => ({ from: share(outs, from, to), to: share(ins, to, from) })
-      return level.wires.flatMap((wire) => {
-        const from = where.get(wire.from)
-        const to = where.get(wire.to)
+      const fitTo = (id: string, box: Box): ((at: Spot) => Spot) | undefined => {
+        const d = shapedAt.get(id)
+        return d ? (at) => meetOutline(d, box, at) : undefined
+      }
+      const rows = level.wires.flatMap((wire) => {
+        const from = boxes.get(wire.from)
+        const to = boxes.get(wire.to)
         if (!from || !to) return []
         const key = keyOf(wire)
         return [
@@ -899,12 +1025,25 @@ export const MapCanvas = ({
             wire,
             key,
             depth,
-            shape: wirePath(from, to, slots(wire.from, wire.to), [...where.values()]),
+            shape: wirePath(from, to, slots(wire.from, wire.to), cardBoxes, { from: fitTo(wire.from, from), to: fitTo(wire.to, to) }),
             small: (ins.get(wire.to) ?? []).length > BUSY,
-            said: sentenceOf(nameOf.get(wire.from) ?? '', wire.kind, nameOf.get(wire.to) ?? '', wire.words),
+            said: sentenceOf(names.get(wire.from) ?? '', wire.kind, names.get(wire.to) ?? '', wire.words),
           },
         ]
       })
+      const open = level.open?.card.id
+      if (open && canDraw)
+        for (const { wire, shape, key } of rows) {
+          if (!wire.id || (wire.to !== open && wire.from !== open)) continue
+          const into = wire.to === open
+          const at = into ? shape.head : shape.tail
+          const id = hubOfWire(wire.id)
+          const name = names.get(into ? wire.from : wire.to) ?? ''
+          boxes.set(id, { x: at.x - HUB_SIZE / 2, y: at.y - HUB_SIZE / 2, w: HUB_SIZE, h: HUB_SIZE })
+          names.set(id, name)
+          hubs.push({ id, at, into, kind: wire.kind, name, depth, wire: key })
+        }
+      return rows
     }
     const all = shown.flatMap(draw)
     // Each sentence keeps clear of every card and of every other sentence,
@@ -913,24 +1052,34 @@ export const MapCanvas = ({
       all.map((one) => {
         const size = sizes[one.key]
         const level = shown[one.depth]!
-        // A sentence a person has moved stays put, unless opening a card has
-        // pushed one of the cards it joins, when it goes with its wire.
+        // A sentence under the hand goes where the hand has it. One a person
+        // has moved stays put, unless opening a card has pushed one of the
+        // cards it joins, when it goes with its wire.
+        const held = one.depth === workAt ? live.moves?.get(one.key) : undefined
         const put =
           one.wire.x !== undefined && one.wire.y !== undefined && !level.pushed.has(one.wire.from) && !level.pushed.has(one.wire.to)
         return {
-          at: put ? { x: one.wire.x! + level.shift.x, y: one.wire.y! + level.shift.y } : one.shape.at,
+          at: held
+            ? { x: held.x + level.shift.x, y: held.y + level.shift.y }
+            : put
+              ? { x: one.wire.x! + level.shift.x, y: one.wire.y! + level.shift.y }
+              : one.shape.at,
           w: size?.w ?? (one.small ? 60 : sentenceWidth(one.wire)),
           h: size?.h ?? 24,
           tail: one.shape.tail,
           head: one.shape.head,
-          fixed: put,
+          fixed: Boolean(held) || put,
         }
       }),
       [...everyCard.map((p) => p.box), ...everyNote.map((n) => n.box)],
     )
-    const at = all.map((one, i) => ({ ...one, at: spots[i]! }))
-    return { all: at, outer: at.filter((one) => one.depth !== workAt), inner: at.filter((one) => one.depth === workAt) }
-  }, [shown, where, nameOf, sizes, everyCard, everyNote, workAt])
+    // The wire is drawn through its sentence, wherever that ended up.
+    const at = all.map((one, i) => ({ ...one, at: spots[i]!, shape: { ...one.shape, d: wireThrough(one.shape, spots[i]!) } }))
+    return { all: at, outer: at.filter((one) => one.depth !== workAt), inner: at.filter((one) => one.depth === workAt), hubs, boxes }
+  }, [shown, where, cardBoxes, shapedAt, canDraw, nameOf, sizes, everyCard, everyNote, workAt, live.moves])
+
+  /** The hubs on the border of the card open now: the only ones in reach. */
+  const hubsHere = useMemo(() => shapes.hubs.filter((hub) => hub.depth + 1 === workAt), [shapes.hubs, workAt])
 
   // Sentences are measured as drawn, so the next layout keeps each one clear
   // of the cards at its true size rather than a guess at it.
@@ -999,14 +1148,30 @@ export const MapCanvas = ({
   }, [selected, hover, children, wires, where])
 
   /** The wires of the card under the pointer, which light up so a person can
-   *  see at a glance what reaches it and what it reaches. */
-  const lit = useMemo(() => {
-    if (!hover) return new Set<string>()
+   *  see at a glance what reaches it and what it reaches, and the cards at
+   *  their other ends. A wire to a hub carries on along the hub's own wire. */
+  const { lit, linked, litHubs } = useMemo(() => {
     const keys = new Set<string>()
-    for (const one of shapes.all)
-      if (one.wire.from === hover || one.wire.to === hover) keys.add(one.key)
-    return keys
-  }, [hover, shapes])
+    const cards = new Set<string>()
+    const hubIds = new Set<string>()
+    if (!hover || live.moves) return { lit: keys, linked: cards, litHubs: hubIds }
+    cards.add(hover)
+    const follow = (one: (typeof shapes.all)[number]): void => {
+      keys.add(one.key)
+      for (const end of [one.wire.from, one.wire.to]) {
+        if (!endsAtHub(end)) {
+          cards.add(end)
+          continue
+        }
+        hubIds.add(end)
+        const hub = shapes.hubs.find((h) => h.id === end)
+        const outer = hub && shapes.all.find((other) => other.key === hub.wire)
+        if (outer && !keys.has(outer.key)) follow(outer)
+      }
+    }
+    for (const one of shapes.all) if (one.wire.from === hover || one.wire.to === hover) follow(one)
+    return { lit: keys, linked: cards, litHubs: hubIds }
+  }, [hover, shapes, live.moves])
 
   const fitted = useCallback((): View => {
     const el = frame.current
@@ -1068,9 +1233,12 @@ export const MapCanvas = ({
       const opened = path.filter((id) => !was.includes(id))
       for (const id of opened) viewsAt.current.set(id, now)
       setSettling({ from: drawnAt.current, t: 0 })
-      setWorkId(path[path.length - 1] ?? '')
       drawing?.onLevel(path[path.length - 1] ?? '')
       select([])
+      setAnnoPicked([])
+      setAnnoEditing('')
+      // What was under the pointer may have just opened, or gone out of reach.
+      setHover('')
       setEditing(null)
       setQuick(null)
       const around = levels.at(-2)
@@ -1102,7 +1270,11 @@ export const MapCanvas = ({
       }
     }
     drawnPath.current = path
-    drawnAt.current = new Map([...where, ...everyNote.map((n) => [n.note.id, n.box] as const)])
+    drawnAt.current = new Map([
+      ...where,
+      ...everyNote.map((n) => [n.note.id, n.box] as const),
+      ...shown.flatMap((level) => [...level.annoBoxes]),
+    ])
   })
 
   useEffect(() => {
@@ -1158,15 +1330,6 @@ export const MapCanvas = ({
 
   /** Backing out one level. */
   const backOut = useCallback((): void => closeCard(trail.length - 1), [closeCard, trail.length])
-
-  /** Starts work on another level of what is open. */
-  const workOn = (depth: number): void => {
-    const id = trail[depth]!.id
-    setWorkId(id)
-    drawing?.onLevel(id)
-    select([])
-    setQuick(null)
-  }
 
   /** Fills the screen with one card, without going into it: a way to read a
    *  crowded level one card at a time. */
@@ -1280,15 +1443,18 @@ export const MapCanvas = ({
     setTimeout(() => setEditing({ id, text: '', was: '', first: true, since: Date.now() }), 0)
   }
 
-  /** A card put down, and then straight into writing its name. */
+  /** A card put down, and then straight into writing its name. It is made from
+   *  whatever the library has under that key, or else as that kind. */
   const placeAt = useCallback(
-    (at: Spot, kind: string, from = ''): void => {
+    (at: Spot, key: string, from = '', look?: CardLook): void => {
       if (!drawing) return
-      const id = drawing.onPlace(at, kind, from)
+      const choice = choices.find((one) => one.key === key)
+      const hub = shapes.hubs.find((one) => one.id === from)
+      const id = drawing.onPlace(at, choice?.kind ?? key, from, hub ? { into: hub.into, kind: hub.kind } : undefined, look ?? choice?.look)
       drawing.onSelect([id])
       writeSoon(id)
     },
-    [drawing],
+    [drawing, choices, shapes.hubs],
   )
 
   /** A note is a sticky note: an annotation, put on the layer in use and
@@ -1382,9 +1548,8 @@ export const MapCanvas = ({
       else if (hotkey.do === 'shape') armShape(hotkey.kind)
       else if (hotkey.do === 'card') {
         // The numbers count down the card library, so they follow the level.
-        const inside = levelInside[focus.level]
-        const kind = inside === focus.level ? undefined : kindGroups(inside).flatMap((group) => group.kinds)[hotkey.index]
-        if (kind) armCard(kind)
+        const key = levelInside[focus.level] === focus.level ? undefined : choices[hotkey.index]?.key
+        if (key) armCard(key)
       } else if (hotkey.do === 'palette') setPalette((open) => !open)
       else if (hotkey.do === 'keys') setKeysOpen((open) => !open)
       else if (hotkey.do === 'layers') setLayersOpen((open) => !open)
@@ -1407,7 +1572,7 @@ export const MapCanvas = ({
       window.removeEventListener('keydown', down)
       window.removeEventListener('keyup', up)
     }
-  }, [backOut, drawing, fit, zoomBy, quick, armed, tool, selected, startEditing, hover, frameOn, annotating, annoArmed, annoPicked, select, keysOpen, focus.level, ready])
+  }, [backOut, drawing, fit, zoomBy, quick, armed, tool, selected, startEditing, hover, frameOn, annotating, annoArmed, annoPicked, select, keysOpen, focus.level, ready, choices])
 
   useEffect(() => {
     if (!layerSaid) return
@@ -1425,7 +1590,13 @@ export const MapCanvas = ({
 
   /** The diagram's cards on this level, as annotations see them: something
    *  to line up with and keep beside, never the other way round. */
-  const annoCards = useMemo(() => placed.map((p) => ({ id: p.card.id, box: p.box })), [placed])
+  const annoCards = useMemo(() => placed.map((p) => ({ id: p.card.id, box: p.box, d: outlineOf(p.card) })), [placed])
+  /** The same for any level, with the card open on it, so a line holding that
+   *  card still has something to hold. */
+  const annoCardsOf = (level: OpenLevel): { id: string; box: Box; d: string }[] => [
+    ...level.placed.map((p) => ({ id: p.card.id, box: p.box, d: outlineOf(p.card) })),
+    ...(level.open ? [{ id: level.open.card.id, box: level.open.box, d: '' }] : []),
+  ]
 
 
   // Picking a card lets go of any annotation, and the other way round.
@@ -1475,13 +1646,6 @@ export const MapCanvas = ({
     if (!picked.includes(id)) return
     const starts = new Map<string, Box>()
     for (const p of laid) if (picked.includes(p.card.id)) starts.set(p.card.id, { ...p.box, x: p.box.x - shift.x, y: p.box.y - shift.y })
-    // A card open on this level is carried by where it sits when closed, and
-    // takes what is inside it along.
-    const openHere = levels[workAt]!.open?.card.id
-    if (openHere && picked.includes(openHere)) {
-      const sits = levels[workAt]!.natural.find((p) => p.card.id === openHere)
-      if (sits) starts.set(openHere, sits.box)
-    }
     for (const n of notes) if (picked.includes(n.id)) starts.set(n.id, { x: n.x, y: n.y, w: 180, h: 60 })
     // Alt and drag leaves the originals where they are and carries copies,
     // the way a diagram tool does.
@@ -1512,44 +1676,13 @@ export const MapCanvas = ({
     pending.current = event.pointerId
   }
 
-  /** What a press on another level has to remember, to happen again once that
-   *  level is the one being worked on. */
-  const heldPress = <T extends HTMLElement>(event: PointerEvent<T>): PointerEvent<T> =>
-    ({
-      pointerId: event.pointerId,
-      button: event.button,
-      clientX: event.clientX,
-      clientY: event.clientY,
-      shiftKey: event.shiftKey,
-      ctrlKey: event.ctrlKey,
-      metaKey: event.metaKey,
-      altKey: event.altKey,
-      stopPropagation: () => undefined,
-    }) as unknown as PointerEvent<T>
-
-  /** Pressing a card or a note on any level: the press makes that level the
-   *  one being worked on, then does what it would have done there. */
-  const pressOn = (depth: number, id: string) => (event: PointerEvent<HTMLElement>): void => {
-    if (depth === workAt) {
-      press(id)(event)
-      return
-    }
-    if (event.button !== 0) return
-    event.stopPropagation()
-    if (editing) finishEditing(true)
-    const held = heldPress(event)
-    workOn(depth)
-    again.current = () => latest.current.press(id)(held)
-  }
-
-  /** Pressing a handle on an open card, to change how much room it has. */
+  /** Pressing a handle on the open card, to change how much room it has. */
   const pressGrip = (depth: number, id: string, grip: Grip) => (event: PointerEvent<HTMLSpanElement>): void => {
     if (event.button !== 0) return
     event.stopPropagation()
     if (editing) finishEditing(true)
     setQuick(null)
     setMenu(null)
-    if (depth !== workAt) workOn(depth)
     gesture.current = { type: 'resize', id, depth, grip, grab: worldOf(event), start: levels[depth]!.room, moved: false }
     pending.current = event.pointerId
   }
@@ -1578,18 +1711,32 @@ export const MapCanvas = ({
     pending.current = event.pointerId
   }
 
-  const pressHandle = (depth: number, id: string) => (side: Side, event: PointerEvent<HTMLSpanElement>): void => {
+  const pressHandle = (id: string) => (side: Side, event: PointerEvent<HTMLSpanElement>): void => {
     if (!drawing) return
     setQuick(null)
-    if (depth !== workAt) {
-      if (editing) finishEditing(true)
-      const held = heldPress(event)
-      workOn(depth)
-      again.current = () => latest.current.pressHandle(depth, id)(side, held)
-      return
-    }
     gesture.current = { type: 'connect', from: id, side, moved: false, sx: event.clientX, sy: event.clientY }
     pending.current = event.pointerId
+  }
+
+  /** Pressing a hub, to wire it to a part inside the card. */
+  const pressHub = (id: string) => (event: PointerEvent<HTMLElement>): void => {
+    if (!drawing || event.button !== 0) return
+    event.stopPropagation()
+    setQuick(null)
+    if (editing) finishEditing(true)
+    gesture.current = { type: 'connect', from: id, side: null, moved: false, sx: event.clientX, sy: event.clientY }
+    pending.current = event.pointerId
+  }
+
+  /** What a wire being drawn lands on: a card, or a hub, unless that hub runs
+   *  the wrong way for the end being moved. Two hubs never join. */
+  const landing = (at: Spot, from: string, end?: 'from' | 'to'): string => {
+    const reach = 16 / seen.current.k
+    if (!endsAtHub(from)) {
+      const hub = hubsHere.find((one) => Math.hypot(one.at.x - at.x, one.at.y - at.y) < reach)
+      if (hub && (!end || (end === 'from') === hub.into)) return hub.id
+    }
+    return cardUnder(at, from)
   }
 
   /** Pressing one end of a picked wire, to point it at another card. */
@@ -1618,7 +1765,7 @@ export const MapCanvas = ({
           : side === 's'
             ? { x: centre.x, y: centre.y + box.h / 2 + gapDown + size.h / 2 }
             : { x: centre.x, y: centre.y - box.h / 2 - gapDown - size.h / 2 }
-    placeAt(at, source.card.kind, id)
+    placeAt(at, source.card.kind, id, source.card.look)
   }
 
   /** The menu for a right-click, on what is under the pointer or the board. */
@@ -1650,17 +1797,16 @@ export const MapCanvas = ({
   }
 
   const down = (event: PointerEvent<HTMLDivElement>): void => {
-    // A press on the board works on the level it landed on: inside an open
-    // card, or out around it. A card picked from the library is of the level
-    // it was picked for, so it stays there and that card grows to reach it.
-    const under = levelAt(worldOf(event))
-    if (!armed && under !== workAt) {
+    // Out around the open card nothing can be touched, but the board still
+    // moves. A card picked from the library is of the level in hand, so it
+    // stays there and the open card grows to reach it.
+    if (!armed && levelAt(worldOf(event)) !== workAt) {
       if (editing) finishEditing(true)
       setAnnoPicked([])
+      setQuick(null)
       setMenu(null)
-      const held = heldPress(event)
-      workOn(under)
-      again.current = () => latest.current.down(held)
+      gesture.current = { type: 'pan', x: event.clientX, y: event.clientY, vx: view.x, vy: view.y, moved: false, button: event.button }
+      capture(event)
       return
     }
     setAnnoPicked([])
@@ -1800,10 +1946,10 @@ export const MapCanvas = ({
       if (!now.moved && Math.hypot(event.clientX - now.sx, event.clientY - now.sy) < 4) return
       now.moved = true
       hold()
-      const source = where.get(now.from)
+      const source = shapes.boxes.get(now.from)
       if (!source) return
-      const target = cardUnder(at, now.from)
-      const targetBox = target ? where.get(target) : undefined
+      const target = landing(at, now.from, now.rewire?.end)
+      const targetBox = target ? shapes.boxes.get(target) : undefined
       const from = now.side ? sideOf(source, now.side) : sideOf(source, facing(source, at))
       const to = targetBox ? sideOf(targetBox, facing(targetBox, sideOf(source, 'e'))) : at
       setLive({ line: { from, to, target } })
@@ -1874,7 +2020,7 @@ export const MapCanvas = ({
     const at = worldOf(event)
     if (now.type === 'pan') {
       dragged.current = now.moved
-      if (!now.moved && now.button === 2 && canMove) openMenu(event, at)
+      if (!now.moved && now.button === 2 && canMove && levelAt(at) === workAt) openMenu(event, at)
       // A click on the empty board, not a drag, lets go of what is picked.
       else if (!now.moved && now.button === 0 && canMove && tool === 'pick') select([])
       return
@@ -1926,13 +2072,17 @@ export const MapCanvas = ({
         if (now.side && !now.rewire) besideOf(now.from, now.side)
         return
       }
-      const target = cardUnder(at, now.from)
+      const target = landing(at, now.from, now.rewire?.end)
       if (now.rewire) {
         if (target) drawing.onRewire(now.rewire.id, now.rewire.end, target)
         return
       }
       if (target) {
-        const id = drawing.onWire(now.from, target)
+        // A wire with a hub at one end runs the way the hub's own wire does.
+        const hub = shapes.hubs.find((one) => one.id === target || one.id === now.from)
+        const other = hub?.id === target ? now.from : target
+        const [from, to] = hub ? (hub.into ? [hub.id, other] : [other, hub.id]) : [now.from, target]
+        const id = drawing.onWire(from, to, hub?.kind)
         drawing.onSelect([id])
         return
       }
@@ -1966,16 +2116,6 @@ export const MapCanvas = ({
       window.removeEventListener('pointerup', drop)
     }
   }, [lifting, placeAt, shift])
-
-  // A press on another level happens once that level is the one in hand.
-  const latest = useRef({ press, pressHandle, down })
-  latest.current = { press, pressHandle, down }
-  const again = useRef<(() => void) | null>(null)
-  useLayoutEffect(() => {
-    const press = again.current
-    again.current = null
-    press?.()
-  })
 
   /** Annotations pressed on the level they belong to, by that level's card. */
   const annoLevel = useMemo(
@@ -2013,6 +2153,7 @@ export const MapCanvas = ({
           what: 'card',
           id,
           kind: card.card.kind,
+          look: card.card.look,
           level: card.card.level,
           page: card.card.kind === 'page',
           opens: canOpen(card.card),
@@ -2108,7 +2249,7 @@ export const MapCanvas = ({
         key={key}
         className={`map-wire map-wire--${wire.kind.replace(/\s+/g, '-')}${
           drawing && wire.id && selected.includes(wire.id) ? ' map-wire--selected' : ''
-        }${depth < workAt ? ' map-wire--outside' : ''}${wire.state ? ` map-wire--${wire.state}` : ''}${
+        }${upClass(workAt - depth)}${wire.state ? ` map-wire--${wire.state}` : ''}${
           lit.has(key) ? ' map-wire--lit' : ''
         }`}
       >
@@ -2132,12 +2273,16 @@ export const MapCanvas = ({
     ))
 
   const editingBox = editing ? where.get(editing.id) : undefined
-  /** The name of an open card is written in its lip, over its border. */
-  const editingOpen = editing ? shown.some((level) => level.open?.card.id === editing.id) : false
+  /** On a shaped card, the words are written where its words go. */
+  const editingCard = editing ? placed.find((p) => p.card.id === editing.id)?.card : undefined
+  const editingShape = editingCard ? drawnShape(editingCard) : null
+  const editingArea = editingShape && editingBox ? textAreaOf(CARD_SHAPES[editingShape].d) : null
   const editingNote = editing ? noteBoxes.find((n) => n.note.id === editing.id) : undefined
   const editingWire = editing ? shapes.inner.find((one) => one.wire.id === editing.id) : undefined
   const pickedWire = drawing && selected.length === 1 ? shapes.inner.find((one) => one.wire.id === selected[0]) : undefined
   const childLevel = levelInside[focus.level]
+  const liftedChoice = lifting ? choices.find((one) => one.key === lifting.kind) : undefined
+  const armedChoice = armed ? choices.find((one) => one.key === armed) : undefined
 
   return (
     <>
@@ -2183,13 +2328,16 @@ export const MapCanvas = ({
         />
       ) : drawing && palette && childLevel !== focus.level ? (
         <CardPalette
-          level={childLevel}
+          groups={choicesAt(childLevel, drawing.cardTypes, Boolean(drawing.codeKinds))}
+          canMakeTypes={ownTypesAt(childLevel) && !drawing.codeKinds}
+          types={drawing.cardTypes}
           armed={armed}
           onArm={(kind) => {
             setArmed(kind)
             setTool('pick')
           }}
           onLift={(kind, event) => setLifting({ kind, x: event.clientX, y: event.clientY, moved: false })}
+          onTypes={drawing.onCardTypes}
           onClose={() => setPalette(false)}
         />
       ) : null}
@@ -2209,7 +2357,7 @@ export const MapCanvas = ({
           event.currentTarget.scrollTop = 0
         }}
         onDoubleClick={(event) => {
-          if (!drawing || event.target !== event.currentTarget) return
+          if (!drawing || event.target !== event.currentTarget || levelAt(worldOf(event)) !== workAt) return
           setQuick({ screen: screenOf(event), inside: insideOf(worldOf(event)), from: '' })
         }}
         onClickCapture={(event) => {
@@ -2235,7 +2383,7 @@ export const MapCanvas = ({
         {drawing && !annoArmed && (armed || tool === 'wire' || tool === 'note') ? (
           <div className="map-hint" role="status">
             {armed
-              ? `Click to place a ${armed}. Hold Shift to place more.`
+              ? `Click to place a ${armedChoice?.kind ?? armed}. Hold Shift to place more.`
               : tool === 'wire'
                 ? 'Drag from one card to another.'
                 : 'Click to leave a note.'}
@@ -2254,7 +2402,7 @@ export const MapCanvas = ({
           </div>
         ) : null}
         <div
-          className={moving ? 'map-world map-world--moving' : 'map-world'}
+          className={`map-world${moving ? ' map-world--moving' : ''}${linked.size ? ' map-world--lit' : ''}`}
           style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})` }}
         >
           {/* Open cards first, outermost first, so what is drawn inside each,
@@ -2263,22 +2411,18 @@ export const MapCanvas = ({
             if (!level.open) return null
             const { card, box } = level.open
             const name = card.name || 'Unnamed'
-            const isPicked = depth === workAt && selected.includes(card.id)
+            const here = depth + 1 === workAt
             return (
               <div
                 key={card.id}
-                className={`map-card map-card--open ${kindClass(card.kind)}${depth + 1 === workAt ? ' map-card--here' : ''}${isPicked ? ' map-card--selected' : ''}`}
+                className={`map-card map-card--open ${kindClass(card.kind)}${card.look ? ` ${lookClass(card.look)}` : ''}${here ? ' map-card--here' : ''}${upClass(workAt - depth - 1)}${linked.has(card.id) ? ' map-card--wired' : ''}`}
                 style={{ left: box.x, top: box.y, width: box.w, height: box.h }}
                 data-open={card.id}
               >
                 <span
-                  className={canMove ? 'map-lip map-lip--movable' : 'map-lip'}
-                  onPointerDown={canMove ? pressOn(depth, card.id) : undefined}
+                  className="map-lip"
                   onClick={(event) => event.stopPropagation()}
-                  onDoubleClick={(event) => {
-                    event.stopPropagation()
-                    if (drawing) startEditing(card.id)
-                  }}
+                  onDoubleClick={(event) => event.stopPropagation()}
                 >
                   <button
                     type="button"
@@ -2296,10 +2440,10 @@ export const MapCanvas = ({
                   </button>
                   <span className="map-kind-word">{kindWords(card)}</span>
                   <span className="map-name" style={{ marginTop: 0 }}>
-                    {editing?.id === card.id ? ' ' : name}
+                    {name}
                   </span>
                 </span>
-                {ports
+                {drawing ? null : ports
                   .filter((port) => port.open === card.id)
                   .map((port) => (
                     <span
@@ -2309,16 +2453,18 @@ export const MapCanvas = ({
                       style={{ left: port.x - box.x, top: port.y - box.y }}
                     />
                   ))}
-                {GRIPS.map((grip) => (
-                  <span
-                    key={grip}
-                    className={`map-grip map-grip--${grip}`}
-                    aria-hidden
-                    onPointerDown={pressGrip(depth + 1, card.id, grip)}
-                    onClick={(event) => event.stopPropagation()}
-                    onDoubleClick={(event) => event.stopPropagation()}
-                  />
-                ))}
+                {here
+                  ? GRIPS.map((grip) => (
+                      <span
+                        key={grip}
+                        className={`map-grip map-grip--${grip}`}
+                        aria-hidden
+                        onPointerDown={pressGrip(depth + 1, card.id, grip)}
+                        onClick={(event) => event.stopPropagation()}
+                        onDoubleClick={(event) => event.stopPropagation()}
+                      />
+                    ))
+                  : null}
               </div>
             )
           })}
@@ -2360,14 +2506,16 @@ export const MapCanvas = ({
           </svg>
 
           {annotating
-            ? shown.map((level) => (
+            ? shown.map((level, depth) => (
                 <AnnotationLayer
                   key={level.card.id}
                   part="behind"
                   layers={annotating.layers}
                   level={level.card.id}
                   shift={level.shift}
-                  cards={level.placed.map((p) => ({ id: p.card.id, box: p.box }))}
+                  cards={annoCardsOf(level)}
+                  moved={level.annoBoxes}
+                  up={workAt - depth}
                   k={view.k}
                   selected={annoPicked.filter((id) => annoLevel.get(id) === level.card.id)}
                   editing={annoEditing}
@@ -2386,9 +2534,8 @@ export const MapCanvas = ({
               ))
             : null}
 
-          {/* The cards around an open card stay as they were: they can be
-              picked up, wired and written on, and pressing one works on its
-              level. */}
+          {/* The cards around the open card stay in view, faded by how far out
+              they are, and cannot be touched until a person backs out to them. */}
           {outside.map((p) => (
             <CardFace
               key={p.card.id}
@@ -2396,17 +2543,14 @@ export const MapCanvas = ({
               picture={drawing?.mockups[p.card.id] ?? p.card.shot}
               opens={canOpen(p.card)}
               selected={false}
-              receded={p.depth < workAt}
+              up={workAt - p.depth}
+              linked={linked.has(p.card.id) ? 'wired' : undefined}
               target={false}
-              handles={Boolean(drawing) && (tool === 'pick' || tool === 'wire') && !armed && hover === p.card.id && !live.moves}
-              movable={canMove}
+              handles={false}
               drawing={Boolean(drawing)}
               agent={agent && holds(p.card, agent.card) ? agent.words : undefined}
               extra={cardExtra?.(p.card)}
-              onOpen={() => openCard(p.card, p.depth)}
-              onPress={canMove ? pressOn(p.depth, p.card.id) : undefined}
-              onHandle={drawing ? pressHandle(p.depth, p.card.id) : undefined}
-              onEdit={(says) => startEditing(p.card.id, says)}
+              onOpen={() => undefined}
             />
           ))}
 
@@ -2419,7 +2563,8 @@ export const MapCanvas = ({
                 picture={drawing?.mockups[p.card.id] ?? p.card.shot}
                 opens={canOpen(p.card)}
                 selected={picked}
-                receded={false}
+                up={0}
+                linked={p.card.id === hover ? 'self' : linked.has(p.card.id) ? 'wired' : undefined}
                 target={live.line?.target === p.card.id}
                 handles={Boolean(drawing) && (tool === 'pick' || tool === 'wire') && !armed && (hover === p.card.id || (picked && selected.length === 1)) && !live.moves}
                 movable={canMove}
@@ -2428,29 +2573,55 @@ export const MapCanvas = ({
               extra={cardExtra?.(p.card)}
                 onOpen={() => openCard(p.card, workAt)}
                 onPress={canMove ? press(p.card.id) : undefined}
-                onHandle={drawing ? pressHandle(workAt, p.card.id) : undefined}
+                onHandle={drawing ? pressHandle(p.card.id) : undefined}
                 onEdit={(says) => startEditing(p.card.id, says)}
               />
             )
           })}
 
+          {/* A hub is where a wire from outside meets the open card's border.
+              A part inside wires to it to say which part the wire really
+              reaches, and any number can. Those on cards further out are only
+              shown. */}
+          {shapes.hubs.map((hub) => {
+            const inReach = hub.depth + 1 === workAt
+            return (
+              <button
+                key={hub.id}
+                type="button"
+                className={`map-hub${hub.into ? ' map-hub--in' : ' map-hub--out'}${upClass(workAt - hub.depth - 1)}${live.line?.target === hub.id ? ' map-hub--target' : ''}${litHubs.has(hub.id) ? ' map-hub--lit' : ''}`}
+                style={{ left: hub.at.x, top: hub.at.y }}
+                disabled={!inReach}
+                aria-label={hub.into ? `Hub: ${hub.name} ${hub.kind} this` : `Hub: this ${hub.kind} ${hub.name}`}
+                title={hub.into ? `${hub.name} ${hub.kind} this. Drag to the part it reaches.` : `This ${hub.kind} ${hub.name}. Drag to the part that does.`}
+                onPointerDown={inReach ? pressHub(hub.id) : undefined}
+                onClick={(event) => event.stopPropagation()}
+                onDoubleClick={(event) => event.stopPropagation()}
+              >
+                <span className="map-hub-name">{hub.name}</span>
+              </button>
+            )
+          })}
+
           {/* Hovering is tracked on the board, not on each card, so a card's
-              dots stay while the pointer crosses onto them. */}
-          <HoverWatch placed={everyCard} where={frame} view={view} onHover={setHover} />
+              dots stay while the pointer crosses onto them. Only the level in
+              hand answers. */}
+          <HoverWatch placed={placed} where={frame} view={view} onHover={setHover} />
 
           {everyNote.map(({ note, box, depth }) => {
             const picked = (live.picked ?? selected).includes(note.id)
+            const here = depth === workAt
             return (
               <div
                 key={note.id}
-                className={picked ? 'map-note map-card--selected' : 'map-note'}
+                className={`${picked ? 'map-note map-card--selected' : 'map-note'}${upClass(workAt - depth)}`}
                 style={{ left: box.x, top: box.y }}
-                role={drawing ? 'button' : undefined}
+                role={drawing && here ? 'button' : undefined}
                 aria-label={`Note: ${note.text || 'empty'}`}
-                onPointerDown={pressOn(depth, note.id)}
+                onPointerDown={here ? press(note.id) : undefined}
                 onDoubleClick={(event) => {
                   event.stopPropagation()
-                  startEditing(note.id)
+                  if (here) startEditing(note.id)
                 }}
                 onClick={(event) => event.stopPropagation()}
               >
@@ -2463,8 +2634,7 @@ export const MapCanvas = ({
               still says what it is for. */}
           {shapes.all.map(({ wire, key, at, small, said, depth }) => {
             const own = depth === workAt
-            const held = own ? live.moves?.get(key) : undefined
-            const spot = held ? { x: held.x + shift.x, y: held.y + shift.y } : at
+            const spot = at
             return (
               <Sentence
                 key={key}
@@ -2478,6 +2648,7 @@ export const MapCanvas = ({
                 selected={Boolean(drawing && own && wire.id && selected.includes(wire.id))}
                 pickable={Boolean(drawing && wire.id && own)}
                 lit={lit.has(key)}
+                up={workAt - depth}
                 movable={canMove && own}
                 hidden={Boolean(editing && wire.id && editing.id === wire.id)}
                 measure={(element) => {
@@ -2491,14 +2662,16 @@ export const MapCanvas = ({
           })}
 
           {annotating
-            ? shown.map((level) => (
+            ? shown.map((level, depth) => (
                 <AnnotationLayer
                   key={level.card.id}
                   part="front"
                   layers={annotating.layers}
                   level={level.card.id}
                   shift={level.shift}
-                  cards={level.placed.map((p) => ({ id: p.card.id, box: p.box }))}
+                  cards={annoCardsOf(level)}
+                  moved={level.annoBoxes}
+                  up={workAt - depth}
                   k={view.k}
                   selected={annoPicked.filter((id) => annoLevel.get(id) === level.card.id)}
                   editing={annoEditing}
@@ -2590,7 +2763,11 @@ export const MapCanvas = ({
                 ref={focusQuietly}
                 className="map-edit map-edit--says"
                 aria-label="What it is for"
-                style={{ left: editingBox.x + 12, top: editingBox.y + 62, width: editingBox.w - 24 }}
+                style={
+                  editingArea
+                    ? { left: editingBox.x + editingArea.x * editingBox.w, top: editingBox.y + editingArea.y * editingBox.h + 44, width: editingArea.w * editingBox.w }
+                    : { left: editingBox.x + 12, top: editingBox.y + 62, width: editingBox.w - 24 }
+                }
                 rows={2}
                 value={editing.text}
                 placeholder="What it is for, in one line"
@@ -2625,15 +2802,17 @@ export const MapCanvas = ({
                 className={`map-edit map-edit--name${isFrame(placed.find((p) => p.card.id === editing.id)?.card ?? root) ? ' map-edit--frame' : ''}`}
                 aria-label="Card name"
                 ref={focusQuietly}
-                style={{
-                  left: editingOpen ? editingBox.x + 88 : editingBox.x + 12,
-                  top: editingOpen
-                    ? editingBox.y - 28
-                    : isFrame(placed.find((p) => p.card.id === editing.id)?.card ?? root)
-                      ? editingBox.y + editingBox.h - 34
-                      : editingBox.y + 34,
-                  width: editingOpen ? 240 : editingBox.w - 24,
-                }}
+                style={
+                  editingArea
+                    ? { left: editingBox.x + editingArea.x * editingBox.w, top: editingBox.y + editingArea.y * editingBox.h + 20, width: editingArea.w * editingBox.w }
+                    : {
+                        left: editingBox.x + 12,
+                        top: isFrame(placed.find((p) => p.card.id === editing.id)?.card ?? root)
+                          ? editingBox.y + editingBox.h - 34
+                          : editingBox.y + 34,
+                        width: editingBox.w - 24,
+                      }
+                }
                 value={editing.text}
                 placeholder="Name it"
                 onPointerDown={(event) => event.stopPropagation()}
@@ -2699,11 +2878,8 @@ export const MapCanvas = ({
             shift={shift}
             cards={annoCards}
             toWorld={toWorld}
+            k={view.k}
             transform={`translate(${view.x}px, ${view.y}px) scale(${view.k})`}
-            onPress={(at) => {
-              const under = levelAt(at)
-              if (under !== workAt) workOn(under)
-            }}
             onPlaced={(next, id, keepGoing) => {
               annotating.onChange(next)
               setActiveLayer(layerOf(next, id)?.id ?? '')
@@ -2727,9 +2903,7 @@ export const MapCanvas = ({
         ) : null}
 
         {annotating && annoPicked.length && !annoEditing ? (() => {
-          const onBar = shown.flatMap((level) =>
-            drawnOn(annotating.layers, level.card.id, level.shift, level.placed.map((p) => ({ id: p.card.id, box: p.box }))),
-          ).filter((d) => annoPicked.includes(d.a.id))
+          const onBar = drawnOn(annotating.layers, working.card.id, working.shift, annoCardsOf(working), working.annoBoxes).filter((d) => annoPicked.includes(d.a.id))
           if (!onBar.length) return null
           const top = Math.min(...onBar.map((d) => d.box.y))
           const left = Math.min(...onBar.map((d) => d.box.x))
@@ -2835,7 +3009,8 @@ export const MapCanvas = ({
                   ? view.y + (picking.box.y + picking.box.h) * view.k + 12
                   : view.y + picking.box.y * view.k - 12,
             }}
-            onKind={(id, kind) => drawing?.onKind(id, kind)}
+            choices={choices}
+            onKind={(id, kind, look) => drawing?.onKind(id, kind, look)}
             onEdit={(id) => startEditing(id)}
             onOpen={(id) => {
               const card = placed.find((p) => p.card.id === id)
@@ -2862,7 +3037,7 @@ export const MapCanvas = ({
 
         {quick && drawing ? (
           <QuickAdd
-            level={childLevel}
+            choices={choices}
             at={quick.screen}
             wired={Boolean(quick.from)}
             onPick={(kind) => {
@@ -2899,9 +3074,9 @@ export const MapCanvas = ({
       </div>
 
       {lifting && lifting.moved ? (
-        <div className={`map-lifted ${kindClass(lifting.kind)}`} style={{ left: lifting.x, top: lifting.y }}>
-          <KindGlyph kind={lifting.kind} size={14} />
-          <span>{lifting.kind}</span>
+        <div className={`map-lifted ${kindClass(liftedChoice?.kind ?? lifting.kind)}${liftedChoice?.look ? ` ${lookClass(liftedChoice.look)}` : ''}`} style={{ left: lifting.x, top: lifting.y }}>
+          {liftedChoice?.look ? <LookGlyph icon={liftedChoice.look.icon} size={14} /> : <KindGlyph kind={lifting.kind} size={14} />}
+          <span>{liftedChoice?.kind ?? lifting.kind}</span>
         </div>
       ) : null}
     </>

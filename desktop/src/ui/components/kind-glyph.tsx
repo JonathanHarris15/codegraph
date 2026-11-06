@@ -1,6 +1,19 @@
 // codegraph: component kind-glyph
 import {
   AlarmClock,
+  Bell,
+  ChartColumn,
+  Cpu,
+  CreditCard,
+  GitBranch,
+  Lock,
+  Mail,
+  MessageSquare,
+  Search,
+  Settings,
+  Shield,
+  Users,
+  Zap,
   AlignCenterHorizontal,
   AlignCenterVertical,
   AlignEndHorizontal,
@@ -128,6 +141,56 @@ export const KindGlyph = ({ kind, size = 14 }: { kind: string; size?: number }) 
   const Glyph = GLYPHS[kind] ?? Box
   return <Glyph size={size} strokeWidth={2} aria-hidden="true" />
 }
+
+/** The icons a person's own type of card can have. A database's is not among
+ *  them: a database is its own kind of card, not a look (ADR 0013). */
+export const LOOK_ICONS: Record<string, LucideIcon> = {
+  package: Package,
+  box: Box,
+  globe: Globe,
+  window: AppWindow,
+  server: Server,
+  monitor: Monitor,
+  phone: Smartphone,
+  cloud: Cloud,
+  function: SquareFunction,
+  terminal: SquareTerminal,
+  page: LayoutPanelTop,
+  play: Play,
+  clock: AlarmClock,
+  file: FileCode,
+  disk: HardDrive,
+  shield: Shield,
+  lock: Lock,
+  mail: Mail,
+  message: MessageSquare,
+  bell: Bell,
+  card: CreditCard,
+  users: Users,
+  person: UserRound,
+  chip: Cpu,
+  branch: GitBranch,
+  search: Search,
+  chart: ChartColumn,
+  settings: Settings,
+  bolt: Zap,
+  star: Star,
+}
+
+export const LookGlyph = ({ icon, size = 14 }: { icon: string; size?: number }) => {
+  const Drawn = LOOK_ICONS[icon] ?? Package
+  return <Drawn size={size} strokeWidth={2} aria-hidden="true" />
+}
+
+/** The class that gives a person's own type of card its colour. */
+export const lookClass = (look: { color: string }): string => `look--${look.color}`
+
+/** The little mark for something a card can be made as. */
+export const CardMark = ({ kind, look, size = 16, small = false }: { kind: string; look?: { icon: string; color: string }; size?: number; small?: boolean }) => (
+  <span className={`map-palette-swatch${small ? ' map-palette-swatch--small' : ''} ${kindClass(kind)}${look ? ` ${lookClass(look)}` : ''}`}>
+    {look ? <LookGlyph icon={look.icon} size={size} /> : <KindGlyph kind={kind} size={size} />}
+  </span>
+)
 
 export const Glyph = ({ of: name, size = 18 }: { of: ToolGlyph; size?: number }) => {
   const Drawn = TOOL_GLYPHS[name]

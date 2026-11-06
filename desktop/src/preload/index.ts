@@ -16,6 +16,7 @@ import type { Card, MapShown } from '../features/show-map.js'
 import type { DrawnCard, Point } from '../modules/reader/index.js'
 import type { Layer } from '../modules/annotations/index.js'
 import type { Arrangement } from '../modules/arrangements/index.js'
+import type { CardType } from '../modules/card-types/index.js'
 import type { Sketch } from '../modules/sketches/index.js'
 
 /** What the window may ask for: one call per feature, nothing else. */
@@ -34,6 +35,8 @@ export type Api = {
   chooseBranch: (projectId: string, systemId: string, branch: string) => Promise<void>
   showAnnotations: (projectId: string) => Promise<Layer[]>
   saveAnnotations: (projectId: string, layers: Layer[]) => Promise<void>
+  showCardTypes: () => Promise<CardType[]>
+  saveCardTypes: (types: CardType[]) => Promise<void>
   showArrangement: (projectId: string) => Promise<Arrangement>
   saveArrangement: (projectId: string, arrangement: Arrangement) => Promise<void>
   listSketches: (projectId: string) => Promise<SketchListed[]>
@@ -65,6 +68,8 @@ const api: Api = {
   chooseBranch: (projectId, systemId, branch) => ipcRenderer.invoke('branch:choose', projectId, systemId, branch),
   showAnnotations: (projectId) => ipcRenderer.invoke('annotations:show', projectId),
   saveAnnotations: (projectId, layers) => ipcRenderer.invoke('annotations:save', projectId, layers),
+  showCardTypes: () => ipcRenderer.invoke('card-types:show'),
+  saveCardTypes: (types) => ipcRenderer.invoke('card-types:save', types),
   showArrangement: (projectId) => ipcRenderer.invoke('arrangement:show', projectId),
   saveArrangement: (projectId, arrangement) => ipcRenderer.invoke('arrangement:save', projectId, arrangement),
   listSketches: (projectId) => ipcRenderer.invoke('sketch:list', projectId),

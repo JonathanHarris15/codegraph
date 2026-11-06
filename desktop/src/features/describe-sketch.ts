@@ -4,7 +4,7 @@
 import { annotationWords } from '../modules/annotations/index.js'
 import { listProjects } from '../modules/projects/index.js'
 import { live, readMap } from '../modules/reader/index.js'
-import { listSketches, mockupFile, readSketch, withNotesAsAnnotations, type SketchCard } from '../modules/sketches/index.js'
+import { listSketches, mockupFile, readSketch, wireOfHub, withNotesAsAnnotations, type SketchCard } from '../modules/sketches/index.js'
 import { sentenceOf } from '../modules/wording/index.js'
 
 /** One sketch in words an agent reads and works from: every level, each card
@@ -32,22 +32,30 @@ export const describeSketch = async (repo: string, name: string, shortName = '')
       if (card.level === 'system') return `${card.kind || 'software system'} ${name}`
       return `${card.kind || card.level} ${name}`
     }
-    const walk = (card: SketchCard, depth: number): void => {
+    const walk = (card: SketchCard, depth: number, around?: SketchCard): void => {
       const pad = '  '.repeat(depth)
       const extra = [card.at ? `at ${card.at}` : '', card.start ? 'start page' : ''].filter(Boolean)
       out.push(`${pad}${named(card)}${extra.length ? ` (${extra.join('; ')})` : ''}${card.says ? `: ${card.says}` : ''}`)
       if (card.mockup) out.push(`${pad}  mockup: ${mockupFile(project.id, sketch.id, card.mockup)}`)
-      for (const child of card.children) walk(child, depth + 1)
+      for (const child of card.children) walk(child, depth + 1, card)
       const byId = new Map(card.children.map((c) => [c.id, c]))
+      // A wire to a hub on this card's border says which part inside the wire
+      // to this card really reaches, so it reads as reaching the far end of it.
+      const endOf = (id: string): SketchCard | undefined => {
+        const hubWire = wireOfHub(id)
+        if (!hubWire) return byId.get(id)
+        const outer = around?.wires.find((w) => w.id === hubWire)
+        return outer && around?.children.find((c) => c.id === (outer.to === card.id ? outer.from : outer.to))
+      }
       for (const wire of card.wires) {
-        const from = byId.get(wire.from)
-        const to = byId.get(wire.to)
+        const from = endOf(wire.from)
+        const to = endOf(wire.to)
         if (from && to)
           out.push(`${pad}  ${sentenceOf(named(from), wire.kind, named(to), wire.words).map((part) => part.text).join('')}`)
       }
       for (const note of card.notes) out.push(`${pad}  note: ${note.text}`)
     }
-    for (const child of sketch.root.children) walk(child, 0)
+    for (const child of sketch.root.children) walk(child, 0, sketch.root)
     for (const note of sketch.root.notes) out.push(`note: ${note.text}`)
 
     // Annotations, level by level, each level named by the card it is in.

@@ -1,5 +1,7 @@
 // codegraph: component map-canvas
 import type { Card } from '../../features/show-map.js'
+import type { CardLook } from '../../modules/sketches/schema.js'
+import { CARD_SHAPES, drawnShape } from './card-looks.js'
 
 /** A wire as the canvas draws it, from the map or from a sketch. */
 export type DrawnWire = {
@@ -24,6 +26,8 @@ export type DrawnNote = { id: string; text: string; x: number; y: number }
 /** A card as the canvas draws it: a card of the map, or of a sketch, which
  *  may also say where a person put it and carry notes. */
 export type DrawnCard = Omit<Card, 'children' | 'wires'> & {
+  /** How a card of a person's own type looks. */
+  look?: CardLook
   x?: number
   y?: number
   /** How much room it has when open, in the space its insides are laid out
@@ -74,14 +78,17 @@ const NOTE_SIZE = { w: 180, h: 60 }
 /** Pages are drawn as frames for their screenshot, the rest as cards. */
 export const isFrame = (card: DrawnCard): boolean => card.level === 'component' && card.kind === 'page'
 
-export const sizeOf = (card: DrawnCard): { w: number; h: number } =>
-  isFrame(card)
+export const sizeOf = (card: DrawnCard): { w: number; h: number } => {
+  const shape = drawnShape(card)
+  if (shape) return { w: CARD_SHAPES[shape].w, h: CARD_SHAPES[shape].h }
+  return isFrame(card)
     ? { w: 260, h: 200 }
     : card.level === 'code'
       ? { w: 240, h: 104 + Math.min(card.names.length, 9) * 18 }
       : card.level === 'system' || card.level === 'container'
         ? { w: 280, h: 150 }
         : { w: 240, h: card.says ? 124 : 104 }
+}
 
 /** Which column a card sits in, left to right, so most wires run one way:
  *  what starts things (pages and triggers), then what they ask for, then
@@ -271,8 +278,63 @@ export const resized = (room: Box, grip: Grip, dx: number, dy: number, least: { 
   return { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h) }
 }
 
+/** An annotation on a level, as far as laying the level out goes. A line's
+ *  loose end is one of these too, with no size. */
+export type AnnoThing = {
+  id: string
+  /** Where it sits in the level's own space. */
+  box: Box
+  /** A card it keeps beside, which it moves with. */
+  near?: { card: string; dx: number; dy: number }
+  /** It frames what is inside it, so it grows with that, not away from it. */
+  around?: boolean
+}
+
+/** Where a level's annotations go to keep clear of the card open on it, if
+ *  any. Each is pushed straight out, the way a card is, but no card ever moves
+ *  for an annotation, so only the open card and other annotations push them. A
+ *  frame round some cards stays round them, however far they were pushed. It
+ *  is only where they are drawn, so they return when the card closes. */
+export const annotationsClear = (
+  annos: AnnoThing[],
+  natural: Placed[],
+  open: { id: string; closed: Box; box: Box } | null,
+  cardNow: (placed: Placed) => Box,
+): Map<string, Box> => {
+  const out = new Map<string, Box>()
+  const free: { id: string; box: Box }[] = []
+  for (const anno of annos) {
+    const near = anno.near?.card
+    if (near && near !== open?.id && natural.some((p) => p.card.id === near)) continue
+    const box = near && open && near === open.id ? { ...anno.box, x: open.closed.x + anno.near!.dx, y: open.closed.y + anno.near!.dy } : anno.box
+    if (!open) {
+      out.set(anno.id, box)
+      continue
+    }
+    if (anno.around) {
+      const held = natural.filter((p) => {
+        const at = middleOfBox(p.box)
+        return at.x > box.x && at.x < box.x + box.w && at.y > box.y && at.y < box.y + box.h
+      })
+      if (held.length) {
+        const was = boundsOf(held.map((p) => p.box))
+        const now = boundsOf(held.map(cardNow))
+        const left = was.x - box.x
+        const top = was.y - box.y
+        const right = box.x + box.w - was.x - was.w
+        const bottom = box.y + box.h - was.y - was.h
+        out.set(anno.id, { x: now.x - left, y: now.y - top, w: now.w + left + right, h: now.h + top + bottom })
+        continue
+      }
+    }
+    free.push({ id: anno.id, box })
+  }
+  if (open) for (const [id, box] of pushAside(open.box, free)) out.set(id, box)
+  return out
+}
+
 /** What is on one level, before it is placed. */
-export type LevelContents = { card: DrawnCard; children: DrawnCard[]; wires: DrawnWire[]; notes: DrawnNote[] }
+export type LevelContents = { card: DrawnCard; children: DrawnCard[]; wires: DrawnWire[]; notes: DrawnNote[]; annos?: AnnoThing[] }
 
 /** One level of the cards that are open, placed on the board. */
 export type OpenLevel = LevelContents & {
@@ -290,6 +352,10 @@ export type OpenLevel = LevelContents & {
   pushed: Set<string>
   /** How much room this level has, in its own space. */
   room: Box
+  /** Where its annotations are drawn, on the board, by annotation; a line's
+   *  loose ends by the line's id and which end. One that keeps beside a card
+   *  is not here, unless that card is the open one. */
+  annoBoxes: Map<string, Box>
 }
 
 /** Places a chain of open cards, each inside the one before, from the inside
@@ -314,7 +380,8 @@ export const openLevels = ({
   /** What is under the hand, which nothing pushes. */
   held?: Set<string>
 }): OpenLevel[] => {
-  const worked: (Omit<OpenLevel, 'shift' | 'placed' | 'noteBoxes' | 'open'> & {
+  const worked: (Omit<OpenLevel, 'shift' | 'placed' | 'noteBoxes' | 'open' | 'annoBoxes'> & {
+    annoBoxes: Map<string, Box>
     placed: Placed[]
     noteBoxes: { note: DrawnNote; box: Box }[]
     open: Placed | null
@@ -356,6 +423,12 @@ export const openLevels = ({
       for (const thing of things) if (pushedTo.get(thing.id) !== thing.box) pushed.add(thing.id)
     }
     const placed: Placed[] = natural.filter((p) => p !== found).map((p) => ({ card: p.card, box: pushedTo.get(p.card.id) ?? p.box }))
+    const annoBoxes = annotationsClear(
+      level.annos ?? [],
+      natural,
+      found && open ? { id: found.card.id, closed: found.box, box: open.box } : null,
+      (p) => (p === found && open ? open.box : (pushedTo.get(p.card.id) ?? p.box)),
+    )
     const noteBoxes = level.notes.map((note) => ({ note, box: pushedTo.get(note.id) ?? { x: note.x, y: note.y, ...NOTE_SIZE } }))
     const boxes: Box[] = [...placed.map((p) => p.box), ...noteBoxes.map((n) => n.box), ...(open ? [open.box] : [])]
     const around = boundsOf(boxes)
@@ -366,7 +439,7 @@ export const openLevels = ({
     // The root has no border, so it needs no room.
     const wanted = i === 0 ? (inside ?? { x: 0, y: 0, w: 0, h: 0 }) : roomOf(level.card, inside)
     const room: Box = inside ? boundsOf([wanted, inside]) : wanted
-    worked.unshift({ ...level, natural, placed, noteBoxes, open, pushed, room, step })
+    worked.unshift({ ...level, natural, placed, noteBoxes, open, pushed, room, step, annoBoxes })
     innerRoom = room
     innerId = level.card.id
   }
@@ -387,6 +460,7 @@ export const openLevels = ({
       placed: level.placed.map((p) => ({ card: p.card, box: by(p.box) })),
       noteBoxes: level.noteBoxes.map((n) => ({ note: n.note, box: by(n.box) })),
       open: level.open ? { card: level.open.card, box: by(level.open.box) } : null,
+      annoBoxes: new Map([...level.annoBoxes].map(([id, box]) => [id, by(box)])),
     })
     shift = { x: shift.x + step.x, y: shift.y + step.y }
   })
@@ -405,6 +479,32 @@ export type WireShape = {
   tail: { x: number; y: number }
   /** Where the wire crosses into the card it reaches, for a port. */
   head: { x: number; y: number }
+  /** How it bends leaving the one and reaching the other. */
+  c1: { x: number; y: number }
+  c2: { x: number; y: number }
+}
+
+/** A wire as it is really drawn: through its sentence, wherever that has gone,
+ *  so the two can never come apart. It leaves and arrives as it always did,
+ *  and is only bent on the way. */
+export const wireThrough = (shape: WireShape, at: { x: number; y: number }): string => {
+  if (Math.hypot(at.x - shape.at.x, at.y - shape.at.y) < 0.5) return shape.d
+  const a = shape.tail
+  const b = shape.head
+  const unit = (p: { x: number; y: number }, q: { x: number; y: number }): { x: number; y: number } => {
+    const length = Math.hypot(q.x - p.x, q.y - p.y)
+    return length < 0.001 ? { x: 0, y: 0 } : { x: (q.x - p.x) / length, y: (q.y - p.y) / length }
+  }
+  const leaving = unit(a, shape.c1)
+  const arriving = unit(b, shape.c2)
+  const across = unit(a, b)
+  const first = Math.hypot(at.x - a.x, at.y - a.y)
+  const second = Math.hypot(b.x - at.x, b.y - at.y)
+  const out = { x: a.x + leaving.x * first * 0.45, y: a.y + leaving.y * first * 0.45 }
+  const into = { x: at.x - across.x * first * 0.35, y: at.y - across.y * first * 0.35 }
+  const on = { x: at.x + across.x * second * 0.35, y: at.y + across.y * second * 0.35 }
+  const last = { x: b.x + arriving.x * second * 0.45, y: b.y + arriving.y * second * 0.45 }
+  return `M ${a.x} ${a.y} C ${out.x} ${out.y}, ${into.x} ${into.y}, ${at.x} ${at.y} C ${on.x} ${on.y}, ${last.x} ${last.y}, ${b.x} ${b.y}`
 }
 
 /** The middle of a cubic curve, where its sentence goes. Eight wires fanning
@@ -429,7 +529,29 @@ export const wirePath = (
   to: Box,
   slots: Slots = { from: 0.5, to: 0.5 },
   others: Box[] = [],
+  /** Where a spot on a card's box lands on the card's real edge, for a card
+   *  that is not a plain box. */
+  fit: { from?: (at: { x: number; y: number }) => { x: number; y: number }; to?: (at: { x: number; y: number }) => { x: number; y: number } } = {},
 ): WireShape => {
+  const finish = (
+    rawA: { x: number; y: number },
+    rawC1: { x: number; y: number },
+    rawC2: { x: number; y: number },
+    rawB: { x: number; y: number },
+  ): WireShape => {
+    const tail = fit.from ? fit.from(rawA) : rawA
+    const head = fit.to ? fit.to(rawB) : rawB
+    const c1 = { x: rawC1.x + tail.x - rawA.x, y: rawC1.y + tail.y - rawA.y }
+    const c2 = { x: rawC2.x + head.x - rawB.x, y: rawC2.y + head.y - rawB.y }
+    return {
+      d: `M ${tail.x} ${tail.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${head.x} ${head.y}`,
+      at: middleOf(tail, c1, c2, head),
+      tail,
+      head,
+      c1,
+      c2,
+    }
+  }
   const fromMid = { x: from.x + from.w / 2, y: from.y + from.h / 2 }
   const toMid = { x: to.x + to.w / 2, y: to.y + to.h / 2 }
   // The open air between the two cards, across and down. Whichever there is
@@ -450,14 +572,7 @@ export const wirePath = (
     )
     if (gap > 24 && !blocked) {
       const bend = Math.max(24, gap / 2) * (down ? 1 : -1)
-      const c1 = { x: a.x, y: a.y + bend }
-      const c2 = { x: b.x, y: b.y - bend }
-      return {
-        d: `M ${a.x} ${a.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${b.x} ${b.y}`,
-        at: middleOf(a, c1, c2, b),
-        tail: a,
-        head: b,
-      }
+      return finish(a, { x: a.x, y: a.y + bend }, { x: b.x, y: b.y - bend }, b)
     }
   }
 
@@ -466,28 +581,14 @@ export const wirePath = (
     const a = { x: forward ? from.x + from.w : from.x, y: from.y + from.h * slots.from }
     const b = { x: forward ? to.x : to.x + to.w, y: to.y + to.h * slots.to }
     const bend = Math.max(40, Math.abs(b.x - a.x) / 2) * (forward ? 1 : -1)
-    const c1 = { x: a.x + bend, y: a.y }
-    const c2 = { x: b.x - bend, y: b.y }
-    return {
-      d: `M ${a.x} ${a.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${b.x} ${b.y}`,
-      at: middleOf(a, c1, c2, b),
-      tail: a,
-      head: b,
-    }
+    return finish(a, { x: a.x + bend, y: a.y }, { x: b.x - bend, y: b.y }, b)
   }
   // Stacked in one column: loop out to the right and back in.
   const down = toMid.y > fromMid.y
   const a = { x: from.x + from.w, y: from.y + from.h * (down ? 0.7 : 0.3) }
   const b = { x: to.x + to.w, y: to.y + to.h * (down ? 0.3 : 0.7) }
   const out = Math.max(a.x, b.x) + 50 + Math.abs(b.y - a.y) * 0.12
-  const c1 = { x: out, y: a.y }
-  const c2 = { x: out, y: b.y }
-  return {
-    d: `M ${a.x} ${a.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${b.x} ${b.y}`,
-    at: middleOf(a, c1, c2, b),
-    tail: a,
-    head: b,
-  }
+  return finish(a, { x: out, y: a.y }, { x: out, y: b.y }, b)
 }
 
 /** A sentence sits in the middle of its own wire. Where that would put it on

@@ -1,42 +1,41 @@
 // codegraph: component quick-add
 import { useEffect, useRef, useState } from 'react'
-import type { Level } from '../../features/show-map.js'
-import { KindGlyph, kindClass } from './kind-glyph.js'
-import { kindGroups } from './sketch-edits.js'
+import { CardMark } from './kind-glyph.js'
+import type { CardChoice } from './sketch-edits.js'
 
 /** Asks what to put at a spot on the board: after a wire is dragged onto
  *  empty board, or a double-click on it. Type to narrow the list, arrows and
  *  Enter to pick, Escape to leave it. */
 export const QuickAdd = ({
-  level,
+  choices,
   at,
   wired,
   onPick,
   onNote,
   onClose,
 }: {
-  level: Level
+  /** What can be put here. */
+  choices: CardChoice[]
   /** Where on the screen to open, in the board's own pixels. */
   at: { x: number; y: number }
   /** A wire is waiting for the card at its end. */
   wired: boolean
-  onPick: (kind: string) => void
+  onPick: (key: string) => void
   onNote?: () => void
   onClose: () => void
 }) => {
   const [typed, setTyped] = useState('')
   const [on, setOn] = useState(0)
   const box = useRef<HTMLInputElement>(null)
-  const kinds = kindGroups(level).flatMap((group) => group.kinds)
-  const showing = kinds.filter((kind) => kind.includes(typed.trim().toLowerCase()))
+  const showing = choices.filter((choice) => choice.kind.toLowerCase().includes(typed.trim().toLowerCase()))
   const notes = !wired && onNote && 'note'.includes(typed.trim().toLowerCase())
-  const rows = [...showing, ...(notes ? ['note'] : [])]
+  const rows: CardChoice[] = [...showing, ...(notes ? [{ key: 'note', kind: 'note', hint: '' }] : [])]
 
   // Focusing must not scroll the board under the menu.
   useEffect(() => box.current?.focus({ preventScroll: true }), [])
   useEffect(() => setOn(0), [typed])
 
-  const choose = (row: string): void => (row === 'note' && notes ? onNote!() : onPick(row))
+  const choose = (row: CardChoice): void => (row.key === 'note' && notes ? onNote!() : onPick(row.key))
 
   return (
     <div
@@ -76,7 +75,7 @@ export const QuickAdd = ({
         {rows.length === 0 ? <div className="map-quick-none">Nothing by that name here</div> : null}
         {rows.map((row, i) => (
           <button
-            key={row}
+            key={row.key}
             type="button"
             role="option"
             aria-selected={i === on}
@@ -84,10 +83,8 @@ export const QuickAdd = ({
             onPointerEnter={() => setOn(i)}
             onClick={() => choose(row)}
           >
-            <span className={`map-palette-swatch ${row === 'note' ? 'kind-of--note' : kindClass(row)}`}>
-              <KindGlyph kind={row === 'note' ? 'note' : row} size={14} />
-            </span>
-            {row}
+            <CardMark kind={row.kind} look={row.look} size={14} />
+            {row.kind}
           </button>
         ))}
       </div>
