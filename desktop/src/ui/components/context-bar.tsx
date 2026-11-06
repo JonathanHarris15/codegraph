@@ -1,12 +1,13 @@
 // codegraph: component context-bar
 import { useState, type ReactNode } from 'react'
 import type { Level } from '../../features/show-map.js'
-import { Glyph, KindGlyph, kindClass, type ToolGlyph } from './kind-glyph.js'
-import { kindsAt, wireKinds, type Alignment } from './sketch-edits.js'
+import type { CardLook } from '../../modules/sketches/schema.js'
+import { CardMark, Glyph, type ToolGlyph } from './kind-glyph.js'
+import { wireKinds, type Alignment, type CardChoice } from './sketch-edits.js'
 
 /** What is picked, as the bar over it needs to know. */
 export type Picking =
-  | { what: 'card'; id: string; kind: string; level: Level; page: boolean; opens: boolean }
+  | { what: 'card'; id: string; kind: string; look?: CardLook; level: Level; page: boolean; opens: boolean }
   | { what: 'wire'; id: string; kind: string }
   | { what: 'note'; id: string }
   | { what: 'many'; ids: string[]; cards: number }
@@ -44,6 +45,7 @@ export const ContextBar = ({
   picking,
   at,
   below = false,
+  choices: cardChoices,
   onKind,
   onEdit,
   onOpen,
@@ -58,7 +60,9 @@ export const ContextBar = ({
    *  when it hangs below what is picked. */
   at: { x: number; y: number }
   below?: boolean
-  onKind: (id: string, kind: string) => void
+  /** What a card here can be changed to. */
+  choices: CardChoice[]
+  onKind: (id: string, kind: string, look?: CardLook) => void
   onEdit: (id: string) => void
   onOpen: (id: string) => void
   onMockup: (id: string) => void
@@ -69,8 +73,12 @@ export const ContextBar = ({
   removeName?: string
 }) => {
   const [kinds, setKinds] = useState(false)
-  const choices =
-    picking.what === 'card' ? kindsAt[picking.level] : picking.what === 'wire' ? wireKinds : []
+  const choices: CardChoice[] =
+    picking.what === 'card'
+      ? cardChoices
+      : picking.what === 'wire'
+        ? wireKinds.map((kind) => ({ key: kind, kind, hint: '' }))
+        : []
 
   return (
     <div
@@ -89,34 +97,26 @@ export const ContextBar = ({
             aria-expanded={kinds}
             onClick={() => setKinds(!kinds)}
           >
-            {picking.what === 'card' ? (
-              <span className={`map-palette-swatch map-palette-swatch--small ${kindClass(picking.kind)}`}>
-                <KindGlyph kind={picking.kind} size={12} />
-              </span>
-            ) : null}
+            {picking.what === 'card' ? <CardMark kind={picking.kind} look={picking.look} size={12} small /> : null}
             <span>{picking.kind}</span>
             <Glyph of="down" size={12} />
           </button>
           {kinds ? (
             <div className="map-context-list" role="menu">
-              {choices.map((kind) => (
+              {choices.map((choice) => (
                 <button
-                  key={kind}
+                  key={choice.key}
                   type="button"
                   role="menuitemradio"
-                  aria-checked={kind === picking.kind}
-                  className={kind === picking.kind ? 'map-quick-row map-quick-row--on' : 'map-quick-row'}
+                  aria-checked={choice.kind === picking.kind}
+                  className={choice.kind === picking.kind ? 'map-quick-row map-quick-row--on' : 'map-quick-row'}
                   onClick={() => {
-                    onKind(picking.id, kind)
+                    onKind(picking.id, choice.kind, choice.look)
                     setKinds(false)
                   }}
                 >
-                  {picking.what === 'card' ? (
-                    <span className={`map-palette-swatch ${kindClass(kind)}`}>
-                      <KindGlyph kind={kind} size={14} />
-                    </span>
-                  ) : null}
-                  {kind}
+                  {picking.what === 'card' ? <CardMark kind={choice.kind} look={choice.look} size={14} /> : null}
+                  {choice.kind}
                 </button>
               ))}
             </div>

@@ -3,6 +3,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CardState, Sketch, SketchCard } from '../../modules/sketches/index.js'
 import { sentenceOf } from '../../modules/wording/index.js'
 import { Button, Field, Select } from '../design-system/kit.js'
+import type { CardType } from '../../modules/card-types/schema.js'
+import { wireOfHub, type CardLook } from '../../modules/sketches/schema.js'
+import { CardLookEditor } from './card-look-editor.js'
+import { BLANK_LOOK } from './card-looks.js'
 import { Glyph } from './kind-glyph.js'
 import { MapCanvas, remember, remembered, walk } from './map-canvas.js'
 import {
@@ -12,8 +16,9 @@ import {
   changeCard,
   changeNote,
   changeWire,
+  choicesAt,
   copyOf,
-  kindsAt,
+  ownTypesAt,
   makeRoom,
   moveThings,
   nudge,
@@ -97,6 +102,15 @@ export const SketchEditor = ({
     return remove(crossed, ids.filter((id) => !fromCode.has(id)))
   }
   const [selected, setSelected] = useState<string[]>([])
+  /** The types of card a person has saved, for every sketch. */
+  const [cardTypes, setCardTypes] = useState<CardType[]>([])
+  useEffect(() => {
+    void window.codegraph.showCardTypes().then(setCardTypes)
+  }, [])
+  const keepCardTypes = (types: CardType[]): void => {
+    setCardTypes(types)
+    void window.codegraph.saveCardTypes(types)
+  }
   const past = useRef<Sketch[]>([])
   const future = useRef<Sketch[]>([])
   const last = useRef<{ step: string; at: number }>({ step: '', at: 0 })
@@ -296,7 +310,16 @@ export const SketchEditor = ({
   const focusState = (id: string): string | undefined =>
     focus.children.find((c) => c.id === id)?.state ?? focus.wires.find((w) => w.id === id)?.state
   const lockedPick = picked !== null && selected.length === 1 && fromCode.has(selected[0]!)
-  const nameOf = (id: string): string => focus.children.find((c) => c.id === id)?.name || 'unnamed'
+  /** A card's name, or for a hub, the name of the card at the far end of its
+   *  wire, however many hubs that takes. */
+  const nameOf = (id: string, depth = trail.length - 1): string => {
+    const hubWire = wireOfHub(id)
+    if (!hubWire) return trail[depth]?.children.find((c) => c.id === id)?.name || 'unnamed'
+    const outer = trail[depth - 1]
+    const wire = outer?.wires.find((w) => w.id === hubWire)
+    if (!outer || !wire) return 'unnamed'
+    return nameOf(wire.to === trail[depth]!.id ? wire.from : wire.to, depth - 1)
+  }
 
   return (
     <div className="sketch-area">
@@ -321,10 +344,10 @@ export const SketchEditor = ({
             keep({ ...now.current, root: changeAt(now.current.root, to, (card) => ({ ...card, room })) }, join ? 'join' : ''),
           onSelect: setSelected,
           onPin: (arrangement) => change((f) => pinAll(f, arrangement), '', true),
-          onPlace: (at, kind, from) => {
+          onPlace: (at, kind, from, hub, look) => {
             let id = ''
             change((f) => {
-              const [next, made] = placeCard(f, at, kind, from)
+              const [next, made] = placeCard(f, at, kind, from, hub, look)
               id = made
               return next
             })
@@ -340,10 +363,10 @@ export const SketchEditor = ({
             return id
           },
           onMove: (moves, join) => change((f) => moveThings(f, moves), join ? 'join' : ''),
-          onWire: (from, to) => {
+          onWire: (from, to, kind) => {
             let id = ''
             change((f) => {
-              const [next, made] = addWire(f, from, to)
+              const [next, made] = addWire(f, from, to, kind)
               id = made
               return next
             })
@@ -361,10 +384,13 @@ export const SketchEditor = ({
           onPaste: pasteNow,
           onDuplicate: duplicate,
           onSelectAll: () => setSelected([...focus.children.map((c) => c.id), ...focus.notes.map((n) => n.id)]),
-          onKind: (id, kind) => {
+          onKind: (id, kind, look) => {
             if (fromCode.has(id)) return
-            change((f) => (pick(f, id)?.kind === 'wire' ? changeWire(f, id, { kind }) : changeCard(f, id, { kind })))
+            change((f) => (pick(f, id)?.kind === 'wire' ? changeWire(f, id, { kind }) : changeCard(f, id, { kind, look })))
           },
+          cardTypes,
+          onCardTypes: keepCardTypes,
+          codeKinds: proposing,
           onMockup: (id) => onAddMockup(id),
           onRemove: (ids) => change((f) => takeAway(f, ids)),
           onAlign: (ids, how) => change((f) => align(f, ids, how)),
@@ -477,12 +503,36 @@ export const SketchEditor = ({
                 value={picked.card.name}
                 onChange={(name) => change((f) => changeCard(f, picked.card.id, { name }), `name:${picked.card.id}`)}
               />
-              <Select
-                label="Kind"
-                value={picked.card.kind}
-                options={[...new Set([picked.card.kind, ...kindsAt[picked.card.level]])].filter(Boolean)}
-                onChange={(kind) => change((f) => changeCard(f, picked.card.id, { kind }))}
-              />
+              {ownTypesAt(picked.card.level) && !proposing ? (
+                picked.card.kind === 'database' || picked.card.kind === 'page' ? (
+                  <div className="ds-hint">
+                    {picked.card.kind === 'database' ? 'A database is its own kind of card, not a look.' : 'A page holds a mockup, so it is its own kind of card.'}
+                  </div>
+                ) : (
+                  <CardLookEditor
+                    kind={picked.card.kind}
+                    look={picked.card.look ?? BLANK_LOOK}
+                    canSave={Boolean(picked.card.kind.trim()) && picked.card.kind !== 'card' && !cardTypes.some((type) => type.name === picked.card.kind)}
+                    onKind={(kind) => change((f) => changeCard(f, picked.card.id, { kind, look: picked.card.look ?? BLANK_LOOK }), `kind:${picked.card.id}`)}
+                    onLook={(look: CardLook) => change((f) => changeCard(f, picked.card.id, { look }))}
+                    onSave={() =>
+                      keepCardTypes([...cardTypes, { id: crypto.randomUUID(), name: picked.card.kind.trim(), ...(picked.card.look ?? BLANK_LOOK) }])
+                    }
+                  />
+                )
+              ) : (
+                <Select
+                  label="Kind"
+                  value={picked.card.kind}
+                  options={[
+                    ...new Set([
+                      picked.card.kind,
+                      ...choicesAt(picked.card.level, [], proposing).flatMap((group) => group.choices.map((choice) => choice.kind)),
+                    ]),
+                  ].filter(Boolean)}
+                  onChange={(kind) => change((f) => changeCard(f, picked.card.id, { kind }))}
+                />
+              )}
               <label className="ds-field">
                 <span className="ds-label">What it is for</span>
                 <textarea

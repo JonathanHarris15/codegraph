@@ -101,14 +101,22 @@ _Avoid_: node, box, unit, element, shape
 A one-way line between two cards. It shows the kind of relationship, read
 from the code, and a phrase saying what it is for, written in the code beside
 the call. It reads as a sentence: who acts, how, on what, and what for —
-write-note uses notes to keep the note.
+write-note uses notes to keep the note. The wire runs through its sentence, so
+the two cannot come apart.
 _Avoid_: edge, arrow, link, connection, dependency
+
+**Hub**:
+Where a wire meets the border of an open card on a drawing. Parts inside the card
+wire to it, any number of them, to say what the wire from outside really reaches.
+It belongs to the wire and goes with it.
+_Avoid_: port (for this), junction, socket, connector
 
 **Opening**:
 Double-clicking a card so it grows where it is into room to draw in, pushing
-the cards around it aside. Nothing else changes: what is around it stays on
-screen, at the same zoom, and can still be drawn on. Backing out is the way
-back; the card shrinks and the cards it pushed return.
+the cards and annotations around it aside. What is around it stays on screen, at
+the same zoom, but fades, further the further out it is, and cannot be touched
+until a person backs out to it. Backing out is the way back; the card shrinks and
+what it pushed returns.
 _Avoid_: tunnelling, drilling down, expanding, zooming in
 
 **Room**:
@@ -145,6 +153,13 @@ _Avoid_: design, wireframe, comp
 
 ## Drawing
 
+**Card type**:
+What a person calls a kind of card on a sketch inside a software system, which is
+not the name of any one card, with the icon, shape and colour it is drawn in. A
+person can save one to the card library. A database and a page are not card types:
+they do more than look a certain way.
+_Avoid_: preset, template, style, stencil
+
 **Sketch**:
 A drawing kept with a project that is not read from any repo: any diagram the
 team wants, sometimes started from a snapshot of the map. An agent can be
@@ -166,7 +181,7 @@ _Avoid_: plan, request, spec, ticket, sketch
 Text, a sticky note, a shape or a line drawn over a map or a sketch for people
 and agents to read. It is not part of the diagram and never changes the code.
 It can keep beside a card, or point at one, but no card ever lines up with
-or moves for an annotation.
+or moves for an annotation. An annotation does move for a card that opens.
 _Avoid_: note (for anything but a sticky note), comment, markup, decoration
 
 **Pointer**:

@@ -4,7 +4,8 @@ Date: 2026-11-05
 
 ## Status
 
-Accepted. Replaces tunnelling, and the last paragraph of ADR 0010.
+Accepted. Replaces tunnelling, and the last paragraph of ADR 0010. ADR 0012 changes
+which levels can be drawn on, and ADR 0014 what a wire can end at.
 
 ## Context
 

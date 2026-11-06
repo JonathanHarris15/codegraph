@@ -1,7 +1,9 @@
 // codegraph: component sketch-editor
 import type { Level, Note, SketchCard, SketchWire } from '../../modules/sketches/index.js'
-import { blankCard } from '../../modules/sketches/schema.js'
+import type { CardType } from '../../modules/card-types/schema.js'
+import { blankCard, isHub, wireOfHub, hubOf, type CardLook } from '../../modules/sketches/schema.js'
 import type { Arrangement } from '../../modules/arrangements/schema.js'
+import { BLANK_LOOK } from './card-looks.js'
 import { sizeOf, wordsWidth } from './map-layout.js'
 
 export type { Arrangement }
@@ -17,18 +19,68 @@ export const levelInside: Record<Level, Level> = {
 
 /** The kinds a card can be at each level, the usual first. A person is drawn
  *  beside the software systems and never read from code, so it is only ever
- *  on a sketch. */
+ *  on a sketch. Inside a software system a sketch's cards are a person's own
+ *  types (ADR 0013): a blank card to make one from, and the kinds that do more
+ *  than look a certain way, a database and a page. */
 export const kindsAt: Record<Level, string[]> = {
   project: ['project'],
   system: ['software system', 'shallow software system', 'person'],
+  container: ['card', 'database'],
+  component: ['card', 'page'],
+  code: ['file'],
+}
+
+/** The kinds a card can be when it is going to be built: what the code can say. */
+const kindsInCode: Partial<Record<Level, string[]>> = {
   container: ['web app', 'browser app', 'server', 'desktop app', 'mobile app', 'database', 'files on disk', 'function', 'command-line tool'],
   component: ['page', 'feature', 'module', 'trigger'],
-  code: ['file'],
+}
+
+/** Whether a wire's end is a hub on the border of the card it is drawn in. */
+export const endsAtHub = (end: string): boolean => isHub(end)
+/** The hub a wire makes where it meets the border of an open card. */
+export const hubOfWire = (wireId: string): string => hubOf(wireId)
+
+/** The levels where a person makes up their own types of card. */
+export const ownTypesAt = (level: Level): boolean => level === 'container' || level === 'component'
+
+/** Something a card can be made as, from the library or the quick menu. */
+export type CardChoice = { key: string; kind: string; look?: CardLook; hint: string }
+
+/** What can be put on a level, in groups: what the app knows, then the types
+ *  a person has saved. */
+export const choicesAt = (level: Level, types: CardType[] = [], codeKinds = false): { name: string; choices: CardChoice[] }[] => {
+  // Over the map, what is drawn gets built, so it has to be a kind code can have.
+  if (codeKinds && ownTypesAt(level))
+    return [{ name: '', choices: kindsInCode[level]!.map((kind) => ({ key: kind, kind, hint: kindHints[kind] ?? '' })) }]
+  const known = kindGroups(level).map((group) => ({
+    name: group.name,
+    choices: group.kinds.map((kind): CardChoice => ({
+      key: kind,
+      kind,
+      ...(kind === 'card' ? { look: BLANK_LOOK } : {}),
+      hint: kindHints[kind] ?? '',
+    })),
+  }))
+  if (!ownTypesAt(level) || types.length === 0) return known
+  return [
+    ...known,
+    {
+      name: 'Your types',
+      choices: types.map((type): CardChoice => ({
+        key: `type:${type.id}`,
+        kind: type.name,
+        look: { icon: type.icon, shape: type.shape, color: type.color },
+        hint: 'Your own type',
+      })),
+    },
+  ]
 }
 
 /** One line on what each kind of card is, in the glossary's words, for the
  *  card library to say beside it. */
 export const kindHints: Record<string, string> = {
+  card: 'Pick its type and look',
   person: 'Someone who uses the software',
   'software system': 'One repo, seen whole',
   'shallow software system': 'Run by someone else; no repo here',
@@ -51,17 +103,12 @@ export const kindHints: Record<string, string> = {
 /** The kinds for one level, grouped the way the canvas lays them out, for
  *  the card library to offer. A level with one group gives it no heading. */
 export const kindGroups = (level: Level): { name: string; kinds: string[] }[] =>
-  level === 'container'
+  level === 'system'
     ? [
-        { name: 'Runs', kinds: kindsAt.container.filter((kind) => !/database|files/.test(kind)) },
-        { name: 'Keeps', kinds: kindsAt.container.filter((kind) => /database|files/.test(kind)) },
+        { name: 'Software', kinds: ['software system', 'shallow software system'] },
+        { name: 'People', kinds: ['person'] },
       ]
-    : level === 'system'
-      ? [
-          { name: 'Software', kinds: ['software system', 'shallow software system'] },
-          { name: 'People', kinds: ['person'] },
-        ]
-      : [{ name: '', kinds: kindsAt[level] }]
+    : [{ name: '', kinds: kindsAt[level] }]
 
 export const wireKinds = ['uses', 'asks', 'reads', 'starts', 'keeps', 'leads to', 'calls']
 
@@ -112,18 +159,28 @@ export const pinAll = (focus: SketchCard, arrangement: Arrangement): SketchCard 
 
 /** A new card centred where the person put it, of the kind they picked. Given
  *  a card to come from, it is wired to that card too, the way dragging a wire
- *  onto empty board and picking a kind does. */
+ *  onto empty board and picking a kind does. Coming from a hub, the wire runs
+ *  the way the hub's own wire does, and is of the same kind. */
 export const placeCard = (
   focus: SketchCard,
   at: { x: number; y: number },
   kind = '',
   from = '',
+  hub?: { into: boolean; kind: string },
+  look?: CardLook,
 ): [SketchCard, string] => {
   const level = levelInside[focus.level]
-  const card = blankCard(newId(), '', level, kind || kindsAt[level][0] || '')
+  const type = kind || kindsAt[level][0] || ''
+  const blank = blankCard(newId(), '', level, type)
+  const shown = look ?? (type === 'card' ? BLANK_LOOK : undefined)
+  const card: SketchCard = shown ? { ...blank, look: shown } : blank
   const { w, h } = sizeOf(card)
   const placed: SketchCard = { ...card, x: Math.round(at.x - w / 2), y: Math.round(at.y - h / 2) }
   const next = { ...focus, children: [...focus.children, placed] }
+  if (from && isHub(from) && hub) {
+    const [wired] = hub.into ? addWire(next, from, card.id, hub.kind) : addWire(next, card.id, from, hub.kind)
+    return [wired, card.id]
+  }
   if (!from || !focus.children.some((c) => c.id === from)) return [next, card.id]
   const [wired] = addWire(next, from, card.id)
   return [wired, card.id]
@@ -163,7 +220,7 @@ export const nudge = (focus: SketchCard, ids: string[], dx: number, dy: number):
       .map((thing) => ({ id: thing.id, x: thing.x! + dx, y: thing.y! + dy })),
   )
 
-export const addWire = (focus: SketchCard, from: string, to: string): [SketchCard, string] => {
+export const addWire = (focus: SketchCard, from: string, to: string, kind?: string): [SketchCard, string] => {
   // One wire between the same two cards is enough; drawing it again picks it.
   const already = focus.wires.find((w) => w.from === from && w.to === to)
   if (already) return [focus, already.id]
@@ -171,21 +228,33 @@ export const addWire = (focus: SketchCard, from: string, to: string): [SketchCar
     id: newId(),
     from,
     to,
-    kind: kindBetween(focus.children.find((c) => c.id === from), focus.children.find((c) => c.id === to)),
+    kind: kind ?? kindBetween(focus.children.find((c) => c.id === from), focus.children.find((c) => c.id === to)),
     words: '',
   }
   return [{ ...focus, wires: [...focus.wires, wire] }, wire.id]
 }
 
-/** Points one end of a wire at another card. */
-export const rewire = (focus: SketchCard, id: string, end: 'from' | 'to', card: string): SketchCard => ({
-  ...focus,
-  wires: focus.wires.map((w) => {
-    if (w.id !== id) return w
-    const next = { ...w, [end]: card }
-    return next.from === next.to ? w : next
-  }),
-})
+/** Takes the wires inside a card that end at the hubs of these wires, and in
+ *  turn whatever hung off the wires taken. */
+const withoutHubs = (card: SketchCard, gone: Set<string>): SketchCard => {
+  if (gone.size === 0) return card
+  const lost = new Set(card.wires.filter((w) => gone.has(wireOfHub(w.from)) || gone.has(wireOfHub(w.to))).map((w) => w.id))
+  if (lost.size === 0) return card
+  return { ...card, wires: card.wires.filter((w) => !lost.has(w.id)), children: card.children.map((c) => withoutHubs(c, lost)) }
+}
+
+/** Points one end of a wire at another card. The card it let go of loses the
+ *  hub the wire had on its border, and what was wired to it. */
+export const rewire = (focus: SketchCard, id: string, end: 'from' | 'to', card: string): SketchCard => {
+  const wire = focus.wires.find((w) => w.id === id)
+  if (!wire || wire[end] === card || (end === 'from' ? wire.to : wire.from) === card) return focus
+  const was = wire[end]
+  return {
+    ...focus,
+    wires: focus.wires.map((w) => (w.id === id ? { ...w, [end]: card } : w)),
+    children: focus.children.map((c) => (c.id === was ? withoutHubs(c, new Set([id])) : c)),
+  }
+}
 
 export type Picked =
   | { kind: 'card'; card: SketchCard }
@@ -257,10 +326,12 @@ export const makeRoom = (focus: SketchCard): SketchCard => {
 /** Takes cards, wires and notes off a level, and any wire left with a loose end. */
 export const remove = (focus: SketchCard, ids: string[]): SketchCard => {
   const gone = new Set(ids)
+  const wires = focus.wires.filter((w) => !gone.has(w.id) && !gone.has(w.from) && !gone.has(w.to))
+  const lost = new Set(focus.wires.filter((w) => !wires.includes(w)).map((w) => w.id))
   return {
     ...focus,
-    children: focus.children.filter((c) => !gone.has(c.id)),
-    wires: focus.wires.filter((w) => !gone.has(w.id) && !gone.has(w.from) && !gone.has(w.to)),
+    children: focus.children.filter((c) => !gone.has(c.id)).map((c) => withoutHubs(c, lost)),
+    wires,
     notes: focus.notes.filter((n) => !gone.has(n.id)),
   }
 }
@@ -280,22 +351,38 @@ export const copyOf = (focus: SketchCard, ids: string[]): Clip => {
   }
 }
 
+/** Makes the hubs named by the wires inside a card follow the wires they
+ *  belong to, which have new ids. */
+const renameHubs = (card: SketchCard, wires: Map<string, string>): SketchCard => {
+  const name = (end: string): string => {
+    const to = wires.get(wireOfHub(end))
+    return to ? hubOf(to) : end
+  }
+  return { ...card, wires: card.wires.map((w) => ({ ...w, from: name(w.from), to: name(w.to) })) }
+}
+
 /** A card again, with fresh ids all the way down, so a copy never shares a
  *  wire or a mockup's place with the card it came from. */
 const fresh = (card: SketchCard, renamed: Map<string, string>): SketchCard => {
   const id = newId()
   renamed.set(card.id, id)
   const children = card.children.map((child) => fresh(child, renamed))
+  const wireNames = new Map<string, string>()
+  const end = (at: string): string | undefined => (isHub(at) ? at : renamed.get(at))
+  const wires = card.wires.flatMap((w) => {
+    const from = end(w.from)
+    const to = end(w.to)
+    if (!from || !to) return []
+    const copy = newId()
+    wireNames.set(w.id, copy)
+    return [{ ...w, id: copy, from, to }]
+  })
   return {
     ...card,
     id,
     mockup: '',
-    children,
-    wires: card.wires.flatMap((w) => {
-      const from = renamed.get(w.from)
-      const to = renamed.get(w.to)
-      return from && to ? [{ ...w, id: newId(), from, to }] : []
-    }),
+    children: children.map((child) => renameHubs(child, wireNames)),
+    wires,
     notes: card.notes.map((n) => ({ ...n, id: newId() })),
   }
 }
@@ -308,14 +395,21 @@ export const paste = (focus: SketchCard, clip: Clip, by = 32): [SketchCard, stri
     const copy = fresh(card, renamed)
     return { ...copy, x: (card.x ?? 0) + by, y: (card.y ?? 0) + by }
   })
+  const wireNames = new Map<string, string>()
   const wires = clip.wires.flatMap((w) => {
     const from = renamed.get(w.from)
     const to = renamed.get(w.to)
-    return from && to ? [{ ...w, id: newId(), from, to }] : []
+    if (!from || !to) return []
+    const copy = newId()
+    wireNames.set(w.id, copy)
+    return [{ ...w, id: copy, from, to }]
   })
+  // A wire that was not copied has no hub on the copy, so nothing can end there.
+  const left = new Set(cards.flatMap((c) => c.wires.flatMap((w) => [w.from, w.to])).map(wireOfHub).filter((wire) => wire && !wireNames.has(wire)))
+  const copies = cards.map((c) => withoutHubs(renameHubs(c, wireNames), left))
   const notes = clip.notes.map((n) => ({ ...n, id: newId(), x: n.x + by, y: n.y + by }))
   return [
-    { ...focus, children: [...focus.children, ...cards], wires: [...focus.wires, ...wires], notes: [...focus.notes, ...notes] },
+    { ...focus, children: [...focus.children, ...copies], wires: [...focus.wires, ...wires], notes: [...focus.notes, ...notes] },
     [...cards.map((c) => c.id), ...notes.map((n) => n.id)],
   ]
 }

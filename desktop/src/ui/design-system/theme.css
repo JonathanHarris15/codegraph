@@ -100,6 +100,9 @@
   --stroke-wire-strong: 2.4px;
 
   --opacity-outside: 0.55;
+  --opacity-up-1: 0.34;
+  --opacity-up-2: 0.16;
+  --opacity-up-3: 0.08;
   --opacity-open-fill: 0.6;
   --opacity-ghost: 0.35;
   --opacity-disabled: 0.45;
@@ -829,10 +832,36 @@ h3 {
   box-shadow: none;
 }
 
-/* the cards around the one that is open */
-.map-card--outside {
-  opacity: var(--opacity-outside);
+/* What is outside the card open now fades, the further out the more, and
+   cannot be touched until a person has backed out to it. A card's lip keeps
+   its back button, since that is the way out. */
+.map-up {
+  filter: grayscale(1);
+  pointer-events: none;
+}
+
+.map-up,
+.map-up * {
+  pointer-events: none !important;
+}
+
+.map-up--1 { opacity: var(--opacity-up-1); }
+.map-up--2 { opacity: var(--opacity-up-2); }
+.map-up--3 { opacity: var(--opacity-up-3); }
+
+.map-card.map-up {
   box-shadow: none;
+}
+
+.map-card--open.map-up .map-back {
+  pointer-events: auto !important;
+}
+
+/* Over a faded card or wire, what the pointer's card reaches still shows. */
+.map-wire.map-up.map-wire--lit,
+.map-card.map-up.map-card--wired {
+  opacity: 0.85;
+  filter: none;
 }
 
 .map-card--selected {
@@ -1186,9 +1215,7 @@ h3 {
 }
 
 /* the wires of the level around the card that is open */
-.map-wire--outside path {
-  opacity: var(--opacity-outside);
-}
+
 
 .map-wire--selected path {
   stroke: var(--wire-strong);
@@ -2483,8 +2510,8 @@ kbd {
 }
 
 .map-wire--lit:not(.map-wire--selected) path:first-child {
-  stroke: var(--wire-strong);
-  stroke-width: var(--stroke-wire-strong);
+  stroke: var(--focus-ring);
+  stroke-width: 3;
   opacity: 1;
 }
 
@@ -2518,9 +2545,53 @@ kbd {
 
 /* the sentence of a lit wire comes forward with it */
 .map-sentence--lit {
-  border-color: var(--wire-strong);
-  box-shadow: var(--shadow-float);
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 1px var(--focus-ring), var(--shadow-float);
+  opacity: 1;
+  filter: none;
   z-index: 2;
+}
+
+/* Under the pointer, a card and what it is wired to come forward and the rest
+   of the level steps back, so what is joined to what reads at a glance. */
+.map-world--lit .map-card:not(.map-card--open):not(.map-card--hovered):not(.map-card--wired):not(.map-up) {
+  opacity: 0.32;
+}
+
+.map-world--lit .map-wire:not(.map-wire--lit):not(.map-up) path {
+  opacity: 0.16;
+}
+
+.map-world--lit .map-sentence:not(.map-sentence--lit):not(.map-up) {
+  opacity: 0.25;
+}
+
+.map-card {
+  transition: opacity 120ms ease-out, box-shadow 120ms ease-out;
+}
+
+.map-card--hovered:not(.map-card--shaped) {
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 2px var(--focus-ring), 0 10px 28px color-mix(in srgb, var(--focus-ring) 35%, transparent);
+}
+
+.map-card--wired:not(.map-card--shaped):not(.map-card--open) {
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 1px var(--focus-ring), 0 6px 18px color-mix(in srgb, var(--focus-ring) 22%, transparent);
+}
+
+.map-card--open.map-card--wired {
+  border-color: var(--focus-ring);
+}
+
+.map-card--hovered.map-card--shaped .map-card-outline path {
+  stroke: var(--focus-ring);
+  stroke-width: 3;
+}
+
+.map-card--wired.map-card--shaped .map-card-outline path {
+  stroke: var(--focus-ring);
+  stroke-width: 2;
 }
 
 /* a sentence can be dragged out of the way of whatever it is sitting on */
@@ -3453,33 +3524,56 @@ kbd {
   fill: none;
 }
 
-.map-anno-text {
-  position: relative;
-  max-width: 100%;
-  max-height: 100%;
+/* A shape's words sit in the biggest rectangle that fits inside its outline,
+   as many lines as fit, and are cut with an ellipsis past that. */
+.map-anno-words {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
-  padding: 8px 12px;
+  min-width: 0;
+  padding: 6px;
+  box-sizing: border-box;
+}
+
+.map-anno-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  max-width: 100%;
   font-size: 13px;
-  line-height: 18px;
   text-align: center;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
+.map-anno--sticky .map-anno-words,
+.map-anno--callout .map-anno-words,
+.map-anno--code .map-anno-words,
+.map-anno--list .map-anno-words {
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
 .map-anno--sticky .map-anno-text,
 .map-anno--callout .map-anno-text {
-  align-self: flex-start;
   width: 100%;
   text-align: left;
   font-family: var(--font-hand, inherit);
 }
 
-.map-anno--callout .map-anno-text {
-  padding-bottom: 30%;
+.map-anno-text--list {
+  width: 100%;
+  text-align: left;
+}
+
+.map-anno--text .map-anno-words {
+  justify-content: flex-start;
+  padding: 2px 4px;
 }
 
 .map-anno--text .map-anno-text {
-  padding: 2px 4px;
   font-size: 15px;
   font-weight: 500;
   text-align: left;
@@ -3490,7 +3584,6 @@ kbd {
 }
 
 .map-anno-text--code {
-  align-self: stretch;
   width: 100%;
   text-align: left;
   font-family: var(--font-mono);
@@ -3501,15 +3594,6 @@ kbd {
   fill: color-mix(in srgb, var(--anno-fill) 60%, var(--surface-sunken));
 }
 
-.map-anno-list {
-  position: relative;
-  align-self: flex-start;
-  width: 100%;
-  margin: 0;
-  padding: 10px 14px 10px 28px;
-  font-size: 13px;
-  line-height: 20px;
-}
 
 /* Frames and boxes sit behind the cards, and are picked by their edge or
    their title, so the board inside them still pans and picks cards. */
@@ -3623,6 +3707,17 @@ kbd {
   font-size: 13px;
   line-height: 18px;
   cursor: text;
+}
+
+.map-anno-seam {
+  fill: var(--surface-000);
+  stroke: var(--focus-ring);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.map-anno-seam--on {
+  fill: var(--focus-ring);
 }
 
 .map-anno-edit--line {
@@ -4092,4 +4187,262 @@ input.map-layers-name:focus {
 .map-palette-key {
   flex: none;
   margin-left: auto;
+}
+
+/* ---- cards of a person's own type, and hubs ---------------------------- */
+
+/* A person's own type of card takes its colour from these. Dark mode's washes
+   come from the annotation colours, which are already set for both. */
+.look--gray { --k: #6f6b63; --kw: var(--anno-gray); }
+.look--blue { --k: #2f6fb0; --kw: var(--anno-blue); }
+.look--teal { --k: #1f8a8a; --kw: color-mix(in srgb, var(--anno-blue) 50%, var(--anno-green)); }
+.look--green { --k: #3a8a4a; --kw: var(--anno-green); }
+.look--yellow { --k: #a88a14; --kw: var(--anno-yellow); }
+.look--orange { --k: #c26a1f; --kw: var(--anno-orange); }
+.look--red { --k: #c0453a; --kw: color-mix(in srgb, var(--anno-pink) 60%, var(--anno-orange)); }
+.look--pink { --k: #c2487a; --kw: var(--anno-pink); }
+.look--purple { --k: #6d4fc2; --kw: var(--anno-purple); }
+
+/* A card drawn in a shape: the outline is the card, and its words sit in the
+   biggest rectangle that fits inside. */
+.map-card--shaped,
+.map-card--shaped:hover,
+.map-card--shaped[role='button']:hover {
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.map-card--shaped.map-card--selected,
+.map-card--shaped.map-card--target {
+  outline: none;
+  box-shadow: none;
+}
+
+.map-card-outline {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.map-card-outline path {
+  fill: var(--kw, var(--surface-000));
+  stroke: var(--k, var(--line-edge));
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 1px 2px rgba(40, 30, 10, 0.14));
+}
+
+.map-card--shaped.map-card--selected .map-card-outline path,
+.map-card--shaped.map-card--target .map-card-outline path {
+  stroke: var(--focus-ring);
+  stroke-width: 3;
+}
+
+.map-card-words {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-width: 0;
+  padding: 4px 8px;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-align: center;
+}
+
+.map-card-words .map-kind {
+  justify-content: center;
+  max-width: 100%;
+}
+
+.map-card-words .map-kind-word {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-card-words .map-name,
+.map-card-words .map-says {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* A hub: where a wire from outside meets the open card's border, for the parts
+   inside to wire to. */
+.map-hub {
+  position: absolute;
+  z-index: 2;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  padding: 0;
+  border: 2px solid var(--focus-ring);
+  border-radius: var(--radius-pill);
+  background: var(--surface-000);
+  cursor: crosshair;
+  transition: transform 80ms ease, background 80ms ease;
+}
+
+.map-hub::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--focus-ring);
+}
+
+.map-hub:hover,
+.map-hub--target,
+.map-hub--lit {
+  transform: scale(1.3);
+  background: var(--focus-ring);
+}
+
+.map-hub-name {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 4px);
+  transform: translateX(-50%);
+  padding: 1px 6px;
+  border-radius: var(--radius-md);
+  background: var(--surface-000);
+  box-shadow: var(--shadow-chip);
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 80ms ease;
+}
+
+.map-hub:hover .map-hub-name,
+.map-hub--target .map-hub-name,
+.map-hub--lit .map-hub-name {
+  opacity: 1;
+}
+
+/* The card library's own types, and the place to make one. */
+.map-palette-row {
+  position: relative;
+  display: block;
+}
+
+.map-palette-forget {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: none;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--surface-000);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.map-palette-row:hover .map-palette-forget,
+.map-palette-forget:focus-visible {
+  display: inline-flex;
+}
+
+.map-palette-new {
+  margin: var(--space-2);
+  padding: var(--space-2);
+  border: var(--stroke-edge) dashed var(--line-edge);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.map-palette-new:hover {
+  border-color: var(--focus-ring);
+  color: var(--ink-000);
+}
+
+.map-palette-making {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  border-top: var(--stroke-edge) solid var(--line-edge);
+}
+
+.map-palette-making-acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.map-look {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.map-look-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.map-look-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.map-look-pick {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-md);
+  background: var(--surface-000);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.map-look-pick svg path {
+  fill: currentColor;
+}
+
+.map-look-pick--on {
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 1px var(--focus-ring);
+  color: var(--ink-000);
+}
+
+.map-look-color {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid var(--k);
+  border-radius: var(--radius-pill);
+  background: var(--kw);
+  cursor: pointer;
+}
+
+.map-look-color--on {
+  box-shadow: 0 0 0 2px var(--surface-000), 0 0 0 4px var(--focus-ring);
 }

@@ -298,7 +298,7 @@ describe('drawing a sketch in the real app', () => {
     await card('notes').click()
     await page.getByRole('button', { name: 'Draw inside it' }).click()
     expect(await page.getByText('Nothing drawn here yet').count()).toBe(0)
-    expect(await shown(page.getByRole('complementary', { name: 'Cards' }))).toContain('web app')
+    expect(await shown(page.getByRole('complementary', { name: 'Cards' }))).toContain('database')
     expect(await shown(page.getByRole('navigation', { name: 'Where you are' }))).toContain('notes')
     await settle()
     await page.keyboard.press('Escape')

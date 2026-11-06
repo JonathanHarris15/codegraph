@@ -10,6 +10,10 @@ import {
 } from './proposal.js'
 import type { ComponentKind, SystemMap, WireKind } from './schema.js'
 
+/** A wire inside a card can end at a hub on that card's border, which stands
+ *  for the card at the far end of the wire the hub belongs to. */
+const HUB = 'hub:'
+
 /** A card as a person drew it, on a sketch or over the map: the same shape
  *  either way. Crossed out, it is to be taken away. */
 export type DrawnCard = {
@@ -25,7 +29,7 @@ export type DrawnCard = {
   x?: number
   y?: number
   children: DrawnCard[]
-  wires: { from: string; to: string; kind: string; words: string; state?: string; x?: number; y?: number }[]
+  wires: { id?: string; from: string; to: string; kind: string; words: string; state?: string; x?: number; y?: number }[]
 }
 
 export type FromDrawing = {
@@ -73,8 +77,13 @@ export const proposalFrom = (system: DrawnCard, map: SystemMap, how: FromDrawing
 
     const drawn = new Set<string>()
     for (const inner of card.children) {
-      if (!KINDS.has(inner.kind) || !inner.name.trim()) continue
-      const component = { container: name, kind: inner.kind as ComponentKind, name: inner.name.trim() }
+      if (!inner.name.trim()) continue
+      // A type a person made up is not one code can say, so it is built as a
+      // module, the one kind that makes no promise about how it is reached,
+      // and its type goes in what it is for.
+      const own = !KINDS.has(inner.kind) && inner.kind && inner.kind !== 'card' ? inner.kind : ''
+      const kind = (KINDS.has(inner.kind) ? inner.kind : 'module') as ComponentKind
+      const component = { container: name, kind, name: inner.name.trim() }
       const full = componentName(component)
       nameOf.set(inner.id, full)
       layout(inner, full)
@@ -82,7 +91,7 @@ export const proposalFrom = (system: DrawnCard, map: SystemMap, how: FromDrawing
       const is = map.components.some((c) => componentName(c) === full)
       const entry: ProposedComponent = {
         ...component,
-        says: inner.says,
+        says: own ? [`(${own})`, inner.says].filter(Boolean).join(' ') : inner.says,
         at: inner.at,
         ...(inner.start ? { start: true } : {}),
         mockup: inner.mockup && how.mockupName ? how.mockupName(inner, full) : '',
@@ -125,8 +134,14 @@ export const proposalFrom = (system: DrawnCard, map: SystemMap, how: FromDrawing
   const drawnWires: ProposedWire[] = []
   for (const holder of [system, ...containers.filter((c) => c.state !== 'gone')])
     for (const w of holder.wires) {
-      const from = nameOf.get(w.from)
-      const to = nameOf.get(w.to)
+      // A hub on this card's border is the card at the far end of its wire.
+      const endOf = (id: string): string | undefined => {
+        if (!id.startsWith(HUB)) return nameOf.get(id)
+        const outer = system.wires.find((one) => one.id === id.slice(HUB.length))
+        return outer && nameOf.get(outer.to === holder.id ? outer.from : outer.to)
+      }
+      const from = endOf(w.from)
+      const to = endOf(w.to)
       if (!from || !to || !WIRES.has(w.kind)) continue
       // Where a person dragged the wire's sentence, kept the way a card's
       // spot is: by the names it reads as, so it survives being read again.
