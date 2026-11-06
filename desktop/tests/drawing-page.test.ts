@@ -130,13 +130,14 @@ describe('a wire and its sentence', () => {
 })
 
 describe('inside a software system', () => {
-  it('offers a blank card and a database, not a list of kinds', async () => {
+  it('offers a blank card, a database, and the old kinds as templates', async () => {
     const system = await boxOf(card('Notes app'))
     await page.mouse.dblclick(middle(system).x, system.y + system.height - 12)
     await settle()
     const cards = page.getByRole('complementary', { name: 'Cards' })
     await cards.getByRole('button', { name: 'Card: database' }).waitFor({ timeout: PATIENCE })
-    expect(await cards.getByRole('button', { name: 'Card: web app' }).count()).toBe(0)
+    await cards.getByRole('button', { name: 'Card: web app' }).waitFor({ timeout: PATIENCE })
+    expect(await cards.textContent()).toContain('Templates')
     await picture('draw-3-open')
   })
 

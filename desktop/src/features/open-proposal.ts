@@ -25,7 +25,7 @@ export type ProposalOpened =
 const nameOfCard = (holder: Card, id: string): string => {
   const one = holder.children.find((c) => c.id === id)
   if (!one) return ''
-  return holder.level === 'system' ? one.name : componentName({ container: holder.name, kind: one.kind, name: one.name })
+  return holder.level === 'system' ? one.name : componentName({ container: holder.name, kind: one.role ?? one.kind, name: one.name })
 }
 
 /** A card of the map as a card to draw on, down to the components: what is
@@ -37,6 +37,8 @@ const toDraw = (card: Card, at: Record<string, [number, number]>, name: string):
     name: card.name,
     level: card.level,
     kind: card.kind,
+    ...(card.role ? { role: card.role } : {}),
+    ...(card.look ? { look: card.look } : {}),
     says: card.says,
     at: card.at,
     start: card.start,
@@ -50,7 +52,7 @@ const toDraw = (card: Card, at: Record<string, [number, number]>, name: string):
       card.level === 'component'
         ? []
         : card.children.map((c) =>
-            toDraw(c, at, card.level === 'system' ? c.name : componentName({ container: card.name, kind: c.kind, name: c.name })),
+            toDraw(c, at, card.level === 'system' ? c.name : componentName({ container: card.name, kind: c.role ?? c.kind, name: c.name })),
           ),
     wires: card.wires.map((w) => {
       // A wire's sentence is kept by the names it reads as, like a card's

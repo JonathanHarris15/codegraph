@@ -1,6 +1,8 @@
 // codegraph: feature save-proposal in workspace
-// codegraph: uses projects, reader, repo
+// codegraph: uses projects, reader, repo, card-types, sketches
+import { rememberLooks } from '../modules/card-types/index.js'
 import { listProjects } from '../modules/projects/index.js'
+import { looksDrawn, type SketchCard } from '../modules/sketches/index.js'
 import { changesAnything, live, proposalFrom, readMap, type DrawnCard } from '../modules/reader/index.js'
 import { headOf, proposalPicture, removeProposal, writeProposal, type Picture } from '../modules/repo/index.js'
 
@@ -29,6 +31,7 @@ export const saveProposal = async (projectId: string, systemId: string, draft: D
     removeProposal(system.path)
     return { ok: true, kept: false }
   }
+  rememberLooks(looksDrawn(draft as unknown as SketchCard))
   writeProposal(
     system.path,
     { ...drawn, says: says.trim(), sketch: map.proposal?.sketch ?? '', base: map.proposal?.base || (await headOf(system.path)) },

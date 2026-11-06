@@ -84,6 +84,9 @@ tag.
 - **module**, **feature**, **page**, **trigger** say which kind of component
   the file belongs to, and its name. A trigger says whether it is a
   schedule, an event or a command.
+- **as** after a component's name says what the team calls it: `module jobs as
+  queue`. It is what the map shows. The rules a component keeps to still come from
+  its kind, so the check holds whatever it is called (ADR 0013).
 - **front door** is written once per module and lists what other components
   may use.
 - **uses** on a feature names the modules it gets its power from.

@@ -14,7 +14,11 @@ export type ProposedContainer = Drawn & { name: string; kind: string; says: stri
 
 export type ProposedComponent = Drawn & {
   container: string
+  /** What rules it keeps to. For a card a person gave their own type this is
+   *  a first guess, for the agent building it to settle. */
   kind: ComponentKind
+  /** The type a person drew it as, to tag it with; left out, none. */
+  type?: string
   name: string
   says: string
   /** A page's address. */
@@ -91,6 +95,7 @@ export const readProposal = (text: string | undefined, problems: string[]): Prop
     proposal.components.push({
       container: words(c['container']),
       kind: kind as ComponentKind,
+      ...(words(c['type']) ? { type: words(c['type']) } : {}),
       name: words(c['name']),
       says: words(c['says']),
       at: words(c['at']),
@@ -192,7 +197,10 @@ export const measure = (map: SystemMap, proposal: Proposal, base: SystemMap | nu
     })
   for (const c of proposal.components) {
     const name = componentName(c)
-    items.push({ name, what: 'component', id: idOfName(name), state: state(map.components.some((m) => m.id === idOfName(name)), c.gone) })
+    // Tagged as anything but the type drawn, it is not built yet. An agent who
+    // thinks another type is better changes the proposal, and says why.
+    const there = map.components.some((m) => m.id === idOfName(name) && (c.gone || !c.type || m.type === c.type))
+    items.push({ name, what: 'component', id: idOfName(name), state: state(there, c.gone) })
   }
   for (const w of proposal.wires)
     items.push({ name: wireName(w), what: 'wire', id: '', state: state(hasWire(map, proposal, w), w.gone) })

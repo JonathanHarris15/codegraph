@@ -1,5 +1,6 @@
 // codegraph: module cards
-// codegraph: front door card, join, systemCard, Card, CardWire, CardState, Level, WireEnds
+// codegraph: front door card, join, systemCard, withLooks, Card, CardWire, CardState, Level, WireEnds
+import type { CardType } from '../card-types/index.js'
 import { idOfName, type SystemMap } from '../reader/index.js'
 
 export type Level = 'project' | 'system' | 'container' | 'component' | 'code'
@@ -29,8 +30,12 @@ export type Card = {
   id: string
   name: string
   level: Level
-  /** browser app, database, page, module… */
+  /** browser app, database, page, module, or a type the team named… */
   kind: string
+  /** A component's kind, when what it is called is another type. */
+  role?: string
+  /** How a type a person saved is drawn. */
+  look?: { icon: string; shape: CardType['shape']; color: string }
   says: string
   /** A page's address. */
   at: string
@@ -65,6 +70,18 @@ export const card = (id: string, name: string, level: Level, more: Partial<Card>
   ...more,
 })
 
+/** Gives every card of a type a person has saved the look of that type, so
+ *  what was drawn looks the same once it is read back from the code. */
+export const withLooks = (shown: Card, types: CardType[]): Card => {
+  if (types.length === 0) return shown
+  const type = types.find((one) => one.name === shown.kind)
+  return {
+    ...shown,
+    ...(type && !shown.look ? { look: { icon: type.icon, shape: type.shape, color: type.color } } : {}),
+    children: shown.children.map((child) => withLooks(child, types)),
+  }
+}
+
 /** Adds a wire, or the words of one, to wires already drawn between the
  *  same two cards. */
 export const join = (wires: CardWire[], wire: CardWire): void => {
@@ -89,7 +106,8 @@ export const systemCard = (id: string, name: string, map: SystemMap): Card => {
         .filter((component) => component.container === container.name)
         .map((component) =>
           card(at(component.id), component.name, 'component', {
-            kind: component.kind,
+            kind: component.type || component.kind,
+            ...(component.type ? { role: component.kind } : {}),
             says: component.kind === 'trigger' ? `On a ${component.trigger}` : '',
             at: component.at,
             start: component.start,
@@ -166,7 +184,7 @@ const drawProposal = (system: Card, map: SystemMap, holder: Map<string, Card>, a
       if (mockup) there.mockup = mockup
     } else if (!c.gone)
       containerCard(c.container).children.push(
-        card(id, c.name, 'component', { kind: c.kind, says: c.says, at: c.at, start: c.start ?? false, state: 'proposed', ...(mockup ? { mockup } : {}) }),
+        card(id, c.name, 'component', { kind: c.type || c.kind, ...(c.type ? { role: c.kind } : {}), says: c.says, at: c.at, start: c.start ?? false, state: 'proposed', ...(mockup ? { mockup } : {}) }),
       )
   }
   const holderOf = (name: string): string => name.split('/')[0]!

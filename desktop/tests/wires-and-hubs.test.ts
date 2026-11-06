@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { blankProposal, proposalFrom, type DrawnCard as ReadCard } from '../src/modules/reader/index.js'
 import { blankCard, hubOf, type SketchCard } from '../src/modules/sketches/schema.js'
 import { annotationsClear, openLevels, roomAround, wirePath, wireThrough, type Box, type DrawnCard } from '../src/ui/components/map-layout.js'
-import { addWire, copyOf, paste, placeCard, remove, rewire } from '../src/ui/components/sketch-edits.js'
+import { TEMPLATES, lookOf } from '../src/ui/components/card-looks.js'
+import { addWire, choicesAt, copyOf, paste, placeCard, remove, rewire } from '../src/ui/components/sketch-edits.js'
 
 const a: Box = { x: 0, y: 0, w: 200, h: 100 }
 const b: Box = { x: 600, y: 0, w: 200, h: 100 }
@@ -82,6 +83,34 @@ describe('annotations keep clear of a card opening', () => {
   })
 })
 
+describe('the old kinds are templates of the one card', () => {
+  const names = (level: 'container' | 'component'): string[] =>
+    choicesAt(level).flatMap((group) => group.choices.map((choice) => choice.kind))
+
+  it('offers them beside the blank card and what does more than look', () => {
+    expect(names('container')).toEqual(expect.arrayContaining(['card', 'database', 'web app', 'server', 'files on disk']))
+    expect(names('component')).toEqual(expect.arrayContaining(['card', 'page', 'feature', 'module', 'trigger']))
+  })
+
+  it('makes a card of one with the template’s look, for a person to change', () => {
+    const server = choicesAt('container').flatMap((group) => group.choices).find((choice) => choice.kind === 'server')!
+    expect(server.look).toEqual(TEMPLATES.server)
+    const [next, id] = placeCard(blankCard('s', 's', 'system'), { x: 0, y: 0 }, server.kind, '', undefined, server.look)
+    expect(next.children.find((c) => c.id === id)?.look).toEqual(TEMPLATES.server)
+  })
+
+  it('keeps a database and a page out of the templates', () => {
+    expect(TEMPLATES.database).toBeUndefined()
+    expect(TEMPLATES.page).toBeUndefined()
+  })
+
+  it('draws a card made before templates the way its template looks', () => {
+    expect(lookOf({ kind: 'server' })).toEqual(TEMPLATES.server)
+    const own = { icon: 'mail', shape: 'diamond' as const, color: 'red' }
+    expect(lookOf({ kind: 'server', look: own })).toEqual(own)
+  })
+})
+
 describe('making a proposal from what a person drew', () => {
   const drawing = (): ReadCard => {
     const server: SketchCard = {
@@ -98,15 +127,15 @@ describe('making a proposal from what a person drew', () => {
   const made = () =>
     proposalFrom(drawing(), { ...blankProposal(), mockups: {}, containers: [], components: [], wires: [], outside: [], stores: [] } as never, { absentIsGone: false })
 
-  it('builds a person’s own type as a module, saying the type', () => {
+  it('carries a person’s own type through to be tagged, as a first guess of module', () => {
     const jobs = made().components.find((c) => c.name === 'jobs')!
-    expect(jobs.kind).toBe('module')
-    expect(jobs.says).toBe('(queue) Holds the work')
+    expect(jobs).toMatchObject({ kind: 'module', type: 'queue', says: 'Holds the work' })
   })
 
   it('says nothing of a card left blank, and keeps a page a page', () => {
     const { components } = made()
     expect(components.find((c) => c.name === 'plain')).toMatchObject({ kind: 'module', says: '' })
+    expect(components.find((c) => c.name === 'plain')?.type).toBeUndefined()
     expect(components.find((c) => c.name === 'home')?.kind).toBe('page')
   })
 

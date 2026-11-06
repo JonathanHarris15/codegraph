@@ -151,6 +151,7 @@ export const readFacts = (point: Point, files: Map<string, string>): Facts => {
         id,
         name: role.name,
         kind: role.kind,
+        type: '',
         container,
         files: [],
         at: '',
@@ -162,6 +163,9 @@ export const readFacts = (point: Point, files: Map<string, string>): Facts => {
       byId.set(id, component)
       map.components.push(component)
     }
+    if (role.type && component.type && role.type !== component.type)
+      problems.push({ file: path, line: 1, says: `${role.name} is called both ${component.type} and ${role.type}` })
+    component.type ||= role.type
     component.at ||= role.at
     component.start ||= role.start
     component.trigger ||= role.trigger

@@ -76,7 +76,7 @@ const PUSHED_AIR = 24
 const NOTE_SIZE = { w: 180, h: 60 }
 
 /** Pages are drawn as frames for their screenshot, the rest as cards. */
-export const isFrame = (card: DrawnCard): boolean => card.level === 'component' && card.kind === 'page'
+export const isFrame = (card: DrawnCard): boolean => card.level === 'component' && (card.role ?? card.kind) === 'page'
 
 export const sizeOf = (card: DrawnCard): { w: number; h: number } => {
   const shape = drawnShape(card)
@@ -94,7 +94,10 @@ export const sizeOf = (card: DrawnCard): { w: number; h: number } => {
  *  what starts things (pages and triggers), then what they ask for, then
  *  what does the work, then where things are kept. */
 const columnOf = (card: DrawnCard): number => {
-  if (card.level === 'component') return card.kind === 'feature' ? 1 : card.kind === 'module' ? 2 : 0
+  if (card.level === 'component') {
+    const role = card.role ?? card.kind
+    return role === 'feature' ? 1 : role === 'module' ? 2 : 0
+  }
   if (card.level === 'container') return /database|files/.test(card.kind) ? 1 : 0
   if (card.level === 'system') return card.kind === 'shallow software system' ? 1 : 0
   return 0

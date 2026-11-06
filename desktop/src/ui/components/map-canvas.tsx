@@ -21,7 +21,7 @@ import { addLayer, changeAnnotation, changeLayer, duplicateAnnotations, layerOf,
 import { AnnotationLayer, AnnotationPlacer, drawnOn } from './annotation-layer.js'
 import { AnnotationLibrary, LayersPanel } from './annotation-library.js'
 import { COLOR_NAMES, COLORS, shapeOf } from './annotation-shapes.js'
-import { CARD_SHAPES, drawnShape } from './card-looks.js'
+import { CARD_SHAPES, drawnShape, lookOf } from './card-looks.js'
 import { meetOutline, seamOf, textAreaOf } from './shape-outline.js'
 import { CanvasMenu, type MenuItem } from './canvas-menu.js'
 import { CardPalette } from './card-palette.js'
@@ -106,9 +106,6 @@ export type Drawing = {
   /** The types of card a person has saved, and changing them. */
   cardTypes: CardType[]
   onCardTypes: (types: CardType[]) => void
-  /** Over the map, what is drawn gets built, so a card has to be a kind the
-   *  code can have. Left out, a person makes up their own types. */
-  codeKinds?: boolean
   onMockup: (id: string) => void
   onRemove: (ids: string[]) => void
   onAlign: (ids: string[], how: Alignment) => void
@@ -371,8 +368,8 @@ const HUB_SIZE = 16
 const upClass = (up: number): string => (up > 0 ? ` map-up map-up--${Math.min(up, 3)}` : '')
 
 /** Everything the library offers on a level, in one list. */
-const pickChoice = (level: Parameters<typeof choicesAt>[0], types: CardType[], codeKinds: boolean): CardChoice[] =>
-  choicesAt(level, types, codeKinds).flatMap((group) => group.choices)
+const pickChoice = (level: Parameters<typeof choicesAt>[0], types: CardType[]): CardChoice[] =>
+  choicesAt(level, types).flatMap((group) => group.choices)
 
 /** What a card's mark says, drawn over the map by a proposal. */
 const STATE_WORDS: Record<string, string> = { proposed: 'To build', built: 'Built', gone: 'To remove' }
@@ -426,9 +423,10 @@ const CardFace = ({
   const locked = up > 0
   const reachable = !locked && (opens || drawing)
   const shape = drawnShape(card)
+  const look = lookOf(card)
   const area = shape ? textAreaOf(CARD_SHAPES[shape].d) : null
   const classes = ['map-card', `map-card--${card.level}`, kindClass(card.kind)]
-  if (card.look) classes.push(lookClass(card.look))
+  if (look) classes.push(lookClass(look))
   if (shape) classes.push('map-card--shaped', `map-card--shape-${shape}`)
   if (linked) classes.push(`map-card--${linked === 'self' ? 'hovered' : 'wired'}`)
   if (keeps(card.kind)) classes.push('map-card--keeps')
@@ -453,7 +451,7 @@ const CardFace = ({
   const words = (
     <>
       <div className="map-kind">
-        <span className="map-glyph">{card.look ? <LookGlyph icon={card.look.icon} /> : <KindGlyph kind={card.kind} />}</span>
+        <span className="map-glyph">{look ? <LookGlyph icon={look.icon} /> : <KindGlyph kind={card.kind} />}</span>
         <span className="map-kind-word">{kindWords(card)}</span>
       </div>
       <div className="map-name" onDoubleClick={onField(false)}>
@@ -812,8 +810,8 @@ export const MapCanvas = ({
   const typesHere = drawing?.cardTypes
   /** What the library and the quick menu offer on this level. */
   const choices = useMemo(
-    () => (drawing ? pickChoice(levelInside[focus.level], typesHere ?? [], Boolean(drawing.codeKinds)) : []),
-    [drawing?.codeKinds, Boolean(drawing), focus.level, typesHere],
+    () => (drawing ? pickChoice(levelInside[focus.level], typesHere ?? []) : []),
+    [Boolean(drawing), focus.level, typesHere],
   )
 
   // Where a person has moved a map's cards and sentences. It is laid over the
@@ -2153,7 +2151,7 @@ export const MapCanvas = ({
           what: 'card',
           id,
           kind: card.card.kind,
-          look: card.card.look,
+          look: lookOf(card.card),
           level: card.card.level,
           page: card.card.kind === 'page',
           opens: canOpen(card.card),
@@ -2328,8 +2326,8 @@ export const MapCanvas = ({
         />
       ) : drawing && palette && childLevel !== focus.level ? (
         <CardPalette
-          groups={choicesAt(childLevel, drawing.cardTypes, Boolean(drawing.codeKinds))}
-          canMakeTypes={ownTypesAt(childLevel) && !drawing.codeKinds}
+          groups={choicesAt(childLevel, drawing.cardTypes)}
+          canMakeTypes={ownTypesAt(childLevel)}
           types={drawing.cardTypes}
           armed={armed}
           onArm={(kind) => {
@@ -2415,7 +2413,7 @@ export const MapCanvas = ({
             return (
               <div
                 key={card.id}
-                className={`map-card map-card--open ${kindClass(card.kind)}${card.look ? ` ${lookClass(card.look)}` : ''}${here ? ' map-card--here' : ''}${upClass(workAt - depth - 1)}${linked.has(card.id) ? ' map-card--wired' : ''}`}
+                className={`map-card map-card--open ${kindClass(card.kind)}${lookOf(card) ? ` ${lookClass(lookOf(card)!)}` : ''}${here ? ' map-card--here' : ''}${upClass(workAt - depth - 1)}${linked.has(card.id) ? ' map-card--wired' : ''}`}
                 style={{ left: box.x, top: box.y, width: box.w, height: box.h }}
                 data-open={card.id}
               >

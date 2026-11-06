@@ -12,6 +12,7 @@ import { makeProposal } from '../features/make-proposal.js'
 import { reportWork } from '../features/report-work.js'
 import { useFolder as useAgentsFolder } from '../modules/agents/index.js'
 import { useFolder as useAnnotationsFolder } from '../modules/annotations/index.js'
+import { useFolder as useCardTypesFolder } from '../modules/card-types/index.js'
 import { appFolderAnywhere } from '../modules/machine/index.js'
 import { useFolder as useProjectsFolder } from '../modules/projects/index.js'
 import { useFolder as useSketchesFolder } from '../modules/sketches/index.js'
@@ -27,6 +28,7 @@ useProjectsFolder(appFolderAnywhere())
 useSketchesFolder(appFolderAnywhere())
 useAgentsFolder(appFolderAnywhere())
 useAnnotationsFolder(appFolderAnywhere())
+useCardTypesFolder(appFolderAnywhere())
 const text = (words: string) => ({ content: [{ type: 'text' as const, text: words }] })
 
 const serve = async (): Promise<void> => {

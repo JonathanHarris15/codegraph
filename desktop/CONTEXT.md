@@ -156,9 +156,15 @@ _Avoid_: design, wireframe, comp
 **Card type**:
 What a person calls a kind of card on a sketch inside a software system, which is
 not the name of any one card, with the icon, shape and colour it is drawn in. A
-person can save one to the card library. A database and a page are not card types:
-they do more than look a certain way.
-_Avoid_: preset, template, style, stencil
+person can save one to the card library. It is what gets tagged in the code, after
+`as`, unless the agent building it and the person agree on better. A database and a
+page are not card types: they do more than look a certain way.
+_Avoid_: preset, style, stencil
+
+**Template**:
+A card type that comes with the app, for a kind the code can name: a web app, a
+server, a feature. It is the same card with a ready-made look.
+_Avoid_: preset, stencil
 
 **Sketch**:
 A drawing kept with a project that is not read from any repo: any diagram the

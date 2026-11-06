@@ -4,7 +4,7 @@ import type { ComponentKind } from './schema.js'
 /** What a file's own tags say about it (ADR 0008). */
 export type FileTags = {
   role:
-    | { kind: ComponentKind; name: string; uses: string[]; at: string; start: boolean; trigger: string }
+    | { kind: ComponentKind; name: string; type: string; uses: string[]; at: string; start: boolean; trigger: string }
     | { kind: 'test' }
     | { kind: 'tooling' }
     | null
@@ -38,8 +38,8 @@ export const readTags = (path: string, text: string): FileTags => {
     if (tags.role) tags.problems.push(`${path} says what it belongs to more than once`)
     else tags.role = role
   }
-  const component = (kind: ComponentKind, name: string, more: Partial<{ uses: string[]; at: string; start: boolean; trigger: string }> = {}) =>
-    setRole({ kind, name, uses: [], at: '', start: false, trigger: '', ...more })
+  const component = (kind: ComponentKind, name: string, more: Partial<{ type: string; uses: string[]; at: string; start: boolean; trigger: string }> = {}) =>
+    setRole({ kind, name, type: '', uses: [], at: '', start: false, trigger: '', ...more })
 
   let waiting: { to: string; words: string } | null = null
   lines.forEach((line, index) => {
@@ -54,15 +54,15 @@ export const readTags = (path: string, text: string): FileTags => {
     const said = own[1]!
     let match: RegExpMatchArray | null
     if ((match = said.match(/^wire\s+(.+)$/))) waiting = wire(match[1]!)
-    else if ((match = said.match(/^module\s+(\S+)$/))) component('module', match[1]!)
+    else if ((match = said.match(/^module\s+(\S+)(?:\s+as\s+(.+))?$/))) component('module', match[1]!, { type: match[2] ?? '' })
     else if ((match = said.match(/^front door\s+(.+)$/))) tags.frontDoor.push(...list(match[1]!))
     else if ((match = said.match(/^store\s+(\S+)\s+in\s+(\S+)$/))) tags.stores.push({ name: match[1]!, in: match[2]! })
-    else if ((match = said.match(/^feature\s+(\S+)(?:\s+uses\s+(.+))?$/)))
-      component('feature', match[1]!, { uses: list(match[2] ?? '') })
-    else if ((match = said.match(/^(start\s+)?page\s+(\S+)(?:\s+at\s+(\S+))?$/)))
-      component('page', match[2]!, { at: match[3] ?? '', start: Boolean(match[1]) })
-    else if ((match = said.match(/^trigger\s+(\S+)\s+(schedule|event|command)$/)))
-      component('trigger', match[1]!, { trigger: match[2]! })
+    else if ((match = said.match(/^feature\s+(\S+)(?:\s+as\s+(.+?))?(?:\s+uses\s+(.+))?$/)))
+      component('feature', match[1]!, { type: match[2] ?? '', uses: list(match[3] ?? '') })
+    else if ((match = said.match(/^(start\s+)?page\s+(\S+)(?:\s+as\s+(.+?))?(?:\s+at\s+(\S+))?$/)))
+      component('page', match[2]!, { type: match[3] ?? '', at: match[4] ?? '', start: Boolean(match[1]) })
+    else if ((match = said.match(/^trigger\s+(\S+)\s+(schedule|event|command)(?:\s+as\s+(.+))?$/)))
+      component('trigger', match[1]!, { trigger: match[2]!, type: match[3] ?? '' })
     else if (/^test\s+/.test(said)) setRole({ kind: 'test' })
     else if (said === 'tooling') setRole({ kind: 'tooling' })
     else if (/^(fakes|shape of)\s+/.test(said)) return
