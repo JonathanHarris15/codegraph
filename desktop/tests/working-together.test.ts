@@ -32,7 +32,7 @@ import { startSketch } from '../src/features/start-sketch.js'
 import { openFolderCloud, useCloud, type Member } from '../src/modules/cloud/index.js'
 import { forgetMember } from '../src/modules/members/index.js'
 import { addProject, listProjects as storedProjects } from '../src/modules/projects/index.js'
-import { blankCard, LOOSE, SHARED_WITH_ME } from '../src/modules/sketches/index.js'
+import { blankCard, LOOSE, SHARED_WITH_ME, writeSketch } from '../src/modules/sketches/index.js'
 import { catchUp, pendingCount, pull } from '../src/modules/sync/index.js'
 import { aComputer, aMappedRepo, closeYard, git, githubAnswers, openYard, type Yard } from './yard.js'
 
@@ -161,6 +161,21 @@ describe('roles', () => {
     expect((await listSketches(id))[0]?.name).toBe('Plan')
   })
 
+  it('stops a viewer deleting or starting a sketch, or agreeing a shallow system', async () => {
+    const id = await invited('viewer')
+    const sketch = await startSketch(id, 'Plan')
+    await beBen()
+    await deleteSketch(id, sketch.id)
+    expect((await listSketches(id)).length).toBe(1)
+    await expect(startSketch(id, 'Mine')).rejects.toThrow()
+    const { agreeShallowSystem } = await import('../src/features/agree-shallow-system.js')
+    await agreeShallowSystem(id, 'Stripe')
+    expect(storedProjects()[0]?.shallow).toEqual([])
+    beAna()
+    await pull(ana)
+    expect((await listSketches(id)).length).toBe(1)
+  })
+
   it('hands a project over whole, and the old owner stays on', async () => {
     const id = await invited()
     await startSketch(id, 'Plan')
@@ -257,7 +272,56 @@ describe('sketches on a project', () => {
   })
 })
 
+describe('when things happen at once', () => {
+  it('keeps what is saved here while a send is on its way', async () => {
+    const id = await invited()
+    const sketch = await startSketch(id, 'Plan')
+    const inner = openFolderCloud(join(yard.path, 'online'), () => up)
+    let during: (() => void) | null = () => writeSketch({ ...sketch, name: 'Newer', updatedAt: 'later' })
+    useCloud({
+      ...inner,
+      change: async (path, how) => {
+        const out = await inner.change(path, how)
+        const once = during
+        during = null
+        once?.()
+        return out
+      },
+    })
+    await saveSketch({ ...sketch, name: 'First' })
+    await new Promise((go) => setTimeout(go, 200))
+    expect((await listSketches(id))[0]?.name).toBe('Newer')
+    useCloud(inner)
+    await beBen()
+    expect((await listSketches(id))[0]?.name).toBe('Newer')
+  })
+})
+
 describe('offline', () => {
+  it('keeps a project made offline, rather than taking it as removed', async () => {
+    up = false
+    await createProject('Offline')
+    up = true
+    await pull(ana)
+    expect((await listProjects()).map((p) => p.name)).toEqual(['Offline'])
+    await catchUp()
+    expect(pendingCount()).toBe(0)
+  })
+
+  it('keeps an offline edit to something another member has deleted', async () => {
+    const id = await invited()
+    const sketch = await startSketch(id, 'Plan')
+    await beBen()
+    up = false
+    const offline = await saveSketch({ ...sketch, name: 'Still wanted' })
+    up = true
+    beAna()
+    await deleteSketch(id, sketch.id)
+    await beBen()
+    expect((await listSketches(id)).map((s) => s.name)).toEqual(['Still wanted'])
+    expect(offline.id).toBe(sketch.id)
+  })
+
   it('keeps working, and goes up on reconnecting', async () => {
     const id = await invited()
     const sketch = await startSketch(id, 'Plan')
@@ -427,6 +491,21 @@ describe('maps online', () => {
     await changeRole(id, '2', 'viewer')
     await beBen()
     expect(await saveArrangement(id, [{ id: inside, x: 9, y: 9 }], { [system]: main })).toEqual([{ id: inside, x: 1, y: 1 }])
+  })
+
+  it('leaves other people\'s notes alone when a viewer saves their own', async () => {
+    const { id, system, main } = await setUp()
+    const note = (key: string, at: string, text: string) => ({ id: key, at, kind: 'sticky', x: 0, y: 0, w: 9, h: 9, text, color: '' })
+    const layer = (...items: ReturnType<typeof note>[]) => ({ id: 'l', name: 'L', shown: true, snaps: true, items })
+    await saveAnnotations(id, [layer(note('top', id, 'for everyone'), note('n', `${system}/container:web`, 'on main'))], { [system]: main })
+    await changeRole(id, '2', 'viewer')
+    await beBen()
+    const seen = await showAnnotations(id, { [system]: main })
+    // Ben, a viewer, tries to take them all off a shared map.
+    await saveAnnotations(id, [{ ...seen[0]!, items: [] }], { [system]: main }, seen)
+    beAna()
+    await pull(ana)
+    expect((await showAnnotations(id, { [system]: main }))[0]?.items.map((i) => i.id).sort()).toEqual(['n', 'top'])
   })
 
   it('marks the main line when a proposal is being built elsewhere', async () => {

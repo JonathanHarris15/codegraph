@@ -2,7 +2,7 @@
 // codegraph: uses annotations, places, projects, sync, together, members
 import { type Layer } from '../modules/annotations/index.js'
 import { may, roleOf, whoIsIn } from '../modules/members/index.js'
-import { keyIsShared, mapsNow, readLayers, writeLayers } from '../modules/places/index.js'
+import { mapsNow, onLocalMap, readLayers, writeLayers } from '../modules/places/index.js'
 import { listProjects } from '../modules/projects/index.js'
 import type { Point } from '../modules/reader/index.js'
 import { sendMap } from '../modules/sync/index.js'
@@ -18,7 +18,15 @@ export const saveAnnotations = async (projectId: string, layers: Layer[], points
   const allowed = may(roleOf(project, whoIsIn()?.id ?? ''), 'draw')
   const now = readLayers(projectId, maps)
   const merged = seen ? mergeItems(seen, layers, now) : layers
-  const kept = allowed ? merged : merged.map((layer) => ({ ...layer, items: layer.items.filter((item) => maps.some((m) => !keyIsShared(m.key) && (item.at === m.systemId || item.at.startsWith(`${m.systemId}/`)))) }))
+  const kept = allowed
+    ? merged
+    : now.map((layer) => ({
+        ...layer,
+        items: [
+          ...layer.items.filter((item) => !onLocalMap(item.at, maps)),
+          ...(merged.find((l) => l.id === layer.id)?.items.filter((item) => onLocalMap(item.at, maps)) ?? []),
+        ],
+      }))
   await sendMap(projectId, writeLayers(projectId, maps, kept))
   return readLayers(projectId, maps)
 }

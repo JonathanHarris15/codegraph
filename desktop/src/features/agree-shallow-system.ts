@@ -1,5 +1,6 @@
 // codegraph: feature agree-shallow-system in workspace
-// codegraph: uses projects, sync
+// codegraph: uses projects, sync, members
+import { may, roleOf, whoIsIn } from '../modules/members/index.js'
 import { addShallowSystem, listProjects } from '../modules/projects/index.js'
 import { sendProject } from '../modules/sync/index.js'
 
@@ -11,6 +12,8 @@ export const agreeShallowSystem = async (
   name: string,
   sameAs = '',
 ): Promise<{ id: string }> => {
+  const project = listProjects().find((p) => p.id === projectId)
+  if (project && !may(roleOf(project, whoIsIn()?.id ?? ''), 'add-repo')) return { id: '' }
   const added = addShallowSystem(projectId, name, sameAs)
   if (listProjects().find((p) => p.id === projectId)?.online) await sendProject(projectId)
   return { id: added.id }

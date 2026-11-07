@@ -15,7 +15,9 @@ export const SketchLibrary = ({
   shown,
   sketches,
   open,
+  canDraw = true,
   onOpen,
+  onCopy,
   onStartBlank,
   onStartFromMap,
   onDelete,
@@ -25,7 +27,11 @@ export const SketchLibrary = ({
   shown: boolean
   sketches: SketchListed[]
   open: string
+  /** A viewer can open these, and copy them, but not start or throw one away. */
+  canDraw?: boolean
   onOpen: (id: string) => void
+  /** Copies one to this member's own library. */
+  onCopy?: (id: string) => void
   onStartBlank: () => void
   onStartFromMap: () => void
   onDelete: (id: string) => void
@@ -74,15 +80,28 @@ export const SketchLibrary = ({
                 </Button>
                 {menu === s.id ? (
                   <div className="sketch-menu-list">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMenu('')
-                        onDelete(s.id)
-                      }}
-                    >
-                      Throw away {s.name}
-                    </button>
+                    {onCopy ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenu('')
+                          onCopy(s.id)
+                        }}
+                      >
+                        Copy to my own sketches
+                      </button>
+                    ) : null}
+                    {canDraw ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenu('')
+                          onDelete(s.id)
+                        }}
+                      >
+                        Throw away {s.name}
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
               </span>
@@ -91,7 +110,7 @@ export const SketchLibrary = ({
         </ul>
       ) : null}
 
-      {choosing ? (
+      {!canDraw ? null : choosing ? (
         <div className="sketch-new-choice" role="group" aria-label="Start a sketch">
           <button type="button" className="sketch-new-way" onClick={onStartFromMap}>
             <Camera size={16} aria-hidden="true" />

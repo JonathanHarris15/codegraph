@@ -53,8 +53,10 @@ export const SketchPage = ({ library, sketchId, onLeave }: { library: string; sk
     const sent = latest.current
     if (!sent) return
     const merged = await window.codegraph.saveSketch(sent, seen.current ?? undefined)
+    // Seen only counts once this window has it, or newer work reads as undoing it.
+    if (latest.current !== sent) return
     seen.current = merged
-    if (latest.current === sent && !(sameDoc(merged.root, sent.root) && sameDoc(merged.layers, sent.layers) && merged.name === sent.name)) {
+    if (!(sameDoc(merged.root, sent.root) && sameDoc(merged.layers, sent.layers) && merged.name === sent.name)) {
       latest.current = merged
       setSketch(merged)
     }

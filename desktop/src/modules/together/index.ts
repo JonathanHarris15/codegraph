@@ -7,7 +7,14 @@
 type Json = unknown
 type Thing = Record<string, Json>
 
-const said = (a: Json): string => JSON.stringify(a ?? null)
+/** A document in one form whatever order its fields come in, since an online store
+ *  need not hand them back in the order they went. */
+const said = (a: Json): string =>
+  JSON.stringify(a ?? null, (_key, value: Json) =>
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? Object.fromEntries(Object.entries(value as Thing).sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)))
+      : value,
+  )
 
 export const sameDoc = (a: Json, b: Json): boolean => said(a) === said(b)
 
@@ -47,6 +54,7 @@ export const mergeDoc = <T>(base: T | null, mine: T, theirs: T): T => {
   if (sameDoc(mine, theirs)) return mine
   if (sameDoc(base, theirs)) return mine
   if (sameDoc(base, mine)) return theirs
+  if (isItems(mine) && isItems(theirs) && (base === null || isItems(base))) return mergeItems((base ?? []) as ({ id: string } & Thing)[], mine, theirs) as T
   const [b, m, t] = [(base ?? {}) as Thing, mine as Thing, theirs as Thing]
   if (typeof m !== 'object' || m === null || typeof t !== 'object' || t === null || Array.isArray(m) || Array.isArray(t)) return mine
   const out: Thing = {}
@@ -64,8 +72,10 @@ export const mergeDoc = <T>(base: T | null, mine: T, theirs: T): T => {
 }
 
 /** Takes back one of this member's own steps, leaving what anyone else has done
- *  since: what the step changed goes back, and nothing else moves. */
-export const undoStep = <T>(before: T, after: T, now: T): T => mergeDoc(after, before, now)
+ *  since: what the step changed goes back, and nothing else moves. If someone has
+ *  changed the very same thing since, theirs stays. Called the other way round, it
+ *  does the step again. */
+export const undoStep = <T>(before: T, after: T, now: T): T => mergeDoc(after, now, before)
 
 export type Tally = {
   moved: Record<string, number>

@@ -74,7 +74,7 @@ export type Api = {
   joinRoom: (id: string, heard: (now: RoomNow) => void) => Promise<boolean>
   sayWhere: (where: Whereabouts) => Promise<void>
   holdThings: (items: string[]) => Promise<{ ok: boolean; taken: string[] }>
-  letGoOfThings: () => Promise<void>
+  letGoOfThings: (items?: string[]) => Promise<void>
   /** Calls back when something changed online; hands back how to stop. */
   heardChange: (onChange: (what: { projectId: string; path: string }) => void) => () => void
 }
@@ -136,7 +136,7 @@ const api: Api = {
   },
   sayWhere: (where) => ipcRenderer.invoke('room:say', where),
   holdThings: (items) => ipcRenderer.invoke('room:hold', items),
-  letGoOfThings: () => ipcRenderer.invoke('room:letGo'),
+  letGoOfThings: (items) => ipcRenderer.invoke('room:letGo', items),
   heardChange: (onChange) => {
     const heard = (_event: unknown, what: { projectId: string; path: string }): void => onChange(what)
     ipcRenderer.on('cloud:changed', heard)

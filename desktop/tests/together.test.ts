@@ -1,6 +1,6 @@
 // codegraph: tooling
 import { describe, expect, it } from 'vitest'
-import { mergeDoc, mergeItems, tally, undoStep, wordsFor } from '../src/modules/together/index.js'
+import { mergeDoc, mergeItems, sameDoc, tally, undoStep, wordsFor } from '../src/modules/together/index.js'
 
 const card = (id: string, more = {}) => ({ id, name: id, x: 0, y: 0, children: [], wires: [], ...more })
 
@@ -51,6 +51,36 @@ describe('undo', () => {
     const after = { children: [card('a', { x: 5 }), card('b')] }
     const now = { children: [card('a', { x: 5 }), card('b', { x: 9 }), card('c')] }
     expect(undoStep(before, after, now)).toEqual({ children: [card('a'), card('b', { x: 9 }), card('c')] })
+  })
+})
+
+describe('undo, with others at work', () => {
+  const layer = (...items: object[]) => [{ id: 'l', name: 'L', items }]
+
+  it('keeps others\' notes when the whole thing is a list of layers', () => {
+    const before = layer({ id: 'a', text: 'a' })
+    const after = layer({ id: 'a', text: 'a' }, { id: 'mine', text: 'm' })
+    const now = layer({ id: 'a', text: 'a' }, { id: 'mine', text: 'm' }, { id: 'theirs', text: 't' })
+    expect(undoStep(before, after, now)).toEqual(layer({ id: 'a', text: 'a' }, { id: 'theirs', text: 't' }))
+  })
+
+  it('leaves a field someone else has changed since', () => {
+    expect(undoStep({ x: 0 }, { x: 1 }, { x: 2 })).toEqual({ x: 2 })
+  })
+
+  it('brings back what the step took away', () => {
+    expect(undoStep({ children: [card('a')] }, { children: [] }, { children: [card('b')] }).children.map((c) => c.id).sort()).toEqual(['a', 'b'])
+  })
+
+  it('does a step again, called the other way round', () => {
+    expect(undoStep({ x: 1 }, { x: 0 }, { x: 0 })).toEqual({ x: 1 })
+  })
+})
+
+describe('the same document in another order', () => {
+  it('is the same document', () => {
+    expect(mergeDoc({ a: 1, b: { c: 1, d: 2 } }, { b: { d: 2, c: 1 }, a: 1 }, { a: 1, b: { c: 1, d: 2 } })).toEqual({ b: { d: 2, c: 1 }, a: 1 })
+    expect(sameDoc({ a: 1, b: 2 }, { b: 2, a: 1 })).toBe(true)
   })
 })
 

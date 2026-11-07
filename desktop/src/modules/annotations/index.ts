@@ -1,5 +1,5 @@
 // codegraph: module annotations
-// codegraph: front door useFolder, readAnnotations, writeAnnotations, hasAnnotations, annotationKeys, removeAnnotations, annotationWords, firstLayer, Annotation, AnnotationEnd, Layer, Pointer
+// codegraph: front door useFolder, readAnnotations, writeAnnotations, hasAnnotations, annotationMarks, annotationKeys, removeAnnotations, annotationWords, firstLayer, Annotation, AnnotationEnd, Layer, Pointer
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -39,12 +39,24 @@ export const readAnnotations = (projectId: string, key = ''): Layer[] => {
 }
 
 /** Written to a neighbour first, then moved over, so a crash cannot shred it. */
-export const writeAnnotations = (projectId: string, layers: Layer[], key = ''): void => {
+export const writeAnnotations = (projectId: string, layers: Layer[], key = '', marks: AnnotationMarks = annotationMarks(projectId, key)): void => {
   const file = fileOf(projectId, key)
   mkdirSync(dirname(file), { recursive: true })
   const beside = `${file}.${randomUUID().slice(0, 8)}`
-  writeFileSync(beside, JSON.stringify({ layers }, null, 2), 'utf8')
+  writeFileSync(beside, JSON.stringify({ layers, ...marks }, null, 2), 'utf8')
   renameSync(beside, file)
+}
+
+/** For telling when a branch these notes are on has been merged. */
+export type AnnotationMarks = { from?: string; head?: string; merged?: string }
+
+export const annotationMarks = (projectId: string, key = ''): AnnotationMarks => {
+  try {
+    const { from, head, merged } = JSON.parse(readFileSync(fileOf(projectId, key), 'utf8')) as AnnotationMarks
+    return { ...(from ? { from } : {}), ...(head ? { head } : {}), ...(merged ? { merged } : {}) }
+  } catch {
+    return {}
+  }
 }
 
 /** The keys of every map of a project with notes kept. */

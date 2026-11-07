@@ -362,7 +362,16 @@ const sendNow = async (path: string, says?: string): Promise<void> => {
     })
     see(path, merged)
     markPending(path, false)
-    if (merged && !sameDoc(merged, mine)) local.write(merged)
+    // Something may have been saved here while this was on its way. It is kept, and
+    // goes up after this.
+    const since = local.read()
+    if (!sameDoc(since, mine)) {
+      if (since && merged) {
+        const both = mergeDoc(mine, since, merged)
+        if (!sameDoc(both, since)) local.write(both)
+      }
+      void sendUp(path)
+    } else if (merged && !sameDoc(merged, mine)) local.write(merged)
     if (merged && path.includes('sketches')) await sendMockups(path, merged)
     await noteRevision(path, me, latest, merged, says)
   } catch (problem) {
@@ -403,7 +412,10 @@ const takeDown = async (path: string, theirs: Doc | null): Promise<boolean> => {
   }
   if (theirs === null) {
     see(path, null)
-    if (base === null && mine !== null) {
+    // New here, or changed here since it was last seen: a change here keeps it.
+    // Being taken off a project is different, and is dealt with where that is heard.
+    const isProject = /^projects\/[^/]+$/.test(path)
+    if (mine !== null && !isProject && (base === null || !sameDoc(mine, base))) {
       await sendUp(path)
       return false
     }
@@ -449,14 +461,26 @@ export const follow = (me: Member, changed: (what: { projectId: string; path: st
   if (!cloud) return () => undefined
   const stops = new Map<string, () => void>()
 
-  const takeAll = async (collection: string, docs: Doc[], projectId: string): Promise<void> => {
-    const here = new Set(docs.map((doc) => `${collection}/${idPart(collection, doc)}`))
-    for (const doc of docs) {
-      const path = `${collection}/${idPart(collection, doc)}`
-      if (await takeDown(path, doc)) changed({ projectId, path })
-    }
-    for (const path of seenIn(collection)) if (!here.has(path) && (await takeDown(path, null))) changed({ projectId, path })
+  const turns = new Map<string, Promise<void>>()
+  /** One at a time on a collection, so an older answer never lands after a newer. */
+  const inTurn = (collection: string, work: () => Promise<void>): Promise<void> => {
+    const next = (turns.get(collection) ?? Promise.resolve()).then(work, work)
+    turns.set(collection, next)
+    return next
   }
+  const takeAll = (collection: string, docs: Doc[], projectId: string): Promise<void> =>
+    inTurn(collection, async () => {
+      const here = new Set(docs.map((doc) => `${collection}/${idPart(collection, doc)}`))
+      for (const doc of docs) {
+        const path = `${collection}/${idPart(collection, doc)}`
+        if (await takeDown(path, doc)) changed({ projectId, path })
+      }
+      for (const path of seenIn(collection)) {
+        // What was heard may be older than something just sent, so make sure.
+        if (here.has(path) || (await cloud.read(path)) !== null) continue
+        if (await takeDown(path, null)) changed({ projectId, path })
+      }
+    })
   const watching = (collection: string, projectId: string): void => {
     if (stops.has(collection)) return
     stops.set(
@@ -472,9 +496,10 @@ export const follow = (me: Member, changed: (what: { projectId: string; path: st
       watching(`projects/${id}/sketches`, id)
       watching(mapsPath(id), id)
     }
-    // Taken off a project: it goes from this computer too.
+    // Taken off a project: it goes from this computer too. One never seen online
+    // has not reached it yet, and is still to go up.
     for (const project of listProjects())
-      if (project.online && !ids.has(project.id)) {
+      if (project.online && !ids.has(project.id) && lastSeen(projectPath(project.id))) {
         forgetProjectHere(project.id)
         see(projectPath(project.id), null)
         changed({ projectId: project.id, path: projectPath(project.id) })
@@ -510,7 +535,7 @@ export const pull = async (me: Member): Promise<void> => {
     await takeAll(mapsPath(id), await cloud.list(mapsPath(id)))
   }
   for (const project of listProjects())
-    if (project.online && !ids.has(project.id)) {
+    if (project.online && !ids.has(project.id) && lastSeen(projectPath(project.id))) {
       forgetProjectHere(project.id)
       see(projectPath(project.id), null)
     }
@@ -529,7 +554,12 @@ export const useHeard = (who: (what: { projectId: string; path: string }) => voi
 export const stopFollowing = (): void => {
   stopNow?.()
   stopNow = null
+  if (retrying) clearInterval(retrying)
+  retrying = null
 }
+
+const RETRY_MS = 20_000
+let retrying: ReturnType<typeof setInterval> | null = null
 
 /** Catches up, then stays in step, until signed out. */
 export const startFollowing = async (me: Member): Promise<void> => {
@@ -548,6 +578,9 @@ export const startFollowing = async (me: Member): Promise<void> => {
     if (!(problem instanceof CloudOffline)) throw problem
   }
   stopNow = follow(me, (what) => heard(what))
+  // What could not go up is tried again, so coming back online sends it.
+  retrying = setInterval(() => void catchUp().catch(quietly), RETRY_MS)
+  retrying.unref?.()
 }
 
 /** Sends up all of a project: its record, its sketches, and its shared maps. */

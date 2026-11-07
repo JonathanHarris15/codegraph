@@ -180,7 +180,7 @@ export type Together = {
   /** Takes hold of things before moving or typing on them. False if someone
    *  else has one of them. */
   onHold: (ids: string[]) => Promise<boolean>
-  onLetGo: () => void
+  onLetGo: (ids: string[]) => void
   /** Goes where a member is. */
   onGo: (inside: string) => void
 }
@@ -1715,21 +1715,33 @@ export const MapCanvas = ({
     void together.onHold([typingOn]).then((got) => {
       if (!got) setEditing(null)
     })
-    return () => together.onLetGo()
+    return () => together.onLetGo([typingOn])
   }, [typingOn])
   useEffect(() => {
     if (!together || !annoEditing) return
     void together.onHold([annoEditing]).then((got) => {
       if (!got) setAnnoEditing('')
     })
-    return () => together.onLetGo()
+    return () => together.onLetGo([annoEditing])
   }, [annoEditing])
   const annoDragged = annoPreview ? [...annoPreview.keys()].join(',') : ''
   useEffect(() => {
     if (!together || !annoDragged) return
     void together.onHold(annoDragged.split(','))
-    return () => together.onLetGo()
+    return () => together.onLetGo(annoDragged.split(','))
   }, [annoDragged])
+  // Leaving the board in the middle of a drag lets go of what was in hand.
+  const togetherNow = useRef(together)
+  togetherNow.current = together
+  useEffect(
+    () => () => {
+      const was = gesture.current
+      if (was?.type !== 'move') return
+      togetherNow.current?.onDragging([])
+      togetherNow.current?.onLetGo(was.ids)
+    },
+    [],
+  )
 
   const worldOf = (event: { clientX: number; clientY: number }): Spot => {
     const rect = frame.current!.getBoundingClientRect()
@@ -2220,7 +2232,7 @@ export const MapCanvas = ({
     if (now.type === 'move') {
       if (now.moved) {
         together?.onDragging([])
-        together?.onLetGo()
+        together?.onLetGo(now.ids)
       }
       if (now.moved && shown.moves) {
         // Whatever was carried past the edge of the card it is in has made
@@ -2524,10 +2536,11 @@ export const MapCanvas = ({
         onPointerMove={move}
         onPointerUp={up}
         onPointerCancel={() => {
+          const was = gesture.current
           gesture.current = null
           setLive({})
           together?.onDragging([])
-          together?.onLetGo()
+          if (was?.type === 'move') together?.onLetGo(was.ids)
         }}
         onContextMenu={(event) => event.preventDefault()}
         onScroll={(event) => {

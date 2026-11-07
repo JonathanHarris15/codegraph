@@ -16,5 +16,8 @@ export const holdThings = async (items: string[]): Promise<{ ok: boolean; taken:
   return { ok: true, taken: [] }
 }
 
-/** Lets go of everything this member holds. */
-export const letGoOfThings = async (): Promise<void> => letGoOfThing()
+/** Lets go of these things, or of everything this member holds. */
+export const letGoOfThings = async (items?: string[]): Promise<void> => {
+  if (!items) return letGoOfThing()
+  for (const item of items) await letGoOfThing(item)
+}

@@ -140,6 +140,41 @@ describe('where things sit on each map', () => {
       expect(readSpots('p', [at('local:main', '')])).toEqual([spot('sys/a', 1)])
     })
 
+    it('never takes this computer\'s own main line as merged', async () => {
+      const repo = aSoftwareSystem(yard, 'ours')
+      const old = git(repo, 'rev-parse', 'main')
+      writeFileSync(join(repo, 'more.ts'), 'export const c = 3\n')
+      git(repo, 'add', '-A')
+      git(repo, 'commit', '-m', 'more')
+      git(repo, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
+      git(repo, 'reset', '--hard', old)
+      const github: MapAt = { systemId: 'sys', key: 'github:main', mainKey: 'github:main' }
+      writeSpots('p', [{ systemId: 'sys', key: 'local:main', mainKey: 'github:main', head: old, from: old }], [spot('sys/a', 9)])
+      expect(await takeUpMerges('p', repo, github, 'origin/main')).toEqual([])
+    })
+
+    it('takes up a move made at a branch tip, merged with no new commit', async () => {
+      const repo = repoWithBranch()
+      const base = git(repo, 'rev-parse', 'main')
+      const tip = git(repo, 'rev-parse', 'feature')
+      writeSpots('p', [{ ...at('local:feature', tip), from: base }], [spot('sys/a', 4)])
+      git(repo, 'merge', '--no-ff', '-m', 'merge', 'feature')
+      await takeUpMerges('p', repo, at('local:main', ''), 'main')
+      expect(readSpots('p', [at('local:main', '')])).toEqual([spot('sys/a', 4)])
+    })
+
+    it('does not blank a layout when the merged branch only had notes', async () => {
+      const repo = repoWithBranch()
+      const base = git(repo, 'rev-parse', 'main')
+      writeSpots('p', [at('local:main', base)], [spot('sys/a', 1)])
+      writeLayers('p', [{ ...at('local:feature', git(repo, 'rev-parse', 'feature')), from: base }], [layer(note('f', 'sys/a'))])
+      git(repo, 'merge', '--no-ff', '-m', 'merge', 'feature')
+      await takeUpMerges('p', repo, at('local:main', ''), 'main')
+      expect(readSpots('p', [at('local:main', '')])).toEqual([spot('sys/a', 1)])
+      expect(readLayers('p', [at('local:main', '')])[0]?.items.map((i) => i.id)).toEqual(['f'])
+      expect(readSpots('p', [at('local:feature', '')])).toEqual([spot('sys/a', 1)])
+    })
+
     it('takes a merge up once', async () => {
       const repo = repoWithBranch()
       writeSpots('p', [at('local:feature', git(repo, 'rev-parse', 'main'))], [spot('sys/a', 2)])

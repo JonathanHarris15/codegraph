@@ -1,5 +1,5 @@
 // codegraph: module repo
-// codegraph: front door isRepo, remoteName, mainLineRef, isSetUp, readSoftwareSystem, folderName, writeProposal, removeProposal, proposalPicture, headOf, makeBranch, switchBranch, useMirrors, mirrorFolder, fetchMirror, tipOf, isAncestor, fetchWorkingCopy, proposalsOnBranches, RepoFacts, SetupFacts, Picture, Reach
+// codegraph: front door isRepo, remoteName, mainLineRef, isSetUp, readSoftwareSystem, folderName, writeProposal, removeProposal, proposalPicture, headOf, makeBranch, switchBranch, useMirrors, mirrorFolder, fetchMirror, tipOf, isAncestor, mergeBase, fetchWorkingCopy, proposalsOnBranches, RepoFacts, SetupFacts, Picture, Reach
 import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
 import { isRepo, mainLineRef, readGit, remoteName, type GitFacts } from './git.js'
@@ -68,6 +68,9 @@ export const isAncestor = async (path: string, commit: string, of: string): Prom
   const base = await git(path, ['merge-base', commit, of])
   return base !== '' && base === (await tipOf(path, commit))
 }
+
+/** The last commit two histories have in common; '' if none. */
+export const mergeBase = (path: string, a: string, b: string): Promise<string> => git(path, ['merge-base', a, b])
 
 /** Asks GitHub what it has for a working copy, using the person's own git. */
 export const fetchWorkingCopy = async (path: string): Promise<void> => {

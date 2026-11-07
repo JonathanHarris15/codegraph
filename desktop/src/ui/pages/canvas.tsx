@@ -67,18 +67,30 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
   const layersSeen = useRef<Layer[]>([])
   /** The points of every map being looked at, for saying which map things are on. */
   const atNow = useRef<Record<string, Point>>({})
+  /** The maps a save still to happen was drawn on, so it lands on those, whatever
+   *  is being looked at by the time it goes. */
+  const layersAt = useRef<Record<string, Point>>({})
+  const saveLayersNow = async (): Promise<void> => {
+    layersSaving.current = null
+    const sent = layersNow.current
+    const merged = await window.codegraph.saveAnnotations(projectId, sent, layersAt.current, layersSeen.current)
+    // Seen only counts once this window has it. If more was drawn meanwhile, the
+    // next save still works from the older one, so nothing reads as taken away.
+    if (layersNow.current !== sent) return
+    layersSeen.current = merged
+    if (!sameDoc(merged, sent)) setMapLayers(merged)
+  }
   const keepLayers = (next: Layer[]): void => {
     setMapLayers(next)
     layersNow.current = next
+    layersAt.current = atNow.current
     if (layersSaving.current) clearTimeout(layersSaving.current)
-    layersSaving.current = setTimeout(() => {
-      layersSaving.current = null
-      const sent = layersNow.current
-      void window.codegraph.saveAnnotations(projectId, sent, atNow.current, layersSeen.current).then((merged) => {
-        layersSeen.current = merged
-        if (layersNow.current === sent && !sameDoc(merged, sent)) setMapLayers(merged)
-      })
-    }, SAVE_AFTER_MS)
+    layersSaving.current = setTimeout(() => void saveLayersNow(), SAVE_AFTER_MS)
+  }
+  const flushLayers = async (): Promise<void> => {
+    if (!layersSaving.current) return
+    clearTimeout(layersSaving.current)
+    await saveLayersNow()
   }
   const changeLayers = (next: Layer[], step = ''): void => {
     const joins =
@@ -97,11 +109,17 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
   // the map: the code says nothing about where anything sits.
   const [spots, setSpots] = useState<Arrangement>([])
   const spotsSeen = useRef<Arrangement>([])
+  const spotsNow = useRef<Arrangement>([])
   const keepSpots = (next: Arrangement): void => {
     setSpots(next)
+    spotsNow.current = next
     void window.codegraph.saveArrangement(projectId, next, atNow.current, spotsSeen.current).then((merged) => {
+      if (spotsNow.current !== next) return
       spotsSeen.current = merged
-      if (!sameDoc(merged, next)) setSpots(merged)
+      if (!sameDoc(merged, next)) {
+        spotsNow.current = merged
+        setSpots(merged)
+      }
     })
   }
   const rearrange = (moves: Arrangement): void => keepSpots(movedTo(spots, moves))
@@ -112,9 +130,14 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
       window.codegraph.showAnnotations(projectId, atNow.current),
       window.codegraph.showArrangement(projectId, atNow.current),
     ])
-    layersSeen.current = layers
-    if (!layersSaving.current) setMapLayers(layers)
+    // A save on its way will take in whatever this brought, so leave it be.
+    if (!layersSaving.current) {
+      layersSeen.current = layers
+      layersNow.current = layers
+      setMapLayers(layers)
+    }
     spotsSeen.current = places
+    spotsNow.current = places
     setSpots(places)
   }, [projectId])
 
@@ -194,7 +217,10 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
   useEffect(() => {
     if (!shown) return
     atNow.current = Object.fromEntries(reachable.map((s) => [s.id, s.point]))
-    void loadPlaces()
+    // Steps taken on another map cannot be undone on this one.
+    layersPast.current = []
+    layersFuture.current = []
+    void flushLayers().then(loadPlaces)
   }, [mapsSaid, shown === null, loadPlaces])
 
   // A change made by someone else reaches this window.
@@ -296,8 +322,10 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
     const sent = latest.current
     if (!sent) return
     const merged = await window.codegraph.saveSketch(sent, seenSketch.current ?? undefined)
+    // Seen only counts once this window has it, or newer work reads as undoing it.
+    if (latest.current !== sent) return
     seenSketch.current = merged
-    if (latest.current === sent && sketchNow.current?.id === merged.id && !(sameDoc(merged.root, sent.root) && sameDoc(merged.layers, sent.layers) && merged.name === sent.name)) {
+    if (sketchNow.current?.id === merged.id && !(sameDoc(merged.root, sent.root) && sameDoc(merged.layers, sent.layers) && merged.name === sent.name)) {
       latest.current = merged
       setSketch(merged)
     }
@@ -613,7 +641,7 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
               )
             }}
             agent={working?.agent ? { card: working.agent.card, words: working.agent.words } : null}
-            onStartSketch={() => void startOne(true)}
+            {...(canDraw ? { onStartSketch: () => void startOne(true) } : {})}
           />
         )}
 
@@ -626,7 +654,7 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
           </div>
         ) : null}
 
-        {!sketch && shown && trail.length === 1 ? (
+        {!sketch && shown && trail.length === 1 && canDraw ? (
           <SuggestionBar
             suggestions={shown.suggestions}
             shallow={shown.card.children.filter((c) => c.kind === 'shallow software system')}
@@ -682,6 +710,8 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
             sketches={sketches}
             open={sketch?.id ?? ''}
             onOpen={(id) => void openOne(id)}
+            canDraw={canDraw}
+            {...(online ? { onCopy: (id: string) => void window.codegraph.copySketch(projectId, id) } : {})}
             onStartBlank={() => void startOne(false)}
             onStartFromMap={() => void startOne(true)}
             onDelete={(id) => void deleteOne(id)}

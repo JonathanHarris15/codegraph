@@ -2,7 +2,7 @@
 // codegraph: uses arrangements, places, projects, sync, together, members
 import type { Arrangement } from '../modules/arrangements/index.js'
 import { may, roleOf, whoIsIn } from '../modules/members/index.js'
-import { keyIsShared, mapsNow, readSpots, writeSpots } from '../modules/places/index.js'
+import { mapsNow, onLocalMap, readSpots, writeSpots } from '../modules/places/index.js'
 import { listProjects } from '../modules/projects/index.js'
 import type { Point } from '../modules/reader/index.js'
 import { sendMap } from '../modules/sync/index.js'
@@ -19,7 +19,7 @@ export const saveArrangement = async (projectId: string, arrangement: Arrangemen
   const allowed = may(roleOf(project, whoIsIn()?.id ?? ''), 'draw')
   const now = readSpots(projectId, maps)
   const merged = seen ? mergeItems(seen, arrangement, now) : arrangement
-  const kept = allowed ? merged : [...now.filter((spot) => !maps.some((m) => !keyIsShared(m.key) && spot.id.includes(`${m.systemId}/`))), ...merged.filter((spot) => maps.some((m) => !keyIsShared(m.key) && spot.id.includes(`${m.systemId}/`)))]
+  const kept = allowed ? merged : [...now.filter((spot) => !onLocalMap(spot.id, maps)), ...merged.filter((spot) => onLocalMap(spot.id, maps))]
   await sendMap(projectId, writeSpots(projectId, maps, kept))
   return readSpots(projectId, maps)
 }

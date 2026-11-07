@@ -1,9 +1,9 @@
 // codegraph: module places
-// codegraph: front door mapKey, mapsNow, readingFolder, keyIsShared, belongsTo, readSpots, writeSpots, readLayers, writeLayers, takeUpMerges, PROJECT_KEY, MapAt
+// codegraph: front door mapKey, mapsNow, readingFolder, onLocalMap, keyIsShared, belongsTo, readSpots, writeSpots, readLayers, writeLayers, takeUpMerges, PROJECT_KEY, MapAt
 import { arrangementKeys, readArrangementFile, writeArrangementFile, type Arrangement } from '../arrangements/index.js'
-import { annotationKeys, hasAnnotations, readAnnotations, writeAnnotations, type Layer } from '../annotations/index.js'
+import { annotationKeys, annotationMarks, hasAnnotations, readAnnotations, writeAnnotations, type Layer } from '../annotations/index.js'
 import type { Point } from '../reader/index.js'
-import { isAncestor, mainLineRef, mirrorFolder, tipOf } from '../repo/index.js'
+import { isAncestor, mainLineRef, mergeBase, mirrorFolder, tipOf } from '../repo/index.js'
 import type { SoftwareSystem } from '../projects/index.js'
 
 /** What the project's top level is known by among its maps: there is one, for
@@ -29,6 +29,8 @@ export type MapAt = {
   mainKey: string
   /** The commit the map is read at, when known. */
   head?: string
+  /** Where its branch left the main line, when known. */
+  from?: string
 }
 
 /** Where a software system's code can be read on this computer: its working
@@ -48,9 +50,17 @@ export const mapsNow = async (systems: SoftwareSystem[], points: Record<string, 
         const onGithub = mainRef.startsWith('origin/')
         const mainKey = `${onGithub ? 'github' : 'local'}:${mainRef.replace(/^origin\//, '') || 'main'}`
         const ref = point.kind === 'live' ? 'HEAD' : point.kind === 'branch' ? point.name : point.sha
-        return { systemId: system.id, key: mapKey(point), mainKey, folder, mainRef, head: folder ? await tipOf(folder, ref) : '' }
+        const from = folder && mainRef ? await mergeBase(folder, ref, mainRef) : ''
+        return { systemId: system.id, key: mapKey(point), mainKey, folder, mainRef, head: folder ? await tipOf(folder, ref) : '', from }
       }),
   )
+
+/** Whether a thing, by the card it is on or its own id, is on a map only this
+ *  member can see, which they may change whatever their role. */
+export const onLocalMap = (id: string, maps: MapAt[]): boolean => {
+  const owner = maps.find((m) => belongsTo(id, [m.systemId]) !== '' || id === m.systemId)
+  return owner !== undefined && !keyIsShared(owner.key)
+}
 
 /** The software system a thing on the map belongs to: anything inside it, and
  *  the room its card is given when open. Anything else is on the project's top
@@ -108,7 +118,7 @@ export const writeSpots = (projectId: string, maps: MapAt[], spots: Arrangement)
         ...kept,
         spots: mine,
         updatedAt: new Date().toISOString(),
-        ...(at.head ? { from: kept?.from || at.head, head: at.head } : {}),
+        ...(at.head ? { from: kept?.from || at.from || at.head, head: at.head } : {}),
       },
       file,
     )
@@ -164,7 +174,8 @@ export const writeLayers = (projectId: string, maps: MapAt[], layers: Layer[]): 
     const mine = onlyFor(layers, (where) => inSystem(where, at.systemId))
     if (JSON.stringify(mine) === JSON.stringify(layersFor(projectId, at, old))) continue
     if (!mine.some((l) => l.items.length) && !layersFor(projectId, at, old).some((l) => l.items.length)) continue
-    writeAnnotations(projectId, mine, fileKey(at))
+    const marks = annotationMarks(projectId, fileKey(at))
+    writeAnnotations(projectId, mine, fileKey(at), at.head ? { ...marks, from: marks.from || at.from || at.head, head: at.head } : marks)
     wrote.push(fileKey(at))
   }
   return wrote
@@ -180,6 +191,7 @@ export const takeUpMerges = async (projectId: string, repo: string, at: MapAt, m
   if (!mainTip) return []
   const mainFile = fileKey(at)
   const prefix = `${at.systemId}@`
+  const mainName = mainRef.replace(/^origin\//, '')
   const wrote = new Set<string>()
   const keys = new Set(
     [...arrangementKeys(projectId), ...annotationKeys(projectId)].filter((k) => k.startsWith(prefix) && k !== mainFile && !k.includes('@commit:')),
@@ -187,10 +199,14 @@ export const takeUpMerges = async (projectId: string, repo: string, at: MapAt, m
   for (const file of keys) {
     const key = file.slice(prefix.length)
     const name = key.replace(/^(github|local):/, '')
+    // This computer's own main line is a local map, not a branch merged into it.
+    if (name === mainName) continue
     const kept = readArrangementFile(projectId, file)
-    const tip = (await tipOf(repo, key.startsWith('github:') ? `origin/${name}` : name)) || kept?.head || ''
-    if (!tip || tip === mainTip || kept?.merged === tip) continue
-    if (kept?.from === tip || !(await isAncestor(repo, tip, mainTip))) continue
+    const marks = annotationMarks(projectId, file)
+    const tip = (await tipOf(repo, key.startsWith('github:') ? `origin/${name}` : name)) || kept?.head || marks.head || ''
+    const from = kept?.from || marks.from || ''
+    if (!tip || !from || tip === mainTip || tip === from) continue
+    if ((kept?.merged || marks.merged) === tip || !(await isAncestor(repo, tip, mainTip))) continue
     const main = readArrangementFile(projectId, mainFile)
     if (kept && (kept.updatedAt ?? '') > (main?.updatedAt ?? '')) {
       writeArrangementFile(projectId, { ...main, spots: kept.spots, updatedAt: kept.updatedAt ?? new Date().toISOString() }, mainFile)
@@ -208,7 +224,8 @@ export const takeUpMerges = async (projectId: string, repo: string, at: MapAt, m
       writeAnnotations(projectId, merged, mainFile)
       wrote.add(mainFile)
     }
-    writeArrangementFile(projectId, { ...(kept ?? { spots: [] }), merged: tip }, file)
+    if (kept) writeArrangementFile(projectId, { ...kept, merged: tip }, file)
+    writeAnnotations(projectId, theirs, file, { ...marks, merged: tip })
   }
   return [...wrote]
 }

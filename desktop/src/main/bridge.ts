@@ -135,5 +135,5 @@ export const openBridge = (): void => {
   })
   ipcMain.handle('room:say', (_event, where: Whereabouts) => sayWhere(where))
   ipcMain.handle('room:hold', (_event, items: string[]) => holdThings(items))
-  ipcMain.handle('room:letGo', () => letGoOfThings())
+  ipcMain.handle('room:letGo', (_event, items?: string[]) => letGoOfThings(items))
 }

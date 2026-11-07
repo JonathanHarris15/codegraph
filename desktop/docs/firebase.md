@@ -66,6 +66,11 @@ once.
   so whoever changes a project's members also has to write them to
   `roomMembers/{room}`. Without this, anyone signed in could join any room. Do this in
   `change`, when the path is a project.
+- **Firestore refuses `undefined`.** Documents here can have fields left undefined, so
+  send them through a JSON round trip first, or turn on `ignoreUndefinedProperties`.
+- **Permission errors.** Only `CloudOffline` is treated as "try again later". A refusal
+  by the rules comes out of `sendUp` as a plain error, and has no words for the person
+  yet.
 - **A document's limit is 1 MiB.** Very large sketches could reach it. Mockups and
   history snapshots are already files, for this reason, but a failed write has no words
   for the person yet.

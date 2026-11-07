@@ -58,7 +58,19 @@ export const useRoom = (room: string, me: string) => {
     [],
   )
 
-  return { people, held: now.held, say }
+  // Holding and letting go happen strictly in order, so letting go of something
+  // while the hold on it is still on its way cannot leave it held.
+  const line = useRef<Promise<unknown>>(Promise.resolve())
+  const hold = useCallback((items: string[]): Promise<boolean> => {
+    const asked = line.current.then(() => window.codegraph.holdThings(items)).then((got) => got.ok)
+    line.current = asked.catch(() => false)
+    return asked
+  }, [])
+  const letGo = useCallback((items?: string[]): void => {
+    line.current = line.current.then(() => window.codegraph.letGoOfThings(items)).catch(() => undefined)
+  }, [])
+
+  return { people, held: now.held, say, hold, letGo }
 }
 
 /** What the canvas needs to know of a room, on one board: `board` names what is
@@ -88,8 +100,8 @@ export const togetherOn = ({
     heldBy,
     onCursor: (inside, x, y) => room.say({ inside, x, y }),
     onDragging: (moves) => room.say({ dragging: moves }),
-    onHold: async (ids) => (board ? (await window.codegraph.holdThings(ids.map((id) => prefix + id))).ok : true),
-    onLetGo: () => void window.codegraph.letGoOfThings(),
+    onHold: async (ids) => (board ? room.hold(ids.map((id) => prefix + id)) : true),
+    onLetGo: (ids) => room.letGo(ids.map((id) => prefix + id)),
     onGo,
   }
 }

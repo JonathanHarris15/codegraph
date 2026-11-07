@@ -11,7 +11,8 @@ const mayDraw = (sketch: Sketch): boolean => {
   const me = whoIsIn()
   if (sketch.projectId === LOOSE) return true
   if (sketch.projectId === SHARED_WITH_ME) {
-    const role = sketch.members?.find((m) => m.id === me?.id)?.role
+    // Who may change it is what is kept here, not what the window says.
+    const role = readSketch(SHARED_WITH_ME, sketch.id)?.members?.find((m) => m.id === me?.id)?.role
     return role === 'owner' || role === 'collaborator'
   }
   const project = listProjects().find((p) => p.id === sketch.projectId)

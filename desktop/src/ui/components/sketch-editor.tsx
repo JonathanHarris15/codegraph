@@ -1,7 +1,7 @@
 // codegraph: component sketch-editor
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Sketch, SketchCard } from '../../modules/sketches/index.js'
-import { mergeDoc, undoStep } from '../../modules/together/index.js'
+import { undoStep } from '../../modules/together/index.js'
 import { sentenceOf } from '../../modules/wording/index.js'
 import { Button, Field, Select } from '../design-system/kit.js'
 import type { CardType } from '../../modules/card-types/schema.js'
@@ -142,7 +142,7 @@ export const SketchEditor = ({
       from.current = from.current.slice(0, -1)
       to.current = [...to.current, step]
       last.current = { step: '', at: 0 }
-      const next = back ? undoStep(step.before, step.after, now.current) : mergeDoc(step.before, step.after, now.current)
+      const next = back ? undoStep(step.before, step.after, now.current) : undoStep(step.after, step.before, now.current)
       now.current = next
       onChange(next)
       setTick((n) => n + 1)
