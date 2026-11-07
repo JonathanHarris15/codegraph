@@ -32,7 +32,8 @@ const drag = async (one: Locator, dx: number, dy: number): Promise<void> => {
   await page.waitForTimeout(400)
 }
 const kept = (): { id: string; x: number; y: number }[] =>
-  JSON.parse(readFileSync(join(yard.home, 'arrangements', 'notes-app.json'), 'utf8')).spots
+  // The map's own layout, kept for the branch being looked at (ADR 0019).
+  JSON.parse(readFileSync(join(yard.home, 'arrangements', 'notes-app', encodeURIComponent('notes@local:main') + '.json'), 'utf8')).spots
 
 beforeAll(async () => {
   yard = openYard('rearrange')

@@ -45,7 +45,8 @@ const away = async (): Promise<void> => {
 }
 const kept = (): Layer[] => {
   try {
-    return (JSON.parse(readFileSync(join(yard.home, 'annotations', 'notes-app.json'), 'utf8')) as { layers: Layer[] }).layers
+    // The map's own notes, kept for the branch being looked at (ADR 0019).
+    return (JSON.parse(readFileSync(join(yard.home, 'annotations', 'notes-app', encodeURIComponent('notes@local:main') + '.json'), 'utf8')) as { layers: Layer[] }).layers
   } catch {
     return []
   }
