@@ -12,7 +12,7 @@ export const copySketch = async (projectId: string, sketchId: string): Promise<S
   if (!sketch) return null
   const { ownerId: _o, members: _m, memberIds: _i, roles: _r, ...rest } = sketch
   const now = new Date().toISOString()
-  const copy: Sketch = { ...rest, id: randomUUID(), projectId: LOOSE, name: `${sketch.name} (copy)`, createdAt: now, updatedAt: now }
+  const copy: Sketch = { ...rest, id: randomUUID(), projectId: LOOSE, folderId: '', name: `${sketch.name} (copy)`, createdAt: now, updatedAt: now }
   const from = sketchesFolder(projectId, sketchId)
   if (existsSync(from)) cpSync(from, sketchesFolder(LOOSE, copy.id), { recursive: true })
   writeSketch(copy)

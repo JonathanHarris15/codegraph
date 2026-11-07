@@ -92,6 +92,19 @@ export type Sketch = {
   members?: { id: string; login: string; name: string; avatar: string; role: 'owner' | 'collaborator' | 'viewer' }[]
   memberIds?: string[]
   roles?: Record<string, string>
+  /** The folder it is filed in; left out or '', the top of its library. */
+  folderId?: string
+}
+
+/** A folder in a sketch library, to keep sketches in. Folders sit inside
+ *  folders; '' as a parent is the top of the library. */
+export type SketchFolder = {
+  id: string
+  /** The library it belongs to: a project's id, or LOOSE for a member's own. */
+  library: string
+  name: string
+  parentId: string
+  createdAt: string
 }
 
 /** Stands in for a project id, for a sketch in a member's own library. */

@@ -388,9 +388,11 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
     return `${two(d.getDate())}/${two(d.getMonth() + 1)}/${two(d.getFullYear() % 100)}`
   }
 
-  const startOne = async (fromMap: boolean): Promise<void> => {
+  const startOne = async (fromMap: boolean, folderId = ''): Promise<void> => {
     const name = fromMap ? `${snapshotOf()} (sketch ${today()})` : 'New sketch'
     const started = await window.codegraph.startSketch(projectId, name, fromMap && shown ? shown.card : undefined)
+    // Started inside a folder, it is kept there.
+    if (folderId) await window.codegraph.fileSketch(projectId, started.id, folderId)
     await loadSketches()
     await openOne(started.id)
     // A sketch from the map opens at the level the person was looking at.
@@ -706,14 +708,16 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
 
         {(
           <SketchLibrary
+            library={projectId}
             shown={library}
             sketches={sketches}
             open={sketch?.id ?? ''}
             onOpen={(id) => void openOne(id)}
             canDraw={canDraw}
             {...(online ? { onCopy: (id: string) => void window.codegraph.copySketch(projectId, id) } : {})}
-            onStartBlank={() => void startOne(false)}
-            onStartFromMap={() => void startOne(true)}
+            onStartBlank={(folderId) => void startOne(false, folderId)}
+            onStartFromMap={(folderId) => void startOne(true, folderId)}
+            onFiled={() => void loadSketches()}
             onDelete={(id) => void deleteOne(id)}
             onClose={() => setLibrary(false)}
           />

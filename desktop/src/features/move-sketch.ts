@@ -20,7 +20,8 @@ export const moveSketch = async (sketchId: string, projectId: string): Promise<C
   const to = sketchesFolder(projectId, sketchId)
   if (existsSync(from)) cpSync(from, to, { recursive: true })
   const { ownerId: _o, members: _m, memberIds: _i, roles: _r, ...rest } = sketch
-  const moved = { ...rest, projectId, updatedAt: new Date().toISOString() }
+  // Its folder was in the library it left.
+  const moved = { ...rest, projectId, folderId: '', updatedAt: new Date().toISOString() }
   writeSketch(moved)
   removeSketch(LOOSE, sketchId)
   if (wasOnline) await sendUp(wasOnline)

@@ -180,7 +180,13 @@ _Avoid_: drawing, draft, plan, diagram
 Where sketches are kept. Each project has one, which all its members can see,
 and each member has their own outside any project. A sketch can be moved from a
 member's own library into a project's.
-_Avoid_: directory, folder, sketch gallery
+_Avoid_: directory, sketch gallery
+
+**Folder**:
+A place inside a sketch library to keep sketches in, which can hold other folders.
+A project's folders are shared by everyone on it; a member's own follow them.
+Deleting one keeps what was in it, a level up.
+_Avoid_: directory, collection, group
 
 **Loose sketch**:
 A sketch in a member's own library, on no project. It is theirs alone until they

@@ -4982,3 +4982,187 @@ button.map-restyle:hover {
 .map-side-grip:active::after {
   background: var(--focus-ring);
 }
+
+/* Folders in a sketch library: the way back up, then the folders here, then
+   the sketches here. Something dragged over a folder lights it up. */
+.folder-browser {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.folder-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 32px;
+}
+
+.folder-crumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.folder-crumb-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--ink-faint);
+}
+
+.folder-crumb {
+  border: 1px dashed transparent;
+  border-radius: var(--radius-sm, 6px);
+  background: none;
+  padding: 2px 6px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.folder-crumb:hover {
+  background: var(--surface-sunken);
+  color: var(--ink-000);
+}
+
+.folder-crumb[aria-current='location'] {
+  color: var(--ink-000);
+  font-weight: 600;
+}
+
+.folder-crumb--over {
+  border-color: var(--focus-ring);
+  background: color-mix(in srgb, var(--focus-ring) 12%, transparent);
+}
+
+.folder-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.folder-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border: var(--stroke-edge) solid var(--line-hair);
+  border-radius: var(--radius-md);
+  background: var(--surface-000);
+}
+
+.folder-row--over {
+  border-color: var(--focus-ring);
+  background: color-mix(in srgb, var(--focus-ring) 10%, var(--surface-000));
+}
+
+.folder-row-open {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  background: none;
+  color: var(--ink-000);
+  text-align: left;
+  cursor: pointer;
+}
+
+.folder-row-open svg {
+  color: var(--ink-soft);
+  flex: none;
+}
+
+.folder-row-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-row-open .ds-hint {
+  margin-left: auto;
+}
+
+.folder-row-more {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-right: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+
+.folder-row-more:hover,
+.folder-row-more[aria-expanded='true'] {
+  background: var(--surface-sunken);
+  color: var(--ink-000);
+}
+
+.folder-row .map-menu {
+  min-width: 180px;
+}
+
+.folder-pick {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.folder-pick-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) 12px;
+  border: 0;
+  border-radius: var(--radius-sm, 6px);
+  background: none;
+  color: var(--ink-000);
+  text-align: left;
+  cursor: pointer;
+}
+
+.folder-pick-row:hover:not(:disabled) {
+  background: var(--surface-sunken);
+}
+
+.folder-pick-row:disabled {
+  color: var(--ink-faint);
+  cursor: default;
+}
+
+/* However wide the panel is dragged, a card's line ends in "…" rather than
+   pushing the panel sideways. */
+.map-side > .map-palette {
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.map-palette-item,
+.map-palette-words {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.map-palette-words {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}

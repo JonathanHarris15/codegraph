@@ -1,5 +1,5 @@
 // codegraph: module sync
-// codegraph: front door useFolder, useHeard, startFollowing, stopFollowing, pull, sendUp, sendSketch, sendMap, sendProject, sendEverything, sendRemoval, catchUp, follow, listRevisions, restoreRevision, pendingCount, removeEverything, projectPath, sketchPath, Revision
+// codegraph: front door useFolder, useHeard, startFollowing, stopFollowing, pull, sendUp, sendSketch, sendFolder, sendMap, sendProject, sendEverything, sendRemoval, catchUp, follow, listRevisions, restoreRevision, pendingCount, removeEverything, projectPath, sketchPath, folderPath, Revision
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -9,7 +9,7 @@ import { CloudOffline, theCloud, type Doc, type Member } from '../cloud/index.js
 import { whoIsIn } from '../members/index.js'
 import { keyIsShared, PROJECT_KEY } from '../places/index.js'
 import { keepProject, listProjects, removeProject, type Project } from '../projects/index.js'
-import { keepMockupBytes, listSketches, LOOSE, mockupFile, readSketch, removeSketch, SHARED_WITH_ME, writeSketch, type Sketch, type SketchCard } from '../sketches/index.js'
+import { keepMockupBytes, listFolders, listSketches, LOOSE, mockupFile, readFolder, readSketch, removeFolder, removeSketch, SHARED_WITH_ME, writeFolder, writeSketch, type Sketch, type SketchCard, type SketchFolder } from '../sketches/index.js'
 import { mergeDoc, sameDoc, tally, wordsFor } from '../together/index.js'
 
 let folder = ''
@@ -79,6 +79,16 @@ export const sketchPath = (sketch: Pick<Sketch, 'id' | 'projectId' | 'memberIds'
     return me ? `members/${me.id}/sketches/${sketch.id}` : ''
   }
   return listProjects().find((p) => p.id === sketch.projectId)?.online ? `projects/${sketch.projectId}/sketches/${sketch.id}` : ''
+}
+
+/** Where a folder of sketches lives online: with its project, or privately under
+ *  who it belongs to. '' if it does not go online. */
+export const folderPath = (library: string, id: string): string => {
+  if (library === LOOSE) {
+    const me = whoIsIn()
+    return me ? `members/${me.id}/folders/${id}` : ''
+  }
+  return listProjects().find((p) => p.id === library)?.online ? `projects/${library}/folders/${id}` : ''
 }
 
 // ---- This computer's copy of each kind of document ----
@@ -164,6 +174,8 @@ const localOf = (path: string): Local | null => {
     return { read: () => mapDoc(a, key), write: (doc) => keepMapDoc(a, key, doc) }
   }
   if (top === 'members' && kind === 'sketches' && b) return localSketch(LOOSE, b)
+  if (top === 'projects' && a && kind === 'folders' && b) return localFolder(a, b)
+  if (top === 'members' && kind === 'folders' && b) return localFolder(LOOSE, b)
   if (top === 'sketches' && a) {
     const inMine = (): string => (readSketch(LOOSE, a) ? LOOSE : SHARED_WITH_ME)
     return {
@@ -189,9 +201,18 @@ const localSketch = (projectId: string, id: string): Local => ({
   },
 })
 
+const localFolder = (library: string, id: string): Local => ({
+  read: () => readFolder(library, id) as unknown as Doc | null,
+  write: (doc) => {
+    if (doc) writeFolder({ ...(doc as unknown as SketchFolder), library })
+    else removeFolder(library, id)
+  },
+})
+
 /** Leaves nothing of a project on this computer. */
 const forgetProjectHere = (projectId: string): void => {
   for (const sketch of listSketches(projectId)) removeSketch(projectId, sketch.id)
+  for (const one of listFolders(projectId)) removeFolder(projectId, one.id)
   removeArrangements(projectId)
   removeAnnotations(projectId)
   removeProject(projectId)
@@ -388,6 +409,12 @@ export const sendSketch = async (sketch: Sketch): Promise<void> => {
   if (path) await sendUp(path)
 }
 
+/** Sends up a folder just made, renamed, moved or deleted. */
+export const sendFolder = async (library: string, id: string): Promise<void> => {
+  const path = folderPath(library, id)
+  if (path) await sendUp(path)
+}
+
 /** Sends up the maps just written. A local map stays on this computer. */
 export const sendMap = async (projectId: string, keys: string[]): Promise<void> => {
   if (!listProjects().find((p) => p.id === projectId)?.online) return
@@ -494,6 +521,7 @@ export const follow = (me: Member, changed: (what: { projectId: string; path: st
     await takeAll('projects', docs, '')
     for (const id of ids) {
       watching(`projects/${id}/sketches`, id)
+      watching(`projects/${id}/folders`, id)
       watching(mapsPath(id), id)
     }
     // Taken off a project: it goes from this computer too. One never seen online
@@ -508,6 +536,7 @@ export const follow = (me: Member, changed: (what: { projectId: string; path: st
 
   stops.set('projects', cloud.watchNaming('projects', me.id, (docs) => void heardProjects(docs).catch(quietly)))
   watching(`members/${me.id}/sketches`, LOOSE)
+  watching(`members/${me.id}/folders`, LOOSE)
   stops.set(
     'sketches',
     cloud.watchNaming('sketches', me.id, (docs) => void takeAll('sketches', docs, SHARED_WITH_ME).catch(quietly)),
@@ -532,6 +561,7 @@ export const pull = async (me: Member): Promise<void> => {
   const ids = new Set(projects.map((d) => String(d['id'])))
   for (const id of ids) {
     await takeAll(`projects/${id}/sketches`, await cloud.list(`projects/${id}/sketches`))
+    await takeAll(`projects/${id}/folders`, await cloud.list(`projects/${id}/folders`))
     await takeAll(mapsPath(id), await cloud.list(mapsPath(id)))
   }
   for (const project of listProjects())
@@ -540,6 +570,7 @@ export const pull = async (me: Member): Promise<void> => {
       see(projectPath(project.id), null)
     }
   await takeAll(`members/${me.id}/sketches`, await cloud.list(`members/${me.id}/sketches`))
+  await takeAll(`members/${me.id}/folders`, await cloud.list(`members/${me.id}/folders`))
   await takeAll('sketches', await cloud.naming('sketches', me.id))
 }
 
@@ -574,6 +605,10 @@ export const startFollowing = async (me: Member): Promise<void> => {
       const path = sketch ? sketchPath(sketch) : ''
       if (sketch && path && !lastSeen(path)) await sendUp(path)
     }
+    for (const one of listFolders(LOOSE)) {
+      const path = folderPath(LOOSE, one.id)
+      if (path && !lastSeen(path)) await sendUp(path)
+    }
   } catch (problem) {
     if (!(problem instanceof CloudOffline)) throw problem
   }
@@ -590,6 +625,7 @@ export const sendEverything = async (projectId: string): Promise<void> => {
     const sketch = readSketch(projectId, listed.id)
     if (sketch) await sendSketch(sketch)
   }
+  for (const one of listFolders(projectId)) await sendFolder(projectId, one.id)
   const keys = new Set([...arrangementKeys(projectId), ...annotationKeys(projectId)])
   await sendMap(projectId, [PROJECT_KEY, ...keys])
 }
@@ -598,7 +634,7 @@ export const sendEverything = async (projectId: string): Promise<void> => {
 export const removeEverything = async (projectId: string): Promise<void> => {
   const cloud = theCloud()
   if (!cloud) return
-  for (const collection of [`projects/${projectId}/sketches`, mapsPath(projectId), revisionsPath(projectId)]) {
+  for (const collection of [`projects/${projectId}/sketches`, `projects/${projectId}/folders`, mapsPath(projectId), revisionsPath(projectId)]) {
     for (const doc of await cloud.list(collection)) {
       const id = idPart(collection, doc)
       await cloud.change(`${collection}/${id}`, () => null)

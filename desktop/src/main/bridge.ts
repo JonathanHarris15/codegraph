@@ -15,6 +15,12 @@ import { createProject } from '../features/create-project.js'
 import { deleteSketch } from '../features/delete-sketch.js'
 import { listPoints } from '../features/list-points.js'
 import { listSketches } from '../features/list-sketches.js'
+import { listFolders } from '../features/list-folders.js'
+import { makeFolder } from '../features/make-folder.js'
+import { renameFolder } from '../features/rename-folder.js'
+import { moveFolder } from '../features/move-folder.js'
+import { deleteFolder } from '../features/delete-folder.js'
+import { fileSketch } from '../features/file-sketch.js'
 import { openSketch } from '../features/open-sketch.js'
 import { saveSketch } from '../features/save-sketch.js'
 import { listGithubSoftwareSystems } from '../features/list-github-software-systems.js'
@@ -74,6 +80,12 @@ export const openBridge = (): void => {
     showMap(projectId, points),
   )
   ipcMain.handle('sketch:list', (_event, projectId: string) => listSketches(projectId))
+  ipcMain.handle('folder:list', (_event, library: string) => listFolders(library))
+  ipcMain.handle('folder:make', (_event, library: string, name: string, parentId: string) => makeFolder(library, name, parentId))
+  ipcMain.handle('folder:rename', (_event, library: string, id: string, name: string) => renameFolder(library, id, name))
+  ipcMain.handle('folder:move', (_event, library: string, id: string, parentId: string) => moveFolder(library, id, parentId))
+  ipcMain.handle('folder:delete', (_event, library: string, id: string) => deleteFolder(library, id))
+  ipcMain.handle('sketch:file', (_event, library: string, sketchId: string, folderId: string) => fileSketch(library, sketchId, folderId))
   ipcMain.handle('sketch:start', (_event, projectId: string, name: string, snapshot?: Card) =>
     startSketch(projectId, name, snapshot),
   )

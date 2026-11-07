@@ -4,6 +4,7 @@ import type { LooseListed } from '../../features/list-my-sketches.js'
 import type { ProjectView } from '../../features/list-projects.js'
 import { LOOSE } from '../../modules/sketches/schema.js'
 import { Button, Card, Field, Select, Sheet } from '../design-system/kit.js'
+import { dragSketch, FolderBrowser, FolderPickSheet, shownIn, useFolders } from './folders.js'
 
 /** A member's own sketch library, outside any project, and what others have shared
  *  with them. Their own always open; someone else's need a connection, unless a
@@ -24,6 +25,24 @@ export const MySketches = ({
   const [login, setLogin] = useState('')
   const [role, setRole] = useState<'collaborator' | 'viewer'>('collaborator')
   const [problem, setProblem] = useState('')
+  const [filing, setFiling] = useState<LooseListed | null>(null)
+  // The folder being looked in, kept across visits to the page.
+  const [at, setAt] = useState(() => {
+    try {
+      return window.sessionStorage.getItem('codegraph-loose-folder') ?? ''
+    } catch {
+      return ''
+    }
+  })
+  const go = (folderId: string): void => {
+    setAt(folderId)
+    try {
+      window.sessionStorage.setItem('codegraph-loose-folder', folderId)
+    } catch {
+      // Only a convenience.
+    }
+  }
+  const { folders, reload } = useFolders(LOOSE)
 
   const load = useCallback(async (): Promise<void> => {
     setSketches(await window.codegraph.listMySketches())
@@ -43,6 +62,8 @@ export const MySketches = ({
 
   const start = async (): Promise<void> => {
     const made = await window.codegraph.startSketch(LOOSE, 'New sketch')
+    // Started inside a folder, it is kept there.
+    if (here) await window.codegraph.fileSketch(LOOSE, made.id, here)
     onOpen(LOOSE, made.id)
   }
 
@@ -53,7 +74,10 @@ export const MySketches = ({
     setProblem('')
   }
 
-  const mine = sketches?.filter((s) => !s.theirs) ?? []
+  // A folder that has gone, as when deleted on another computer, is the top.
+  const here = at && folders.some((f) => f.id === at) ? at : ''
+  const allMine = sketches?.filter((s) => !s.theirs) ?? []
+  const mine = allMine.filter((s) => shownIn(s.folderId, folders) === here)
   const theirs = sketches?.filter((s) => s.theirs) ?? []
   const hereProjects = projects.filter((p) => p.role !== 'viewer')
 
@@ -61,7 +85,7 @@ export const MySketches = ({
     const shut = sketch.theirs && !online
     return (
       <Card key={sketch.id}>
-        <div className="sketch-row">
+        <div className="sketch-row" {...(sketch.theirs ? {} : dragSketch(sketch.id))}>
           <div>
             <div className="ds-card-name">{sketch.name}</div>
             <div className="ds-hint">
@@ -84,6 +108,9 @@ export const MySketches = ({
                     Share
                   </Button>
                 ) : null}
+                <Button look="bare" onClick={() => setFiling(sketch)}>
+                  Move to folder…
+                </Button>
                 {hereProjects.length ? (
                   <Button look="bare" onClick={() => setMoving(sketch)}>
                     Move to a project
@@ -109,9 +136,20 @@ export const MySketches = ({
         </Button>
       </div>
       {sketches === null ? <div className="ds-empty">Reading your sketches…</div> : null}
-      {sketches?.length === 0 ? <div className="ds-empty">No sketches yet.</div> : null}
-      <div style={{ display: 'grid', gap: 8 }}>{mine.map(row)}</div>
-      {theirs.length ? (
+      {sketches?.length === 0 && !folders.length ? <div className="ds-empty">No sketches yet.</div> : null}
+      <FolderBrowser
+        library={LOOSE}
+        folders={folders}
+        reload={reload}
+        at={here}
+        onGo={go}
+        canEdit
+        sketchFolders={Object.fromEntries(allMine.map((s) => [s.id, shownIn(s.folderId, folders)]))}
+        onFiled={() => void load()}
+      >
+        <div style={{ display: 'grid', gap: 8 }}>{mine.map(row)}</div>
+      </FolderBrowser>
+      {theirs.length && !here ? (
         <>
           <h2 className="ds-label" style={{ marginTop: 20 }}>
             Shared with you
@@ -150,6 +188,21 @@ export const MySketches = ({
             </Button>
           </div>
         </Sheet>
+      ) : null}
+
+      {filing ? (
+        <FolderPickSheet
+          title={`Move ${filing.name} to…`}
+          folders={folders}
+          current={shownIn(filing.folderId, folders)}
+          onPick={(folderId) =>
+            void window.codegraph.fileSketch(LOOSE, filing.id, folderId).then(() => {
+              setFiling(null)
+              void load()
+            })
+          }
+          onClose={() => setFiling(null)}
+        />
       ) : null}
 
       {moving ? (

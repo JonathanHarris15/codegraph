@@ -40,8 +40,8 @@ service cloud.firestore {
       allow delete: if signedIn() && resource.data.ownerId == me();
     }
 
-    // A member's own, private ones.
-    match /members/{member}/sketches/{sketch} {
+    // A member's own, private ones: sketches, and the folders they keep them in.
+    match /members/{member}/{kind}/{doc} {
       allow read, write: if signedIn() && member == me();
     }
   }

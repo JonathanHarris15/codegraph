@@ -7,6 +7,8 @@ import type { ProjectView } from '../features/list-projects.js'
 import type { Linked } from '../features/link-software-system.js'
 import type { MockupAdded } from '../features/add-mockup.js'
 import type { SketchListed } from '../features/list-sketches.js'
+import type { SketchFolder } from '../features/list-folders.js'
+import type { FolderDone } from '../features/make-folder.js'
 import type { Switched } from '../features/switch-branch.js'
 import type { SketchOpened } from '../features/open-sketch.js'
 import type { Card, MapShown } from '../features/show-map.js'
@@ -46,6 +48,12 @@ export type Api = {
   showArrangement: (projectId: string, points?: Record<string, Point>) => Promise<Arrangement>
   saveArrangement: (projectId: string, arrangement: Arrangement, points?: Record<string, Point>, seen?: Arrangement) => Promise<Arrangement>
   listSketches: (projectId: string) => Promise<SketchListed[]>
+  listFolders: (library: string) => Promise<SketchFolder[]>
+  makeFolder: (library: string, name: string, parentId: string) => Promise<FolderDone>
+  renameFolder: (library: string, id: string, name: string) => Promise<FolderDone>
+  moveFolder: (library: string, id: string, parentId: string) => Promise<FolderDone>
+  deleteFolder: (library: string, id: string) => Promise<FolderDone>
+  fileSketch: (library: string, sketchId: string, folderId: string) => Promise<FolderDone>
   startSketch: (projectId: string, name: string, snapshot?: Card) => Promise<Sketch>
   openSketch: (projectId: string, sketchId: string) => Promise<SketchOpened | null>
   saveSketch: (sketch: Sketch, seen?: Sketch) => Promise<Sketch>
@@ -100,6 +108,12 @@ const api: Api = {
   showArrangement: (projectId, points = {}) => ipcRenderer.invoke('arrangement:show', projectId, points),
   saveArrangement: (projectId, arrangement, points = {}, seen) => ipcRenderer.invoke('arrangement:save', projectId, arrangement, points, seen),
   listSketches: (projectId) => ipcRenderer.invoke('sketch:list', projectId),
+  listFolders: (library) => ipcRenderer.invoke('folder:list', library),
+  makeFolder: (library, name, parentId) => ipcRenderer.invoke('folder:make', library, name, parentId),
+  renameFolder: (library, id, name) => ipcRenderer.invoke('folder:rename', library, id, name),
+  moveFolder: (library, id, parentId) => ipcRenderer.invoke('folder:move', library, id, parentId),
+  deleteFolder: (library, id) => ipcRenderer.invoke('folder:delete', library, id),
+  fileSketch: (library, sketchId, folderId) => ipcRenderer.invoke('sketch:file', library, sketchId, folderId),
   startSketch: (projectId, name, snapshot) => ipcRenderer.invoke('sketch:start', projectId, name, snapshot),
   openSketch: (projectId, sketchId) => ipcRenderer.invoke('sketch:open', projectId, sketchId),
   saveSketch: (sketch, seen) => ipcRenderer.invoke('sketch:save', sketch, seen),

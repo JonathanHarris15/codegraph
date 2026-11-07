@@ -3,7 +3,7 @@
 import { whoIsIn } from '../modules/members/index.js'
 import { listSketches, LOOSE, readSketch, SHARED_WITH_ME, type Sketch } from '../modules/sketches/index.js'
 
-export type LooseListed = Pick<Sketch, 'id' | 'name' | 'createdAt' | 'updatedAt' | 'from' | 'projectId'> & {
+export type LooseListed = Pick<Sketch, 'id' | 'name' | 'createdAt' | 'updatedAt' | 'from' | 'projectId' | 'folderId'> & {
   /** Someone else's: it needs a connection to open, unless copied. */
   theirs: boolean
   /** Who owns it, if it is shared. */

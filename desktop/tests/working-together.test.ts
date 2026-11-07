@@ -20,6 +20,10 @@ import { moveSketch } from '../src/features/move-sketch.js'
 import { openSketch } from '../src/features/open-sketch.js'
 import { putProjectOnline } from '../src/features/put-project-online.js'
 import { removeMember } from '../src/features/remove-member.js'
+import { makeFolder } from '../src/features/make-folder.js'
+import { fileSketch } from '../src/features/file-sketch.js'
+import { deleteFolder } from '../src/features/delete-folder.js'
+import { listFolders } from '../src/features/list-folders.js'
 import { renameProject } from '../src/features/rename-project.js'
 import { restoreRevision } from '../src/features/restore-revision.js'
 import { saveAnnotations } from '../src/features/save-annotations.js'
@@ -226,6 +230,36 @@ describe('roles', () => {
 
 describe('sketches on a project', () => {
   const drawn = (name: string, x = 0) => ({ ...blankCard(name, name, 'system', 'software system'), x })
+
+  it('are kept in folders every member sees, and a viewer cannot change', async () => {
+    const id = await invited()
+    const folder = (await makeFolder(id, 'Planning')).folder!
+    const sketch = await startSketch(id, 'Plan')
+    await fileSketch(id, sketch.id, folder.id)
+    await beBen()
+    expect((await listFolders(id)).map((f) => f.name)).toEqual(['Planning'])
+    expect((await listSketches(id))[0]?.folderId).toBe(folder.id)
+    beAna()
+    expect((await deleteFolder(id, folder.id)).ok).toBe(true)
+    await beBen()
+    expect(await listFolders(id)).toEqual([])
+    expect((await listSketches(id))[0]?.folderId).toBe('')
+  })
+
+  it('keep a member’s own folders with them, on another computer', async () => {
+    beAna()
+    const mine = (await makeFolder(LOOSE, 'Ideas')).folder!
+    const other = aComputer(yard, 'ana-laptop')
+    other.be(ana)
+    await pull(ana)
+    expect((await listFolders(LOOSE)).map((f) => f.id)).toEqual([mine.id])
+  })
+
+  it('stops a viewer making folders', async () => {
+    const id = await invited('viewer')
+    await beBen()
+    expect((await makeFolder(id, 'Mine')).ok).toBe(false)
+  })
 
   it('are seen by every member', async () => {
     const id = await invited()
