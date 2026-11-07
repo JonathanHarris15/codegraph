@@ -1,15 +1,15 @@
 // codegraph: test ui canvas
 import { writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
-import { _electron as electron, type ElectronApplication, type Locator, type Page } from 'playwright'
+import { join } from 'node:path'
+import { type ElectronApplication, type Locator, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { sayWhere, useFolder as useAgents } from '../src/modules/agents/index.js'
-import { aMappedRepo, aProposal, buildSearch, closeYard, git, openYard, searchProposal, type Yard } from './yard.js'
+import { aMappedRepo, aProposal, buildSearch, closeYard, git, openTheApp, openYard, searchProposal, type Yard } from './yard.js'
 
 /** The built app watching a proposal get built: a notes repo on a branch
  *  with a proposal for a search page, an agent saying where it works, and
- *  the code catching up while the canvas is open. */
-const appFolder = resolve(import.meta.dirname, '..')
+ *  the code catching up while the canvas is open. Then a person draws a
+ *  proposal of their own on a second repo, still on its main line. */
 const PATIENCE = 15_000
 const pictures = process.env.CODEGRAPH_PICTURES ?? ''
 
@@ -48,7 +48,7 @@ beforeAll(async () => {
       ],
     }),
   )
-  app = await electron.launch({ args: ['.', `--user-data-dir=${yard.home}`], cwd: appFolder })
+  app = await openTheApp(yard.home)
   page = await app.firstWindow()
   await page.setViewportSize({ width: 1400, height: 860 })
   await page.getByRole('button', { name: 'Open Notes', exact: true }).dblclick()

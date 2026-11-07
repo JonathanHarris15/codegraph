@@ -1,13 +1,12 @@
 // codegraph: test ui canvas
 import { mkdirSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
-import { _electron as electron, type ElectronApplication, type Locator, type Page } from 'playwright'
+import { join } from 'node:path'
+import { type ElectronApplication, type Locator, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { aMappedRepo, aPicture, closeYard, openYard, type Yard } from './yard.js'
+import { aMappedRepo, aPicture, closeYard, openTheApp, openYard, type Yard } from './yard.js'
 
 /** The built app on a blank computer that knows one project: the notes app
  *  the tests write by hand. */
-const appFolder = resolve(import.meta.dirname, '..')
 const PATIENCE = 15_000
 /** Where a run leaves pictures of what it saw, when asked to. */
 const pictures = process.env.CODEGRAPH_PICTURES ?? ''
@@ -45,7 +44,7 @@ beforeAll(async () => {
       ],
     }),
   )
-  app = await electron.launch({ args: ['.', `--user-data-dir=${yard.home}`], cwd: appFolder })
+  app = await openTheApp(yard.home)
   page = await app.firstWindow()
   await page.setViewportSize({ width: 1400, height: 860 })
   await page.waitForLoadState('domcontentloaded')

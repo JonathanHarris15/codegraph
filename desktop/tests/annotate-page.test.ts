@@ -1,15 +1,14 @@
 // codegraph: test ui canvas
 import { readFileSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
-import { _electron as electron, type ElectronApplication, type Locator, type Page } from 'playwright'
+import { join } from 'node:path'
+import { type ElectronApplication, type Locator, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { Annotation, Layer } from '../src/modules/annotations/index.js'
-import { aMappedRepo, closeYard, openYard, type Yard } from './yard.js'
+import { aMappedRepo, closeYard, openTheApp, openYard, type Yard } from './yard.js'
 
 /** Drawing annotations over a map and a sketch the way a person does: from
  *  the library, onto the board, beside cards and between them, on layers
  *  that can be hidden. */
-const appFolder = resolve(import.meta.dirname, '..')
 const PATIENCE = 15_000
 const pictures = process.env.CODEGRAPH_PICTURES ?? ''
 
@@ -52,7 +51,7 @@ const kept = (): Layer[] => {
   }
 }
 const open = async (): Promise<void> => {
-  app = await electron.launch({ args: ['.', `--user-data-dir=${yard.home}`], cwd: appFolder })
+  app = await openTheApp(yard.home)
   page = await app.firstWindow()
   await page.setViewportSize({ width: 1400, height: 860 })
   await page.getByRole('button', { name: 'Open Notes', exact: true }).dblclick()

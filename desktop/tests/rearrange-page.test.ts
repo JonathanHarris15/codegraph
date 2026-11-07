@@ -1,14 +1,13 @@
 // codegraph: test ui canvas
 import { readFileSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
-import { _electron as electron, type ElectronApplication, type Locator, type Page } from 'playwright'
+import { join } from 'node:path'
+import { type ElectronApplication, type Locator, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { aMappedRepo, closeYard, openYard, type Yard } from './yard.js'
+import { aMappedRepo, closeYard, openTheApp, openYard, type Yard } from './yard.js'
 
 /** Moving a map's cards and its wires' words about: a map is read from the
  *  code, so where a person likes things is kept beside it, and going into a
  *  card takes two clicks so one can drag. */
-const appFolder = resolve(import.meta.dirname, '..')
 const PATIENCE = 15_000
 
 let yard: Yard
@@ -47,7 +46,7 @@ beforeAll(async () => {
       ],
     }),
   )
-  app = await electron.launch({ args: ['.', `--user-data-dir=${yard.home}`], cwd: appFolder })
+  app = await openTheApp(yard.home)
   page = await app.firstWindow()
   await page.setViewportSize({ width: 1400, height: 860 })
   await page.getByRole('button', { name: 'Open Notes', exact: true }).dblclick()
@@ -95,6 +94,34 @@ describe('moving a map about', () => {
     const now = await boxOf(again)
     expect(now.x).toBeGreaterThan(was.x + 30)
     expect(now.y).toBeGreaterThan(was.y + 30)
+  })
+
+  it("lets go of a moved sentence when a card its wire joins is dragged", async () => {
+    // A wire bent through a sentence is two curves; a smooth one is one.
+    const bent = (): Promise<number> =>
+      page.$$eval('.map-wire path', (paths) => paths.filter((path) => (path.getAttribute('d') ?? '').split('C').length > 2).length)
+    const moved = kept().find((spot) => spot.id.includes('>'))!
+    const joined = onBoard(moved.id.split('>')[0]!)
+    expect(await bent()).toBeGreaterThan(0)
+
+    const box = (await joined.boundingBox())!
+    await page.mouse.move(box.x + box.width / 2, box.y + 12)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width / 2 + 40, box.y + 12 + 30, { steps: 8 })
+    // Already smooth, with the card still in the hand.
+    expect(await bent()).toBe(0)
+    await page.mouse.up()
+    await page.waitForTimeout(400)
+    expect(await bent()).toBe(0)
+    expect(kept().map((spot) => spot.id)).not.toContain(moved.id)
+
+    // And now it goes along with the wire.
+    const said = page.locator('.map-sentence').first()
+    const was = await boxOf(said)
+    await drag(joined, 80, 0)
+    const now = await boxOf(said)
+    expect(now.x - was.x).toBeGreaterThan(10)
+    expect(await bent()).toBe(0)
   })
 
   it('puts a card back where the map had it, from the right-click menu', async () => {

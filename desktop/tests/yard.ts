@@ -2,7 +2,8 @@
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
+import type { ElectronApplication } from 'playwright'
 import { vi } from 'vitest'
 import { useFolder as useAnnotationsFolder } from '../src/modules/annotations/index.js'
 import { useFolder as useArrangementsFolder } from '../src/modules/arrangements/index.js'
@@ -30,6 +31,18 @@ export const openYard = (what: string): Yard => {
 
 export const closeYard = (yard: Yard): void => {
   rmSync(yard.path, { recursive: true, force: true })
+}
+
+/** Opens the real app for a page test, in a window a person cannot touch: see
+ *  hands-off-window.cjs. Playwright is only loaded by the tests that ask. */
+export const openTheApp = async (home: string, env: Record<string, string> = {}): Promise<ElectronApplication> => {
+  const { _electron: electron } = await import('playwright')
+  const tests = import.meta.dirname
+  return electron.launch({
+    args: ['-r', join(tests, 'hands-off-window.cjs'), '.', `--user-data-dir=${home}`],
+    cwd: resolve(tests, '..'),
+    env: { ...process.env, ...env } as Record<string, string>,
+  })
 }
 
 /** A second name for a folder: a symbolic link, a junction on Windows, which

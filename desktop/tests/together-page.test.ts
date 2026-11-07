@@ -1,8 +1,8 @@
 // codegraph: test ui canvas
 import { execFileSync } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
-import { join, resolve } from 'node:path'
-import { _electron as electron, type ElectronApplication, type Page } from 'playwright'
+import { join } from 'node:path'
+import type { ElectronApplication, Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createProject } from '../src/features/create-project.js'
 import { inviteMember } from '../src/features/invite-member.js'
@@ -11,12 +11,11 @@ import { startSketch } from '../src/features/start-sketch.js'
 import { openFolderCloud, useCloud, type Member } from '../src/modules/cloud/index.js'
 import { listProjects } from '../src/modules/projects/index.js'
 import { pull } from '../src/modules/sync/index.js'
-import { aComputer, aMappedRepo, closeYard, git, githubAnswers, openYard, type Yard } from './yard.js'
+import { aComputer, aMappedRepo, closeYard, git, githubAnswers, openTheApp, openYard, type Yard } from './yard.js'
 
 /** Two real copies of the app, on two people's "computers", with a folder standing
  *  in for the online side and for GitHub: what is sent really does go from one
  *  window to the other. */
-const appFolder = resolve(import.meta.dirname, '..')
 const PATIENCE = 15_000
 const ana: Member = { id: '1', login: 'ana', name: 'Ana', avatar: '' }
 const ben: Member = { id: '2', login: 'ben', name: 'Ben', avatar: '' }
@@ -28,11 +27,7 @@ let anaPage: Page
 let benPage: Page
 
 const open = async (home: string, online: string, github: string): Promise<Page> => {
-  const app = await electron.launch({
-    args: ['.', `--user-data-dir=${home}`],
-    cwd: appFolder,
-    env: { ...process.env, CODEGRAPH_CLOUD_FOLDER: online, CODEGRAPH_GITHUB_HOST: github },
-  })
+  const app = await openTheApp(home, { CODEGRAPH_CLOUD_FOLDER: online, CODEGRAPH_GITHUB_HOST: github })
   apps.push(app)
   const page = await app.firstWindow()
   await page.setViewportSize({ width: 1300, height: 800 })

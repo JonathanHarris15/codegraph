@@ -54,7 +54,10 @@ through `src/main/bridge.ts` — one channel per feature, nothing else in it.
    real git in a temp folder, and fakes only what is outside the program
    (GitHub). A feature test calls the feature the way the page would and runs
    the real modules. Fake nothing this repo owns; where the runtime lacks
-   something, say so in a `codegraph: fakes <what> because <why>` tag.
+   something, say so in a `codegraph: fakes <what> because <why>` tag. A page
+   test opens the app with `openTheApp` from `tests/yard.ts`, which keeps the
+   window out of reach of whoever is using the computer: a stray double-click
+   in it strands every test left in that file.
 3. **Keep tags true.** A new file gets its tag when it is written. A new name
    other code may use goes on its module's front door; a feature that starts
    using a module adds it to `uses`.

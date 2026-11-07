@@ -657,9 +657,10 @@ export type WireShape = {
   c2: { x: number; y: number }
 }
 
-/** A wire as it is really drawn: through its sentence, wherever that has gone,
- *  so the two can never come apart. It leaves and arrives as it always did,
- *  and is only bent on the way. */
+/** A wire whose sentence a person has moved: drawn through it, so the two can
+ *  never come apart. It leaves and arrives as it always did, and is only bent
+ *  on the way. A sentence nobody has moved already sits on the wire's own
+ *  curve, which needs no bending. */
 export const wireThrough = (shape: WireShape, at: { x: number; y: number }): string => {
   if (Math.hypot(at.x - shape.at.x, at.y - shape.at.y) < 0.5) return shape.d
   const a = shape.tail
@@ -840,16 +841,31 @@ export const wirePath = (
   return finish(a, { x: out, y: a.y }, { x: out, y: b.y }, b)
 }
 
+/** A point on a cubic curve, `t` of the way along it. */
+const pointOn = (
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  c: { x: number; y: number },
+  d: { x: number; y: number },
+  t: number,
+): { x: number; y: number } => {
+  const u = 1 - t
+  const mix = (axis: 'x' | 'y'): number => u * u * u * a[axis] + 3 * u * u * t * b[axis] + 3 * u * t * t * c[axis] + t * t * t * d[axis]
+  return { x: mix('x'), y: mix('y') }
+}
+
 /** A sentence sits in the middle of its own wire. Where that would put it on
- *  another sentence or on a card, it slides along the wire, either way, and
- *  then steps off to one side of it, the nearest clear spot winning. It is
- *  never left on a card when anywhere else will do. */
+ *  another sentence or on a card, it slides along the wire, either way, the
+ *  nearest clear spot winning. It never leaves the wire, so the wire stays a
+ *  smooth curve from card to card (ADR 0016). */
 export const spread = (
   chips: {
     at: { x: number; y: number }
     w: number
     h: number
     tail: { x: number; y: number }
+    c1: { x: number; y: number }
+    c2: { x: number; y: number }
     head: { x: number; y: number }
     /** A sentence a person has moved stays exactly where they put it, and
      *  the rest keep clear of it. */
@@ -862,21 +878,10 @@ export const spread = (
     one.x < other.x + other.w + AIR && one.x + one.w + AIR > other.x && one.y < other.y + other.h + AIR && one.y + one.h + AIR > other.y
   const boxAt = (at: { x: number; y: number }, w: number, h: number): Box => ({ x: at.x - w / 2, y: at.y - h / 2, w, h })
   const placed: Box[] = chips.filter((chip) => chip.fixed).map((chip) => boxAt(chip.at, chip.w, chip.h))
-  const along = (chip: (typeof chips)[number], by: number): { x: number; y: number } => {
-    const end = by < 0 ? chip.tail : chip.head
-    const share = Math.abs(by)
-    return { x: chip.at.x + (end.x - chip.at.x) * share, y: chip.at.y + (end.y - chip.at.y) * share }
-  }
-  const SLIDES = [0, -0.16, 0.16, -0.32, 0.32, -0.48, 0.48, -0.62, 0.62]
+  const SLIDES = [0.5, 0.42, 0.58, 0.34, 0.66, 0.26, 0.74, 0.18, 0.82, 0.1, 0.9]
   return chips.map((chip) => {
     if (chip.fixed) return chip.at
-    const tries: { x: number; y: number }[] = []
-    for (const side of [0, -1, 1, -2, 2])
-      for (const by of SLIDES) {
-        const on = along(chip, by)
-        tries.push({ x: on.x, y: on.y + side * (chip.h + AIR) })
-      }
-    const free = tries.find((at) => {
+    const free = SLIDES.map((t) => pointOn(chip.tail, chip.c1, chip.c2, chip.head, t)).find((at) => {
       const box = boxAt(at, chip.w, chip.h)
       return !cards.some((card) => hits(box, card)) && !placed.some((other) => hits(box, other))
     })

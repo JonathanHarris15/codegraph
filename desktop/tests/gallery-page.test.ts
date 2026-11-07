@@ -1,8 +1,8 @@
 // codegraph: test ui gallery
 import { execFileSync } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
-import { join, resolve } from 'node:path'
-import { _electron as electron, type ElectronApplication, type Page } from 'playwright'
+import { join } from 'node:path'
+import type { ElectronApplication, Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createProject } from '../src/features/create-project.js'
 import { inviteMember } from '../src/features/invite-member.js'
@@ -13,11 +13,10 @@ import { openFolderCloud, useCloud, type Member } from '../src/modules/cloud/ind
 import { keepProject, listProjects } from '../src/modules/projects/index.js'
 import { blankCard } from '../src/modules/sketches/index.js'
 import { pull, sendProject } from '../src/modules/sync/index.js'
-import { aComputer, aMappedRepo, closeYard, git, githubAnswers, openYard, type Yard } from './yard.js'
+import { aComputer, aMappedRepo, closeYard, git, githubAnswers, openTheApp, openYard, type Yard } from './yard.js'
 
 /** The gallery and a project as a viewer sees them, with a repo they can reach and
  *  one GitHub will not hand over; then signed out. */
-const appFolder = resolve(import.meta.dirname, '..')
 const PATIENCE = 15_000
 const ana: Member = { id: '1', login: 'ana', name: 'Ana', avatar: '' }
 const ben: Member = { id: '2', login: 'ben', name: 'Ben', avatar: '' }
@@ -54,7 +53,7 @@ beforeAll(async () => {
   useCloud(null)
   vi.unstubAllGlobals()
 
-  app = await electron.launch({ args: ['.', `--user-data-dir=${bens.home}`], cwd: appFolder, env: { ...process.env, CODEGRAPH_CLOUD_FOLDER: online, CODEGRAPH_GITHUB_HOST: hub } })
+  app = await openTheApp(bens.home, { CODEGRAPH_CLOUD_FOLDER: online, CODEGRAPH_GITHUB_HOST: hub })
   page = await app.firstWindow()
   await page.setViewportSize({ width: 1300, height: 800 })
 }, 90_000)
