@@ -17,6 +17,7 @@ let page: Page
 
 const picked = (): Locator => page.locator('.map-anno--picked')
 const note = (): Locator => page.getByRole('button', { name: /Annotation: .*out here/ })
+const beside = (): Locator => page.getByRole('button', { name: /Annotation: .*beside web/ })
 const kept = (): Layer[] => (JSON.parse(readFileSync(join(yard.home, 'annotations', 'notes-app.json'), 'utf8')) as { layers: Layer[] }).layers
 const boxOf = async (one: Locator): Promise<{ x: number; y: number; width: number; height: number }> => (await one.boundingBox())!
 const openArea = (): Locator => page.locator('.map-card--open').first()
@@ -58,7 +59,20 @@ beforeAll(async () => {
     join(yard.home, 'annotations', 'notes-app.json'),
     JSON.stringify({
       version: 1,
-      layers: [{ id: 'l', name: 'Layer 1', shown: true, snaps: false, items: [{ ...item, id: 'outer', text: 'out here' }] }],
+      layers: [
+        {
+          id: 'l',
+          name: 'Layer 1',
+          shown: true,
+          snaps: false,
+          items: [
+            { ...item, id: 'outer', text: 'out here' },
+            // Drawn while the card was open, so it belongs to the card's level,
+            // but it sits out past the card's border, where annotations go.
+            { ...item, id: 'beside', at: 'notes/container:web', x: -1000, y: -300, text: 'beside web' },
+          ],
+        },
+      ],
     }),
   )
   app = await electron.launch({ args: ['.', `--user-data-dir=${yard.home}`], cwd: appFolder })
@@ -105,13 +119,13 @@ describe('picking with Shift around an open card', () => {
   })
 
   it('moves it by dragging, with the card still open', async () => {
-    const was = kept()[0]!.items[0]!
+    const was = kept()[0]!.items.find((one) => one.id === 'outer')!
     const box = await boxOf(note())
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
     await page.mouse.down()
     await page.mouse.move(box.x + box.width / 2 + 50, box.y + box.height / 2 + 20, { steps: 8 })
     await page.mouse.up()
-    await expect.poll(() => kept()[0]!.items[0]!.x).toBeGreaterThan(was.x + 10)
+    await expect.poll(() => kept()[0]!.items.find((one) => one.id === 'outer')!.x).toBeGreaterThan(was.x + 10)
     expect(await openArea().count()).toBe(1)
     await letGo()
     expect(await picked().count()).toBe(0)
@@ -125,11 +139,24 @@ describe('picking with Shift around an open card', () => {
     await letGo()
   })
 
-  it('does not reach it with a box started inside the open card', async () => {
+  it('reaches it with a box started inside the open card, too', async () => {
+    const area = await boxOf(page.locator('.map-card--open:not(.map-up)'))
+    const target = await boxOf(note())
+    // From an empty top corner of the card, clear of its handles and its cards.
+    await shiftBox({ x: area.x + area.width - 30, y: area.y + 40 }, { x: target.x + 10, y: target.y + 5 })
+    expect(await note().evaluate((el) => el.closest('.map-anno--picked') !== null)).toBe(true)
+    await letGo()
+  })
+
+  it("picks one drawn on the open card's level but sitting past its border, from a box started out there", async () => {
     const area = await boxOf(openArea())
-    const [, to] = await round(note())
-    await shiftBox({ x: area.x + area.width / 2, y: area.y + area.height / 2 }, { x: area.x + area.width / 2 + 40, y: to.y })
-    expect(await picked().count()).toBe(0)
+    const spot = await boxOf(beside())
+    expect(spot.x + spot.width < area.x || spot.y + spot.height < area.y).toBe(true)
+    const [from, to] = await round(beside())
+    await shiftBox(from, to)
+    expect(await picked().count()).toBe(1)
+    expect(await beside().evaluate((el) => el.closest('.map-anno--picked') !== null)).toBe(true)
+    await letGo()
   })
 
   it('still will not pick a card out there', async () => {
@@ -144,7 +171,7 @@ describe('picking with Shift around an open card', () => {
     const [from, to] = await round(note())
     await shiftBox(from, to)
     await page.keyboard.press('Delete')
-    await expect.poll(() => kept()[0]!.items.length).toBe(0)
+    await expect.poll(() => kept()[0]!.items.map((one) => one.id)).toEqual(['beside'])
     expect(await openArea().count()).toBe(1)
   })
 })

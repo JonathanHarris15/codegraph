@@ -26,9 +26,15 @@ Cards, wires and notes out there stay out of reach until a person backs out.
 A picked annotation is in hand wherever it is: it stops fading and can be moved,
 resized, written on, copied or deleted. It fades again once let go.
 
-A box picks on the level it was started on, and does not reach across the border
-of an open card. On the level in hand, a box that catches cards picks those and not
-the annotations, since the two cannot be picked together.
+A box can start anywhere and catches what it touches, wherever that is. Where it
+starts should not matter much, because annotations sit wherever a person put them,
+and that is often past the border of the room they belong to.
+
+It picks annotations on one level at a time: the first with something in the box,
+starting with the level under the start of the box, then the card open now, then
+outwards. Cards and annotations cannot be picked together, so a box started in the
+open card goes for its cards first, and one started out around it for annotations
+first.
 
 ## Consequences
 
