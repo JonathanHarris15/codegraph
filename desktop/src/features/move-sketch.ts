@@ -19,7 +19,7 @@ export const moveSketch = async (sketchId: string, projectId: string): Promise<C
   const from = sketchesFolder(LOOSE, sketchId)
   const to = sketchesFolder(projectId, sketchId)
   if (existsSync(from)) cpSync(from, to, { recursive: true })
-  const { ownerId: _o, members: _m, memberIds: _i, ...rest } = sketch
+  const { ownerId: _o, members: _m, memberIds: _i, roles: _r, ...rest } = sketch
   const moved = { ...rest, projectId, updatedAt: new Date().toISOString() }
   writeSketch(moved)
   removeSketch(LOOSE, sketchId)

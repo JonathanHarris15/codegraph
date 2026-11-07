@@ -1,0 +1,17 @@
+{
+  "//": "DRAFT: not yet run. See docs/firebase.md. It may need adjusting: whether these rules can read the github.com identity like this is not confirmed. roomMembers is written whenever a project's or a shared sketch's members change, since these rules cannot read Firestore.",
+  "rules": {
+    "roomMembers": {
+      "$room": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "rooms": {
+      "$room": {
+        ".read": "auth != null && root.child('roomMembers').child($room).child(auth.token.firebase.identities['github.com'][0]).exists()",
+        ".write": "auth != null && root.child('roomMembers').child($room).child(auth.token.firebase.identities['github.com'][0]).exists()"
+      }
+    }
+  }
+}

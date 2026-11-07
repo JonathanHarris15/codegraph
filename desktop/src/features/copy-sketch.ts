@@ -10,7 +10,7 @@ import { sendSketch } from '../modules/sync/index.js'
 export const copySketch = async (projectId: string, sketchId: string): Promise<Sketch | null> => {
   const sketch = readSketch(projectId, sketchId)
   if (!sketch) return null
-  const { ownerId: _o, members: _m, memberIds: _i, ...rest } = sketch
+  const { ownerId: _o, members: _m, memberIds: _i, roles: _r, ...rest } = sketch
   const now = new Date().toISOString()
   const copy: Sketch = { ...rest, id: randomUUID(), projectId: LOOSE, name: `${sketch.name} (copy)`, createdAt: now, updatedAt: now }
   const from = sketchesFolder(projectId, sketchId)

@@ -1,0 +1,45 @@
+rules_version = '2';
+// DRAFT: not yet run. See docs/firebase.md.
+// Members are known by GitHub's number for their account (ADR 0017).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function me() { return request.auth.token.firebase.identities['github.com'][0]; }
+    function signedIn() { return request.auth != null; }
+    function roleIn(doc) { return doc.data.roles[me()]; }
+    function canDraw(doc) { return roleIn(doc) in ['owner', 'co-owner', 'collaborator']; }
+    function canInvite(doc) { return roleIn(doc) in ['owner', 'co-owner']; }
+
+    // Who is on it may only change for those allowed to change it.
+    function peopleSame() {
+      return request.resource.data.members == resource.data.members
+        && request.resource.data.ownerId == resource.data.ownerId;
+    }
+
+    match /projects/{project} {
+      allow read: if signedIn() && me() in resource.data.memberIds;
+      allow create: if signedIn() && request.resource.data.ownerId == me();
+      allow update: if signedIn() && (canInvite(resource) || (canDraw(resource) && peopleSame()));
+      allow delete: if signedIn() && resource.data.ownerId == me();
+
+      function project_() { return get(/databases/$(database)/documents/projects/$(project)); }
+
+      match /{kind}/{doc} {
+        allow read: if signedIn() && me() in project_().data.memberIds;
+        allow write: if signedIn() && canDraw(project_());
+      }
+    }
+
+    // A loose sketch that has been shared stands on its own.
+    match /sketches/{sketch} {
+      allow read: if signedIn() && me() in resource.data.memberIds;
+      allow create: if signedIn() && request.resource.data.ownerId == me();
+      allow update: if signedIn() && canDraw(resource);
+      allow delete: if signedIn() && resource.data.ownerId == me();
+    }
+
+    // A member's own, private ones.
+    match /members/{member}/sketches/{sketch} {
+      allow read, write: if signedIn() && member == me();
+    }
+  }
+}

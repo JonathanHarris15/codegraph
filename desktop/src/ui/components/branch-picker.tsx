@@ -118,10 +118,14 @@ export const BranchPicker = ({
       >
         {point.kind === 'commit' ? <GitCommitHorizontal size={14} aria-hidden="true" /> : <GitBranch size={14} aria-hidden="true" />}
         <span className="map-branch-name">
-          {point.kind === 'live' ? checkedOut || 'this folder' : point.kind === 'branch' ? point.name : point.sha.slice(0, 7)}
+          {point.kind === 'live' ? checkedOut || 'this folder' : point.kind === 'branch' ? point.name.replace(/^origin\//, '') : point.sha.slice(0, 7)}
         </span>
         {point.kind === 'commit' ? <span className="map-picker-title">{point.title}</span> : null}
-        {point.kind !== 'live' && !compact ? <span className="map-branch-note">not checked out</span> : null}
+        {point.kind === 'branch' && (point.where === 'cloud' || point.name.startsWith('origin/')) ? (
+          <span className="map-branch-note">on GitHub</span>
+        ) : point.kind !== 'live' && !compact ? (
+          <span className="map-branch-note">not checked out</span>
+        ) : null}
         {showing ? <Apart branch={showing} /> : null}
         <ChevronDown size={14} aria-hidden="true" />
       </button>

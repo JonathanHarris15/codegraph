@@ -22,7 +22,7 @@ export const shareSketch = async (sketchId: string, login: string, role: 'collab
     if (members.some((m) => m.id === account.id)) return { ok: false, problem: `${account.name} already has it.` }
     const wasPrivate = sketch.memberIds?.length ? '' : sketchPath(sketch)
     const next = [...members, { ...account, role }]
-    const shared = { ...sketch, ownerId: me.id, members: next, memberIds: next.map((m) => m.id) }
+    const shared = { ...sketch, ownerId: me.id, members: next, memberIds: next.map((m) => m.id), roles: Object.fromEntries(next.map((m) => [m.id, m.role])) }
     writeSketch(shared)
     await sendUp(sketchPath(shared))
     if (wasPrivate) await sendRemoval(wasPrivate)

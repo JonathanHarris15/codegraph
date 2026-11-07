@@ -24,7 +24,8 @@ library. Maps come from working copies; a software system with none is out of
 reach.
 
 Offline changes go up on reconnecting. Where two changes hit one thing, the last
-change wins, item by item, and both stay in the history.
+to reach the online copy wins, item by item, and both stay in the history. This
+is judged by arrival, not by each computer's clock, which cannot be trusted.
 
 A loose sketch is private but follows its member's account between computers.
 

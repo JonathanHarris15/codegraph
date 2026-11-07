@@ -128,6 +128,7 @@ export const openBridge = (): void => {
   // One room a window at a time: what it hears goes back to that window.
   ipcMain.handle('room:join', (event, id: string) => {
     const sender = event.sender
+    sender.once('destroyed', () => void joinRoom('', () => undefined))
     return joinRoom(id, (now) => {
       if (!sender.isDestroyed()) sender.send('room:now', now)
     })

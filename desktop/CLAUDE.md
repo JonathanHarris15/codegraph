@@ -35,6 +35,13 @@ run under node, that an agent talks to. Each of its tools hands to one
 feature, like the bridge does for the window. Everything it tells an agent
 lives in the `instructions` module, as Markdown.
 
+The online side sits behind one module, `cloud`, whose `Cloud` type is everything
+the app asks of it. `sync` keeps this computer's copy and the online copy in step
+(ADR 0021), and every other module still just reads and writes its files, so the
+MCP and offline work need nothing new. In tests, and with `CODEGRAPH_CLOUD_FOLDER`,
+a folder stands in for Firebase; `docs/firebase.md` says what is left to connect.
+With neither, the app runs on one computer as it always did.
+
 Electron runs features in the main process, so every call from the page goes
 through `src/main/bridge.ts` — one channel per feature, nothing else in it.
 
@@ -64,4 +71,5 @@ npm install
 npm run dev     # the app, with the page reloading as you edit
 npm run build   # bundles into out/
 npm start       # runs what was built
+npm run together  # builds, then opens two windows, as two members, with no Firebase
 ```

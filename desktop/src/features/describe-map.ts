@@ -91,7 +91,12 @@ const annotationsOver = (repo: string, map: SystemMap): string[] => {
       ...map.containers.map((c) => `${system.id}/${c.id}`),
       ...map.components.map((c) => `${system.id}/${c.id}`),
     ]
-    const said = annotationWords(readAnnotations(project.id), levels, nameOf)
+    // Notes belong to their branch (ADR 0019): the project's top level, and this
+    // working copy's own map, or what it was pushed as.
+    const branch = map.point.kind === 'live' ? map.point.branch : ''
+    const here = readAnnotations(project.id, `${system.id}@local:${branch}`)
+    const there = here.length ? here : readAnnotations(project.id, `${system.id}@github:${branch}`)
+    const said = annotationWords([...readAnnotations(project.id), ...there], levels, nameOf)
     if (said.length) out.push(`From project ${project.name}:`, ...said)
   }
   return out

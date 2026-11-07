@@ -92,7 +92,9 @@ const projectDoc = (project: Project): Doc => ({
   createdAt: project.createdAt,
   ownerId: project.ownerId ?? '',
   members: project.members ?? [],
+  // The same again in the forms the online side's access rules can read.
   memberIds: (project.members ?? []).map((m) => m.id),
+  roles: Object.fromEntries((project.members ?? []).map((m) => [m.id, m.role])),
   systems: project.systems.map(({ id, name, remote }) => ({ id, name, remote })),
   shallow: project.shallow,
 })
@@ -319,10 +321,16 @@ export const sendUp = (path: string, says?: string): Promise<void> => {
   return next
 }
 
-/** A project lists who is on it two ways, one so it can be searched by member;
- *  whatever a merge does, the two always agree. */
+/** A project lists who is on it three ways, for searching and for access rules;
+ *  whatever a merge does, they always agree. */
 const tidy = (path: string, doc: Doc | null): Doc | null =>
-  doc && /^projects\/[^/]+$/.test(path) ? { ...doc, memberIds: ((doc['members'] ?? []) as { id: string }[]).map((m) => m.id) } : doc
+  doc && /^projects\/[^/]+$/.test(path)
+    ? {
+        ...doc,
+        memberIds: ((doc['members'] ?? []) as { id: string }[]).map((m) => m.id),
+        roles: Object.fromEntries(((doc['members'] ?? []) as { id: string; role: string }[]).map((m) => [m.id, m.role])),
+      }
+    : doc
 
 /** Takes something off the online side that stays on this computer, as when a
  *  sketch moves from one place online to another. */

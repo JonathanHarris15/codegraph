@@ -106,8 +106,8 @@ describe('two members on one map', () => {
 
   it('opens on GitHub\'s main line for both, one with no working copy', async () => {
     expect(await web(benPage).count()).toBe(1)
-    expect(await benPage.getByRole('button', { name: 'Branch of notes' }).textContent()).toContain('origin/main')
-    expect(await anaPage.getByRole('button', { name: 'Branch of notes' }).textContent()).toContain('origin/main')
+    expect(await benPage.getByRole('button', { name: 'Branch of notes' }).textContent()).toContain('on GitHub')
+    expect(await anaPage.getByRole('button', { name: 'Branch of notes' }).textContent()).toContain('on GitHub')
   })
 
   it('shows one member\'s cursor on the other\'s screen', async () => {

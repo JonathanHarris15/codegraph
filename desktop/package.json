@@ -12,6 +12,7 @@
     "start": "electron-vite preview",
     "test": "electron-vite build && vitest run",
     "typecheck": "tsc --noEmit",
+    "together": "electron-vite build && node scripts/try-together.mjs",
     "test:quick": "vitest run --exclude \"tests/projects-page.test.ts\""
   },
   "devDependencies": {

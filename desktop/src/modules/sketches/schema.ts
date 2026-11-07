@@ -91,6 +91,7 @@ export type Sketch = {
   ownerId?: string
   members?: { id: string; login: string; name: string; avatar: string; role: 'owner' | 'collaborator' | 'viewer' }[]
   memberIds?: string[]
+  roles?: Record<string, string>
 }
 
 /** Stands in for a project id, for a sketch in a member's own library. */
