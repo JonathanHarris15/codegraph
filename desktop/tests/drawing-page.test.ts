@@ -1,16 +1,15 @@
 // codegraph: test ui canvas
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
-import { _electron as electron, type ElectronApplication, type Locator, type Page } from 'playwright'
+import { join } from 'node:path'
+import { type ElectronApplication, type Locator, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { Layer } from '../src/modules/annotations/index.js'
 import type { SketchCard } from '../src/modules/sketches/index.js'
-import { aMappedRepo, closeYard, openYard, type Yard } from './yard.js'
+import { aMappedRepo, closeYard, openTheApp, openYard, type Yard } from './yard.js'
 
 /** Drawing on a sketch in the built app: wires through their sentences, what
  *  hovering shows, hubs on an open card's border, a person's own card types,
  *  and annotations that keep to their shapes and out of an open card's way. */
-const appFolder = resolve(import.meta.dirname, '..')
 const PATIENCE = 15_000
 const pictures = process.env.CODEGRAPH_PICTURES ?? ''
 
@@ -79,7 +78,7 @@ beforeAll(async () => {
       projects: [{ id: 'notes-app', name: 'Notes', createdAt: '', systems: [{ id: 'notes', name: 'notes', path: repo, remote: '' }] }],
     }),
   )
-  app = await electron.launch({ args: ['.', `--user-data-dir=${yard.home}`], cwd: appFolder })
+  app = await openTheApp(yard.home)
   page = await app.firstWindow()
   await page.setViewportSize({ width: 1400, height: 860 })
   await page.getByRole('button', { name: 'Open Notes', exact: true }).dblclick()

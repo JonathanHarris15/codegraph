@@ -1,14 +1,13 @@
 // codegraph: test ui canvas
 import { writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
-import { _electron as electron, type ElectronApplication, type Locator, type Page } from 'playwright'
+import { join } from 'node:path'
+import { type ElectronApplication, type Locator, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { aMappedRepo, closeYard, openYard, type Yard } from './yard.js'
+import { aMappedRepo, closeYard, openTheApp, openYard, type Yard } from './yard.js'
 
 /** Moving round the board the way a hand does: a trackpad's two fingers pan
  *  and, with Ctrl, zoom; a mouse wheel zooms and, with Ctrl or Shift, pans;
  *  and dragging the empty board moves it. */
-const appFolder = resolve(import.meta.dirname, '..')
 const PATIENCE = 15_000
 
 let yard: Yard
@@ -28,8 +27,8 @@ const centre = async (): Promise<void> => {
 }
 
 /** One wheel event as a Mac hands it over, recorded from a real mouse.
- *  codegraph: fakes a mouse wheel's events because Playwright's own wheel
- *  cannot set the notch count apart from the step. */
+ *  It is made by hand because Playwright's own wheel cannot set the notch
+ *  count apart from the step. */
 type Scroll = { deltaY: number; wheelDeltaY: number; ctrlKey?: boolean; metaKey?: boolean }
 const replay = async (steps: Scroll[]): Promise<void> => {
   await page.evaluate(async (all) => {
@@ -73,7 +72,7 @@ beforeAll(async () => {
       ],
     }),
   )
-  app = await electron.launch({ args: ['.', `--user-data-dir=${yard.home}`], cwd: appFolder })
+  app = await openTheApp(yard.home)
   page = await app.firstWindow()
   await page.setViewportSize({ width: 1400, height: 860 })
   await page.getByRole('button', { name: 'Open Notes', exact: true }).dblclick()

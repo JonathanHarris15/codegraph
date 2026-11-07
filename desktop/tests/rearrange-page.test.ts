@@ -1,14 +1,13 @@
 // codegraph: test ui canvas
 import { readFileSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
-import { _electron as electron, type ElectronApplication, type Locator, type Page } from 'playwright'
+import { join } from 'node:path'
+import { type ElectronApplication, type Locator, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { aMappedRepo, closeYard, openYard, type Yard } from './yard.js'
+import { aMappedRepo, closeYard, openTheApp, openYard, type Yard } from './yard.js'
 
 /** Moving a map's cards and its wires' words about: a map is read from the
  *  code, so where a person likes things is kept beside it, and going into a
  *  card takes two clicks so one can drag. */
-const appFolder = resolve(import.meta.dirname, '..')
 const PATIENCE = 15_000
 
 let yard: Yard
@@ -46,7 +45,7 @@ beforeAll(async () => {
       ],
     }),
   )
-  app = await electron.launch({ args: ['.', `--user-data-dir=${yard.home}`], cwd: appFolder })
+  app = await openTheApp(yard.home)
   page = await app.firstWindow()
   await page.setViewportSize({ width: 1400, height: 860 })
   await page.getByRole('button', { name: 'Open Notes', exact: true }).dblclick()
