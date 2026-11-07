@@ -24,6 +24,8 @@ const cloudWords = (
       return { tone: 'bad', words: 'not tracked by git' }
     case 'missing':
       return { tone: 'bad', words: 'folder not found' }
+    case 'not-here':
+      return { tone: 'plain', words: 'no working copy here' }
   }
 }
 
@@ -31,6 +33,7 @@ const missingBits = (system: SoftwareSystemView): string =>
   `${system.mainLine || 'The main line'} has no codegraph.config.json yet. Ask your agent to set this repo up with codegraph.`
 
 const SetupBadge = ({ system, project }: { system: SoftwareSystemView; project: string }) => {
+  if (!system.path) return null
   if (system.setUp && !system.namesThisProject)
     return (
       <span

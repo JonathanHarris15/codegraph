@@ -221,14 +221,31 @@ Projects and sketches online; members see each other at work. Decided in ADRs
 `cloud` module, with a folder on disk standing in for it until the Firebase
 project exists. `docs/firebase.md` lists what is left to connect.
 
-- **CG-7.1** The cloud front door, and the stand-in.
-- **CG-7.2** Sign-in with GitHub; members and roles; invites; handing over.
-- **CG-7.3** Each map keeps its own arrangement and notes; merges.
-- **CG-7.4** GitHub maps and local maps, with no working copy needed, and
+- **CG-7.1** (done) The cloud front door, and the stand-in.
+- **CG-7.2** (done, but for the real sign-in) Sign-in with GitHub; members and roles;
+  invites; handing over.
+- **CG-7.3** (done) Each map keeps its own arrangement and notes; merges.
+- **CG-7.4** (done) GitHub maps and local maps, with no working copy needed, and
   software systems out of reach.
-- **CG-7.5** Proposals only from sketches, never on the main line.
-- **CG-7.6** A computer's copy and the online copy keep in step, offline too.
-- **CG-7.7** Cursors, badges and held things.
-- **CG-7.8** Revisions and restoring them.
-- **CG-7.9** Loose sketches: their library, sharing, moving, copying.
+- **CG-7.5** (done) Proposals only from sketches, never on the main line.
+- **CG-7.6** (done) A computer's copy and the online copy keep in step, offline too.
+- **CG-7.7** (done) Cursors, badges and held things.
+- **CG-7.8** (done) Revisions and restoring them.
+- **CG-7.9** (done) Loose sketches: their library, sharing, moving, copying.
 - **CG-7.10** Connect Firebase, and test sign-in on the real project.
+
+**Try it:** `npm run together` opens two windows as two members, with a folder
+standing in for Firebase. Link a repo in one, and move about in both.
+
+Still rough:
+
+- Signing in as someone else on the same computer keeps the first person's loose
+  sketches there, and drops their projects. Each computer is taken to be one person's.
+- A squash merge cannot be told from git's history, so the main line keeps its
+  layout and picks up no notes (ADR 0019).
+- A member's own layout on a local map is not kept apart per computer's repo: two
+  working copies of one repo on one computer share it.
+- Dragging a sticky note holds it for others, but its ring is only drawn on cards.
+- The stock card library is per computer, as before; it does not go online.
+- The drawing options a directly drawn proposal used (`floor`, `locked`) are left in
+  the canvas, unused.

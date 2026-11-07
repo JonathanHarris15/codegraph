@@ -16,6 +16,7 @@ export type Cloud =
   | 'no-remote'
   | 'untracked'
   | 'missing'
+  | 'not-here'
 
 export type SoftwareSystemView = {
   id: string
@@ -109,7 +110,7 @@ export const listProjects = async (fetchFirst = false): Promise<ProjectView[]> =
             mainLine: facts.mainLine,
             ahead: facts.ahead,
             behind: facts.behind,
-            cloud: cloudOf(facts),
+            cloud: system.path ? cloudOf(facts) : 'not-here',
             setUp: isSetUp(facts),
             setUpHere: facts.setUpHere,
             configWritten: facts.configWritten,

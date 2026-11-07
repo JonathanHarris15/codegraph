@@ -453,6 +453,20 @@ describe('loose sketches', () => {
     expect((await openSketch(LOOSE, sketch.id))?.sketch.name).toBe('Idea')
   })
 
+  it('go up when their maker signs in', async () => {
+    forgetMember()
+    await startSketch(LOOSE, 'Done signed out')
+    const { rememberMember } = await import('../src/modules/members/index.js')
+    const { startFollowing, stopFollowing } = await import('../src/modules/sync/index.js')
+    rememberMember(ana)
+    await startFollowing(ana)
+    stopFollowing()
+    const other = aComputer(yard, 'ana-mac')
+    other.be(ana)
+    await pull(ana)
+    expect((await listMySketches()).map((s) => s.name)).toEqual(['Done signed out'])
+  })
+
   it('stay private, and follow their member to another computer', async () => {
     await startSketch(LOOSE, 'Idea')
     const other = aComputer(yard, 'ana-mac')

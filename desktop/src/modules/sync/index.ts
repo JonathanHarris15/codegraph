@@ -436,6 +436,12 @@ const idPart = (collection: string, doc: Doc): string => {
   return collection.endsWith('/maps') ? encodeURIComponent(id) : id
 }
 
+/** Something heard could not be taken in just now, as when the connection drops
+ *  part way. It is heard again when the online copy next changes, or at next start. */
+const quietly = (problem: unknown): void => {
+  console.error('codegraph: could not take in a change from online', problem)
+}
+
 /** Stays in step with everything that names this member, for as long as it is
  *  not stopped, and says what changed. */
 export const follow = (me: Member, changed: (what: { projectId: string; path: string }) => void): (() => void) => {
@@ -455,7 +461,7 @@ export const follow = (me: Member, changed: (what: { projectId: string; path: st
     if (stops.has(collection)) return
     stops.set(
       collection,
-      cloud.watch(collection, (docs) => void takeAll(collection, docs, projectId)),
+      cloud.watch(collection, (docs) => void takeAll(collection, docs, projectId).catch(quietly)),
     )
   }
 
@@ -475,11 +481,11 @@ export const follow = (me: Member, changed: (what: { projectId: string; path: st
       }
   }
 
-  stops.set('projects', cloud.watchNaming('projects', me.id, (docs) => void heardProjects(docs)))
+  stops.set('projects', cloud.watchNaming('projects', me.id, (docs) => void heardProjects(docs).catch(quietly)))
   watching(`members/${me.id}/sketches`, LOOSE)
   stops.set(
     'sketches',
-    cloud.watchNaming('sketches', me.id, (docs) => void takeAll('sketches', docs, SHARED_WITH_ME)),
+    cloud.watchNaming('sketches', me.id, (docs) => void takeAll('sketches', docs, SHARED_WITH_ME).catch(quietly)),
   )
   return () => {
     for (const stop of stops.values()) stop()
@@ -532,6 +538,12 @@ export const startFollowing = async (me: Member): Promise<void> => {
   try {
     await catchUp()
     await pull(me)
+    // Sketches made with no one signed in go up now, and follow this member.
+    for (const listed of listSketches(LOOSE)) {
+      const sketch = readSketch(LOOSE, listed.id)
+      const path = sketch ? sketchPath(sketch) : ''
+      if (sketch && path && !lastSeen(path)) await sendUp(path)
+    }
   } catch (problem) {
     if (!(problem instanceof CloudOffline)) throw problem
   }
