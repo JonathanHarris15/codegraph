@@ -1,6 +1,8 @@
 // codegraph: feature list-projects in workspace
-// codegraph: uses projects, repo, reader
-import { chooseBranch, listProjects as stored } from '../modules/projects/index.js'
+// codegraph: uses projects, repo, reader, cloud, members
+import { isConnected } from '../modules/cloud/index.js'
+import { roleOf, whoIsIn, type Role } from '../modules/members/index.js'
+import { chooseBranch, listProjects as stored, type ProjectMember } from '../modules/projects/index.js'
 import { listPoints, pointFor, type Point } from '../modules/reader/index.js'
 import { isSetUp, readSoftwareSystem, type RepoFacts } from '../modules/repo/index.js'
 
@@ -55,6 +57,12 @@ export type ProjectView = {
   shortName: string
   createdAt: string
   systems: SoftwareSystemView[]
+  /** Online for its members, not just on this computer. */
+  online: boolean
+  /** What the person signed in may do here. */
+  role: Role | null
+  ownerId: string
+  members: ProjectMember[]
 }
 
 export const cloudOf = (facts: RepoFacts): Cloud => {
@@ -69,10 +77,15 @@ export const cloudOf = (facts: RepoFacts): Cloud => {
 }
 
 /** Every project with the live state of each software system under it. Ask it to
- *  fetch first and it asks GitHub what it has before answering. */
+ *  fetch first and it asks GitHub what it has before answering. Where there is an
+ *  online side, projects need signing in to; none show for no one. */
 export const listProjects = async (fetchFirst = false): Promise<ProjectView[]> =>
   Promise.all(
-    stored().map(async (project) => ({
+    (isConnected() && !whoIsIn() ? [] : stored()).map(async (project) => ({
+      online: project.online ?? false,
+      role: roleOf(project, whoIsIn()?.id ?? ''),
+      ownerId: project.ownerId ?? '',
+      members: project.members ?? [],
       id: project.id,
       name: project.name,
       shortName: project.shortName,

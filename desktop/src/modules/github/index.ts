@@ -1,6 +1,6 @@
 // codegraph: module github
-// codegraph: front door useFolder, useKeystore, tokenIsSafe, saveToken, savedToken, forgetToken, whoAmI, listRepos, codegraphRepos, GithubRepo, GithubRefused, Keystore
-import { GithubRefused, listRepos, projectsServed, whoAmI, type GithubRepo } from './api.js'
+// codegraph: front door useFolder, useKeystore, tokenIsSafe, saveToken, savedToken, forgetToken, whoAmI, whoFully, findAccount, startDeviceSignIn, askDeviceSignIn, listRepos, codegraphRepos, GithubRepo, GithubAccount, DeviceSignIn, GithubRefused, Keystore
+import { GithubRefused, askDeviceSignIn, findAccount, listRepos, projectsServed, startDeviceSignIn, whoAmI, whoFully, type GithubRepo } from './api.js'
 import {
   forgetToken,
   saveToken,
@@ -19,9 +19,13 @@ export {
   useFolder,
   useKeystore,
   whoAmI,
+  whoFully,
+  findAccount,
+  startDeviceSignIn,
+  askDeviceSignIn,
 }
 export { GithubRefused }
-export type { GithubRepo } from './api.js'
+export type { DeviceSignIn, GithubAccount, GithubRepo } from './api.js'
 export type { Keystore } from './token.js'
 
 /** A few questions at a time, so a hundred repos do not open a hundred calls. */

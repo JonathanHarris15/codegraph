@@ -1,21 +1,42 @@
 // codegraph: feature show-map in workspace
-// codegraph: uses projects, reader, agents, cards, card-types
+// codegraph: uses projects, reader, agents, cards, card-types, repo, github, places, sketches
 import { whereIs } from '../modules/agents/index.js'
 import { readCardTypes } from '../modules/card-types/index.js'
 import { card, join, systemCard, withLooks, type Card } from '../modules/cards/index.js'
-import { chooseBranch, listProjects } from '../modules/projects/index.js'
-import { idOfName, pointFor, proposalProgress, readMap, type Point, type Progress } from '../modules/reader/index.js'
+import { savedToken } from '../modules/github/index.js'
+import { mapKey, readingFolder } from '../modules/places/index.js'
+import { chooseBranch, listProjects, type Project, type SoftwareSystem } from '../modules/projects/index.js'
+import { idOfName, pointFor, PROPOSAL, proposalProgress, readMap, type Point, type Progress, type SystemMap } from '../modules/reader/index.js'
+import { fetchMirror, mainLineRef, proposalsOnBranches, type Reach } from '../modules/repo/index.js'
+import { listSketches } from '../modules/sketches/index.js'
 
 export type { Card, CardState, CardWire, Level, WireEnds } from '../modules/cards/index.js'
 
 /** Where an agent says it is working, as the card the canvas follows. */
 export type AgentShown = { card: string; name: string; words: string; at: string }
 
+/** How a member can get at a software system's code right now. */
+export type SystemReach = Reach | 'not-on-github'
+
+const WORDS: Record<Exclude<SystemReach, 'open'>, string> = {
+  'no-access': 'You need adding to this repo on GitHub to open it.',
+  offline: 'Reconnect to the internet to open this.',
+  'not-on-github': 'This repo is not on GitHub yet, so only the member who has it can open it.',
+}
+
 export type SystemShown = {
   id: string
   name: string
   path: string
   point: Point
+  /** Which map this is, the same for every member looking at the same one. */
+  mapKey: string
+  /** Whether this member can open it, and if not, why. */
+  reach: SystemReach
+  /** Looking at the main line: branches with a proposal being built. */
+  proposalsElsewhere: string[]
+  /** The sketch the proposal here came from has changed since it was read. */
+  sketchMoved: boolean
   setUp: boolean
   problems: string[]
   /** How far the code has got toward the proposal at this point. */
@@ -31,6 +52,36 @@ export type MapShown = {
   suggestions: string[]
 }
 
+const blankMap = (point: Point): SystemMap => ({ point, setUp: false, projects: [], containers: [], components: [], wires: [], outside: [], problems: [], proposal: null, mockups: {} }) as unknown as SystemMap
+
+/** Reads one software system, if this member can reach it. With no working copy
+ *  its history is fetched from GitHub with their own access, and GitHub's answer
+ *  decides (ADR 0018). Someone on a project with others opens on its GitHub main
+ *  line, where everyone can meet, until they choose a branch themselves. */
+const readOne = async (project: Project, system: SoftwareSystem, asked?: Point) => {
+  const folder = readingFolder(system)
+  let reach: SystemReach = 'open'
+  if (!system.path) {
+    if (project.online) reach = system.remote ? await fetchMirror(system.remote, savedToken()) : 'not-on-github'
+    else if (system.remote && folder) reach = await fetchMirror(system.remote, savedToken())
+  }
+  if (reach !== 'open') return { system, point: { kind: 'live' } as Point, map: blankMap({ kind: 'live' }), reach, folder: '' }
+  let point = asked
+  if (!point && !system.path) {
+    const main = folder ? await mainLineRef(folder) : ''
+    const name = system.branch?.startsWith('origin/') ? system.branch : main
+    point = name ? { kind: 'branch', name, where: 'cloud' } : { kind: 'live' }
+  }
+  if (!point) {
+    const together = (project.members?.length ?? 0) > 1 && !system.branch
+    const main = together ? await mainLineRef(folder) : ''
+    const chosen = await pointFor(system.path, system.branch || (main.startsWith('origin/') ? main : ''))
+    if (chosen.moved) chooseBranch(project.id, system.id, chosen.branch)
+    point = chosen.point
+  }
+  return { system, point, map: await readMap(folder, point), reach, folder }
+}
+
 /** A project's map, each software system read at the point asked for, or
  *  else on the branch last chosen for it, or the live folder (ADR 0003). A
  *  chosen branch that has gone falls back to the main line, which is then
@@ -39,32 +90,30 @@ export const showMap = async (projectId: string, points: Record<string, Point> =
   const project = listProjects().find((p) => p.id === projectId)
   if (!project) throw new Error('no project with that id')
 
-  const read = await Promise.all(
-    project.systems.map(async (system) => {
-      let point = points[system.id]
-      if (!point) {
-        const chosen = await pointFor(system.path, system.branch)
-        if (chosen.moved) chooseBranch(project.id, system.id, chosen.branch)
-        point = chosen.point
-      }
-      return { system, point, map: await readMap(system.path, point) }
-    }),
-  )
+  const read = await Promise.all(project.systems.map((system) => readOne(project, system, points[system.id])))
 
   const top = card(project.id, project.name, 'project', { kind: 'project' })
   const systems: SystemShown[] = []
   const answersTo = new Map<string, string>()
-  for (const { system, point, map } of read) {
-    top.children.push(systemCard(system.id, system.name, map))
+  for (const { system, point, map, reach, folder } of read) {
+    top.children.push(
+      reach === 'open' ? systemCard(system.id, system.name, map) : card(system.id, system.name, 'system', { kind: 'software system', says: WORDS[reach], outOfReach: WORDS[reach] }),
+    )
+    const onMain = reach === 'open' && folder && (await mainLineRef(folder)).replace(/^origin\//, '') === ((point.kind === 'branch' ? point.name : point.kind === 'live' ? (point.branch ?? '') : '').replace(/^origin\//, ''))
+    const sketch = map.proposal?.sketch ? listSketches(project.id).find((s) => s.name === map.proposal?.sketch) : undefined
     const said = point.kind === 'live' && system.path ? whereIs(system.path) : null
     systems.push({
       id: system.id,
       name: system.name,
       path: system.path,
       point,
+      mapKey: mapKey(point),
+      reach,
+      proposalsElsewhere: onMain ? await proposalsOnBranches(folder, PROPOSAL) : [],
+      sketchMoved: Boolean(sketch && map.proposal?.sketchAt && sketch.updatedAt > map.proposal.sketchAt),
       setUp: map.setUp,
       problems: map.problems,
-      proposal: map.proposal ? await proposalProgress(system.path, map) : null,
+      proposal: map.proposal && folder ? await proposalProgress(folder, map) : null,
       agent: said ? { card: `${system.id}/${idOfName(said.card)}`, name: said.card, words: said.words, at: said.at } : null,
     })
     answersTo.set(system.name.toLowerCase(), system.id)

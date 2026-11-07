@@ -86,7 +86,17 @@ export type Sketch = {
   root: SketchCard
   /** What is drawn over it that is not the diagram; left out, none. */
   layers?: Layer[]
+  /** A loose sketch shared with others: its owner, and who else it is shared
+   *  with. Nothing here means it is its owner's alone. */
+  ownerId?: string
+  members?: { id: string; login: string; name: string; avatar: string; role: 'owner' | 'collaborator' | 'viewer' }[]
+  memberIds?: string[]
 }
+
+/** Stands in for a project id, for a sketch in a member's own library. */
+export const LOOSE = 'loose'
+/** Likewise, for a sketch someone else has shared with this member. */
+export const SHARED_WITH_ME = 'shared-with-me'
 
 /** The types of card a drawing uses that a person chose the look of, all the
  *  way down. */

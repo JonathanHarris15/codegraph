@@ -114,13 +114,11 @@ export const pointsIn = async (repo: string, commits = 30): Promise<Point[]> => 
     .map((line) => line.split('\t'))
     .filter((parts) => parts[0])
   const remote = new Set(lines.map(([ref]) => ref!).filter((ref) => ref.startsWith('refs/remotes/')).map((ref) => ref.replace('refs/remotes/', '')))
-  const tracked = new Set<string>()
   const branches: Extract<Point, { kind: 'branch' }>[] = []
   for (const [ref = '', upstream = '', track = '', head = ''] of lines) {
     if (!ref.startsWith('refs/heads/')) continue
     const name = ref.replace('refs/heads/', '')
     const there = upstream && remote.has(upstream) && track !== 'gone'
-    if (there) tracked.add(upstream)
     const count = (word: string): number => Number(track.match(new RegExp(`${word} (\\d+)`))?.[1] ?? 0)
     branches.push({
       kind: 'branch',
@@ -131,11 +129,10 @@ export const pointsIn = async (repo: string, commits = 30): Promise<Point[]> => 
       current: head.trim() === '*',
     })
   }
-  const local = new Set(branches.map((b) => b.name))
   for (const [ref = ''] of lines) {
     if (!ref.startsWith('refs/remotes/') || ref.endsWith('/HEAD')) continue
     const name = ref.replace('refs/remotes/', '')
-    if (tracked.has(name) || local.has(name.replace(/^[^/]+\//, '')) || !name.includes('/')) continue
+    if (!name.includes('/')) continue
     branches.push({ kind: 'branch', name, where: 'cloud', ahead: 0, behind: 0, current: false })
   }
   branches.sort((a, b) => Number(b.current) - Number(a.current))

@@ -71,7 +71,7 @@ export const makeProposal = async (repo: string, name: string, shortName = '', r
 
   const facts = await readSoftwareSystem(repo)
   if (!facts.branch || facts.branch === 'HEAD' || facts.branch === facts.mainLine || ['main', 'master'].includes(facts.branch))
-    return `You are on ${facts.branch || 'no branch'}. A proposal lives on a branch of its own: make one named after the change (\`git switch -c <name>\`), then call \`propose\` again.`
+    return `You are on ${facts.branch || 'no branch'}. A proposal can never start on the main line: use a branch already in progress, or make one named after the change (\`git switch -c <name>\`), then call \`propose\` again.`
 
   const map = await readMap(repo, live)
   if (map.proposal && !replace)
@@ -89,7 +89,7 @@ export const makeProposal = async (repo: string, name: string, shortName = '', r
       },
     })
 
-  const proposal = { ...make(drawn, map, pictures), says: sketch.name, sketch: sketch.name, base: await headOf(repo) }
+  const proposal = { ...make(drawn, map, pictures), says: sketch.name, sketch: sketch.name, sketchAt: sketch.updatedAt, base: await headOf(repo) }
   const others: string[] = []
   for (const card of sketch.root.children.filter((c) => c.level === 'system' && c !== drawn)) {
     if (card.kind === 'person' || card.kind === 'shallow software system') continue
@@ -116,7 +116,7 @@ export const makeProposal = async (repo: string, name: string, shortName = '', r
     `Wrote the proposal to ${PROPOSAL} on ${facts.branch}: ${counted(proposal)}.`,
     ...listOf(proposal),
     '',
-    'Call `check` to see what is left; it fails until the proposal is built. Call `working-on` before each card.',
+    'Call `check` to see what is left; it fails until the proposal is built. Call `working-on` before each card. Push now, and again as parts get built, so other members can watch.',
     ...elsewhere,
   ].join('\n')
 }

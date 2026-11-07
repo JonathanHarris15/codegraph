@@ -1,5 +1,6 @@
 // codegraph: module projects
 // codegraph: store projects as Workspace
+import type { Role } from '../members/index.js'
 
 /** One repo that belongs to a project. */
 export type SoftwareSystem = {
@@ -23,6 +24,9 @@ export type ShallowSystem = {
   answersTo: string[]
 }
 
+/** Someone on a project: known by GitHub, with what they may do here. */
+export type ProjectMember = { id: string; login: string; name: string; avatar: string; role: Role }
+
 /** A piece of work with one or more software systems under it. */
 export type Project = {
   id: string
@@ -33,6 +37,11 @@ export type Project = {
   createdAt: string
   systems: SoftwareSystem[]
   shallow: ShallowSystem[]
+  /** Online, for its members, not just on this computer. It points at its owner
+   *  and members, and does not sit under any of them (ADR 0016). */
+  online?: boolean
+  ownerId?: string
+  members?: ProjectMember[]
 }
 
 /** Everything this computer remembers about the person's projects. */

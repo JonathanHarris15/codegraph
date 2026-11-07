@@ -39,8 +39,10 @@ export type ProposedWire = Drawn & { from: string; to: string; kind: WireKind; w
 export type Proposal = {
   /** What the change is for, in a line. */
   says: string
-  /** The sketch it was made from, if any. */
+  /** The sketch it was made from, if any, and when that sketch had last changed
+   *  when the agent read it. */
   sketch: string
+  sketchAt?: string
   /** The commit it was drawn on: what "nothing else changed" is held to. */
   base: string
   containers: ProposedContainer[]
@@ -82,6 +84,7 @@ export const readProposal = (text: string | undefined, problems: string[]): Prop
   const proposal = blankProposal()
   proposal.says = words(raw['says'])
   proposal.sketch = words(raw['sketch'])
+  if (words(raw['sketchAt'])) proposal.sketchAt = words(raw['sketchAt'])
   proposal.base = words(raw['base'])
   proposal.containers = list(raw['containers'])
     .filter((c) => words(c['name']))

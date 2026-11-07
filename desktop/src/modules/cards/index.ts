@@ -50,6 +50,8 @@ export type Card = {
    *  screenshot. */
   mockup?: string
   state?: CardState
+  /** A software system this member cannot open right now, and why, in words. */
+  outOfReach?: string
   children: Card[]
   wires: CardWire[]
 }

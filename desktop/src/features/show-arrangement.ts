@@ -1,6 +1,17 @@
 // codegraph: feature show-arrangement in workspace
-// codegraph: uses arrangements
-import { readArrangement, type Arrangement } from '../modules/arrangements/index.js'
+// codegraph: uses arrangements, places, projects, sync
+import type { Arrangement } from '../modules/arrangements/index.js'
+import { mapsNow, readSpots, takeUpMerges } from '../modules/places/index.js'
+import { listProjects } from '../modules/projects/index.js'
+import type { Point } from '../modules/reader/index.js'
+import { sendMap } from '../modules/sync/index.js'
 
-/** Where a person has moved the cards and sentences of a project's map. */
-export const showArrangement = async (projectId: string): Promise<Arrangement> => readArrangement(projectId)
+/** Where people have moved the cards and sentences of a project's maps, as those
+ *  maps stand. A map whose branch has been merged into it takes that up first. */
+export const showArrangement = async (projectId: string, points: Record<string, Point> = {}): Promise<Arrangement> => {
+  const project = listProjects().find((p) => p.id === projectId)
+  if (!project) return []
+  const maps = await mapsNow(project.systems, points)
+  for (const at of maps) await sendMap(projectId, await takeUpMerges(projectId, at.folder, at, at.mainRef))
+  return readSpots(projectId, maps)
+}

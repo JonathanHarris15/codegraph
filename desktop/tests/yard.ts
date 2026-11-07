@@ -4,6 +4,16 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { vi } from 'vitest'
+import { useFolder as useAnnotationsFolder } from '../src/modules/annotations/index.js'
+import { useFolder as useArrangementsFolder } from '../src/modules/arrangements/index.js'
+import { useFolder as useCardTypesFolder } from '../src/modules/card-types/index.js'
+import type { Member } from '../src/modules/cloud/index.js'
+import { saveToken, useFolder as useGithubFolder } from '../src/modules/github/index.js'
+import { rememberMember, useFolder as useMembersFolder } from '../src/modules/members/index.js'
+import { useFolder as useProjectsFolder } from '../src/modules/projects/index.js'
+import { useMirrors } from '../src/modules/repo/index.js'
+import { useFolder as useSketchesFolder } from '../src/modules/sketches/index.js'
+import { useFolder as useSyncFolder } from '../src/modules/sync/index.js'
 
 /** A scratch yard for a test: real folders, real git, thrown away after. */
 export type Yard = { path: string; home: string }
@@ -249,4 +259,30 @@ export const buildSearch = (repo: string, { all = true } = {}): void => {
     ].join('\n'),
   })
   if (all) rmSync(join(repo, 'app/triggers/nightly.ts'))
+}
+
+/** A computer of its own in a yard: all of codegraph's stores pointed at a folder
+ *  of its own, as though it were another person's machine, with whoever is signed
+ *  in there. Only one can be "here" at a time. */
+export const aComputer = (yard: Yard, name: string, github = '') => {
+  const home = join(yard.path, `computer-${name}`)
+  mkdirSync(home, { recursive: true })
+  return {
+    home,
+    be: (who?: Member): void => {
+      useProjectsFolder(home)
+      useSketchesFolder(home)
+      useAnnotationsFolder(home)
+      useArrangementsFolder(home)
+      useCardTypesFolder(home)
+      useGithubFolder(home)
+      useMembersFolder(home)
+      useSyncFolder(home)
+      useMirrors(home, github || 'https://github.invalid')
+      if (who) {
+        rememberMember(who)
+        saveToken('token-of-' + who.login)
+      }
+    },
+  }
 }

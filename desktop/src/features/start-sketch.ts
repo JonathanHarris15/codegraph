@@ -1,8 +1,9 @@
 // codegraph: feature start-sketch in workspace
-// codegraph: uses projects, sketches
+// codegraph: uses projects, sketches, sync, members
 import { randomUUID } from 'node:crypto'
 import { listProjects } from '../modules/projects/index.js'
-import { blankCard, newSketch, writeSketch, type Level, type Sketch, type SketchCard } from '../modules/sketches/index.js'
+import { sendSketch } from '../modules/sync/index.js'
+import { blankCard, LOOSE, newSketch, writeSketch, type Level, type Sketch, type SketchCard } from '../modules/sketches/index.js'
 
 /** A card of the map, as the page hands it over to snapshot. */
 export type MapCard = {
@@ -40,10 +41,11 @@ const fromMap = (card: MapCard): SketchCard => ({
  *  the person is looking at, to draw a change over. */
 export const startSketch = async (projectId: string, name: string, snapshot?: MapCard): Promise<Sketch> => {
   const project = listProjects().find((p) => p.id === projectId)
-  if (!project) throw new Error('no project with that id')
+  if (!project && projectId !== LOOSE) throw new Error('no project with that id')
   const sketch = snapshot
     ? newSketch(projectId, name, fromMap(snapshot), `A snapshot of the map, ${new Date().toISOString().slice(0, 10)}`)
-    : newSketch(projectId, name, blankCard(project.id, project.name, 'project', 'project'))
+    : newSketch(projectId, name, blankCard(project?.id ?? randomUUID(), project?.name ?? name, 'project', 'project'))
   writeSketch(sketch)
+  await sendSketch(sketch)
   return sketch
 }

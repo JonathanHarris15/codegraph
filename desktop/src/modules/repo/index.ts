@@ -1,5 +1,5 @@
 // codegraph: module repo
-// codegraph: front door isRepo, remoteName, mainLineRef, isSetUp, readSoftwareSystem, folderName, writeProposal, removeProposal, proposalPicture, headOf, makeBranch, switchBranch, RepoFacts, SetupFacts, Picture
+// codegraph: front door isRepo, remoteName, mainLineRef, isSetUp, readSoftwareSystem, folderName, writeProposal, removeProposal, proposalPicture, headOf, makeBranch, switchBranch, useMirrors, mirrorFolder, fetchMirror, tipOf, isAncestor, fetchWorkingCopy, proposalsOnBranches, RepoFacts, SetupFacts, Picture, Reach
 import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
 import { isRepo, mainLineRef, readGit, remoteName, type GitFacts } from './git.js'
@@ -11,6 +11,8 @@ export { headOf, makeBranch, proposalPicture, removeProposal, writeProposal } fr
 export type { Picture } from './proposal.js'
 export { switchBranch } from './switch.js'
 export type { SetupFacts } from './setup.js'
+export { fetchMirror, mirrorFolder, useMirrors } from './mirror.js'
+export type { Reach } from './mirror.js'
 
 /** Everything one working copy on this computer says about itself. The setup
  *  answers are the repo's, read on its main line; the branch, the changes
@@ -55,4 +57,32 @@ export const readSoftwareSystem = async (path: string, fetchFirst = false): Prom
     mainLine: main.replace(/^origin\//, ''),
     setUpHere: isSetUp(onThisBranch ?? onMainLine),
   }
+}
+
+/** The commit a branch or other name stands at; '' if git does not know it. */
+export const tipOf = (path: string, ref: string): Promise<string> => git(path, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])
+
+/** Whether one commit is in the history of another. */
+export const isAncestor = async (path: string, commit: string, of: string): Promise<boolean> => {
+  if (!commit || !of) return false
+  const base = await git(path, ['merge-base', commit, of])
+  return base !== '' && base === (await tipOf(path, commit))
+}
+
+/** Asks GitHub what it has for a working copy, using the person's own git. */
+export const fetchWorkingCopy = async (path: string): Promise<void> => {
+  await git(path, ['fetch', '--quiet', '--prune'], 90)
+}
+
+/** The branches of a repo with a proposal being built on them, by name as a map
+ *  would show it: a GitHub one if it is on GitHub. */
+export const proposalsOnBranches = async (path: string, file: string): Promise<string[]> => {
+  const refs = (await git(path, ['for-each-ref', '--sort=-committerdate', '--count=40', '--format=%(refname:short)', 'refs/remotes', 'refs/heads'])).split('\n').filter(Boolean)
+  const found: string[] = []
+  for (const ref of refs) {
+    if (ref.endsWith('/HEAD') || ref === 'origin') continue
+    if (await git(path, ['rev-parse', '--verify', '--quiet', `${ref}:${file}`])) found.push(ref)
+  }
+  const pushed = new Set(found.filter((ref) => ref.startsWith('origin/')).map((ref) => ref.replace('origin/', '')))
+  return found.filter((ref) => !pushed.has(ref))
 }

@@ -1,11 +1,11 @@
 // codegraph: module projects
-// codegraph: front door useFolder, listProjects, addProject, renameProject, addSoftwareSystem, removeSoftwareSystem, chooseBranch, knownRemotes, addShallowSystem, Project, SoftwareSystem, ShallowSystem, Workspace
+// codegraph: front door useFolder, listProjects, addProject, renameProject, keepProject, removeProject, addSoftwareSystem, removeSoftwareSystem, chooseBranch, knownRemotes, addShallowSystem, Project, SoftwareSystem, ShallowSystem, ProjectMember, Workspace
 import { sameFolder } from '../machine/index.js'
 import { shortNameOf, type Project, type ShallowSystem, type SoftwareSystem } from './schema.js'
 import { newId, read, useFolder, write } from './store.js'
 
 export { useFolder }
-export type { Project, ShallowSystem, SoftwareSystem, Workspace } from './schema.js'
+export type { Project, ProjectMember, ShallowSystem, SoftwareSystem, Workspace } from './schema.js'
 
 export const listProjects = (): Project[] => read().projects
 
@@ -31,6 +31,22 @@ export const addProject = (name: string, shortName = ''): Project => {
   return project
 }
 
+/** Puts a project on this computer exactly as given: new, or replacing the one
+ *  with its id. */
+export const keepProject = (project: Project): void => {
+  const workspace = read()
+  const at = workspace.projects.findIndex((p) => p.id === project.id)
+  if (at >= 0) workspace.projects[at] = project
+  else workspace.projects.push(project)
+  write(workspace)
+}
+
+export const removeProject = (id: string): void => {
+  const workspace = read()
+  workspace.projects = workspace.projects.filter((p) => p.id !== id)
+  write(workspace)
+}
+
 export const renameProject = (id: string, name: string): void => {
   const workspace = read()
   const project = workspace.projects.find((p) => p.id === id)
@@ -49,7 +65,14 @@ export const addSoftwareSystem = (
   const already = project.systems.find(
     (c) => (system.path && c.path && sameFolder(c.path, system.path)) || (system.remote && c.remote === system.remote),
   )
-  if (already) return already
+  if (already) {
+    // A member with no working copy of a repo on the project has just linked one.
+    if (system.path && !already.path) {
+      already.path = system.path
+      write(workspace)
+    }
+    return already
+  }
   const added: SoftwareSystem = { id: newId(), ...system }
   project.systems.push(added)
   write(workspace)
