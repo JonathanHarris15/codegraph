@@ -4,7 +4,8 @@ Date: 2026-11-04
 
 ## Status
 
-Accepted. How a card opens has since changed; see ADR 0011.
+Accepted. How a card opens has since changed; see ADR 0011. An arrangement now
+belongs to a branch, not the project; see ADR 0019.
 
 ## Context
 

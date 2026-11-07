@@ -4,7 +4,10 @@ Date: 2026-11-02
 
 ## Status
 
-Accepted.
+Accepted. Now that projects are online, a repo's claim only suggests: it is
+matched only among the projects a member is on, and never adds a repo to a
+project or a member to one. Where nothing matches, the app says to ask the
+owner for an invite or to make a new project.
 
 ## Context
 

@@ -129,7 +129,10 @@ _Avoid_: subcanvas, size, frame, viewport
 Where a person has moved a map's cards and its wires' sentences, and the room
 they have given its open cards. No code says where anything sits, so an
 arrangement is kept beside the map, never in a repo, and moving something
-changes no code. A sketch holds its own.
+changes no code. People shift cards out of the way all the time, so there is
+nothing to protect: each branch has its own, and they are free to differ. A
+merged branch's map takes the layout of whichever side was last worked on. A
+sketch holds its own.
 _Avoid_: layout, positions, coordinates, pins
 
 **Framing**:
@@ -147,8 +150,8 @@ A picture of a page as it really is, taken as the tests click through it.
 _Avoid_: capture, preview, thumbnail
 
 **Mockup**:
-A picture of how a page should look, dropped onto a sketch or a proposal by a
-person. On a proposal it is shown beside the page's screenshot.
+A picture of how a page should look, dropped onto a sketch by a person. On a
+proposal made from that sketch it is shown beside the page's screenshot.
 _Avoid_: design, wireframe, comp
 
 ## Drawing
@@ -167,25 +170,39 @@ server, a feature. It is the same card with a ready-made look.
 _Avoid_: preset, stencil
 
 **Sketch**:
-A drawing kept with a project that is not read from any repo: any diagram the
-team wants, sometimes started from a snapshot of the map. An agent can be
-handed a sketch to make proposals from: one for each software system it
-changes, making the repo first where there is none.
+A drawing that is not read from any repo: any diagram at all, sometimes started
+from a snapshot of a map. An agent can be handed a sketch to make proposals
+from: one for each software system it changes, making the repo first where
+there is none.
 _Avoid_: drawing, draft, plan, diagram
+
+**Sketch library**:
+Where sketches are kept. Each project has one, which all its members can see,
+and each member has their own outside any project. A sketch can be moved from a
+member's own library into a project's.
+_Avoid_: directory, folder, sketch gallery
+
+**Loose sketch**:
+A sketch in a member's own library, on no project. It is theirs alone until they
+share it.
+_Avoid_: personal sketch, draft, local sketch
 
 **Snapshot**:
 A copy of the map as it stood at one moment, used to start a sketch.
 _Avoid_: export, copy, baseline
 
 **Proposal**:
-A change drawn over the map of a software system on one branch, which an
-agent builds until the map matches it. A branch has at most one. A person can
-draw one directly, or an agent can make one from a sketch.
+A sketch being made real on one branch of one software system, and the only way
+a change gets drawn over a map. An agent reads the sketch as it stands, and puts
+its faint outline over the map of a branch, never the main line. The outline
+turns solid as its parts become real code. A branch has at most one. Later
+changes to the sketch are a further round of work, not part of this proposal.
 _Avoid_: plan, request, spec, ticket, sketch
 
 **Annotation**:
 Text, a sticky note, a shape or a line drawn over a map or a sketch for people
 and agents to read. It is not part of the diagram and never changes the code.
+On a map it belongs to that branch, and comes along when the branch is merged.
 It can keep beside a card, or point at one, but no card ever lines up with
 or moves for an annotation. An annotation does move for a card that opens.
 _Avoid_: note (for anything but a sticky note), comment, markup, decoration
@@ -239,3 +256,68 @@ _Avoid_: annotation, marker, label, comment
 A software system whose code has been reshaped to fit codegraph's
 conventions, carries tags throughout, and names its projects.
 _Avoid_: installed, configured, onboarded, initialised
+
+## Working together
+
+**Member**:
+Someone on a project, known by their GitHub account: their name beside their
+cursor and beside their work. Not the same as a person, who uses the software
+the project is about.
+_Avoid_: user, account, teammate, person (for this)
+
+**Owner**:
+The one member a project answers to. The project points at them and does not
+sit under them, so it can be handed to another member whole.
+_Avoid_: creator, admin
+
+**Working copy**:
+A repo's folder on one member's computer.
+_Avoid_: local repo, clone, checkout
+
+**GitHub copy**:
+A repo as GitHub holds it, which a working copy is compared against.
+_Avoid_: cloud repo, remote, origin, upstream
+
+**Co-owner**:
+A member who can do all an owner can, except hand over or delete the project.
+_Avoid_: admin, manager
+
+**Collaborator**:
+A member who can draw, move things, add repos and rename the project, but cannot
+say who else is on it.
+_Avoid_: editor, contributor
+
+**Viewer**:
+A member who can look and point, and whose cursor others see, but who changes
+nothing.
+_Avoid_: guest, reader
+
+**GitHub map**:
+The map read from a GitHub copy, at a branch or a commit. Any member GitHub lets
+into the repo can open it, and members on the same one see each other.
+_Avoid_: cloud map, remote map, shared map
+
+**Local map**:
+The map read from a member's own working copy: a local branch, or the folder as
+it stands. No one else ever sees it.
+_Avoid_: private map, my map
+
+**Out of reach**:
+A software system on a project that a member cannot open right now, because
+GitHub has not let them into the repo or because they are offline. It is greyed
+out and says which. It still has a repo, so it is not shallow.
+_Avoid_: shallow (for this), locked, disabled, unavailable
+
+**Held**:
+A card, wire or note that one member is dragging or typing on. No one else can
+touch it until they let go.
+_Avoid_: locked, checked out, reserved
+
+**Revision**:
+One entry in a project's history: what one member changed in one stretch of
+work. Restoring an old one adds a new revision, so nothing is lost.
+_Avoid_: version, save, commit, snapshot
+
+**Gallery**:
+The page listing the projects a member is on.
+_Avoid_: dashboard, grid, home

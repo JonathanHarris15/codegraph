@@ -4,7 +4,7 @@ Date: 2026-11-02
 
 ## Status
 
-Accepted.
+Accepted. A proposal now only ever comes from a sketch; see ADR 0020.
 
 ## Context
 

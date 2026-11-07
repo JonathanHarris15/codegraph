@@ -214,7 +214,21 @@ Draw a project that does not exist yet and have the agent make it.
 
 **Try it:** sketch a two-system project from nothing and hand it over.
 
-## Later
+## Checkpoint 7: Working together
 
-- Sharing projects and sketches live online.
-- **(ask)** Where projects live once they are online, and who can see them.
+Projects and sketches online; members see each other at work. Decided in ADRs
+0016 to 0021. Everything that talks to Firebase sits behind one front door, the
+`cloud` module, with a folder on disk standing in for it until the Firebase
+project exists. `docs/firebase.md` lists what is left to connect.
+
+- **CG-7.1** The cloud front door, and the stand-in.
+- **CG-7.2** Sign-in with GitHub; members and roles; invites; handing over.
+- **CG-7.3** Each map keeps its own arrangement and notes; merges.
+- **CG-7.4** GitHub maps and local maps, with no working copy needed, and
+  software systems out of reach.
+- **CG-7.5** Proposals only from sketches, never on the main line.
+- **CG-7.6** A computer's copy and the online copy keep in step, offline too.
+- **CG-7.7** Cursors, badges and held things.
+- **CG-7.8** Revisions and restoring them.
+- **CG-7.9** Loose sketches: their library, sharing, moving, copying.
+- **CG-7.10** Connect Firebase, and test sign-in on the real project.

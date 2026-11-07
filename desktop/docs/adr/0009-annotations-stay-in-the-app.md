@@ -4,7 +4,8 @@ Date: 2026-11-04
 
 ## Status
 
-Accepted.
+Accepted. A map's annotations now belong to its branch, not its project; see
+ADR 0019.
 
 ## Context
 
