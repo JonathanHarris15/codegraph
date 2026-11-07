@@ -1,18 +1,17 @@
 // codegraph: test ui projects
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import {
-  _electron as electron,
   type ElectronApplication,
   type Locator,
   type Page,
 } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { openTheApp } from './yard.js'
 
 /** The built app, opened on a blank computer: its own folder for files, so
  *  the real projects on this machine are left alone. */
-const appFolder = resolve(import.meta.dirname, '..')
 const PATIENCE = 15_000
 
 let home = ''
@@ -20,7 +19,7 @@ let app: ElectronApplication
 let page: Page
 
 const open = async (): Promise<void> => {
-  app = await electron.launch({ args: ['.', `--user-data-dir=${home}`], cwd: appFolder })
+  app = await openTheApp(home)
   page = await app.firstWindow()
   await page.waitForLoadState('domcontentloaded')
 }
