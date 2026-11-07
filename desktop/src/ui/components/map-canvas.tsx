@@ -231,7 +231,7 @@ type Side = 'n' | 'e' | 's' | 'w'
 type Gesture =
   | { type: 'pan'; x: number; y: number; vx: number; vy: number; moved: boolean; button: number }
   | { type: 'zoombox'; from: Spot }
-  /** A box drawn to pick with. It picks on the level it was started on. */
+  /** A box drawn to pick with, and the level under where it was started. */
   | { type: 'select'; from: Spot; base: string[]; annoBase: string[]; depth: number; moved: boolean }
   | {
       type: 'move'
@@ -1968,12 +1968,12 @@ export const MapCanvas = ({
   }
 
   /** The annotations a box catches, added to what was picked before, on one
-   *  level only. Started in the card open now, that is its level. Started out
-   *  around it, it is the first level out there with something in the box,
-   *  beginning from the level under the start of the box, since an annotation
-   *  may stick out past the room it belongs to. */
+   *  level only: the first with something in the box, starting with the level
+   *  under the start of the box, then the card open now, then outwards. Where
+   *  the box starts decides little, because annotations sit wherever a person
+   *  put them, and that is often out past the border of the room they belong to. */
   const annosPicked = (box: Box, depth: number, before: string[]): string[] => {
-    const levels = depth === workAt ? [depth] : [depth, ...shown.map((_, i) => workAt - 1 - i).filter((i) => i >= 0 && i !== depth)]
+    const levels = [...new Set([depth, workAt, ...shown.map((_, i) => workAt - 1 - i).filter((i) => i >= 0)])]
     const hit = levels.find((i) => annosCaught(box, i).length > 0)
     if (hit === undefined) return before
     const here = shown[hit]!.card.id
@@ -2004,7 +2004,7 @@ export const MapCanvas = ({
       setQuick(null)
       setIconsFor('')
       setMenu(null)
-      gesture.current = { type: 'select', from: worldOf(event), base: depth === workAt ? selected : [], annoBase: annoPicked, depth, moved: false }
+      gesture.current = { type: 'select', from: worldOf(event), base: selected, annoBase: annoPicked, depth, moved: false }
       capture(event)
       return
     }
@@ -2082,16 +2082,18 @@ export const MapCanvas = ({
         if (!now.moved && box.w * seen.current.k < 4 && box.h * seen.current.k < 4) return
         now.moved = true
         hold()
-        // Cards and annotations cannot be picked together: on the level in
-        // hand, cards come first. Out around it, only annotations can be.
-        const caught =
-          drawing && now.depth === workAt
-            ? [
-                ...placed.filter((p) => overlaps(box, p.box)).map((p) => p.card.id),
-                ...noteBoxes.filter((n) => overlaps(box, n.box)).map((n) => n.note.id),
-              ]
-            : []
-        setAnnoPicked(caught.length ? now.annoBase : annosPicked(box, now.depth, now.annoBase))
+        // Cards and annotations cannot be picked together. A box started in
+        // the open card goes for its cards first, and one started out around
+        // it for annotations first. Only the open card's own cards can be picked.
+        const cards = drawing
+          ? [
+              ...placed.filter((p) => overlaps(box, p.box)).map((p) => p.card.id),
+              ...noteBoxes.filter((n) => overlaps(box, n.box)).map((n) => n.note.id),
+            ]
+          : []
+        const annos = annosPicked(box, now.depth, now.annoBase)
+        const caught = now.depth === workAt || !annos.some((id) => !now.annoBase.includes(id)) ? cards : []
+        setAnnoPicked(caught.length ? now.annoBase : annos)
         setLive({ marquee: box, picked: [...new Set([...now.base, ...caught])] })
       } else {
         hold()
