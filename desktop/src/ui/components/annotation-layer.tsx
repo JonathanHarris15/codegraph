@@ -36,6 +36,26 @@ export type Drawn = {
   ways?: [Seam | null, Seam | null]
 }
 
+/** The same, leaving out any that keep to, or run to, a card not drawn. */
+export const drawnAmong = (layers: Layer[], level: string, shift: Spot, cards: Card[], moved: Map<string, Box> | undefined, notDrawn: Set<string> | undefined): Drawn[] => {
+  const gone = (end: AnnotationEnd | undefined): boolean => Boolean(end && 'card' in end && notDrawn?.has(end.card))
+  return drawnOn(layers, level, shift, cards, moved).filter((d) => !(d.a.near && notDrawn?.has(d.a.near.card)) && !gone(d.a.from) && !gone(d.a.to))
+}
+
+/** Which of a level's annotations a box drawn on the board catches. A frame
+ *  fills the space it holds, so it is caught only when the box goes all round
+ *  it, or a box drawn inside it would always catch it. */
+export const caughtBy = (box: Box, drawn: Drawn[]): string[] =>
+  drawn
+    .filter((d) => {
+      const [a, b] = d.ends ?? [null, null]
+      const of = a && b ? { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x), h: Math.abs(a.y - b.y) } : d.box
+      if (shapeOf(d.a.kind).behind)
+        return of.x >= box.x && of.y >= box.y && of.x + of.w <= box.x + box.w && of.y + of.h <= box.y + box.h
+      return of.x <= box.x + box.w && of.x + of.w >= box.x && of.y <= box.y + box.h && of.y + of.h >= box.y
+    })
+    .map((d) => d.a.id)
+
 const inBox = (p: Spot, b: Box): boolean => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h
 
 /** Every annotation of the shown layers on one level, where it sits on the
@@ -248,10 +268,7 @@ export const AnnotationLayer = ({
   onEdit: (id: string) => void
   onChange: (layers: Layer[], step?: string) => void
 }) => {
-  const drawn = useMemo(() => {
-    const gone = (end: AnnotationEnd | undefined): boolean => Boolean(end && 'card' in end && notDrawn?.has(end.card))
-    return drawnOn(layers, level, shift, cards, moved).filter((d) => !(d.a.near && notDrawn?.has(d.a.near.card)) && !gone(d.a.from) && !gone(d.a.to))
-  }, [layers, level, shift, cards, moved, notDrawn])
+  const drawn = useMemo(() => drawnAmong(layers, level, shift, cards, moved, notDrawn), [layers, level, shift, cards, moved, notDrawn])
   const upped = levelsOut > 0 ? ` map-up map-up--${Math.min(levelsOut, 3)} map-anno--locked` : ''
   const drag = useRef<Drag | null>(null)
 
@@ -477,7 +494,8 @@ export const AnnotationLayer = ({
     if (Boolean(kind.behind) === front || d.a.from) return null
     const b = boxOf(d)
     const picked = selected.includes(d.a.id)
-    const classes = [`map-anno map-anno--${d.a.kind}${upped}`]
+    // What is picked is in hand, even out around the card open now (ADR 0017).
+    const classes = [`map-anno map-anno--${d.a.kind}${picked ? '' : upped}`]
     if (d.a.color) classes.push(`map-anno-fill--${d.a.color}`)
     if (kind.behind) classes.push('map-anno--behind')
     if (picked) classes.push('map-anno--picked')
@@ -753,7 +771,7 @@ export const AnnotationLayer = ({
           // The line runs through its words, which are the wire's handle too.
           <div
             key={d.a.id}
-            className={`map-anno-wire-words${selected.includes(d.a.id) ? ' map-anno-wire-words--picked' : ''}${upped}`}
+            className={`map-anno-wire-words${selected.includes(d.a.id) ? ' map-anno-wire-words--picked' : upped}`}
             style={{ left: mid.x, top: mid.y }}
             role="button"
             aria-label={`Wire words: ${d.a.text || 'none yet'}`}

@@ -177,6 +177,10 @@ const fits = (r: Box, polygon: Polygon): boolean => {
 
 const areas = new Map<string, Box>()
 
+/** Where the middle of a shape's words might go, trying its true middle first,
+ *  so words only sit off to one side when that really gives them more room. */
+const FROM_THE_MIDDLE = [50, ...Array.from({ length: 12 }, (_, i) => (i + 1) * 4).flatMap((by) => [50 - by, 50 + by])]
+
 /** The biggest rectangle that fits inside an outline, as shares of its box
  *  from 0 to 1: where words go, so they never run out over the edge. It is
  *  worked out once per outline, since it only depends on the outline. */
@@ -185,10 +189,9 @@ export const textAreaOf = (d: string): Box => {
   if (kept) return kept
   const body = [...polygonsOf(d)].sort((a, b) => areaOf(b) - areaOf(a))[0]!
   let best: Box = { x: 0, y: 0, w: 0, h: 0 }
-  const STEP = 4
   for (const across of [0.5, 0.7, 0.85, 1, 1.2, 1.5, 2, 3, 4]) {
-    for (let cx = STEP; cx < 100; cx += STEP)
-      for (let cy = STEP; cy < 100; cy += STEP) {
+    for (const cx of FROM_THE_MIDDLE)
+      for (const cy of FROM_THE_MIDDLE) {
         const around = (h: number): Box => ({ x: cx - (h * across) / 2, y: cy - h / 2, w: h * across, h })
         // Only worth a closer look if it can beat what is already found.
         const beat = Math.sqrt((best.w * best.h + 1) / across)

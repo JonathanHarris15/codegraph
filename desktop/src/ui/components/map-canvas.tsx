@@ -10,6 +10,7 @@ import {
   type ReactElement,
   type ReactNode,
   type RefObject,
+  type SetStateAction,
 } from 'react'
 import { sentenceOf, type Said } from '../../modules/wording/index.js'
 import { ArrowLeft, Copy as CopyIcon, Trash2 } from 'lucide-react'
@@ -18,7 +19,7 @@ import type { Layer } from '../../modules/annotations/index.js'
 import type { CardType } from '../../modules/card-types/schema.js'
 import type { CardLook } from '../../modules/sketches/schema.js'
 import { addLayer, changeAnnotation, changeLayer, duplicateAnnotations, layerOf, placeAnnotation, removeAnnotations, removeLayer } from './annotation-edits.js'
-import { AnnotationLayer, AnnotationPlacer, drawnOn } from './annotation-layer.js'
+import { AnnotationLayer, AnnotationPlacer, caughtBy, drawnAmong, drawnOn } from './annotation-layer.js'
 import { AnnotationLibrary, LayersPanel } from './annotation-library.js'
 import { COLOR_NAMES, COLORS, shapeOf } from './annotation-shapes.js'
 import { IconPick } from './card-look-editor.js'
@@ -123,6 +124,9 @@ export type Drawing = {
   removeName?: string
 }
 
+/** How long the board takes to glide through one click of a mouse wheel. */
+const WHEEL_GLIDE_MS = 140
+
 /** How long the board takes to bring an open card into view. */
 const STEP_MS = 320
 /** How long cards take to settle as a card opens or closes. */
@@ -153,8 +157,9 @@ export type Rearranging = {
    *  room a card has when open, by `roomKey`. */
   spots: Arrangement
   /** Every card on the level where it now sits, with any sentence moved and
-   *  any room changed. */
-  onMove: (moves: Arrangement) => void
+   *  any room changed, and the wires whose moved sentences a moved card has
+   *  let go of. */
+  onMove: (moves: Arrangement, letGo?: string[]) => void
   /** Forgets where these were put, so the map lays them out again. */
   onForget: (ids: string[]) => void
 }
@@ -168,17 +173,21 @@ export type Annotating = {
 
 /** Whether a wheel event comes from a trackpad rather than a mouse wheel.
  *  A wheel moves in whole notches, straight up and down; a trackpad sends
- *  small, uneven steps, often sideways too. Once a trackpad is heard, the
- *  rest of the same swipe counts as one, though its last steps may be big. */
+ *  small, uneven steps, often sideways too. A Mac speeds up a wheel spun fast,
+ *  which makes its steps uneven as well, but it still counts whole notches of
+ *  120, and a trackpad does not. Once a trackpad is heard, the rest of the
+ *  same swipe counts as one, though its last steps may be big. */
 const isTrackpad = (event: WheelEvent, until: { current: number }): boolean => {
   const now = performance.now()
   const step = event.deltaY || event.deltaX
+  const { wheelDeltaX, wheelDeltaY } = event as WheelEvent & { wheelDeltaX: number; wheelDeltaY: number }
+  const notched = (wheelDeltaX !== 0 || wheelDeltaY !== 0) && wheelDeltaX % 120 === 0 && wheelDeltaY % 120 === 0
   const pad =
     event.deltaMode === 0 &&
     ((event.deltaX !== 0 && event.deltaY !== 0) ||
       (event.deltaX !== 0 && !event.shiftKey) ||
       // A notch is whole, give or take the screen's scaling.
-      Math.abs(step - Math.round(step)) > 0.01 ||
+      (Math.abs(step - Math.round(step)) > 0.01 && !notched) ||
       Math.abs(step) < 40)
   if (pad || now < until.current) {
     until.current = now + 400
@@ -222,7 +231,8 @@ type Side = 'n' | 'e' | 's' | 'w'
 type Gesture =
   | { type: 'pan'; x: number; y: number; vx: number; vy: number; moved: boolean; button: number }
   | { type: 'zoombox'; from: Spot }
-  | { type: 'select'; from: Spot; add: boolean; base: string[]; moved: boolean }
+  /** A box drawn to pick with. It picks on the level it was started on. */
+  | { type: 'select'; from: Spot; base: string[]; annoBase: string[]; depth: number; moved: boolean }
   | {
       type: 'move'
       ids: string[]
@@ -768,7 +778,18 @@ export const MapCanvas = ({
   onStartSketch?: () => void
 }) => {
   const frame = useRef<HTMLDivElement>(null)
-  const [view, setView] = useState<View>({ x: 0, y: 0, k: 1 })
+  const [view, showView] = useState<View>({ x: 0, y: 0, k: 1 })
+  // A click of a mouse wheel glides to where it is going. Anything else that
+  // moves the board takes over from the glide at once.
+  const wheelGlide = useRef<{ to: View; frame: number } | null>(null)
+  const setView = useCallback((next: SetStateAction<View>): void => {
+    if (wheelGlide.current) cancelAnimationFrame(wheelGlide.current.frame)
+    wheelGlide.current = null
+    showView(next)
+  }, [])
+  useEffect(() => () => {
+    if (wheelGlide.current) cancelAnimationFrame(wheelGlide.current.frame)
+  }, [])
   const [moving, setMoving] = useState(false)
   const [tool, setTool] = useState<Tool>('pick')
   const [palette, setPaletteNow] = useState(() => remembered('codegraph-palette', true))
@@ -847,6 +868,32 @@ export const MapCanvas = ({
   const dragged = useRef(false)
   const seen = useRef(view)
   seen.current = view
+
+  /** Moves the board to a view in a straight line, a little at a time. A new
+   *  aim while one is under way sets off from wherever the board has got to. */
+  const glideTo = useCallback(
+    (to: View): void => {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        setView(to)
+        return
+      }
+      const from = seen.current
+      const start = performance.now()
+      if (wheelGlide.current) cancelAnimationFrame(wheelGlide.current.frame)
+      const step = (now: number): void => {
+        const t = Math.min(Math.max((now - start) / WHEEL_GLIDE_MS, 0), 1)
+        if (t >= 1) {
+          wheelGlide.current = null
+          showView(to)
+          return
+        }
+        wheelGlide.current = { to, frame: requestAnimationFrame(step) }
+        showView({ x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t, k: from.k + (to.k - from.k) * t })
+      }
+      wheelGlide.current = { to, frame: requestAnimationFrame(step) }
+    },
+    [setView],
+  )
 
   const selected = drawing?.selected ?? held
   /** Picking something, on a sketch or on a map. */
@@ -1124,16 +1171,21 @@ export const MapCanvas = ({
     const all = shown.flatMap(draw)
     // Each sentence keeps clear of every card and of every other sentence,
     // at the size it was really drawn.
-    const spots = spread(
-      all.map((one) => {
+    const chipsNow = all.map((one) => {
         const size = sizes[one.key]
         const level = shown[one.depth]!
         // A sentence under the hand goes where the hand has it. One a person
-        // has moved stays put, unless opening a card has pushed one of the
-        // cards it joins, when it goes with its wire.
-        const held = one.depth === workAt ? live.moves?.get(one.key) : undefined
+        // has moved stays put, unless a card it joins is moving, in the hand
+        // or pushed by a card opening, when it goes with its wire.
+        const moving = one.depth === workAt ? live.moves : undefined
+        const held = moving?.get(one.key)
         const put =
-          one.wire.x !== undefined && one.wire.y !== undefined && !level.pushed.has(one.wire.from) && !level.pushed.has(one.wire.to)
+          one.wire.x !== undefined &&
+          one.wire.y !== undefined &&
+          !level.pushed.has(one.wire.from) &&
+          !level.pushed.has(one.wire.to) &&
+          !moving?.has(one.wire.from) &&
+          !moving?.has(one.wire.to)
         return {
           at: held
             ? { x: held.x + level.shift.x, y: held.y + level.shift.y }
@@ -1143,14 +1195,22 @@ export const MapCanvas = ({
           w: size?.w ?? (one.small ? 60 : sentenceWidth(one.wire)),
           h: size?.h ?? 24,
           tail: one.shape.tail,
+          c1: one.shape.c1,
+          c2: one.shape.c2,
           head: one.shape.head,
           fixed: Boolean(held) || put,
         }
-      }),
+      })
+    const spots = spread(
+      chipsNow,
       [...everyCard.filter((p) => !notDrawn.has(p.card.id)).map((p) => p.box), ...everyNote.map((n) => n.box)],
     )
-    // The wire is drawn through its sentence, wherever that ended up.
-    const at = all.map((one, i) => ({ ...one, at: spots[i]!, shape: { ...one.shape, d: wireThrough(one.shape, spots[i]!) } }))
+    // Only a sentence a person has moved bends its wire; the rest sit on it.
+    const at = all.map((one, i) => ({
+      ...one,
+      at: spots[i]!,
+      shape: { ...one.shape, d: chipsNow[i]!.fixed ? wireThrough(one.shape, spots[i]!) : one.shape.d },
+    }))
     return { all: at, outer: at.filter((one) => one.depth !== workAt), inner: at.filter((one) => one.depth === workAt), hubs, boxes }
   }, [shown, where, cardBoxes, shapedAt, canDraw, nameOf, sizes, everyCard, everyNote, workAt, live.moves, notDrawn, passing, reaching])
 
@@ -1395,8 +1455,9 @@ export const MapCanvas = ({
     return () => window.removeEventListener('resize', refit)
   }, [])
 
+  // A person has nothing inside, so a person's card is never opened.
   const canOpen = (card: DrawnCard): boolean =>
-    drawing ? card.level !== 'code' && card.level !== drawing.floor : card.children.length > 0
+    drawnShape(card) !== 'person' && (drawing ? card.level !== 'code' && card.level !== drawing.floor : card.children.length > 0)
 
   /** Opening a card: it grows where it is, and any card already open on its
    *  level, with whatever is open inside that, closes. */
@@ -1471,14 +1532,21 @@ export const MapCanvas = ({
       const rect = el.getBoundingClientRect()
       const cx = event.clientX - rect.left
       const cy = event.clientY - rect.top
-      const k = Math.min(Math.max(v.k * Math.exp(-event.deltaY * (pad ? 0.01 : 0.0015)), 0.08), 5)
-      const worldX = (cx - v.x) / v.k
-      const worldY = (cy - v.y) / v.k
-      setView({ k, x: cx - worldX * k, y: cy - worldY * k })
+      // A wheel spun fast sends huge steps; each counts for one notch at most,
+      // or one flick would throw the board from one end of the zoom to the other.
+      const step = pad ? event.deltaY : Math.min(Math.max(event.deltaY, -120), 120)
+      // A click adds to where the last one was going, not to where it has got.
+      const base = pad ? v : (wheelGlide.current?.to ?? v)
+      const k = Math.min(Math.max(base.k * Math.exp(-step * (pad ? 0.01 : 0.0015)), 0.08), 5)
+      const worldX = (cx - base.x) / base.k
+      const worldY = (cy - base.y) / base.k
+      const to = { k, x: cx - worldX * k, y: cy - worldY * k }
+      if (pad) setView(to)
+      else glideTo(to)
     }
     el.addEventListener('wheel', wheel, { passive: false })
     return () => el.removeEventListener('wheel', wheel)
-  }, [])
+  }, [setView, glideTo])
 
   const startEditing = useCallback(
     (id: string, says = false): void => {
@@ -1899,8 +1967,48 @@ export const MapCanvas = ({
     return 0
   }
 
+  /** The annotations a box catches, added to what was picked before, on one
+   *  level only. Started in the card open now, that is its level. Started out
+   *  around it, it is the first level out there with something in the box,
+   *  beginning from the level under the start of the box, since an annotation
+   *  may stick out past the room it belongs to. */
+  const annosPicked = (box: Box, depth: number, before: string[]): string[] => {
+    const levels = depth === workAt ? [depth] : [depth, ...shown.map((_, i) => workAt - 1 - i).filter((i) => i >= 0 && i !== depth)]
+    const hit = levels.find((i) => annosCaught(box, i).length > 0)
+    if (hit === undefined) return before
+    const here = shown[hit]!.card.id
+    return [...new Set([...before.filter((id) => annoLevel.get(id) === here), ...annosCaught(box, hit)])]
+  }
+
+  /** The annotations a box catches on one level, leaving out any not drawn. */
+  const annosCaught = (box: Box, depth: number): string[] => {
+    const level = shown[depth]
+    if (!annotating || !level) return []
+    return caughtBy(box, drawnAmong(annotating.layers, level.card.id, level.shift, annoCardsOf(level), level.annoBoxes, notDrawn))
+  }
+
   const down = (event: PointerEvent<HTMLDivElement>): void => {
-    // Out around the open card nothing can be touched, but the board still
+    // Holding Shift draws a box to pick with, on a drawing or over a map, and
+    // it works out around the open card too, where annotations can be picked
+    // though nothing else can (ADR 0017).
+    if (
+      event.button === 0 &&
+      (drawing || annotating) &&
+      !armed &&
+      tool === 'pick' &&
+      !space.current &&
+      (event.shiftKey || event.ctrlKey || event.metaKey)
+    ) {
+      const depth = levelAt(worldOf(event))
+      if (editing) finishEditing(true)
+      setQuick(null)
+      setIconsFor('')
+      setMenu(null)
+      gesture.current = { type: 'select', from: worldOf(event), base: depth === workAt ? selected : [], annoBase: annoPicked, depth, moved: false }
+      capture(event)
+      return
+    }
+    // Out around the open card nothing else can be touched, but the board still
     // moves. A card picked from the library is of the level in hand, so it
     // stays there and the open card grows to reach it.
     if (!armed && levelAt(worldOf(event)) !== workAt) {
@@ -1941,13 +2049,6 @@ export const MapCanvas = ({
       capture(event)
       return
     }
-    if (drawing && tool === 'pick' && (event.shiftKey || event.ctrlKey || event.metaKey)) {
-      // Dragging the board moves it; with Shift it draws a box to pick with.
-      const add = event.shiftKey || event.ctrlKey || event.metaKey
-      gesture.current = { type: 'select', from: worldOf(event), add, base: add ? selected : [], moved: false }
-      capture(event)
-      return
-    }
     gesture.current = { type: 'pan', x: event.clientX, y: event.clientY, vx: view.x, vy: view.y, moved: false, button: event.button }
     capture(event)
   }
@@ -1981,10 +2082,16 @@ export const MapCanvas = ({
         if (!now.moved && box.w * seen.current.k < 4 && box.h * seen.current.k < 4) return
         now.moved = true
         hold()
-        const caught = [
-          ...placed.filter((p) => overlaps(box, p.box)).map((p) => p.card.id),
-          ...noteBoxes.filter((n) => overlaps(box, n.box)).map((n) => n.note.id),
-        ]
+        // Cards and annotations cannot be picked together: on the level in
+        // hand, cards come first. Out around it, only annotations can be.
+        const caught =
+          drawing && now.depth === workAt
+            ? [
+                ...placed.filter((p) => overlaps(box, p.box)).map((p) => p.card.id),
+                ...noteBoxes.filter((n) => overlaps(box, n.box)).map((n) => n.note.id),
+              ]
+            : []
+        setAnnoPicked(caught.length ? now.annoBase : annosPicked(box, now.depth, now.annoBase))
         setLive({ marquee: box, picked: [...new Set([...now.base, ...caught])] })
       } else {
         hold()
@@ -2092,14 +2199,19 @@ export const MapCanvas = ({
 
   /** The level as it now stands, for a map to keep beside it: every card
    *  where it sits, so moving one never shuffles the rest, and every
-   *  sentence a person has moved. */
+   *  sentence a person has moved, less those a moved card has let go of. */
+  const lettingGo = (moves: Map<string, Spot>): string[] =>
+    levels[workAt]!.wires.map(keyOf).filter((key, i) => {
+      const wire = levels[workAt]!.wires[i]!
+      return !moves.has(key) && (moves.has(wire.from) || moves.has(wire.to))
+    })
   const levelNow = (moves: Map<string, Spot>): Arrangement => [
     ...levels[workAt]!.natural.map((p) => {
       const to = moves.get(p.card.id)
       return { id: p.card.id, x: Math.round(to?.x ?? p.box.x), y: Math.round(to?.y ?? p.box.y) }
     }),
     ...shapes.inner
-      .filter((one) => moves.has(one.key) || one.wire.x !== undefined)
+      .filter((one) => moves.has(one.key) || (one.wire.x !== undefined && !lettingGo(moves).includes(one.key)))
       .map((one) => {
         const to = moves.get(one.key) ?? { x: one.wire.x!, y: one.wire.y! }
         return { id: one.key, x: Math.round(to.x), y: Math.round(to.y) }
@@ -2140,9 +2252,25 @@ export const MapCanvas = ({
       return
     }
     if (now.type === 'select') {
-      if (now.moved) select(shown.picked ?? now.base)
-      else if (!now.add) select([])
       dragged.current = now.moved
+      if (now.moved) {
+        const cards = shown.picked ?? now.base
+        const added = cards.length > now.base.length
+        // Whatever the box caught is what is picked: cards or annotations.
+        select(added || !annoPicked.some((id) => !now.annoBase.includes(id)) ? cards : [])
+        return
+      }
+      // A Shift-click out around the open card, where an annotation cannot
+      // hear the press itself, picks it or lets it go.
+      if (now.depth !== workAt) {
+        const was = now.annoBase
+        const after = annosPicked({ x: at.x, y: at.y, w: 0, h: 0 }, now.depth, was)
+        if (after.some((id) => !was.includes(id))) {
+          setAnnoPicked(after)
+          select([])
+          dragged.current = true
+        }
+      }
       return
     }
     if (now.type === 'resize') {
@@ -2161,7 +2289,7 @@ export const MapCanvas = ({
           drawing.onMove([...shown.moves].map(([id, spot]) => ({ id, x: spot.x, y: spot.y })), now.copied)
           if (room && grew) keepRoom(workAt, focus.id, room, true)
         } else {
-          rearranging?.onMove([...levelNow(shown.moves), ...(room && grew ? [{ id: roomKey(focus.id), ...room }] : [])])
+          rearranging?.onMove([...levelNow(shown.moves), ...(room && grew ? [{ id: roomKey(focus.id), ...room }] : [])], lettingGo(shown.moves))
           if (room && grew) defaults.current.set(focus.id, room)
         }
         dragged.current = true
@@ -3050,7 +3178,9 @@ export const MapCanvas = ({
         ) : null}
 
         {annotating && annoPicked.length && !annoEditing ? (() => {
-          const onBar = drawnOn(annotating.layers, working.card.id, working.shift, annoCardsOf(working), working.annoBoxes).filter((d) => annoPicked.includes(d.a.id))
+          // The level the picked annotations are on, which may be out around the open card.
+          const barLevel = shown.find((level) => level.card.id === annoLevel.get(annoPicked[0]!)) ?? working
+          const onBar = drawnOn(annotating.layers, barLevel.card.id, barLevel.shift, annoCardsOf(barLevel), barLevel.annoBoxes).filter((d) => annoPicked.includes(d.a.id))
           if (!onBar.length) return null
           const top = Math.min(...onBar.map((d) => d.box.y))
           const left = Math.min(...onBar.map((d) => d.box.x))

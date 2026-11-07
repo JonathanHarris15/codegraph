@@ -17,7 +17,8 @@ _Avoid_: slug, key, id, handle
 
 **Person**:
 Someone who uses a project's software, drawn beside its software systems.
-No code says who they are, so a person is drawn, not read.
+No code says who they are, so a person is drawn, not read. A person has nothing
+inside, so their card does not open.
 _Avoid_: user, actor, persona, role
 
 **Software system**:
@@ -102,7 +103,8 @@ A one-way line between two cards. It shows the kind of relationship, read
 from the code, and a phrase saying what it is for, written in the code beside
 the call. It reads as a sentence: who acts, how, on what, and what for —
 write-note uses notes to keep the note. The wire runs through its sentence, so
-the two cannot come apart.
+the two cannot come apart. It is a smooth line from card to card, and only moving
+the sentence itself bends it; moving a card it joins lets go of that again.
 _Avoid_: edge, arrow, link, connection, dependency
 
 **Hub**:
@@ -115,7 +117,8 @@ _Avoid_: port (for this), junction, socket, connector
 Double-clicking a card so it grows where it is into room to draw in, pushing
 the cards and annotations around it aside. The cards wired to it stay on screen, at
 the same zoom, but fade, further the further out they are, and cannot be touched
-until a person backs out to them. Cards not wired to it are not drawn at all.
+until a person backs out to them, except annotations, which Shift can still pick.
+Cards not wired to it are not drawn at all.
 Backing out is the way back; the card shrinks and what it pushed returns.
 _Avoid_: tunnelling, drilling down, expanding, zooming in
 

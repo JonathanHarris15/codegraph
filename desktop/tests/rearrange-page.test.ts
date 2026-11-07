@@ -96,6 +96,34 @@ describe('moving a map about', () => {
     expect(now.y).toBeGreaterThan(was.y + 30)
   })
 
+  it("lets go of a moved sentence when a card its wire joins is dragged", async () => {
+    // A wire bent through a sentence is two curves; a smooth one is one.
+    const bent = (): Promise<number> =>
+      page.$$eval('.map-wire path', (paths) => paths.filter((path) => (path.getAttribute('d') ?? '').split('C').length > 2).length)
+    const moved = kept().find((spot) => spot.id.includes('>'))!
+    const joined = onBoard(moved.id.split('>')[0]!)
+    expect(await bent()).toBeGreaterThan(0)
+
+    const box = (await joined.boundingBox())!
+    await page.mouse.move(box.x + box.width / 2, box.y + 12)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width / 2 + 40, box.y + 12 + 30, { steps: 8 })
+    // Already smooth, with the card still in the hand.
+    expect(await bent()).toBe(0)
+    await page.mouse.up()
+    await page.waitForTimeout(400)
+    expect(await bent()).toBe(0)
+    expect(kept().map((spot) => spot.id)).not.toContain(moved.id)
+
+    // And now it goes along with the wire.
+    const said = page.locator('.map-sentence').first()
+    const was = await boxOf(said)
+    await drag(joined, 80, 0)
+    const now = await boxOf(said)
+    expect(now.x - was.x).toBeGreaterThan(10)
+    expect(await bent()).toBe(0)
+  })
+
   it('puts a card back where the map had it, from the right-click menu', async () => {
     const moved = await boxOf(card('web'))
     await card('web').click({ button: 'right' })

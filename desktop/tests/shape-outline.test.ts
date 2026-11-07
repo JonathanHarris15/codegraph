@@ -23,6 +23,13 @@ describe('words stay inside the shape they are written in', () => {
     expect(area.w * area.h).toBeLessThan(0.3)
   })
 
+  it('centres the words across any shape that is even from side to side', () => {
+    for (const [name, shape] of Object.entries(CARD_SHAPES)) {
+      const area = textAreaOf(shape.d)
+      expect(area.x + area.w / 2, name).toBeCloseTo(0.5, 3)
+    }
+  })
+
   it('sits a triangle’s words down in its wide part', () => {
     const area = textAreaOf(TRIANGLE)
     expect(area.y + area.h / 2).toBeGreaterThan(0.5)

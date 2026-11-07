@@ -107,6 +107,18 @@ describe('the context level', () => {
     await page.locator('.map-card--shape-person').waitFor({ timeout: PATIENCE })
     await picture('draw-1-person')
   })
+
+  it('does not open a person, who has nothing inside', async () => {
+    const box = (await card('Reader').boundingBox())!
+    await page.mouse.dblclick(box.x + box.width / 2, box.y + box.height * 0.15)
+    await page.waitForTimeout(600)
+    expect(await page.locator('.map-card--open').count()).toBe(0)
+    await card('Reader').click({ button: 'right', position: { x: box.width / 2, y: box.height * 0.15 } })
+    const menu = page.getByRole('menu', { name: 'What to do here' })
+    await menu.waitFor({ timeout: PATIENCE })
+    expect(await menu.getByRole('menuitem', { name: /Draw inside it/ }).count()).toBe(0)
+    await page.keyboard.press('Escape')
+  })
 })
 
 describe('a wire and its sentence', () => {

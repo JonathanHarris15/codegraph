@@ -2,9 +2,9 @@
 import { describe, expect, it } from 'vitest'
 import { blankProposal, proposalFrom, type DrawnCard as ReadCard } from '../src/modules/reader/index.js'
 import { blankCard, hubOf, type SketchCard } from '../src/modules/sketches/schema.js'
-import { annotationsClear, flowOf, layOut, loopSides, openLevels, reachingOpen, roomAround, wirePath, wireThrough, type Box, type DrawnCard, type DrawnWire } from '../src/ui/components/map-layout.js'
+import { annotationsClear, flowOf, layOut, loopSides, openLevels, reachingOpen, roomAround, spread, wirePath, wireThrough, type Box, type DrawnCard, type DrawnWire } from '../src/ui/components/map-layout.js'
 import { TEMPLATES, lookOf } from '../src/ui/components/card-looks.js'
-import { addWire, choicesAt, copyOf, paste, placeCard, remove, rewire } from '../src/ui/components/sketch-edits.js'
+import { addWire, choicesAt, copyOf, moveThings, nudge, paste, placeCard, remove, rewire } from '../src/ui/components/sketch-edits.js'
 
 const a: Box = { x: 0, y: 0, w: 200, h: 100 }
 const b: Box = { x: 600, y: 0, w: 200, h: 100 }
@@ -379,5 +379,65 @@ describe('hubs on a card’s border', () => {
     const full = withHubWires(root, wire)
     const [next, ids] = paste(full, copyOf(full, ['c']))
     expect(next.children.find((c) => ids.includes(c.id))!.wires).toEqual([])
+  })
+})
+
+describe("a wire's sentence and its line", () => {
+  const curve = { tail: { x: 0, y: 0 }, c1: { x: 200, y: 0 }, c2: { x: 400, y: 200 }, head: { x: 600, y: 200 } }
+  const on = (t: number): { x: number; y: number } => {
+    const u = 1 - t
+    const mix = (axis: 'x' | 'y'): number =>
+      u * u * u * curve.tail[axis] + 3 * u * u * t * curve.c1[axis] + 3 * u * t * t * curve.c2[axis] + t * t * t * curve.head[axis]
+    return { x: mix('x'), y: mix('y') }
+  }
+  const distanceToCurve = (at: { x: number; y: number }): number =>
+    Math.min(...Array.from({ length: 201 }, (_, i) => on(i / 200)).map((point) => Math.hypot(point.x - at.x, point.y - at.y)))
+
+  it('slides along the curve itself to get clear, so the line need not bend', () => {
+    const middle = on(0.5)
+    const [at] = spread([{ ...curve, at: middle, w: 80, h: 24 }], [{ x: middle.x - 60, y: middle.y - 60, w: 120, h: 120 }])
+    expect(at).not.toEqual(middle)
+    expect(distanceToCurve(at!)).toBeLessThan(0.5)
+  })
+
+  it('stays on the curve when nowhere on it is clear', () => {
+    const [at] = spread([{ ...curve, at: on(0.5), w: 80, h: 24 }], [{ x: -50, y: -50, w: 700, h: 300 }])
+    expect(at).toEqual(on(0.5))
+  })
+
+  it('stays where a person put it', () => {
+    const [at] = spread([{ ...curve, at: { x: 40, y: 400 }, w: 80, h: 24, fixed: true }])
+    expect(at).toEqual({ x: 40, y: 400 })
+  })
+
+  describe('on a sketch', () => {
+    const level = (): SketchCard => {
+      const focus = blankCard('top', 'top', 'component', 'module')
+      const one = { ...blankCard('one', 'one', 'component', 'module'), x: 0, y: 0 }
+      const two = { ...blankCard('two', 'two', 'component', 'module'), x: 500, y: 0 }
+      return { ...focus, children: [one, two], wires: [{ id: 'w', from: 'one', to: 'two', kind: 'uses', words: '', x: 250, y: 300 }] }
+    }
+    const put = (focus: SketchCard): { x?: number; y?: number } => {
+      const { x, y } = focus.wires[0]!
+      return { x, y }
+    }
+
+    it('lets go of a moved sentence when a card its wire joins moves', () => {
+      expect(put(moveThings(level(), [{ id: 'one', x: 40, y: 40 }]))).toEqual({ x: undefined, y: undefined })
+    })
+
+    it('lets go of it when a card is nudged with the arrow keys, too', () => {
+      expect(put(nudge(level(), ['two'], 10, 0))).toEqual({ x: undefined, y: undefined })
+    })
+
+    it('keeps it when the sentence itself is what moved', () => {
+      expect(put(moveThings(level(), [{ id: 'w', x: 10, y: 20 }]))).toEqual({ x: 10, y: 20 })
+    })
+
+    it('keeps it when some other card moves', () => {
+      const more = level()
+      more.children.push({ ...blankCard('three', 'three', 'component', 'module'), x: 900, y: 0 })
+      expect(put(moveThings(more, [{ id: 'three', x: 950, y: 0 }]))).toEqual({ x: 250, y: 300 })
+    })
   })
 })
