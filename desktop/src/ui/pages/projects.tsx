@@ -147,8 +147,9 @@ export const ProjectsPage = ({ onOpen, onOpenSketch }: { onOpen: (projectId: str
           {session?.online ? (
             session.member ? (
               <>
-                <span className="together-face" style={{ background: 'var(--accent, #3e63dd)' }} title={`Signed in as @${session.member.login}`}>
-                  {session.member.name}
+                <span className="me-chip" title={`Signed in as @${session.member.login}`}>
+                  {session.member.avatar ? <img className="member-face" src={session.member.avatar} alt="" /> : null}
+                  {session.member.name || session.member.login}
                 </span>
                 {session.waiting ? <span className="ds-hint">{session.waiting} waiting to go up</span> : null}
                 <Button look="bare" onClick={() => void signOut()}>

@@ -1,5 +1,7 @@
+// See docs/firebase.md. Rooms: who is where right now, and what they hold.
+// roomMembers is copied from Firestore by a member on the way into a room,
+// since these rules cannot read Firestore.
 {
-  "//": "DRAFT: not yet run. See docs/firebase.md. It may need adjusting: whether these rules can read the github.com identity like this is not confirmed. roomMembers is written whenever a project's or a shared sketch's members change, since these rules cannot read Firestore.",
   "rules": {
     "roomMembers": {
       "$room": {

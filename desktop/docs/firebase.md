@@ -10,14 +10,18 @@ Firebase. This is what is left.
    about $0 a month, and I'd set a budget alert to be sure.
 2. **Make a GitHub OAuth App** (GitHub, Settings, Developer settings, OAuth Apps).
    - Tick **Enable Device Flow**.
-   - Callback URL: the one Firebase shows in the next step.
+   - Homepage URL: anything; the repo page, https://github.com/JonathanHarris15/codegraph, will do.
+   - Redirect URI (older screens say callback URL): the one Firebase shows in the next
+     step, with wildcard matching left off. Put the homepage in for now
+     and swap it in once Firebase shows it.
 3. **Turn on sign-in**: Firebase, Authentication, Sign-in method, GitHub. Paste the
    OAuth App's client ID and secret.
 4. **Turn on three stores**, in the same region if you can:
    - Firestore: projects, sketches, layouts, history.
    - Realtime Database: cursors and held things.
    - Storage: mockups and history snapshots.
-5. **Add a Web app** to the project, and copy its config.
+5. **Add a Web app** to the project, and copy its config. Leave "Also set up
+   Firebase Hosting" unticked: the app runs on your computer, not a website.
 6. **Give me**: that config, and the OAuth App's client ID. The secret stays in
    Firebase and never goes in the app.
 
@@ -25,6 +29,10 @@ If your repos sit in a GitHub organisation, its owner has to approve the OAuth A
 once.
 
 ## What I do then (CG-7.10)
+
+Done as of 2026-11-07: steps 1 to 5. Firebase takes the device-flow token, and its
+`firebase.identities['github.com'][0]` is GitHub's number for the account. Tests run
+with `CODEGRAPH_CLOUD=off`, so they never reach the real project. Left: step 6.
 
 1. **Prove sign-in first.** The docs do not say whether Firebase takes a token from
    GitHub's device flow, or must see one from the same OAuth App, so test

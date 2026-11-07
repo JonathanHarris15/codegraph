@@ -4849,6 +4849,29 @@ button.map-restyle:hover {
   border-radius: 50%;
   vertical-align: middle;
   margin-right: 6px;
+  flex: none;
+  object-fit: cover;
+  background: var(--line-edge);
+}
+
+/* Who is signed in, top right of the projects page: their GitHub picture and name. */
+.me-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  color: var(--ink-000);
+  white-space: nowrap;
+}
+
+.me-chip .member-face {
+  margin-right: 8px;
+}
+
+/* Who is on a project, under its name: lined up with the name, and clear of the
+   repos below. */
+.project-card-people {
+  gap: 6px;
+  padding: 0 var(--space-4) var(--space-3);
 }
 .gallery-tabs {
   display: inline-flex;

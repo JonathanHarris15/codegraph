@@ -1,5 +1,5 @@
 // codegraph: module machine
-// codegraph: front door appFolder, devRendererUrl, keystore, askForFolder, useChooser, askForPicture, usePicturePicker, mcpServerFile, appFolderAnywhere, watchFolders, realFolder, sameFolder, githubClientId, cloudFolder, Keystore
+// codegraph: front door appFolder, devRendererUrl, keystore, askForFolder, useChooser, askForPicture, usePicturePicker, mcpServerFile, appFolderAnywhere, watchFolders, realFolder, sameFolder, githubClientId, cloudFolder, firebaseSettings, Keystore
 
 /** This computer and the window around the app: where files are kept, the
  *  operating system's keystore, the folder picker, and what the build says.
@@ -8,6 +8,7 @@
 import { existsSync, realpathSync, watch, type FSWatcher } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
+import type { FirebaseSettings } from '../cloud/index.js'
 
 type Electron = typeof import('electron')
 
@@ -49,13 +50,29 @@ export const mcpServerFile = async (): Promise<string> => {
 /** The page server while the app is being worked on; '' in a built app. */
 export const devRendererUrl = (): string => process.env['ELECTRON_RENDERER_URL'] ?? ''
 
-/** The GitHub app that sign-in goes through; '' until there is one, and the app
- *  then takes a pasted token instead. */
-export const githubClientId = (): string => process.env['CODEGRAPH_GITHUB_CLIENT_ID'] ?? ''
+/** The GitHub app that sign-in goes through. An empty one makes the app take a
+ *  pasted token instead. Not a secret: the secret stays in Firebase. */
+export const githubClientId = (): string => process.env['CODEGRAPH_GITHUB_CLIENT_ID'] ?? 'Ov23lirLHKBZBwXJ44vf'
 
 /** A folder standing in for the online side, for trying the app with no Firebase
  *  project. Two copies of the app pointed at one folder see each other. */
 export const cloudFolder = (): string => process.env['CODEGRAPH_CLOUD_FOLDER'] ?? ''
+
+/** The Firebase project the app works with online, or null when it is turned
+ *  off (`CODEGRAPH_CLOUD=off`, as in tests). None of this is secret: what each
+ *  person may do is up to the access rules in docs/firebase. */
+export const firebaseSettings = (): FirebaseSettings | null =>
+  process.env['CODEGRAPH_CLOUD'] === 'off'
+    ? null
+    : {
+        apiKey: 'AIzaSyDk4HMm6qJpwih5LiPgyV8rDSimhw92WdU',
+        authDomain: 'codegraph-57234.firebaseapp.com',
+        projectId: 'codegraph-57234',
+        storageBucket: 'codegraph-57234.firebasestorage.app',
+        messagingSenderId: '174592939508',
+        appId: '1:174592939508:web:b136d1d9e4eadce44015a1',
+        databaseURL: process.env['CODEGRAPH_DATABASE_URL'] ?? 'https://codegraph-57234-default-rtdb.firebaseio.com',
+      }
 
 /** The operating system's keystore, if it has one that works. */
 export const keystore = async (): Promise<Keystore | null> => {

@@ -232,7 +232,9 @@ project exists. `docs/firebase.md` lists what is left to connect.
 - **CG-7.7** (done) Cursors, badges and held things.
 - **CG-7.8** (done) Revisions and restoring them.
 - **CG-7.9** (done) Loose sketches: their library, sharing, moving, copying.
-- **CG-7.10** Connect Firebase, and test sign-in on the real project.
+- **CG-7.10** Connect Firebase, and test sign-in on the real project. *Connected: sign-in proven,
+  rules deployed (`npx firebase deploy --only firestore:rules,database,storage`), one
+  person's project goes up and comes back. Left: two computers, and testing the rules.*
 
 **Try it:** `npm run together` opens two windows as two members, with a folder
 standing in for Firebase. Link a repo in one, and move about in both.

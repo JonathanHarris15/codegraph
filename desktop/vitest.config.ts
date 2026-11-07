@@ -10,5 +10,8 @@ export default defineConfig({
     // The UI tests each drive a real window. Too many at once starve each other,
     // and different tests fail on each run, so test files take turns.
     fileParallelism: false,
+    // Tests never reach the real Firebase project; those that need an online side
+    // hand the app a folder instead. Windows the tests open take this with them.
+    env: { CODEGRAPH_CLOUD: 'off' },
   },
 })

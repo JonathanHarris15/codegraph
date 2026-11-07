@@ -1,8 +1,9 @@
 // codegraph: module cloud
-// codegraph: front door useCloud, theCloud, isConnected, openFolderCloud, CloudOffline, Cloud, Doc, Member, Room, RoomNow, Seen
+// codegraph: front door useCloud, theCloud, isConnected, openFolderCloud, openFirebaseCloud, FirebaseSettings, CloudOffline, Cloud, Doc, Member, Room, RoomNow, Seen
 import type { Cloud } from './schema.js'
 
 export { openFolderCloud } from './folder.js'
+export { openFirebaseCloud, type FirebaseSettings } from './firebase.js'
 export { CloudOffline } from './schema.js'
 export type { Cloud, Doc, Member, Room, RoomNow, Seen } from './schema.js'
 

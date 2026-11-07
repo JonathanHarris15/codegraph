@@ -50,7 +50,7 @@ export const ProjectCard = ({
     </div>
 
     {onMembers || onPutOnline ? (
-      <div className="ds-row" style={{ padding: '0 var(--space-3, 12px)', gap: 6 }} onDoubleClick={(event) => event.stopPropagation()}>
+      <div className="ds-row project-card-people" onDoubleClick={(event) => event.stopPropagation()}>
         {onMembers ? (
           <button type="button" className="map-notice" onClick={onMembers} aria-label={`Members of ${project.name}`}>
             {project.members.length === 1 ? 'Just you' : `${project.members.length} members`}

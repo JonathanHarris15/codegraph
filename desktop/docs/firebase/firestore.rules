@@ -1,5 +1,6 @@
 rules_version = '2';
-// DRAFT: not yet run. See docs/firebase.md.
+// See docs/firebase.md. The app lifts id, ownerId, memberIds, roles and members
+// to the top of each document for these rules; the rest rides in `body`.
 // Members are known by GitHub's number for their account (ADR 0017).
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -15,8 +16,10 @@ service cloud.firestore {
         && request.resource.data.ownerId == resource.data.ownerId;
     }
 
+    // A document that is not there gives nothing away, and the app has to ask
+    // before it makes one.
     match /projects/{project} {
-      allow read: if signedIn() && me() in resource.data.memberIds;
+      allow read: if signedIn() && (resource == null || me() in resource.data.memberIds);
       allow create: if signedIn() && request.resource.data.ownerId == me();
       allow update: if signedIn() && (canInvite(resource) || (canDraw(resource) && peopleSame()));
       allow delete: if signedIn() && resource.data.ownerId == me();
@@ -31,7 +34,7 @@ service cloud.firestore {
 
     // A loose sketch that has been shared stands on its own.
     match /sketches/{sketch} {
-      allow read: if signedIn() && me() in resource.data.memberIds;
+      allow read: if signedIn() && (resource == null || me() in resource.data.memberIds);
       allow create: if signedIn() && request.resource.data.ownerId == me();
       allow update: if signedIn() && canDraw(resource);
       allow delete: if signedIn() && resource.data.ownerId == me();
