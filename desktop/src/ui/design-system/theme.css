@@ -4710,3 +4710,165 @@ button.map-restyle:hover {
   stroke: var(--focus-ring);
   stroke-width: 2;
 }
+
+/* Others on the board */
+.together-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+}
+.together-cursor {
+  position: absolute;
+  display: flex;
+  align-items: flex-start;
+  transition: left 90ms linear, top 90ms linear;
+}
+.together-cursor span,
+.together-badge,
+.together-held span {
+  color: white;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.together-cursor span {
+  margin: 12px 0 0 -2px;
+}
+.together-held {
+  position: absolute;
+  border: 2px solid var(--accent, #6d8cff);
+  border-radius: 10px;
+}
+.together-held span {
+  position: absolute;
+  left: 0;
+  top: -20px;
+  background: var(--accent, #6d8cff);
+}
+.together-badges {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-left: -8px;
+  margin-top: -8px;
+}
+.together-badge {
+  border: 0;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.map-card--out-of-reach,
+.map-card--out-of-reach[role='button'] {
+  opacity: 0.55;
+  border-style: dashed;
+  cursor: not-allowed;
+  filter: grayscale(1);
+}
+
+/* Who is here, and what they can do */
+.together-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.together-face {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  min-width: 24px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 12px;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.together-face--away {
+  opacity: 0.45;
+}
+.map-notice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: 1px solid var(--line, #3334);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 12px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.map-notice--plain {
+  cursor: default;
+}
+.revisions {
+  position: absolute;
+  top: var(--space-3, 12px);
+  right: var(--space-3, 12px);
+  bottom: var(--space-3, 12px);
+  width: 340px;
+  overflow: auto;
+  z-index: 60;
+  padding: var(--space-3, 12px);
+  background: var(--surface, #1a1c24);
+  border: 1px solid var(--line, #3334);
+  border-radius: 10px;
+}
+.revision {
+  display: grid;
+  gap: 2px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line, #3334);
+}
+.revision-who {
+  font-weight: 500;
+}
+.revision-says {
+  font-size: 13px;
+}
+.revision-when {
+  font-size: 11px;
+  opacity: 0.7;
+}
+.member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 6px 0;
+}
+.member-face {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+.gallery-tabs {
+  display: inline-flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3, 12px);
+}
+.gallery-tab--on {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.signin-code {
+  font-family: var(--mono, monospace);
+  font-size: 26px;
+  letter-spacing: 3px;
+  text-align: center;
+  padding: var(--space-3, 12px);
+}
+.sketch-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  align-items: center;
+}

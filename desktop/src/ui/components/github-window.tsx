@@ -105,7 +105,7 @@ export const GithubWindow = ({
                 {system.projectsNew.map((short) => (
                   <div key={short} className="ds-row" style={{ marginTop: 6, gap: 8 }}>
                     <span className="ds-hint">
-                      serves <span className="ds-mono">{short}</span>, which is not a project here
+                      serves <span className="ds-mono">{short}</span>, which is not a project you are on. Ask its owner for an invite, or make your own
                     </span>
                     <Button look="bare" onClick={() => onMakeProject(short)}>
                       Make it

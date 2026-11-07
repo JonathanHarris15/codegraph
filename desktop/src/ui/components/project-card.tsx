@@ -15,6 +15,8 @@ export const ProjectCard = ({
   onOpen,
   onChoose,
   linking,
+  onPutOnline,
+  onMembers,
 }: {
   project: ProjectView
   onLink: (projectId: string) => void
@@ -22,6 +24,10 @@ export const ProjectCard = ({
   /** A person picked the branch one of its repos' maps opens on. */
   onChoose: (systemId: string, point: Point) => void
   linking: boolean
+  /** Only on this computer, with an online side to go to. */
+  onPutOnline?: () => void
+  /** Online: who is on it. */
+  onMembers?: () => void
 }) => (
   <div className="ds-card project-card" onDoubleClick={() => onOpen(project.id)}>
     <div
@@ -42,6 +48,22 @@ export const ProjectCard = ({
         Double-click to open
       </span>
     </div>
+
+    {onMembers || onPutOnline ? (
+      <div className="ds-row" style={{ padding: '0 var(--space-3, 12px)', gap: 6 }} onDoubleClick={(event) => event.stopPropagation()}>
+        {onMembers ? (
+          <button type="button" className="map-notice" onClick={onMembers} aria-label={`Members of ${project.name}`}>
+            {project.members.length === 1 ? 'Just you' : `${project.members.length} members`}
+            {project.role && project.role !== 'owner' ? ` · you are a ${project.role}` : ''}
+          </button>
+        ) : null}
+        {onPutOnline ? (
+          <button type="button" className="map-notice" onClick={onPutOnline}>
+            Only on this computer · Put online
+          </button>
+        ) : null}
+      </div>
+    ) : null}
 
     <div className="project-repos" aria-label={`Repos in ${project.name}`} onDoubleClick={(event) => event.stopPropagation()}>
       {project.systems.map((system) => (

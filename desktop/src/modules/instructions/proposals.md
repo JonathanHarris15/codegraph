@@ -1,7 +1,9 @@
 # Proposals
 
-A proposal is a change drawn over this repo's map, kept on the branch where
-it is built. It works like a failing test. The `check` tool fails while
+A proposal is a sketch being made real on one branch of this repo. It only ever
+comes from a sketch: people draw the sketch, and you read it, put its faint
+outline over the map, and build until the outline is solid. It works like a
+failing test. The `check` tool fails while
 anything the proposal draws is not in the code. You work until it passes,
 and the person watches the map change as you go.
 
@@ -42,14 +44,21 @@ where the person put each card while drawing; leave it as it is.
 ## Making one from a sketch
 
 1. Read the sketch: the `sketch` tool, by name. Open each mockup it names.
-2. Be on a branch of its own, not the main line. If you are not, make one
-   named after the change.
+2. Be on any branch but the main line: one already in progress, or a new one
+   named after the change. A proposal can never start on the main line.
 3. Call `propose` with the sketch's name. It compares the sketch with this
    repo's map and writes the proposal: only what is new, and what the
    sketch took away. It says which other software systems the sketch also
    changes. Each needs a proposal of its own, made in its own repo on its
    own branch. A system with no repo yet needs the repo made first.
 4. Read what it wrote back to the person in a line or two before building.
+5. Commit the proposal and push the branch. Other members only see what has
+   reached GitHub, so this is when the outline appears for them.
+
+Work from the sketch as you read it. If someone changes the sketch afterwards,
+that does not move what you are building. The map tells people the sketch has
+changed; looking at those changes and adding them is another round of work,
+started by calling `propose` again with replace set, once a person asks for it.
 
 ## When you think something else makes more sense
 
@@ -74,11 +83,13 @@ otherwise. You know the code, so say what you see:
    doing. The person's canvas follows you there.
 3. Build it the way the repo's rules say: the right kind, tagged, each new
    import's wire given its words. Call `check` as you go.
-4. Change nothing the proposal does not draw. The check lists anything
+4. Push as parts get built, not only at the end, so other members can watch the
+   outline turn solid.
+5. Change nothing the proposal does not draw. The check lists anything
    that changed without being drawn. Undo it, or, if the change truly
    needs it, add it to the proposal and tell the person why.
-5. When the check says the proposal is built, run the tests. When they
+6. When the check says the proposal is built, run the tests. When they
    pass, delete `codegraph-proposal/` in the same commit, so the check
    passes and the proposal never reaches the main line. The sketch it came
    from stays in the project as the record of what was asked for.
-6. Call `working-on` with no card when you stop.
+7. Call `working-on` with no card when you stop.

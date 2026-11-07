@@ -2,14 +2,14 @@
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { saveProposal } from '../src/features/save-proposal.js'
+import { makeProposal } from '../src/features/make-proposal.js'
 import { showCardTypes } from '../src/features/show-card-types.js'
 import { useFolder as useCardTypes } from '../src/modules/card-types/index.js'
 import { systemCard, withLooks } from '../src/modules/cards/index.js'
 import { addProject, addSoftwareSystem, useFolder as useProjects } from '../src/modules/projects/index.js'
 import { blankProposal, checkRepo, live, measure, proposalFrom, readMap, type DrawnCard, type SystemMap } from '../src/modules/reader/index.js'
 import { readTags } from '../src/modules/reader/tags.js'
-import { blankCard } from '../src/modules/sketches/index.js'
+import { blankCard, newSketch, useFolder as useSketches, writeSketch, type SketchCard } from '../src/modules/sketches/index.js'
 import { aMappedRepo, closeYard, git, openYard, type Yard } from './yard.js'
 
 let yard: Yard
@@ -114,8 +114,13 @@ describe('a proposal for a typed card', () => {
   it('remembers the look of a type going into the code', async () => {
     const project = addProject('Notes', 'notes-app')
     const system = addSoftwareSystem(project.id, { name: 'notes', path: repo, remote: '' })
-    await saveProposal(project.id, system.id, drawing('stream'), 'Stream the jobs')
+    useSketches(yard.home)
+    const root = blankCard(project.id, 'Notes', 'project', 'project')
+    writeSketch({ ...newSketch(project.id, 'Stream', root), root: { ...root, children: [{ ...(drawing('stream') as unknown as SketchCard), id: system.id, name: 'notes' }] } })
+    git(repo, 'checkout', '-q', '-b', 'stream-jobs')
+    await makeProposal(repo, 'Stream', 'notes-app')
     expect(await showCardTypes()).toMatchObject([{ name: 'stream', ...queue }])
     git(repo, 'clean', '-fdq', 'codegraph-proposal')
+    git(repo, 'checkout', '-q', '-')
   })
 })

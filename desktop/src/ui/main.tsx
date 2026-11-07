@@ -10,21 +10,31 @@ import './design-system/theme.css'
 import { wearTheme } from './design-system/kit.js'
 import { CanvasPage } from './pages/canvas.js'
 import { ProjectsPage } from './pages/projects.js'
+import { SketchPage } from './pages/sketch.js'
 
 /** Which page the window shows, kept in the address so a reload stays put. */
 const projectInAddress = (): string => window.location.hash.match(/^#\/projects\/(.+)$/)?.[1] ?? ''
 
+const sketchInAddress = (): string => window.location.hash.match(/^#\/sketches\/(.+\/.+)$/)?.[1] ?? ''
+
 const App = () => {
   const [project, setProject] = useState(projectInAddress)
+  const [sketch, setSketch] = useState(sketchInAddress)
   useEffect(() => {
-    const moved = (): void => setProject(projectInAddress())
+    const moved = (): void => {
+      setProject(projectInAddress())
+      setSketch(sketchInAddress())
+    }
     window.addEventListener('hashchange', moved)
     return () => window.removeEventListener('hashchange', moved)
   }, [])
-  return project ? (
+  const [library = '', sketchId = ''] = sketch.split('/')
+  return sketch ? (
+    <SketchPage key={sketch} library={library} sketchId={sketchId} onLeave={() => (window.location.hash = '#/sketches')} />
+  ) : project ? (
     <CanvasPage key={project} projectId={project} onLeave={() => (window.location.hash = '')} />
   ) : (
-    <ProjectsPage onOpen={(id) => (window.location.hash = `#/projects/${id}`)} />
+    <ProjectsPage onOpen={(id) => (window.location.hash = `#/projects/${id}`)} onOpenSketch={(from, id) => (window.location.hash = `#/sketches/${from}/${id}`)} />
   )
 }
 

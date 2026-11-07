@@ -5,27 +5,22 @@ import type { SketchListed } from '../../features/list-sketches.js'
 import type { MapShown, SystemShown } from '../../features/show-map.js'
 import type { Layer } from '../../modules/annotations/index.js'
 import { forgetting, movedTo, type Arrangement } from '../../modules/arrangements/schema.js'
+import { sameDoc, undoStep } from '../../modules/together/index.js'
 import type { Point } from '../../modules/reader/index.js'
-import type { Sketch, SketchCard } from '../../modules/sketches/index.js'
+import type { Sketch } from '../../modules/sketches/index.js'
 import { Button, ThemeSwitch } from '../design-system/kit.js'
-import { MapCanvas, walk } from '../components/map-canvas.js'
+import { MapCanvas, walk, type Together } from '../components/map-canvas.js'
 import { BranchPicker } from '../components/branch-picker.js'
 import { ProposalPanel } from '../components/proposal-panel.js'
 import { SketchEditor } from '../components/sketch-editor.js'
 import { SketchLibrary } from '../components/sketch-library.js'
 import { SuggestionBar } from '../components/suggestion-bar.js'
 import { Trail } from '../components/trail.js'
+import { MembersSheet } from '../components/members-sheet.js'
+import { RevisionsPanel } from '../components/revisions-panel.js'
+import { togetherOn, useRoom } from '../components/together.js'
 
 const SAVE_AFTER_MS = 500
-
-/** A proposal being drawn over one software system's map. */
-type Drafting = {
-  systemId: string
-  branch: string
-  sketch: Sketch
-  known: string[]
-  mockups: Record<string, string>
-}
 
 /** The ids from the top of a card down to one inside it, or [] if it is not there. */
 const pathTo = (card: { id: string; children: { id: string; children: unknown[] }[] }, id: string): string[] => {
@@ -59,55 +54,69 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
   const saving = useRef<ReturnType<typeof setTimeout> | null>(null)
   const latest = useRef<Sketch | null>(null)
 
-  const [drafting, setDrafting] = useState<Drafting | null>(null)
-  const [draftPath, setDraftPath] = useState<string[]>([])
-  const [asking, setAsking] = useState<{ systemId: string; branch: string; why: string } | null>(null)
-  const draftSaving = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const latestDraft = useRef<Drafting | null>(null)
-
-  // The annotations over the map: kept with the project as they change, with
-  // a history of their own to undo, since the map itself never changes here.
+  // The annotations over the map: kept as they change, with a history of their
+  // own to undo, since the map itself never changes here. Undoing takes back only
+  // what that step changed, whatever others have done since.
   const [mapLayers, setMapLayers] = useState<Layer[]>([])
-  const layersPast = useRef<Layer[][]>([])
-  const layersFuture = useRef<Layer[][]>([])
+  const layersPast = useRef<{ before: Layer[]; after: Layer[] }[]>([])
+  const layersFuture = useRef<{ before: Layer[]; after: Layer[] }[]>([])
   const layersStep = useRef<{ step: string; at: number }>({ step: '', at: 0 })
   const layersNow = useRef<Layer[]>([])
   layersNow.current = mapLayers
   const layersSaving = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const layersSeen = useRef<Layer[]>([])
+  /** The points of every map being looked at, for saying which map things are on. */
+  const atNow = useRef<Record<string, Point>>({})
   const keepLayers = (next: Layer[]): void => {
     setMapLayers(next)
+    layersNow.current = next
     if (layersSaving.current) clearTimeout(layersSaving.current)
     layersSaving.current = setTimeout(() => {
       layersSaving.current = null
-      void window.codegraph.saveAnnotations(projectId, layersNow.current)
+      const sent = layersNow.current
+      void window.codegraph.saveAnnotations(projectId, sent, atNow.current, layersSeen.current).then((merged) => {
+        layersSeen.current = merged
+        if (layersNow.current === sent && !sameDoc(merged, sent)) setMapLayers(merged)
+      })
     }, SAVE_AFTER_MS)
   }
   const changeLayers = (next: Layer[], step = ''): void => {
     const joins =
       step === 'join' || (step !== '' && layersStep.current.step === step && Date.now() - layersStep.current.at < 900)
-    if (!joins) {
-      layersPast.current = [...layersPast.current.slice(-199), layersNow.current]
+    const open = layersPast.current.at(-1)
+    if (joins && open) layersPast.current = [...layersPast.current.slice(0, -1), { before: open.before, after: next }]
+    else {
+      layersPast.current = [...layersPast.current.slice(-199), { before: layersNow.current, after: next }]
       layersFuture.current = []
     }
     layersStep.current = { step, at: Date.now() }
     keepLayers(next)
   }
-  useEffect(() => {
-    void window.codegraph.showAnnotations(projectId).then(setMapLayers)
-  }, [projectId])
 
-  // Where the person has moved the map's cards and its wires' sentences,
-  // kept beside the map: the code says nothing about where anything sits.
+  // Where people have moved the map's cards and its wires' sentences, kept beside
+  // the map: the code says nothing about where anything sits.
   const [spots, setSpots] = useState<Arrangement>([])
-  useEffect(() => {
-    void window.codegraph.showArrangement(projectId).then(setSpots)
-  }, [projectId])
+  const spotsSeen = useRef<Arrangement>([])
   const keepSpots = (next: Arrangement): void => {
     setSpots(next)
-    void window.codegraph.saveArrangement(projectId, next)
+    void window.codegraph.saveArrangement(projectId, next, atNow.current, spotsSeen.current).then((merged) => {
+      spotsSeen.current = merged
+      if (!sameDoc(merged, next)) setSpots(merged)
+    })
   }
   const rearrange = (moves: Arrangement): void => keepSpots(movedTo(spots, moves))
   const forget = (ids: string[]): void => keepSpots(forgetting(spots, ids))
+
+  const loadPlaces = useCallback(async (): Promise<void> => {
+    const [layers, places] = await Promise.all([
+      window.codegraph.showAnnotations(projectId, atNow.current),
+      window.codegraph.showArrangement(projectId, atNow.current),
+    ])
+    layersSeen.current = layers
+    if (!layersSaving.current) setMapLayers(layers)
+    spotsSeen.current = places
+    setSpots(places)
+  }, [projectId])
 
   const pointsNow = useRef(points)
   pointsNow.current = points
@@ -132,19 +141,17 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
   }, [load, loadSketches])
 
   // The map follows the code: an edit, a checkout, a commit, or an agent
-  // saying where it is redraws it. Not while drawing over it.
-  const quiet = useRef(false)
-  quiet.current = drafting !== null
+  // saying where it is redraws it.
   useEffect(
     () =>
       window.codegraph.watchProject(projectId, () => {
-        if (!quiet.current) void load(pointsNow.current)
+        void load(pointsNow.current)
       }),
     [projectId, load],
   )
 
   // Undo and redo for the map's annotations, while the map is what is shown.
-  const onMap = !sketch && !drafting
+  const onMap = !sketch
   useEffect(() => {
     if (!onMap) return
     const keys = (event: KeyboardEvent): void => {
@@ -161,9 +168,9 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
       if (!step) return
       event.preventDefault()
       from.current = from.current.slice(0, -1)
-      to.current = [...to.current, layersNow.current]
+      to.current = [...to.current, step]
       layersStep.current = { step: '', at: 0 }
-      keepLayers(step)
+      keepLayers(back ? undoStep(step.before, step.after, layersNow.current) : undoStep(step.after, step.before, layersNow.current))
     }
     window.addEventListener('keydown', keys)
     return () => window.removeEventListener('keydown', keys)
@@ -180,6 +187,45 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
   const branchSystem = system
   const branchShown = shown?.systems.find((s) => s.id === branchSystem?.id)
 
+  // Which maps are being looked at. When that changes, so do their layouts and
+  // notes: each branch keeps its own (ADR 0019).
+  const reachable = shown?.systems.filter((s) => s.reach === 'open') ?? []
+  const mapsSaid = reachable.map((s) => `${s.id}@${s.mapKey}`).join(',')
+  useEffect(() => {
+    if (!shown) return
+    atNow.current = Object.fromEntries(reachable.map((s) => [s.id, s.point]))
+    void loadPlaces()
+  }, [mapsSaid, shown === null, loadPlaces])
+
+  // A change made by someone else reaches this window.
+  const sketchNow = useRef<Sketch | null>(null)
+  const refreshSketch = useRef<(id: string) => void>(() => undefined)
+  useEffect(
+    () =>
+      window.codegraph.heardChange((what) => {
+        if (what.projectId !== projectId) return
+        if (what.path.includes('/sketches/')) {
+          void loadSketches()
+          const id = what.path.split('/').pop() ?? ''
+          if (sketchNow.current?.id === id) refreshSketch.current(id)
+          return
+        }
+        if (what.path.includes('/maps/')) void loadPlaces()
+        else void load(pointsNow.current)
+      }),
+    [projectId, load, loadPlaces, loadSketches],
+  )
+
+  // GitHub maps refresh about once a minute, so a branch that moved on shows it.
+  const online = shown?.online ?? false
+  useEffect(() => {
+    if (!online) return
+    const every = setInterval(() => {
+      void window.codegraph.refreshGithub(projectId).then(() => load(pointsNow.current))
+    }, 60_000)
+    return () => clearInterval(every)
+  }, [online, projectId, load])
+
   // A new software system starts from nothing; the same one keeps what it
   // showed until its branches are read again, so the bar never blinks.
   useEffect(() => setChoices([]), [branchSystem?.id])
@@ -192,11 +238,11 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
   // person has said not to follow.
   useEffect(() => {
     const agent = working?.agent
-    if (!shown || !agent || !follow || sketch || drafting || agent.card === followed.current) return
+    if (!shown || !agent || !follow || sketch || agent.card === followed.current) return
     followed.current = agent.card
     const to = pathTo(shown.card, agent.card)
     if (to.length > 1) setPath(to.slice(0, -1))
-  }, [shown, working?.agent?.card, follow, sketch, drafting])
+  }, [shown, working?.agent?.card, follow, sketch])
 
   /** Moves the repo's folder onto the branch being looked at; the map then
    *  reads the folder again, now on that branch. */
@@ -244,43 +290,46 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
   }, [projectId, systemIds, sketch === null, shown])
 
   // A sketch is kept as it is drawn: each change waits a moment for the
-  // next, then goes to disk.
+  // next, then goes to disk. What others have changed in the meantime stays.
+  const seenSketch = useRef<Sketch | null>(null)
+  const saveNow = async (): Promise<void> => {
+    const sent = latest.current
+    if (!sent) return
+    const merged = await window.codegraph.saveSketch(sent, seenSketch.current ?? undefined)
+    seenSketch.current = merged
+    if (latest.current === sent && sketchNow.current?.id === merged.id && !(sameDoc(merged.root, sent.root) && sameDoc(merged.layers, sent.layers) && merged.name === sent.name)) {
+      latest.current = merged
+      setSketch(merged)
+    }
+  }
   const saveSoon = (next: Sketch): void => {
     latest.current = next
     if (saving.current) clearTimeout(saving.current)
     saving.current = setTimeout(() => {
       saving.current = null
-      if (latest.current) void window.codegraph.saveSketch(latest.current).then(() => loadSketches())
+      void saveNow().then(() => loadSketches())
     }, SAVE_AFTER_MS)
   }
   const flush = async (): Promise<void> => {
     if (!saving.current) return
     clearTimeout(saving.current)
     saving.current = null
-    if (latest.current) await window.codegraph.saveSketch(latest.current)
+    await saveNow()
+  }
+  sketchNow.current = sketch
+  refreshSketch.current = (id) => {
+    if (saving.current) return
+    void window.codegraph.openSketch(projectId, id).then((opened) => {
+      if (!opened || saving.current || sketchNow.current?.id !== id) return
+      seenSketch.current = opened.sketch
+      setSketch(opened.sketch)
+      setMockups(opened.mockups)
+    })
   }
 
-  // So is a proposal, into the repo, on its branch.
-  const saveDraft = (draft: Drafting): Promise<unknown> =>
-    window.codegraph.saveProposal(projectId, draft.systemId, draft.sketch.root, draft.sketch.name)
-  const saveDraftSoon = (next: Drafting): void => {
-    latestDraft.current = next
-    if (draftSaving.current) clearTimeout(draftSaving.current)
-    draftSaving.current = setTimeout(() => {
-      draftSaving.current = null
-      if (latestDraft.current) void saveDraft(latestDraft.current)
-    }, SAVE_AFTER_MS)
-  }
-  const flushDraft = async (): Promise<void> => {
-    if (!draftSaving.current) return
-    clearTimeout(draftSaving.current)
-    draftSaving.current = null
-    if (latestDraft.current) await saveDraft(latestDraft.current)
-  }
   useEffect(
     () => () => {
       void flush()
-      void flushDraft()
     },
     [],
   )
@@ -289,6 +338,7 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
     await flush()
     const opened = await window.codegraph.openSketch(projectId, id)
     if (!opened) return
+    seenSketch.current = opened.sketch
     setSketch(opened.sketch)
     setMockups(opened.mockups)
     setSketchPath([opened.sketch.root.id])
@@ -345,80 +395,60 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
     changed({ ...sketch, root: setOn(sketch.root) })
   }
 
-  /** Opens the proposal on a software system's branch to draw on; on the
-   *  main line it first asks what to call the branch it goes on. */
-  const propose = async (systemId: string, branch = ''): Promise<void> => {
-    const opened = await window.codegraph.openProposal(projectId, systemId, branch)
-    if (!opened.ok) {
-      if (opened.why === 'main line' || opened.why === 'no branch')
-        setAsking({ systemId, branch: branch || 'proposal', why: opened.why })
-      else setProblem(opened.why === 'not set up' ? 'That repo is not set up for codegraph yet.' : 'That repo could not be read.')
-      return
-    }
-    setAsking(null)
-    const now = new Date().toISOString()
-    setDrafting({
-      systemId,
-      branch: opened.branch,
-      known: opened.known,
-      mockups: opened.mockups,
-      sketch: { id: `proposal-${systemId}`, projectId, name: opened.says, createdAt: now, updatedAt: now, from: 'the map', root: opened.draft },
-    })
-    // It opens where the person was looking, as far down as a proposal goes.
-    const here = walk(opened.draft, path.slice(1)).map((c) => c.id)
-    setDraftPath(here.length && here[0] === opened.draft.id ? here.slice(0, 2) : [opened.draft.id])
-  }
-
-  const draftChanged = (next: Sketch): void => {
-    if (!drafting) return
-    const draft = { ...drafting, sketch: next }
-    setDrafting(draft)
-    saveDraftSoon(draft)
-  }
-
-  const doneDrafting = async (): Promise<void> => {
-    await flushDraft()
-    setDrafting(null)
-    await load(points)
-  }
-
-  const addProposalMockup = async (cardId: string): Promise<void> => {
-    if (!drafting) return
-    const find = (card: SketchCard): SketchCard | undefined =>
-      card.id === cardId ? card : card.children.map(find).find(Boolean)
-    const page = find(drafting.sketch.root)
-    if (!page) return
-    const added = await window.codegraph.addProposalMockup(projectId, drafting.systemId, page.name || 'page')
-    if (!added.ok) return
-    const setOn = (card: SketchCard): SketchCard =>
-      card.id === cardId ? { ...card, mockup: added.name } : { ...card, children: card.children.map(setOn) }
-    const draft = { ...drafting, mockups: { ...drafting.mockups, [cardId]: added.url }, sketch: { ...drafting.sketch, root: setOn(drafting.sketch.root) } }
-    setDrafting(draft)
-    saveDraftSoon(draft)
-  }
+  // Who else is on this project, and what can be done here.
+  const me = shown?.me ?? ''
+  const room = useRoom(online ? `project:${projectId}` : '', me)
+  const canDraw = !online || (shown?.role !== 'viewer' && shown?.role !== null && shown?.role !== undefined)
+  const sharedMaps = Object.fromEntries(reachable.filter((s) => !s.mapKey.startsWith('local:')).map((s) => [s.id, s.mapKey]))
+  const sharedSaid = JSON.stringify(sharedMaps)
+  useEffect(() => {
+    room.say({ maps: sharedMaps, sketch: sketch?.id ?? '', dragging: [] })
+  }, [sharedSaid, sketch?.id])
+  const inSystem = (cardId: string): SystemShown | undefined => shown?.systems.find((s) => cardId === s.id || cardId.startsWith(`${s.id}/`))
+  const thereWith = room.people.filter((p) => {
+    if (sketch) return p.where.sketch === sketch.id
+    if (p.where.sketch) return false
+    const in_ = inSystem(p.where.inside ?? '')
+    if (!in_) return true
+    return p.where.maps?.[in_.id] !== undefined && p.where.maps[in_.id] === sharedMaps[in_.id]
+  })
+  const others = thereWith.map((p) => ({ id: p.id, name: p.name, color: p.color, inside: p.where.inside ?? '', ...(p.where.x !== undefined ? { x: p.where.x } : {}), ...(p.where.y !== undefined ? { y: p.where.y } : {}), dragging: p.where.dragging ?? [] }))
+  const focusId = (sketch ? walk(sketch.root, sketchPath) : trail).at(-1)?.id ?? ''
+  const focusSystem = sketch ? undefined : inSystem(focusId)
+  const board = !online ? '' : sketch ? `sketch:${sketch.id}` : focusSystem ? (sharedMaps[focusSystem.id] ? `${focusSystem.id}@${sharedMaps[focusSystem.id]}` : '') : 'project'
+  const together: Together | undefined = online
+    ? togetherOn({
+        board,
+        room,
+        me,
+        others,
+        onGo: (inside) => {
+          if (sketch) {
+            const to = pathTo(sketch.root, inside)
+            if (to.length) setSketchPath(to)
+          } else if (shown) {
+            const to = pathTo(shown.card, inside)
+            if (to.length) setPath(to)
+          }
+        },
+      })
+    : undefined
+  /** Moving things on a local map is always this member's own to do. */
+  const canMoveHere = canDraw || (focusSystem !== undefined && !sharedMaps[focusSystem.id])
+  const [showRevisions, setShowRevisions] = useState(false)
+  const [showMembers, setShowMembers] = useState(false)
 
   const sketchTrail = sketch ? walk(sketch.root, sketchPath) : []
-  const draftTrail = drafting ? walk(drafting.sketch.root, draftPath) : []
-  const showing = drafting ? draftTrail : sketch ? sketchTrail : trail
-  const goTo = (i: number): void =>
-    drafting
-      ? setDraftPath(draftPath.slice(0, i + 1))
-      : sketch
-        ? setSketchPath(sketchPath.slice(0, i + 1))
-        : setPath(path.slice(0, i + 1))
+  const showing = sketch ? sketchTrail : trail
+  const goTo = (i: number): void => (sketch ? setSketchPath(sketchPath.slice(0, i + 1)) : setPath(path.slice(0, i + 1)))
   const problems = systemShown?.problems ?? []
   const progress = systemShown?.proposal ?? null
   const builtCount = progress ? progress.items.filter((i) => i.state === 'built' || i.state === 'removed').length : 0
-  const canPropose = Boolean(system && systemShown && systemShown.setUp && systemShown.point.kind === 'live' && systemShown.path)
 
   return (
     <div className="map-page">
       <div className="map-bar">
-        {drafting ? (
-          <Button look="bare" onClick={() => void doneDrafting()}>
-            ← Done
-          </Button>
-        ) : sketch ? (
+        {sketch ? (
           <Button look="bare" onClick={() => void backToMap()}>
             ← Map
           </Button>
@@ -427,19 +457,11 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
             ← Projects
           </Button>
         )}
-        {drafting ? (
-          <input
-            className="ds-input map-sketch-name"
-            aria-label="What this change is for"
-            placeholder="What this change is for"
-            style={{ width: `${Math.min(Math.max(drafting.sketch.name.length + 3, 24), 44)}ch` }}
-            value={drafting.sketch.name}
-            onChange={(e) => draftChanged({ ...drafting.sketch, name: e.target.value })}
-          />
-        ) : sketch ? (
+        {sketch ? (
           <input
             className="ds-input map-sketch-name"
             aria-label="Sketch name"
+            readOnly={!canDraw}
             style={{ width: `${Math.min(Math.max(sketch.name.length + 3, 14), 44)}ch` }}
             value={sketch.name}
             onChange={(e) => changed({ ...sketch, name: e.target.value })}
@@ -447,16 +469,54 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
         ) : null}
         <Trail steps={showing.map((card) => ({ id: card.id, name: card.name, level: card.level }))} onGo={goTo} />
         <div className="map-bar-end">
-          {drafting ? <span className="map-follow">Proposal on {drafting.branch}</span> : null}
-          {!sketch && !drafting && branchSystem && branchShown ? (
+          {online ? (
+            <span className="together-bar" aria-label="Who is here">
+              {room.people.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  className={thereWith.includes(p) ? 'together-face' : 'together-face together-face--away'}
+                  style={{ background: p.color }}
+                  title={thereWith.includes(p) ? `${p.name} is here. Click to go to them.` : `${p.name} is looking at something else.`}
+                  onClick={() => {
+                    if (p.where.sketch) void openOne(p.where.sketch)
+                    else if (p.where.inside && shown) {
+                      setSketch(null)
+                      const to = pathTo(shown.card, p.where.inside)
+                      if (to.length) setPath(to)
+                    }
+                  }}
+                >
+                  {p.name}
+                </button>
+              ))}
+              <Button look="bare" onClick={() => setShowMembers(true)}>
+                Members
+              </Button>
+              <Button look="bare" onClick={() => setShowRevisions(!showRevisions)}>
+                History
+              </Button>
+            </span>
+          ) : null}
+          {!sketch && systemShown?.proposalsElsewhere.length ? (
+            <button
+              type="button"
+              className="map-notice"
+              onClick={() => void pickPoint({ kind: 'branch', name: systemShown.proposalsElsewhere[0]!, where: systemShown.proposalsElsewhere[0]!.startsWith('origin/') ? 'cloud' : 'local' })}
+            >
+              {systemShown.proposalsElsewhere.length === 1 ? `1 proposal being built on ${systemShown.proposalsElsewhere[0]!.replace(/^origin\//, '')}` : `${systemShown.proposalsElsewhere.length} proposals being built`}
+            </button>
+          ) : null}
+          {!sketch && systemShown?.sketchMoved ? <span className="map-notice map-notice--plain">The sketch has changed since this was started</span> : null}
+          {!sketch && branchSystem && branchShown ? (
             <BranchPicker system={branchSystem.name} points={choices} point={branchShown.point} onPick={(p) => void pickPoint(p)} />
           ) : null}
-          {!sketch && !drafting && branchShown?.point.kind === 'branch' ? (
+          {!sketch && branchShown?.point.kind === 'branch' && branchShown.path ? (
             <Button onClick={() => void switchFolder()} disabled={switching}>
               {switching ? 'Switching…' : `Switch folder to ${branchShown.point.name.replace(/^origin\//, '')}`}
             </Button>
           ) : null}
-          {!sketch && !drafting && progress ? (
+          {!sketch && progress ? (
             <button
               type="button"
               className={progress.built ? 'map-proposal map-proposal--built' : 'map-proposal'}
@@ -472,24 +532,20 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
               </span>
             </button>
           ) : null}
-          {!sketch && !drafting && working ? (
+          {!sketch && working ? (
             <label className="map-follow">
               <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} />
               Follow the agent
             </label>
           ) : null}
-          {!sketch && !drafting && problems.length > 0 ? (
+          {!sketch && problems.length > 0 ? (
             <button type="button" className="map-count" onClick={() => setShowProblems(!showProblems)}>
               {problems.length === 1
                 ? '1 thing in this repo the map could not place'
                 : `${problems.length} things in this repo the map could not place`}
             </button>
           ) : null}
-          {!sketch && !drafting && canPropose && system ? (
-            <Button onClick={() => void propose(system.id)}>{progress ? 'Change the proposal' : 'Propose a change'}</Button>
-          ) : null}
-          {!drafting ? (
-            sketch ? (
+          {sketch ? (
               <button
                 type="button"
                 className="map-sketching"
@@ -503,8 +559,7 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
               </button>
             ) : (
               <Button onClick={() => setLibrary(!library)}>Sketches{sketches.length ? ` (${sketches.length})` : ''}</Button>
-            )
-          ) : null}
+          )}
           <ThemeSwitch />
         </div>
       </div>
@@ -512,27 +567,28 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
       <div className="map-body">
         {problem ? (
           <div className="ds-empty">{problem}</div>
-        ) : drafting ? (
-          <SketchEditor
-            key={drafting.sketch.id}
-            sketch={drafting.sketch}
-            mockups={drafting.mockups}
-            path={draftPath}
-            onPath={setDraftPath}
-            onChange={draftChanged}
-            onAddMockup={(cardId) => void addProposalMockup(cardId)}
-            known={drafting.known}
-          />
         ) : sketch ? (
-          <SketchEditor
-            key={sketch.id}
-            sketch={sketch}
-            mockups={mockups}
-            path={sketchPath}
-            onPath={setSketchPath}
-            onChange={changed}
-            onAddMockup={(cardId) => void addMockup(cardId)}
-          />
+          canDraw ? (
+            <SketchEditor
+              key={sketch.id}
+              sketch={sketch}
+              mockups={mockups}
+              path={sketchPath}
+              onPath={setSketchPath}
+              onChange={changed}
+              onAddMockup={(cardId) => void addMockup(cardId)}
+              {...(together ? { together } : {})}
+            />
+          ) : (
+            <MapCanvas
+              key={sketch.id}
+              root={sketch.root as never}
+              path={sketchPath}
+              onPath={setSketchPath}
+              annotating={{ layers: sketch.layers ?? [], onChange: () => undefined, frozen: true }}
+              {...(together ? { together } : {})}
+            />
+          )
         ) : !shown ? (
           <div className="ds-empty">Reading the code…</div>
         ) : (
@@ -540,11 +596,12 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
             root={shown.card}
             path={path}
             onPath={setPath}
-            rearranging={{ spots, onMove: rearrange, onForget: forget }}
-            annotating={{ layers: mapLayers, onChange: changeLayers }}
+            rearranging={canMoveHere ? { spots, onMove: rearrange, onForget: forget } : { spots, onMove: () => undefined, onForget: () => undefined, frozen: true }}
+            annotating={{ layers: mapLayers, onChange: changeLayers, ...(canMoveHere ? {} : { frozen: true }) }}
+            {...(together ? { together } : {})}
             cardExtra={(card) => {
               const at = card.level === 'system' ? shown.systems.find((s) => s.id === card.id) : undefined
-              if (!at?.path || !at.setUp || system?.id === card.id) return null
+              if (!at || at.reach !== 'open' || !at.setUp || system?.id === card.id) return null
               return (
                 <BranchPicker
                   system={at.name}
@@ -569,40 +626,7 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
           </div>
         ) : null}
 
-        {asking ? (
-          <form
-            className="map-branch-ask"
-            aria-label="Make a branch for the proposal"
-            onSubmit={(event) => {
-              event.preventDefault()
-              void propose(asking.systemId, asking.branch)
-            }}
-          >
-            <div className="sketch-panel-head">A proposal goes on a branch of its own</div>
-            <div className="ds-hint">
-              {asking.why === 'no branch'
-                ? `Git would not make a branch called “${asking.branch}”. Try another name.`
-                : 'This repo is on its main line. Name a branch for the change; the app makes it and moves the repo onto it, taking any changes along.'}
-            </div>
-            <input
-              className="ds-input"
-              aria-label="Branch name"
-              autoFocus
-              value={asking.branch}
-              onChange={(e) => setAsking({ ...asking, branch: e.target.value })}
-            />
-            <div className="ds-row" style={{ justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
-              <Button look="bare" onClick={() => setAsking(null)}>
-                Not now
-              </Button>
-              <Button look="loud" onClick={() => void propose(asking.systemId, asking.branch)}>
-                Make the branch
-              </Button>
-            </div>
-          </form>
-        ) : null}
-
-        {!sketch && !drafting && shown && trail.length === 1 ? (
+        {!sketch && shown && trail.length === 1 ? (
           <SuggestionBar
             suggestions={shown.suggestions}
             shallow={shown.card.children.filter((c) => c.kind === 'shallow software system')}
@@ -612,11 +636,11 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
           />
         ) : null}
 
-        {!sketch && !drafting && showProposal && progress ? (
+        {!sketch && showProposal && progress ? (
           <ProposalPanel progress={progress} agent={systemShown?.agent ?? null} onClose={() => setShowProposal(false)} />
         ) : null}
 
-        {!sketch && !drafting && showProblems && problems.length > 0 ? (
+        {!sketch && showProblems && problems.length > 0 ? (
           <aside className="map-problems" aria-label="What the map could not place">
             <div className="ds-row" style={{ justifyContent: 'space-between' }}>
               <span className="ds-label">
@@ -636,7 +660,23 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
           </aside>
         ) : null}
 
-        {!drafting ? (
+        {showRevisions ? (
+          <RevisionsPanel
+            projectId={projectId}
+            canRestore={canDraw}
+            onRestored={() => {
+              void load(pointsNow.current)
+              void loadPlaces()
+              void loadSketches()
+              if (sketch) refreshSketch.current(sketch.id)
+            }}
+            onClose={() => setShowRevisions(false)}
+          />
+        ) : null}
+
+        {showMembers && shown ? <MembersSheet projectId={projectId} onClose={() => setShowMembers(false)} /> : null}
+
+        {(
           <SketchLibrary
             shown={library}
             sketches={sketches}
@@ -647,7 +687,7 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
             onDelete={(id) => void deleteOne(id)}
             onClose={() => setLibrary(false)}
           />
-        ) : null}
+        )}
       </div>
     </div>
   )

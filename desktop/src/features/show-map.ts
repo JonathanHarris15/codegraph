@@ -1,11 +1,12 @@
 // codegraph: feature show-map in workspace
-// codegraph: uses projects, reader, agents, cards, card-types, repo, github, places, sketches
+// codegraph: uses projects, reader, agents, cards, card-types, repo, github, places, sketches, members
 import { whereIs } from '../modules/agents/index.js'
 import { readCardTypes } from '../modules/card-types/index.js'
 import { card, join, systemCard, withLooks, type Card } from '../modules/cards/index.js'
 import { savedToken } from '../modules/github/index.js'
+import { roleOf, whoIsIn, type Role } from '../modules/members/index.js'
 import { mapKey, readingFolder } from '../modules/places/index.js'
-import { chooseBranch, listProjects, type Project, type SoftwareSystem } from '../modules/projects/index.js'
+import { chooseBranch, listProjects, type Project, type ProjectMember, type SoftwareSystem } from '../modules/projects/index.js'
 import { idOfName, pointFor, PROPOSAL, proposalProgress, readMap, type Point, type Progress, type SystemMap } from '../modules/reader/index.js'
 import { fetchMirror, mainLineRef, proposalsOnBranches, type Reach } from '../modules/repo/index.js'
 import { listSketches } from '../modules/sketches/index.js'
@@ -46,6 +47,13 @@ export type SystemShown = {
 
 export type MapShown = {
   card: Card
+  /** Online for its members, not just on this computer. */
+  online: boolean
+  /** What the person signed in may do here. */
+  role: Role | null
+  /** Who else can be here, by id, for telling them apart. */
+  members: ProjectMember[]
+  me: string
   systems: SystemShown[]
   /** Names the code calls out to that no software system in the project
    *  answers to: shallow software systems, until a person says so. */
@@ -140,5 +148,14 @@ export const showMap = async (projectId: string, points: Record<string, Point> =
       else if (!reached) suggestions.add(name)
     }
 
-  return { card: withLooks(top, readCardTypes()), systems, suggestions: [...suggestions] }
+  const me = whoIsIn()?.id ?? ''
+  return {
+    card: withLooks(top, readCardTypes()),
+    online: project.online ?? false,
+    role: roleOf(project, me),
+    members: project.members ?? [],
+    me,
+    systems,
+    suggestions: [...suggestions],
+  }
 }

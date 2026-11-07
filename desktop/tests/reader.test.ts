@@ -145,7 +145,7 @@ describe('the branches of a repo with a copy on GitHub', () => {
     expect(branches[0]).toMatchObject({ name: 'main', where: 'both', ahead: 1, behind: 0, current: true })
     expect(branches.find((b) => b.name === 'just-here')).toMatchObject({ where: 'local', current: false })
     expect(branches.find((b) => b.name === 'origin/add-search')).toMatchObject({ where: 'cloud' })
-    expect(branches.some((b) => b.name === 'origin/main')).toBe(false)
+    expect(branches.find((b) => b.name === 'origin/main')).toMatchObject({ where: 'cloud' })
   })
 })
 

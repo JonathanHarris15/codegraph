@@ -6,7 +6,11 @@ import { useFolder as useAnnotationsFolder } from '../modules/annotations/index.
 import { useFolder as useArrangementsFolder } from '../modules/arrangements/index.js'
 import { useFolder as useCardTypesFolder } from '../modules/card-types/index.js'
 import { useFolder as useGithubFolder, useKeystore } from '../modules/github/index.js'
-import { appFolder, devRendererUrl, keystore } from '../modules/machine/index.js'
+import { openFolderCloud, useCloud } from '../modules/cloud/index.js'
+import { appFolder, cloudFolder, devRendererUrl, keystore } from '../modules/machine/index.js'
+import { useFolder as useMembersFolder, whoIsIn } from '../modules/members/index.js'
+import { useMirrors } from '../modules/repo/index.js'
+import { startFollowing, useFolder as useSyncFolder, useHeard } from '../modules/sync/index.js'
 import { useFolder as useProjectsFolder } from '../modules/projects/index.js'
 import { useFolder as useSketchesFolder } from '../modules/sketches/index.js'
 import { openBridge } from './bridge.js'
@@ -22,6 +26,14 @@ const wireModules = async (): Promise<void> => {
   useArrangementsFolder(home)
   useCardTypesFolder(home)
   useGithubFolder(home)
+  useMembersFolder(home)
+  useSyncFolder(home)
+  useMirrors(home, process.env['CODEGRAPH_GITHUB_HOST'] || undefined)
+
+  // The online side. Firebase goes here (docs/firebase.md); until then a folder
+  // can stand in for it, and with neither the app runs on this computer alone.
+  const standIn = cloudFolder()
+  if (standIn) useCloud(openFolderCloud(standIn))
 
   const locked = await keystore()
   if (locked) useKeystore(locked)
@@ -66,6 +78,11 @@ void app.whenReady().then(async () => {
   quietMenu()
   await wireModules()
   openBridge()
+  useHeard((what) => {
+    for (const window of BrowserWindow.getAllWindows()) window.webContents.send('cloud:changed', what)
+  })
+  const me = whoIsIn()
+  if (me) void startFollowing(me)
   openWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) openWindow()

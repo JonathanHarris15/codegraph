@@ -48,10 +48,12 @@ export const whoIsIn = (): Member | null => {
 }
 
 export const rememberMember = (member: Member): void => {
+  if (!folder) return
   mkdirSync(folder, { recursive: true })
   writeFileSync(file(), JSON.stringify(member, null, 2), 'utf8')
 }
 
 export const forgetMember = (): void => {
+  if (!folder) return
   rmSync(file(), { force: true })
 }

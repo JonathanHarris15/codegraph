@@ -93,6 +93,8 @@ export const BranchPicker = ({
 
   const live = points.find((p): p is Extract<Point, { kind: 'live' }> => p.kind === 'live')
   const branches = points.filter((p): p is BranchPoint => p.kind === 'branch')
+  const cloudBranches = branches.filter((b) => b.where === 'cloud')
+  const localBranches = branches.filter((b) => b.where !== 'cloud')
   const commits = points.filter((p): p is Extract<Point, { kind: 'commit' }> => p.kind === 'commit')
   const checkedOut = live?.branch ?? (point.kind === 'live' ? (point.branch ?? '') : '')
   const showing = point.kind === 'live' ? branches.find((b) => b.current) : point.kind === 'branch' ? branches.find((b) => b.name === point.name) : undefined
@@ -125,8 +127,27 @@ export const BranchPicker = ({
       </button>
       {open ? (
         <div className="map-branch-menu" role="menu" aria-label={`Branches of ${system}`}>
-          <div className="map-flyout-group">Branches of {system}</div>
-          {branches.map((branch) => {
+          {cloudBranches.length ? <div className="map-flyout-group">On GitHub, where members see each other</div> : null}
+          {cloudBranches.map((branch) => (
+            <button
+              key={branch.name}
+              type="button"
+              role="menuitemradio"
+              aria-checked={keyOf(point) === keyOf(branch)}
+              className={keyOf(point) === keyOf(branch) ? 'map-branch-row map-branch-row--on' : 'map-branch-row'}
+              onClick={() => pick(branch)}
+            >
+              <span className="map-branch-row-name">
+                <GitBranch size={13} aria-hidden="true" />
+                {branch.name.replace(/^[^/]+\//, '')}
+              </span>
+              <span className="map-branch-row-facts">
+                <Where branch={branch} />
+              </span>
+            </button>
+          ))}
+          {localBranches.length ? <div className="map-flyout-group">{cloudBranches.length ? 'On this computer, only you see these' : `Branches of ${system}`}</div> : null}
+          {localBranches.map((branch) => {
             const here = branch.current
             const chosen = here ? point.kind === 'live' : keyOf(point) === keyOf(branch)
             return (

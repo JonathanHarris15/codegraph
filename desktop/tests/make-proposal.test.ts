@@ -50,7 +50,7 @@ afterAll(async () => {
 
 describe('making a proposal from a sketch', () => {
   it('will not write one on the main line', async () => {
-    expect(await makeProposal(repo, 'Search')).toContain('You are on main. A proposal lives on a branch of its own')
+    expect(await makeProposal(repo, 'Search')).toContain('You are on main. A proposal can never start on the main line')
     expect(existsSync(join(repo, 'codegraph-proposal'))).toBe(false)
   })
 

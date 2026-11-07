@@ -57,6 +57,7 @@ import {
 import { Overview } from './overview.js'
 import { QuickAdd } from './quick-add.js'
 import { choicesAt, endsAtHub, hubOfWire, levelInside, ownTypesAt, type Alignment, type Arrangement, type CardChoice } from './sketch-edits.js'
+import { TogetherLayer, type Other } from './together-layer.js'
 import { ToolRail } from './tool-rail.js'
 import { ZoomBar } from './zoom-bar.js'
 
@@ -157,13 +158,31 @@ export type Rearranging = {
   onMove: (moves: Arrangement) => void
   /** Forgets where these were put, so the map lays them out again. */
   onForget: (ids: string[]) => void
+  /** A viewer's: things stay where they are put. */
+  frozen?: boolean
 }
 
 /** What a map or a sketch hands the canvas so annotations can be drawn over
- *  it: its layers, and where changes to them go. */
+ *  it: its layers, and where changes to them go. A viewer sees them frozen. */
 export type Annotating = {
   layers: Layer[]
   onChange: (layers: Layer[], step?: string) => void
+  frozen?: boolean
+}
+
+/** Who else is on this board, and how this member's hands reach them. */
+export type Together = {
+  others: Other[]
+  /** What others have hold of, and whose name to show. */
+  heldBy: Map<string, string>
+  onCursor: (inside: string, x: number, y: number) => void
+  onDragging: (moves: { id: string; x: number; y: number }[]) => void
+  /** Takes hold of things before moving or typing on them. False if someone
+   *  else has one of them. */
+  onHold: (ids: string[]) => Promise<boolean>
+  onLetGo: () => void
+  /** Goes where a member is. */
+  onGo: (inside: string) => void
 }
 
 /** Whether a wheel event comes from a trackpad rather than a mouse wheel.
@@ -453,6 +472,7 @@ const CardFace = ({
   if (!card.setUp || card.kind === 'shallow software system') classes.push('map-card--bare')
   if (card.kind === 'person') classes.push('map-card--person')
   if (isFrame(card)) classes.push('map-frame')
+  if (card.outOfReach) classes.push('map-card--out-of-reach')
   if (selected) classes.push('map-card--selected')
   if (locked) classes.push('map-up', `map-up--${Math.min(up, 3)}`)
   if (target) classes.push('map-card--target')
@@ -751,6 +771,7 @@ export const MapCanvas = ({
   agent,
   cardExtra,
   onStartSketch,
+  together,
 }: {
   /** What the page puts on a card, if anything, by the card. */
   cardExtra?: (card: DrawnCard) => ReactNode
@@ -766,6 +787,8 @@ export const MapCanvas = ({
    *  is inside. */
   agent?: { card: string; words: string } | null
   onStartSketch?: () => void
+  /** Others working here, if anyone. */
+  together?: Together
 }) => {
   const frame = useRef<HTMLDivElement>(null)
   const [view, setView] = useState<View>({ x: 0, y: 0, k: 1 })
@@ -858,7 +881,7 @@ export const MapCanvas = ({
     [drawing],
   )
   /** Things can be moved about on a sketch, and on a map that says so. */
-  const canMove = Boolean(drawing) || Boolean(rearranging)
+  const canMove = Boolean(drawing) || Boolean(rearranging && !rearranging.frozen)
   const trail = useMemo(() => walk(root, path), [root, path])
   /** The level in hand: the innermost card open. Everything drawn or moved
    *  goes there, and nothing outside it can be touched until a person has
@@ -875,12 +898,14 @@ export const MapCanvas = ({
   // Where a person has moved a map's cards and sentences. It is laid over the
   // map rather than written into it, so re-reading the code leaves it alone.
   const spotsAt = useMemo(() => new Map((rearranging?.spots ?? []).map((spot) => [spot.id, spot])), [rearranging?.spots])
+  // What others are dragging shows where their hand has it, before it lands.
+  const theirDrags = useMemo(() => new Map((together?.others ?? []).flatMap((o) => o.dragging).map((d) => [d.id, d])), [together?.others])
   const asPut = useCallback(
     (card: DrawnCard): { children: DrawnCard[]; wires: DrawnWire[] } => {
-      if (spotsAt.size === 0) return { children: card.children, wires: card.wires }
+      if (spotsAt.size === 0 && theirDrags.size === 0) return { children: card.children, wires: card.wires }
       return {
         children: card.children.map((child) => {
-          const spot = spotsAt.get(child.id)
+          const spot = theirDrags.get(child.id) ?? spotsAt.get(child.id)
           return spot ? { ...child, x: spot.x, y: spot.y } : child
         }),
         wires: card.wires.map((wire) => {
@@ -889,7 +914,7 @@ export const MapCanvas = ({
         }),
       }
     },
-    [spotsAt],
+    [spotsAt, theirDrags],
   )
 
   /** The annotations on a level, for it to keep them clear of an open card. A
@@ -1596,6 +1621,7 @@ export const MapCanvas = ({
     setArmed((held) => (held === kind ? '' : kind))
   }
   const armShape = (kind: string): void => {
+    if (annotating?.frozen) return
     setArmed('')
     setTool('pick')
     setAnnoArmed((held) => (held === kind ? '' : kind))
@@ -1643,7 +1669,7 @@ export const MapCanvas = ({
       if (!plain) return
       // Letters and numbers pick tools whatever is picked, the way an art
       // program's do. No key writes on anything: that is a double-click.
-      const hotkey = event.repeat ? null : hotkeyFor(event, { drawing: Boolean(drawing), annotating: Boolean(annotating) })
+      const hotkey = event.repeat ? null : hotkeyFor(event, { drawing: Boolean(drawing), annotating: Boolean(annotating && !annotating.frozen) })
       if (!hotkey) return
       event.preventDefault()
       if (hotkey.do === 'tool') pickTool(hotkey.tool)
@@ -1681,6 +1707,29 @@ export const MapCanvas = ({
     const later = setTimeout(() => setLayerSaid(''), 1400)
     return () => clearTimeout(later)
   }, [layerSaid])
+
+  // Typing on something holds it, just as dragging does.
+  const typingOn = editing?.id ?? ''
+  useEffect(() => {
+    if (!together || !typingOn) return
+    void together.onHold([typingOn]).then((got) => {
+      if (!got) setEditing(null)
+    })
+    return () => together.onLetGo()
+  }, [typingOn])
+  useEffect(() => {
+    if (!together || !annoEditing) return
+    void together.onHold([annoEditing]).then((got) => {
+      if (!got) setAnnoEditing('')
+    })
+    return () => together.onLetGo()
+  }, [annoEditing])
+  const annoDragged = annoPreview ? [...annoPreview.keys()].join(',') : ''
+  useEffect(() => {
+    if (!together || !annoDragged) return
+    void together.onHold(annoDragged.split(','))
+    return () => together.onLetGo()
+  }, [annoDragged])
 
   const worldOf = (event: { clientX: number; clientY: number }): Spot => {
     const rect = frame.current!.getBoundingClientRect()
@@ -1741,10 +1790,13 @@ export const MapCanvas = ({
       pending.current = event.pointerId
       return
     }
+    // Something another member has hold of cannot be picked up.
+    if (together?.heldBy.has(id)) return
     const add = event.shiftKey || event.ctrlKey || event.metaKey
     let picked = selected
     if (add) picked = selected.includes(id) ? selected.filter((one) => one !== id) : [...selected, id]
     else if (!selected.includes(id)) picked = [id]
+    if (together) picked = picked.filter((one) => !together.heldBy.has(one))
     select(picked)
     if (!picked.includes(id)) return
     const starts = new Map<string, Box>()
@@ -1953,6 +2005,10 @@ export const MapCanvas = ({
   }
 
   const move = (event: PointerEvent<HTMLDivElement>): void => {
+    if (together) {
+      const here = worldOf(event)
+      together.onCursor(focus.id, here.x - shift.x, here.y - shift.y)
+    }
     const now = gesture.current
     if (!now) return
     lastPointer.current = { clientX: event.clientX, clientY: event.clientY }
@@ -1994,6 +2050,15 @@ export const MapCanvas = ({
     }
     if (now.type === 'move') {
       if (!now.moved && Math.hypot(event.clientX - now.sx, event.clientY - now.sy) < 3) return
+      if (!now.moved && together) {
+        // Lost to someone a moment quicker: the drag stops, and nothing moves.
+        void together.onHold(now.ids).then((got) => {
+          if (got || gesture.current !== now) return
+          gesture.current = null
+          setLive({})
+          together.onDragging([])
+        })
+      }
       now.moved = true
       hold()
       let dx = at.x - now.grab.x
@@ -2002,6 +2067,7 @@ export const MapCanvas = ({
         const moves = new Map<string, Spot>()
         for (const [id, box] of now.starts) moves.set(id, { x: box.x + dx, y: box.y + dy })
         setLive({ moves })
+        together?.onDragging([...moves].map(([id, spot]) => ({ id, ...spot })))
         return
       }
       // The group lines up with cards that are staying put: an edge or a
@@ -2032,6 +2098,7 @@ export const MapCanvas = ({
       const moves = new Map<string, Spot>()
       for (const [id, box] of now.starts) moves.set(id, { x: box.x + dx, y: box.y + dy })
       setLive({ moves, guides: lines })
+      together?.onDragging([...moves].map(([id, spot]) => ({ id, ...spot })))
       return
     }
     if (now.type === 'resize') {
@@ -2151,6 +2218,10 @@ export const MapCanvas = ({
       return
     }
     if (now.type === 'move') {
+      if (now.moved) {
+        together?.onDragging([])
+        together?.onLetGo()
+      }
       if (now.moved && shown.moves) {
         // Whatever was carried past the edge of the card it is in has made
         // that card bigger, and it stays that way when the thing comes back.
@@ -2418,7 +2489,7 @@ export const MapCanvas = ({
         keys={keysOpen}
         onKeys={() => setKeysOpen(!keysOpen)}
       />
-      {annotating && annoOpen ? (
+      {annotating && !annotating.frozen && annoOpen ? (
         <AnnotationLibrary
           armed={annoArmed}
           onArm={(kind) => {
@@ -2455,6 +2526,8 @@ export const MapCanvas = ({
         onPointerCancel={() => {
           gesture.current = null
           setLive({})
+          together?.onDragging([])
+          together?.onLetGo()
         }}
         onContextMenu={(event) => event.preventDefault()}
         onScroll={(event) => {
@@ -2630,10 +2703,12 @@ export const MapCanvas = ({
                   fresh={annoFresh}
                   toWorld={toWorld}
                   onSelect={(ids) => {
+                    if (annotating.frozen) return
                     if (ids.length) select([])
-                    setAnnoPicked(ids)
+                    setAnnoPicked(together ? ids.filter((id) => !together.heldBy.has(id)) : ids)
                   }}
                   onEdit={(id) => {
+                    if (annotating.frozen || (id && together?.heldBy.has(id))) return
                     if (!id) setAnnoFresh('')
                     setAnnoEditing(id)
                   }}
@@ -2794,10 +2869,12 @@ export const MapCanvas = ({
                   fresh={annoFresh}
                   toWorld={toWorld}
                   onSelect={(ids) => {
+                    if (annotating.frozen) return
                     if (ids.length) select([])
-                    setAnnoPicked(ids)
+                    setAnnoPicked(together ? ids.filter((id) => !together.heldBy.has(id)) : ids)
                   }}
                   onEdit={(id) => {
+                    if (annotating.frozen || (id && together?.heldBy.has(id))) return
                     if (!id) setAnnoFresh('')
                     setAnnoEditing(id)
                   }}
@@ -3008,6 +3085,23 @@ export const MapCanvas = ({
             </div>
           ) : null}
 
+          {together ? (
+            <TogetherLayer
+              others={together.others}
+              heldBy={together.heldBy}
+              focusId={focus.id}
+              shift={shift}
+              k={view.k}
+              placed={placed}
+              contains={(cardId, inside) => {
+                const holds = (card: DrawnCard): boolean => card.id === inside || card.children.some(holds)
+                const card = placed.find((p) => p.card.id === cardId)?.card
+                return card ? holds(card) : false
+              }}
+              onGo={together.onGo}
+            />
+          ) : null}
+
           {live.marquee ? (
             <div
               className={gesture.current?.type === 'select' ? 'map-marquee map-marquee--pick' : 'map-marquee'}
@@ -3049,7 +3143,7 @@ export const MapCanvas = ({
           </div>
         ) : null}
 
-        {annotating && annoPicked.length && !annoEditing ? (() => {
+        {annotating && !annotating.frozen && annoPicked.length && !annoEditing ? (() => {
           const onBar = drawnOn(annotating.layers, working.card.id, working.shift, annoCardsOf(working), working.annoBoxes).filter((d) => annoPicked.includes(d.a.id))
           if (!onBar.length) return null
           const top = Math.min(...onBar.map((d) => d.box.y))
