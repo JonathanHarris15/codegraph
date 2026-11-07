@@ -431,7 +431,8 @@ export const SketchEditor = ({
                 <dd>Drag a card, a note, or a wire's words out from under each other</dd>
                 <dt>Pick many</dt>
                 <dd>
-                  <kbd>Shift</kbd> and drag a box on the board, or <kbd>Shift</kbd>-click
+                  <kbd>Shift</kbd> and drag a box on the board, or <kbd>Shift</kbd>-click. Out around an open card, this
+                  picks annotations
                 </dd>
                 <dt>Draw inside a card</dt>
                 <dd>

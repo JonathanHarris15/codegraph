@@ -201,7 +201,9 @@ export const placeNote = (focus: SketchCard, at: { x: number; y: number }): [Ske
   return [{ ...focus, notes: [...focus.notes, note] }, note.id]
 }
 
-/** Moves cards, notes and wires' sentences to where they were put down. */
+/** Moves cards, notes and wires' sentences to where they were put down. Moving
+ *  a card lets go of any sentence moved on a wire it joins, which goes back to
+ *  the wire's own line (ADR 0016). */
 export const moveThings = (focus: SketchCard, moves: Arrangement): SketchCard => {
   const to = new Map(moves.map((m) => [m.id, m]))
   return {
@@ -216,7 +218,10 @@ export const moveThings = (focus: SketchCard, moves: Arrangement): SketchCard =>
     }),
     wires: focus.wires.map((w) => {
       const m = to.get(w.id)
-      return m ? { ...w, x: Math.round(m.x), y: Math.round(m.y) } : w
+      if (m) return { ...w, x: Math.round(m.x), y: Math.round(m.y) }
+      if (!to.has(w.from) && !to.has(w.to)) return w
+      const { x: _x, y: _y, ...free } = w
+      return free
     }),
   }
 }

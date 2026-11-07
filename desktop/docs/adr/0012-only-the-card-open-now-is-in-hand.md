@@ -5,7 +5,8 @@ Date: 2026-11-06
 ## Status
 
 Accepted. Replaces the paragraph of ADR 0011 that says every level on screen can
-be drawn on.
+be drawn on. Annotations out around the open card can now be picked with Shift;
+see ADR 0017.
 
 ## Context
 

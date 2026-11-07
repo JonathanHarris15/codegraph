@@ -106,7 +106,7 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
     setSpots(next)
     void window.codegraph.saveArrangement(projectId, next)
   }
-  const rearrange = (moves: Arrangement): void => keepSpots(movedTo(spots, moves))
+  const rearrange = (moves: Arrangement, letGo: string[] = []): void => keepSpots(forgetting(movedTo(spots, moves), letGo))
   const forget = (ids: string[]): void => keepSpots(forgetting(spots, ids))
 
   const pointsNow = useRef(points)

@@ -880,6 +880,12 @@ h3 {
   pointer-events: auto !important;
 }
 
+/* A line picked out around the open card can still be moved. */
+.map-up .map-anno-line--picked,
+.map-up .map-anno-line--picked * {
+  pointer-events: auto !important;
+}
+
 /* Over a faded card or wire, what the pointer's card reaches still shows. */
 .map-wire.map-up.map-wire--lit,
 .map-card.map-up.map-card--wired {
