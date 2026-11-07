@@ -1,6 +1,9 @@
 // codegraph: component project-card
+import { MoreHorizontal } from 'lucide-react'
+import { useRef, useState } from 'react'
 import type { ProjectView } from '../../features/list-projects.js'
 import type { Point } from '../../modules/reader/index.js'
+import { CanvasMenu, type MenuItem } from './canvas-menu.js'
 import { SoftwareSystemRow } from './software-system-row.js'
 
 const countWords = (many: number): string =>
@@ -8,7 +11,7 @@ const countWords = (many: number): string =>
 
 /** One project: double-click anywhere on it, but its list of repos, to open
  *  its map. The repos fill its lower half, with a quiet last line to link
- *  another. */
+ *  another. Its ... holds what is done to the project itself. */
 export const ProjectCard = ({
   project,
   onLink,
@@ -17,6 +20,8 @@ export const ProjectCard = ({
   linking,
   onPutOnline,
   onMembers,
+  onRename,
+  onDelete,
 }: {
   project: ProjectView
   onLink: (projectId: string) => void
@@ -28,8 +33,29 @@ export const ProjectCard = ({
   onPutOnline?: () => void
   /** Online: who is on it. */
   onMembers?: () => void
-}) => (
-  <div className="ds-card project-card" onDoubleClick={() => onOpen(project.id)}>
+  /** Each only for those who may. */
+  onRename?: () => void
+  onDelete?: () => void
+}) => {
+  const card = useRef<HTMLDivElement>(null)
+  const more = useRef<HTMLButtonElement>(null)
+  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null)
+  const canInvite = project.role === 'owner' || project.role === 'co-owner'
+  const items: MenuItem[] = [
+    ...(onRename ? [{ name: 'Rename', act: onRename }] : []),
+    ...(onMembers ? [{ name: canInvite ? 'Add people' : 'Members', act: onMembers }] : []),
+    ...(onPutOnline ? [{ name: 'Put online to add people', act: onPutOnline }] : []),
+    ...(onDelete ? ['rule' as const, { name: 'Delete…', danger: true, act: onDelete }] : []),
+  ]
+  const openMenu = (): void => {
+    const box = card.current?.getBoundingClientRect()
+    const at = more.current?.getBoundingClientRect()
+    if (!box || !at) return
+    setMenuAt({ x: at.right - box.left - 180, y: at.bottom - box.top + 4 })
+  }
+
+  return (
+  <div ref={card} className="ds-card project-card" onDoubleClick={() => onOpen(project.id)}>
     <div
       className="project-card-top"
       role="button"
@@ -47,7 +73,36 @@ export const ProjectCard = ({
       <span className="project-card-open" aria-hidden="true">
         Double-click to open
       </span>
+      {items.length ? (
+        <button
+          ref={more}
+          type="button"
+          className="project-card-more"
+          aria-label={`More for ${project.name}`}
+          aria-haspopup="menu"
+          aria-expanded={menuAt !== null}
+          onClick={(event) => {
+            event.stopPropagation()
+            if (menuAt) setMenuAt(null)
+            else openMenu()
+          }}
+          onKeyDown={(event) => event.stopPropagation()}
+          onDoubleClick={(event) => event.stopPropagation()}
+        >
+          <MoreHorizontal size={16} />
+        </button>
+      ) : null}
     </div>
+    {menuAt ? (
+      <div onDoubleClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+        <CanvasMenu
+          at={menuAt}
+          items={items}
+          opener={more}
+          onClose={() => setMenuAt(null)}
+        />
+      </div>
+    ) : null}
 
     {onMembers || onPutOnline ? (
       <div className="ds-row project-card-people" onDoubleClick={(event) => event.stopPropagation()}>
@@ -83,4 +138,5 @@ export const ProjectCard = ({
       </button>
     </div>
   </div>
-)
+  )
+}

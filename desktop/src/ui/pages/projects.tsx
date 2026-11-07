@@ -9,6 +9,7 @@ import { Button, Card, Field, Sheet, ThemeSwitch } from '../design-system/kit.js
 import { AgentWindow } from '../components/agent-window.js'
 import { GithubWindow } from '../components/github-window.js'
 import { MembersSheet } from '../components/members-sheet.js'
+import { DeleteProjectSheet, RenameProjectSheet } from '../components/project-sheets.js'
 import { MySketches } from '../components/my-sketches.js'
 import { ProjectCard } from '../components/project-card.js'
 
@@ -19,6 +20,8 @@ export const ProjectsPage = ({ onOpen, onOpenSketch }: { onOpen: (projectId: str
   const [signInProblem, setSignInProblem] = useState('')
   const [offering, setOffering] = useState(false)
   const [membersOf, setMembersOf] = useState('')
+  const [renaming, setRenaming] = useState('')
+  const [deleting, setDeleting] = useState('')
   const [projects, setProjects] = useState<ProjectView[] | null>(null)
   const [cloud, setCloud] = useState<CloudView | null>(null)
   const [naming, setNaming] = useState(false)
@@ -251,6 +254,8 @@ export const ProjectsPage = ({ onOpen, onOpenSketch }: { onOpen: (projectId: str
               linking={linking === project.id}
               {...(session?.online && session.member && !project.online ? { onPutOnline: () => void window.codegraph.putProjectOnline(project.id).then(() => load()) } : {})}
               {...(project.online ? { onMembers: () => setMembersOf(project.id) } : {})}
+              {...(!project.online || (project.role && project.role !== 'viewer') ? { onRename: () => setRenaming(project.id) } : {})}
+              {...(!project.online || project.role === 'owner' ? { onDelete: () => setDeleting(project.id) } : {})}
             />
           ))}
         </div>
@@ -267,7 +272,25 @@ export const ProjectsPage = ({ onOpen, onOpenSketch }: { onOpen: (projectId: str
         />
       ) : null}
 
-      {membersOf ? <MembersSheet projectId={membersOf} onClose={() => setMembersOf('')} onChanged={() => void load()} /> : null}
+      {membersOf ? (
+        <MembersSheet
+          projectId={membersOf}
+          onClose={() => setMembersOf('')}
+          onChanged={() => void load()}
+          onDelete={() => {
+            setDeleting(membersOf)
+            setMembersOf('')
+          }}
+        />
+      ) : null}
+      {(() => {
+        const project = projects?.find((p) => p.id === renaming)
+        return project ? <RenameProjectSheet project={project} onClose={() => setRenaming('')} onDone={() => void load()} /> : null
+      })()}
+      {(() => {
+        const project = projects?.find((p) => p.id === deleting)
+        return project ? <DeleteProjectSheet project={project} onClose={() => setDeleting('')} onDone={() => void load()} /> : null
+      })()}
 
       {typing ? (
         <Sheet title="Sign in with GitHub" onClose={() => setTyping(null)}>

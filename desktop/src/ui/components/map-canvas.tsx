@@ -25,6 +25,7 @@ import { IconPick } from './card-look-editor.js'
 import { BLANK_LOOK, CARD_SHAPES, drawnShape, lookOf } from './card-looks.js'
 import { meetOutline, seamOf, textAreaOf } from './shape-outline.js'
 import { CanvasMenu, type MenuItem } from './canvas-menu.js'
+import { SidePanel } from './side-panel.js'
 import { CardPalette } from './card-palette.js'
 import { hotkeyFor } from './hotkeys.js'
 import { KeyList } from './key-list.js'
@@ -809,6 +810,19 @@ export const MapCanvas = ({
   const [annoOpen, setAnnoOpen] = useState(false)
   const [layersOpen, setLayersOpen] = useState(false)
   const [annoArmed, setAnnoArmed] = useState('')
+  // The cards and the annotations share one side panel: opening one shuts the other.
+  const openPalette = (open: boolean): void => {
+    setPalette(open)
+    if (open) {
+      setAnnoOpen(false)
+      setAnnoArmed('')
+    }
+  }
+  const openAnnotations = (open: boolean): void => {
+    setAnnoOpen(open)
+    setAnnoArmed('')
+    if (open) setPalette(false)
+  }
   const [annoPicked, setAnnoPicked] = useState<string[]>([])
   const [annoEditing, setAnnoEditing] = useState('')
   const [activeLayer, setActiveLayer] = useState('')
@@ -1447,15 +1461,59 @@ export const MapCanvas = ({
 
   /** Fills the screen with one card, without going into it: a way to read a
    *  crowded level one card at a time. */
-  const frameOn = useCallback((id: string): void => {
-    const at = where.get(id)
+  /** Fills the screen with one box on the board: a card, or an annotation. */
+  const frameBox = useCallback((at: Box): void => {
     const el = frame.current
-    if (!at || !el) return
+    if (!el || at.w <= 0 || at.h <= 0) return
     const k = Math.min(Math.min(el.clientWidth / at.w, el.clientHeight / at.h) * 0.9, 4)
     setMoving(true)
     setView({ k, x: el.clientWidth / 2 - (at.x + at.w / 2) * k, y: el.clientHeight / 2 - (at.y + at.h / 2) * k })
     setTimeout(() => setMoving(false), STEP_MS)
-  }, [where])
+  }, [])
+
+  const frameOn = useCallback((id: string): void => {
+    const at = where.get(id)
+    if (at) frameBox(at)
+  }, [where, frameBox])
+
+  /** Where the pointer is over the board now, for keys that act on what is under it. */
+  const pointerNow = useRef<{ x: number; y: number } | null>(null)
+  useEffect(() => {
+    const el = frame.current
+    if (!el) return
+    const move = (event: globalThis.PointerEvent): void => {
+      pointerNow.current = { x: event.clientX, y: event.clientY }
+    }
+    const leave = (): void => {
+      pointerNow.current = null
+    }
+    el.addEventListener('pointermove', move)
+    el.addEventListener('pointerleave', leave)
+    return () => {
+      el.removeEventListener('pointermove', move)
+      el.removeEventListener('pointerleave', leave)
+    }
+  }, [])
+
+  /** The annotation right under the pointer, as a box on the board. */
+  const annotationUnderPointer = (): Box | null => {
+    const at = pointerNow.current
+    const el = frame.current
+    if (!at || !el) return null
+    const hit = document
+      .elementsFromPoint(at.x, at.y)
+      .find((one) => one instanceof Element && one.closest('[data-anno]'))
+      ?.closest('[data-anno]')
+    if (!hit) return null
+    const box = hit.getBoundingClientRect()
+    const rect = el.getBoundingClientRect()
+    return {
+      x: (box.left - rect.left - view.x) / view.k,
+      y: (box.top - rect.top - view.y) / view.k,
+      w: box.width / view.k,
+      h: box.height / view.k,
+    }
+  }
 
   const zoomBy = useCallback((by: number): void => {
     const el = frame.current
@@ -1617,6 +1675,7 @@ export const MapCanvas = ({
     // The card library and the annotation library share a place; show the
     // one the key reached for.
     setAnnoOpen(false)
+    if (drawing) setPalette(true)
     setTool('pick')
     setArmed((held) => (held === kind ? '' : kind))
   }
@@ -1660,11 +1719,16 @@ export const MapCanvas = ({
         else zoomBy(event.key === '-' ? 0.8 : 1.25)
         return
       }
-      // f fills the screen with the card under the pointer.
-      if (plain && hover && (event.key === 'f' || event.key === 'F')) {
-        event.preventDefault()
-        frameOn(hover)
-        return
+      // f fills the screen with what is under the pointer: an annotation drawn
+      // there, or else the card.
+      if (plain && (event.key === 'f' || event.key === 'F')) {
+        const shape = annotationUnderPointer()
+        if (shape || hover) {
+          event.preventDefault()
+          if (shape) frameBox(shape)
+          else frameOn(hover)
+          return
+        }
       }
       if (!plain) return
       // Letters and numbers pick tools whatever is picked, the way an art
@@ -1678,13 +1742,11 @@ export const MapCanvas = ({
         // The numbers count down the card library, so they follow the level.
         const key = levelInside[focus.level] === focus.level ? undefined : choices[hotkey.index]?.key
         if (key) armCard(key)
-      } else if (hotkey.do === 'palette') setPalette((open) => !open)
+      } else if (hotkey.do === 'palette') openPalette(!palette)
       else if (hotkey.do === 'keys') setKeysOpen((open) => !open)
       else if (hotkey.do === 'layers') setLayersOpen((open) => !open)
-      else if (hotkey.do === 'library') {
-        setAnnoOpen((open) => !open)
-        setAnnoArmed('')
-      } else if (hotkey.do === 'layer' && annotating?.layers.length) {
+      else if (hotkey.do === 'library') openAnnotations(!annoOpen)
+      else if (hotkey.do === 'layer' && annotating?.layers.length) {
         const all = annotating.layers
         const next = all[(all.findIndex((l) => l.id === ready[1]) + hotkey.by + all.length) % all.length]!
         setActiveLayer(next.id)
@@ -1700,7 +1762,7 @@ export const MapCanvas = ({
       window.removeEventListener('keydown', down)
       window.removeEventListener('keyup', up)
     }
-  }, [backOut, drawing, fit, zoomBy, quick, armed, tool, selected, startEditing, hover, frameOn, annotating, annoArmed, annoPicked, select, keysOpen, focus.level, ready, choices, iconsFor])
+  }, [backOut, drawing, fit, zoomBy, quick, armed, tool, selected, startEditing, hover, frameOn, frameBox, view, palette, annoOpen, annotating, annoArmed, annoPicked, select, keysOpen, focus.level, ready, choices, iconsFor])
 
   useEffect(() => {
     if (!layerSaid) return
@@ -2485,7 +2547,7 @@ export const MapCanvas = ({
           if (next === 'note' && annotating) armShape('sticky')
           else pickTool(next)
         }}
-        onPalette={() => setPalette(!palette)}
+        onPalette={() => openPalette(!palette)}
         onUndo={() => drawing?.onUndo()}
         onRedo={() => drawing?.onRedo()}
         onStartSketch={() => onStartSketch?.()}
@@ -2493,15 +2555,13 @@ export const MapCanvas = ({
         onOverview={() => setShutOverview(!shutOverview)}
         annotations={annoOpen}
         layers={layersOpen}
-        onAnnotations={() => {
-          setAnnoOpen(!annoOpen)
-          setAnnoArmed('')
-        }}
+        onAnnotations={() => openAnnotations(!annoOpen)}
         onLayers={() => setLayersOpen(!layersOpen)}
         keys={keysOpen}
         onKeys={() => setKeysOpen(!keysOpen)}
       />
       {annotating && !annotating.frozen && annoOpen ? (
+        <SidePanel key="annotations" name="annotations" start={280}>
         <AnnotationLibrary
           armed={annoArmed}
           onArm={(kind) => {
@@ -2514,7 +2574,9 @@ export const MapCanvas = ({
             setAnnoArmed('')
           }}
         />
+        </SidePanel>
       ) : drawing && palette && childLevel !== focus.level ? (
+        <SidePanel key="cards" name="cards" start={216}>
         <CardPalette
           groups={choicesAt(childLevel, drawing.cardTypes)}
           canMakeTypes={ownTypesAt(childLevel)}
@@ -2528,6 +2590,7 @@ export const MapCanvas = ({
           onTypes={drawing.onCardTypes}
           onClose={() => setPalette(false)}
         />
+        </SidePanel>
       ) : null}
       <div
         ref={frame}

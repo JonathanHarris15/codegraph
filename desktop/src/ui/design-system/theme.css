@@ -334,6 +334,17 @@ h3 {
   border-color: var(--ink-soft);
 }
 
+.ds-button--danger {
+  background: var(--state-problem);
+  color: #fff;
+  border-color: var(--state-problem);
+  font-weight: 600;
+}
+
+.ds-button--danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--state-problem) 85%, #000);
+}
+
 .ds-button--bare {
   background: transparent;
   border-color: transparent;
@@ -4894,4 +4905,80 @@ button.map-restyle:hover {
   justify-content: space-between;
   gap: var(--space-2);
   align-items: center;
+}
+
+/* The card holds the ... menu, which opens over it. */
+.project-card {
+  position: relative;
+}
+
+/* The ... on a project card: rename, people, delete. It sits where the
+   double-click hint was, which moves over to make room. */
+.project-card-more {
+  position: absolute;
+  top: calc(var(--space-4) - 6px);
+  right: calc(var(--space-4) - 6px);
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+
+.project-card-more:hover,
+.project-card-more:focus-visible,
+.project-card-more[aria-expanded='true'] {
+  background: var(--surface-sunken);
+  color: var(--ink-000);
+}
+
+.project-card-top:has(.project-card-more) .project-card-open {
+  right: calc(var(--space-4) + 30px);
+}
+
+.project-card .map-menu {
+  min-width: 180px;
+}
+
+/* The panel beside the board, with an edge to drag it wider or narrower. */
+.map-side {
+  position: relative;
+  flex: none;
+  display: flex;
+  z-index: 2;
+}
+
+.map-side > .map-palette {
+  width: 100%;
+}
+
+.map-side-grip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -4px;
+  width: 8px;
+  cursor: col-resize;
+  z-index: 3;
+  touch-action: none;
+}
+
+.map-side-grip::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 2px;
+  background: transparent;
+  transition: background 120ms ease;
+}
+
+.map-side-grip:hover::after,
+.map-side-grip:active::after {
+  background: var(--focus-ring);
 }

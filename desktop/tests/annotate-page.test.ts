@@ -196,6 +196,17 @@ describe('annotating a map', () => {
     await page.getByRole('button', { name: 'Close the layers' }).click()
   })
 
+  it('fills the screen with the shape under the pointer when F is pressed', async () => {
+    const note = page.locator('.map-anno--sticky').first()
+    const was = (await note.boundingBox())!
+    await note.hover()
+    await page.keyboard.press('f')
+    await page.waitForTimeout(600)
+    expect((await note.boundingBox())!.width).toBeGreaterThan(was.width * 1.5)
+    await page.keyboard.press('0')
+    await page.waitForTimeout(400)
+  })
+
   it('keeps it all when the app is opened again', async () => {
     await app.close()
     await open()
@@ -339,5 +350,26 @@ describe('annotating a sketch', () => {
     const web = (await page.locator('.map-world').getByRole('button', { name: 'web', exact: true }).boundingBox())!
     const note = (await page.locator('.map-anno--sticky').filter({ hasText: 'Rename to app?' }).boundingBox())!
     expect(Math.abs(web.x - note.x)).toBeGreaterThan(1)
+  })
+
+  it('shows the cards or the annotations beside the board, never both', async () => {
+    const cards = page.getByRole('complementary', { name: 'Cards' })
+    const annotations = page.getByRole('complementary', { name: 'Annotations' })
+    if (!(await cards.isVisible())) await page.keyboard.press('c')
+    await cards.waitFor({ timeout: PATIENCE })
+    await page.keyboard.press('Shift+A')
+    await annotations.waitFor({ timeout: PATIENCE })
+    expect(await cards.count()).toBe(0)
+    await page.keyboard.press('c')
+    await cards.waitFor({ timeout: PATIENCE })
+    expect(await annotations.count()).toBe(0)
+  })
+
+  it('makes the panel beside the board wider when its edge is dragged', async () => {
+    const panel = page.getByRole('complementary', { name: 'Cards' })
+    const was = (await panel.boundingBox())!
+    const grip = (await page.getByRole('separator', { name: 'Resize the cards panel' }).boundingBox())!
+    await drag({ x: grip.x + grip.width / 2, y: grip.y + 200 }, { x: grip.x + grip.width / 2 + 120, y: grip.y + 200 })
+    expect((await panel.boundingBox())!.width).toBeGreaterThan(was.width + 100)
   })
 })

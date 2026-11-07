@@ -20,6 +20,7 @@ import { moveSketch } from '../src/features/move-sketch.js'
 import { openSketch } from '../src/features/open-sketch.js'
 import { putProjectOnline } from '../src/features/put-project-online.js'
 import { removeMember } from '../src/features/remove-member.js'
+import { renameProject } from '../src/features/rename-project.js'
 import { restoreRevision } from '../src/features/restore-revision.js'
 import { saveAnnotations } from '../src/features/save-annotations.js'
 import { saveArrangement } from '../src/features/save-arrangement.js'
@@ -185,6 +186,20 @@ describe('roles', () => {
     expect(project).toMatchObject({ ownerId: '2', role: 'owner' })
     expect(project?.members.find((m) => m.id === '1')?.role).toBe('co-owner')
     expect((await listSketches(id)).map((s) => s.name)).toEqual(['Plan'])
+  })
+
+  it('renames a project for everyone on it', async () => {
+    const id = await invited()
+    expect((await renameProject(id, 'Field notes')).ok).toBe(true)
+    await beBen()
+    expect((await listProjects()).find((p) => p.id === id)?.name).toBe('Field notes')
+  })
+
+  it('stops a viewer renaming a project', async () => {
+    const id = await invited('viewer')
+    await beBen()
+    expect((await renameProject(id, 'Mine now')).ok).toBe(false)
+    expect((await listProjects()).find((p) => p.id === id)?.name).toBe('Notes')
   })
 
   it('takes a member off, and leaves nothing of it on their computer', async () => {

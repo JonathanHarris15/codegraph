@@ -9,8 +9,20 @@ type Givable = Exclude<Role, 'owner'>
 const ROLES: Givable[] = ['co-owner', 'collaborator', 'viewer']
 
 /** Who is on a project, and, for those who may, inviting them by GitHub username,
- *  changing what they can do, and handing the project over or deleting it. */
-export const MembersSheet = ({ projectId, onClose, onChanged }: { projectId: string; onClose: () => void; onChanged?: () => void }) => {
+ *  changing what they can do, and handing the project over. Deleting asks first,
+ *  elsewhere. */
+export const MembersSheet = ({
+  projectId,
+  onClose,
+  onChanged,
+  onDelete,
+}: {
+  projectId: string
+  onClose: () => void
+  onChanged?: () => void
+  /** Asks before deleting; the sheet only offers it to the owner. */
+  onDelete?: () => void
+}) => {
   const [project, setProject] = useState<ProjectView | null>(null)
   const [me, setMe] = useState('')
   const [login, setLogin] = useState('')
@@ -96,19 +108,9 @@ export const MembersSheet = ({ projectId, onClose, onChanged }: { projectId: str
         </div>
       ) : null}
       <div className="ds-sheet-actions">
-        {isOwner ? (
-          <Button
-            look="bare"
-            onClick={() =>
-              void act(() => window.codegraph.deleteProject(projectId)).then((ok) => {
-                if (ok) {
-                  onClose()
-                  window.location.hash = ''
-                }
-              })
-            }
-          >
-            Delete the project
+        {isOwner && onDelete ? (
+          <Button look="bare" onClick={onDelete}>
+            Delete the project…
           </Button>
         ) : null}
         <Button look="bare" onClick={onClose}>

@@ -30,7 +30,7 @@ export const Button = ({
   label,
   children,
 }: {
-  look?: 'normal' | 'loud' | 'bare'
+  look?: 'normal' | 'loud' | 'bare' | 'danger'
   onClick?: () => void
   disabled?: boolean
   title?: string

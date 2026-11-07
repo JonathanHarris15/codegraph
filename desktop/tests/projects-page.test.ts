@@ -83,4 +83,28 @@ describe('the projects screen in the real app', () => {
     await open()
     expect(await shown(page.getByText('Mosaic Manager'))).toContain('Mosaic Manager')
   }, 60_000)
+
+  it('renames a project from its ..., and keeps the name repos call it', async () => {
+    await page.getByRole('button', { name: 'More for Mosaic Manager' }).click()
+    await page.getByRole('menuitem', { name: 'Rename' }).click()
+    const sheet = page.getByRole('dialog', { name: 'Rename Mosaic Manager' })
+    await sheet.getByLabel('Name').fill('Mosaic')
+    await sheet.getByRole('button', { name: 'Rename' }).click()
+    await sheet.waitFor({ state: 'detached', timeout: PATIENCE })
+    expect(await shown(page.locator('.ds-card-name'))).toBe('Mosaic')
+    expect(await shown(page.getByText('mosaic-manager', { exact: true }))).toBe('mosaic-manager')
+  }, 30_000)
+
+  it('deletes a project only once its name is typed', async () => {
+    await page.getByRole('button', { name: 'More for Mosaic' }).click()
+    await page.getByRole('menuitem', { name: 'Delete…' }).click()
+    const sheet = page.getByRole('dialog', { name: 'Delete Mosaic?' })
+    const go = sheet.getByRole('button', { name: 'Delete the project' })
+    expect(await go.isDisabled()).toBe(true)
+    await sheet.getByLabel('Type Mosaic to confirm').fill('Mosai')
+    expect(await go.isDisabled()).toBe(true)
+    await sheet.getByLabel('Type Mosaic to confirm').fill('Mosaic')
+    await go.click()
+    expect(await shown(page.getByText('No projects yet'))).toContain('No projects yet')
+  }, 30_000)
 })

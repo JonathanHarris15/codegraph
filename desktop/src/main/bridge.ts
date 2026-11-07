@@ -27,6 +27,7 @@ import { switchBranch } from '../features/switch-branch.js'
 import { changeRole } from '../features/change-role.js'
 import { copySketch } from '../features/copy-sketch.js'
 import { deleteProject } from '../features/delete-project.js'
+import { renameProject } from '../features/rename-project.js'
 import { finishSignIn } from '../features/finish-sign-in.js'
 import { handOverProject } from '../features/hand-over-project.js'
 import { holdThings, letGoOfThings } from '../features/hold-thing.js'
@@ -118,6 +119,7 @@ export const openBridge = (): void => {
   ipcMain.handle('project:remove', (_event, projectId: string, memberId: string) => removeMember(projectId, memberId))
   ipcMain.handle('project:handOver', (_event, projectId: string, memberId: string) => handOverProject(projectId, memberId))
   ipcMain.handle('project:delete', (_event, projectId: string) => deleteProject(projectId))
+  ipcMain.handle('project:rename', (_event, projectId: string, name: string) => renameProject(projectId, name))
   ipcMain.handle('github:refresh', (_event, projectId: string) => refreshGithub(projectId))
   ipcMain.handle('revisions:list', (_event, projectId: string) => listRevisions(projectId))
   ipcMain.handle('revisions:restore', (_event, projectId: string, revisionId: string) => restoreRevision(projectId, revisionId))

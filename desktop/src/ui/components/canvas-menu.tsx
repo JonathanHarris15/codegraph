@@ -1,5 +1,5 @@
 // codegraph: component canvas-menu
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type RefObject } from 'react'
 import { Glyph, type ToolGlyph } from './kind-glyph.js'
 
 export type MenuItem = { name: string; keys?: string; glyph?: ToolGlyph; danger?: boolean; act: () => void } | 'rule'
@@ -10,17 +10,22 @@ export const CanvasMenu = ({
   at,
   items,
   onClose,
+  opener,
 }: {
   at: { x: number; y: number }
   items: MenuItem[]
   onClose: () => void
+  /** The button that opened it, which closes it itself rather than counting as a
+   *  click away. */
+  opener?: RefObject<HTMLElement | null>
 }) => {
   const box = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     box.current?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true })
     const away = (event: PointerEvent): void => {
-      if (!box.current?.contains(event.target as Node)) onClose()
+      const target = event.target as Node
+      if (!box.current?.contains(target) && !opener?.current?.contains(target)) onClose()
     }
     const key = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
@@ -34,7 +39,7 @@ export const CanvasMenu = ({
       window.removeEventListener('pointerdown', away, true)
       window.removeEventListener('keydown', key, true)
     }
-  }, [onClose])
+  }, [onClose, opener])
 
   return (
     <div

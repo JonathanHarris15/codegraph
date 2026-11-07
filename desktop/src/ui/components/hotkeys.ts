@@ -93,7 +93,7 @@ export const KEY_GROUPS: { name: string; rows: { keys: string; says: string }[] 
   {
     name: 'Moving about',
     rows: [
-      { keys: 'F', says: 'Fill the screen with the card under the pointer' },
+      { keys: 'F', says: 'Fill the screen with the card or shape under the pointer' },
       { keys: '0', says: 'Fit the level to the window' },
       { keys: '+  −', says: 'Zoom in and out' },
     ],
