@@ -76,6 +76,11 @@ const quietMenu = (): void => {
   )
 }
 
+// The installed app is called Codegraph, but its files stay where they have
+// always been, under codegraph-desktop, which the MCP looks in too. A folder
+// named on the command line, as in tests, wins.
+if (!app.commandLine.hasSwitch('user-data-dir')) app.setPath('userData', join(app.getPath('appData'), 'codegraph-desktop'))
+
 void app.whenReady().then(async () => {
   quietMenu()
   await wireModules()

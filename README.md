@@ -3,6 +3,12 @@
 A map of a codebase drawn at the level people think in — systems, features,
 modules, stores, pages — instead of files.
 
+## Install
+
+Download the installer for your computer from the
+[latest release](https://github.com/JonathanHarris15/codegraph/releases/latest)
+and open it. The release notes say what to do the first time it opens.
+
 ## What is in here
 
 **`desktop/`** is the codegraph app. Open it and you see your projects as a

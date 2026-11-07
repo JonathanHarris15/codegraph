@@ -33,7 +33,19 @@ npm run dev
 ```
 
 `npm run build` bundles it into `out/`; `npm start` runs what was built.
-Packaging it into something you double-click is not set up yet.
+
+## Making the installers
+
+`npm run package` builds the app and writes installers into `release/`: a
+`.dmg` for each kind of Mac, a setup `.exe` for Windows and an `.AppImage` for
+Linux. The icon is drawn in `build/icon.svg`; `build/icon.png` is that drawing
+at 1024 pixels, which the builder turns into each system's icon.
+
+The app is kept as plain files inside the install, not packed into one
+archive, because the codegraph MCP runs under `node` from the installed
+`out/main/mcp.js`, and `node` cannot read inside the archive. The installers
+are not signed, so Mac and Windows each warn the first time; the release
+notes say how to get past it.
 
 ## How it is put together
 

@@ -13,7 +13,8 @@
     "test": "electron-vite build && vitest run",
     "typecheck": "tsc --noEmit",
     "together": "electron-vite build && node scripts/try-together.mjs",
-    "test:quick": "vitest run --exclude \"tests/projects-page.test.ts\""
+    "test:quick": "vitest run --exclude \"tests/projects-page.test.ts\"",
+    "package": "npm run build && electron-builder --publish never"
   },
   "devDependencies": {
     "@types/node": "^22.7.5",
@@ -21,6 +22,7 @@
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^6.2.1",
     "electron": "^45.2.3",
+    "electron-builder": "^26.18.0",
     "electron-vite": "^6.0.0",
     "firebase-tools": "^15.35.0",
     "playwright": "^1.64.1",
@@ -37,5 +39,71 @@
     "lucide-react": "^0.456.0",
     "typescript": "^5.6.3",
     "zod": "^4.6.7"
+  },
+  "productName": "Codegraph",
+  "homepage": "https://github.com/JonathanHarris15/codegraph",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JonathanHarris15/codegraph.git"
+  },
+  "build": {
+    "appId": "dev.codegraph.app",
+    "productName": "Codegraph",
+    "copyright": "Copyright © 2026 Jonathan Harris",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "out/**",
+      "package.json"
+    ],
+    "asar": false,
+    "artifactName": "Codegraph-${version}-${os}-${arch}.${ext}",
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "category": "public.app-category.developer-tools",
+      "identity": "-",
+      "hardenedRuntime": false
+    },
+    "dmg": {
+      "title": "Codegraph ${version}"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "Codegraph",
+      "artifactName": "Codegraph-${version}-windows-setup.${ext}"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Development"
+    }
   }
 }

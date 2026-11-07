@@ -17,3 +17,4 @@ gw*.html
 
 # the map the mod draws
 .codegraph/
+release/
