@@ -30,10 +30,20 @@ Read the whole repo before changing any of it. Decide:
 - **Components**: sort every code file into a module, a feature, a page, a
   trigger, a test or tooling. Name components by what they do, in the
   repo's own words.
+- **Types**: where the team already has a word for a kind of thing — a
+  queue, a gateway, a worker — write it after the component's name with
+  `as`: `module jobs as queue`. The map draws it as that, and the word
+  reaches the person's card library. The four kinds still say which rules
+  the component keeps to.
+- **What it reaches outside**: every call out of a container — another
+  system, somebody else's API — gets `wire to <name>:`. Name the system the
+  way a person would say it, not the library or the URL: the app offers that
+  name to the person as a shallow software system, and it becomes a card on
+  their map.
 - **Reshaping**: list every place the code breaks the rules. The usual ones:
   - a page that talks to the database or an outside service itself. Pull the
     work out into a feature, and the storage or outside call into a module.
-  - a page or feature that calls out of the repo. Move the call into a
+  - a page or feature that calls out of its container. Move the call into a
     module.
   - a helper used by many pages. Make it a module with a front door.
   - a module that imports a feature or a page. Turn the import around.
@@ -54,6 +64,16 @@ and `uses`, and puts words on every import between components. Reshaping
 only moves code; it never changes what the program does. If a reshape is
 risky or unclear, the sub-agent leaves it, says why, and tags the code as it
 is.
+
+Three things every sub-agent gets wrong unless it is told, so tell it:
+
+- A wire's words go on the line the import **starts** on, or on a line of
+  their own directly above it. On a multi-line import they do not go on the
+  closing `} from '...'` line, where the reader will not find them.
+- A default export goes on the front door as the word `default`, not under
+  the module's name: `front door default, saveNote`.
+- A `require` or an `await import(...)` is an import like any other, with its
+  words on the line its statement starts on.
 
 ## 3. Clear out the old codegraph
 

@@ -3,9 +3,9 @@
 A proposal is a sketch being made real on one branch of this repo. It only ever
 comes from a sketch: people draw the sketch, and you read it, put its faint
 outline over the map, and build until the outline is solid. It works like a
-failing test. The `check` tool fails while
-anything the proposal draws is not in the code. You work until it passes,
-and the person watches the map change as you go.
+failing test: the `check` tool fails while anything the proposal draws is not
+in the code. You work until it passes, and the person watches the map change
+as you go.
 
 ## Where it lives
 
@@ -24,22 +24,30 @@ container by its name, `web`, and a component inside one, `web/page search`.
   "containers": [{ "name": "search-index", "kind": "database", "says": "Keeps the words of every note" }],
   "components": [
     { "container": "web", "kind": "page", "name": "search", "says": "Finds a note by its words", "at": "/search", "mockup": "search.png" },
+    { "container": "web", "kind": "module", "name": "jobs", "type": "queue", "says": "Holds the work waiting", "at": "", "mockup": "" },
     { "container": "web", "kind": "trigger", "name": "nightly-tidy", "says": "", "at": "", "mockup": "", "gone": true }
   ],
-  "wires": [{ "from": "web/page search", "to": "web/feature find-notes", "kind": "asks", "words": "to find notes" }]
+  "wires": [{ "from": "web/page search", "to": "web/feature find-notes", "kind": "asks", "words": "to find notes" }],
+  "layout": { "web/page search": [120, 40] }
 }
 ```
 
-A component with a `"type"` was drawn as a card type the person chose, like a
-queue. Tag it with that type: `// codegraph: module jobs as queue`. It is not
-built until it is tagged that way. A container's `kind` is written into the
-config as it stands.
-
-`"gone": true` crosses a card or wire out: it is to be taken away, and its
-wires go with it. A wire between two containers stands for any wire between
-what they hold. A `calls` wire to a name that is no container is a call out
-of the repo, written `// codegraph: wire to <name>: <words>`. `layout` is
-where the person put each card while drawing; leave it as it is.
+- `kind` is one of module, feature, page or trigger, and says which rules the
+  card keeps to. `type` is what the team calls it, and is tagged after `as`:
+  `// codegraph: module jobs as queue`. A card with a type is not built until
+  it is tagged with it.
+- `start: true` marks a page as where a person lands: tag it `start page`.
+- A container's `kind` is written into the config as it stands.
+- `"gone": true` crosses a card or wire out: it is to be taken away, and its
+  wires go with it.
+- A wire's `kind` is one of `uses`, `asks`, `reads`, `starts`, `keeps`,
+  `leads to`, `calls`; see the `tags` instructions for what makes each. A
+  wire between two containers stands for any wire between what they hold. A
+  `calls` wire to a name that is no container is a call out of the container,
+  written `// codegraph: wire to <name>: <words>`.
+- `layout` is where the person put each card and each wire's sentence while
+  drawing, a wire's by the names it reads as, `from>kind>to`. It means
+  nothing to the code: leave it as it is.
 
 ## Making one from a sketch
 
@@ -60,14 +68,31 @@ that does not move what you are building. The map tells people the sketch has
 changed; looking at those changes and adding them is another round of work,
 started by calling `propose` again with replace set, once a person asks for it.
 
+A sketch holds more than cards to build, and `propose` leaves these out:
+
+- **People and shallow software systems** on the outermost level. A person is
+  who uses the software; a shallow system is one somebody else runs. Neither
+  has code here, so neither is ever built. A wire to a shallow system is a
+  call out of a module, tagged `wire to <name>:`.
+- **Notes and annotations.** Sticky notes, text, frames and lines are there
+  for you to read. They say why the change is wanted, and sometimes how. They
+  are never cards, and nothing you build comes from them alone: if a note asks
+  for something the cards do not draw, say so rather than quietly building it.
+- **Hubs.** Where a wire meets an open card's border, parts inside wire to a
+  hub. You read it as a wire to the card at the far end, which is what the
+  proposal makes of it.
+
 ## When you think something else makes more sense
 
 What the person drew is what gets built and tagged, until you and they agree
 otherwise. You know the code, so say what you see:
 
-- A component with a `type` starts as a `module`, because a drawing does not
-  say which rules it keeps to. Choose the kind that fits what it does, and
-  change `kind` in the proposal. This needs no asking, but say what you chose.
+- A card drawn as a type of the team's own comes through as a `module`, the
+  kind that promises least, because a drawing does not say which rules it
+  keeps to. Read what the card is for, choose the kind that fits, and change
+  `kind` in the proposal. This needs no asking, but say what you chose.
+  A card drawn from one of the app's own templates already says its kind —
+  a feature arrives as a feature — so leave those alone.
 - If a type, a kind that goes against what they plainly meant, a split or a merge
   would serve better, tell the person what and why before building that card.
   If they agree, change the proposal to match. If they do not, build what they

@@ -106,6 +106,55 @@ describe('checking a repo against its tags', () => {
     ])
   })
 
+  it('reads a require the way it reads an import, so a CommonJS feature can keep its uses', async () => {
+    const found = await checkWith({
+      'app/features/post-note.js': [
+        '// codegraph: feature post-note uses notes',
+        "const { listNotes } = require('../modules/notes') // codegraph: wire finds the notes",
+        'module.exports = { post: () => listNotes() }',
+        '',
+      ].join('\n'),
+    })
+    expect(says(found)).toEqual([])
+  })
+
+  it('holds a require to the front door, name by name, but lets it take the module whole', async () => {
+    const found = await checkWith({
+      'app/features/nag-again.js':
+        "// codegraph: feature nag-again uses notes\nconst { tellOwner } = require('../modules/notes') // codegraph: wire nags the owner\nmodule.exports = tellOwner\n",
+      'app/features/tidy-up.js':
+        "// codegraph: feature tidy-up uses notes\nconst notes = require('../modules/notes') // codegraph: wire reads every note\nmodule.exports = () => notes.listNotes()\n",
+    })
+    expect(says(found)).toEqual(['It takes tellOwner from module notes, which is not on its front door.'])
+  })
+
+  it('wants a wire\'s words on the line the import starts on, or on a line of their own above it', async () => {
+    const late = await checkWith({
+      'app/pages/gather.tsx': [
+        '// codegraph: page gather at /gather',
+        'import {',
+        '  listNotes,',
+        "} from '../modules/notes' // codegraph: wire gathers the notes",
+        'export const Gather = () => listNotes().length',
+        '',
+      ].join('\n'),
+    })
+    expect(says(late)).toEqual(['The wire from page gather to module notes has no words saying what it is for.'])
+
+    const above = await checkWith({
+      'app/pages/gather.tsx': [
+        '// codegraph: page gather at /gather',
+        '// codegraph: wire gathers the notes',
+        'import {',
+        '  listNotes,',
+        "} from '../modules/notes'",
+        'export const Gather = () => listNotes().length',
+        '',
+      ].join('\n'),
+    })
+    expect(says(above)).toEqual([])
+  })
+
   it('passes on what the reader could not place', async () => {
     const found = await checkWith({ 'loose.ts': '// codegraph: module loose\n' })
     expect(says(found)).toEqual(["loose.ts is not in any container's folders"])

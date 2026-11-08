@@ -6,9 +6,21 @@ its root, and a tag in every code file. The map is read from them, and the
 
 ## The levels
 
-- **Software system**: the whole repo.
-- **Container**: a part of it that runs on its own (a browser app, a server,
-  a desktop app, a database, files on disk, a function, a command-line tool).
+Codegraph follows C4, from the outside in.
+
+- **Project**: the outermost thing, one or more software systems people work
+  on as one. It lives in the app, not in any repo. A repo names the projects
+  it serves by their short name, and may serve more than one.
+- **Person**: someone who uses the software. No code says who they are, so
+  people are drawn in the app, never read or tagged.
+- **Software system**: the whole repo. Yours is the only one you tag.
+- **Shallow software system**: something the project leans on that has no
+  repo here, usually because someone else runs it. A call out of your
+  container names one (see Words on wires); it only reaches the map once a
+  person agrees to it.
+- **Container**: a part of the system that runs on its own (a browser app, a
+  server, a desktop app, a database, files on disk, a function, a
+  command-line tool).
 - **Component**: one part of a container that does one job behind a clear
   front. Every component is one of four kinds:
   - **module**: does real work behind a small front door. Only a module
@@ -40,11 +52,16 @@ its root, and a tag in every code file. The map is read from them, and the
   folders. Every component file sits under exactly one container's folders.
   Tests and tooling may sit anywhere.
 
+A kind is a few plain words. The ones the app draws from the start are
+browser app, server, desktop app, database, files on disk, function and
+command-line tool; any other words are a type of the team's own, and the app
+draws a card for it.
+
 ## Tags
 
 One comment line near the top of each file, starting `codegraph:`, in
-whatever comment the language uses. Files with the same tag make one
-component.
+whatever comment the language uses. The whole line must be that comment and
+nothing else. Files with the same tag make one component.
 
 ```ts
 // codegraph: module notes
@@ -54,16 +71,19 @@ component.
 // codegraph: page note at /notes/:id
 // codegraph: start page notes at /
 // codegraph: trigger nightly-tidy schedule        (or event, or command)
-// codegraph: test feature write-note              (test module x, test page y…)
+// codegraph: test feature write-note              (test module x, test page y...)
 // codegraph: tooling                              (config, build scripts, helpers for tests)
 ```
 
 - `as <type>` says what the team calls a component, after its name: `module
   jobs as queue`, `feature send as webhook uses mail`, `page home as landing at
-  /`, `trigger tidy schedule as cron`. It changes what the map calls it, never
-  which rules it keeps to: those come from module, feature, page or trigger.
+  /`, `trigger tidy schedule as cron`. It changes what the map calls it and the
+  card it is drawn as, never which rules it keeps to: those come from module,
+  feature, page or trigger. Use the team's own word where they have one.
 - `front door` goes once per module and lists every name other components
-  may take from it.
+  may take from it. A default export goes on it as the word `default`, not
+  under the module's name, because that is the name the code takes:
+  `front door default, saveNote`.
 - `uses` on a feature lists exactly the modules it imports.
 - `store` goes on the schema that defines what is kept, in the module that
   owns it, and names the container it is kept in.
@@ -75,23 +95,60 @@ component.
 ## Words on wires
 
 The kind of a wire is read from the code. Its words, saying what it is for,
-are written at the end of the line that makes it:
+you write:
 
 ```ts
 import { saveNote } from '../modules/notes' // codegraph: wire keeps the note
 await fetch(stripeUrl, body) // codegraph: wire to stripe: takes the payment
 ```
 
+**Which line.** The words go on the line the statement *starts* on, or on a
+line of their own directly above it. On a multi-line import, that is the
+`import {` line, never the closing `} from '...'` line. When the names are
+spread over several lines, the tag on its own line above reads better:
+
+```ts
+// codegraph: wire lists the notes
+import {
+  listNotes,
+} from '../modules/notes'
+```
+
+A `require` counts as an import, and so does `await import(...)`. The words
+go on the line the statement starts on, the same way.
+
 Every import from one component into another needs words, written once on
-any one line that makes that wire. A call out of the repo says what it
-reaches with `to <name>:`, and only a module may make one.
+any one line that makes that wire. Two sets of words that disagree is a
+mismatch.
+
+**What reaches outside.** A call out of the container says what it reaches
+with `to <name>:`, and only a module may make one. The name is not decoration:
+the app offers it to the person as a shallow software system, and once they
+agree it is a card on the map. So name the system, as a person would say it
+— `to stripe:`, `to companies house:` — not the library, the URL or the
+function.
+
+**The kinds of wire.** The reader works these out; you never write a kind in
+a tag. It helps to know what it will read:
+
+| Kind | What makes it | Words |
+| --- | --- | --- |
+| `asks` | a page imports a feature | yours |
+| `reads` | a page imports a module | yours |
+| `starts` | a trigger imports anything | yours |
+| `uses` | any other import between components | yours |
+| `keeps` | a module's `store` tag, to the container it names | written for you |
+| `leads to` | a page holding another page's address | read from the code |
+| `calls` | a `wire to <name>:` tag | yours |
 
 ## What the check holds you to
 
 - Every code file is tagged; every component file is inside one container.
-- Every wire between components has words.
+- Every `uses`, `asks`, `reads` and `starts` wire has words. `keeps` and
+  `leads to` are written for you, so they need none.
 - A module never reaches a feature, a page or a trigger. A feature never
   reaches a page or a trigger. Nothing reaches into a page or a trigger.
-- A feature's `uses` names exactly the modules it imports.
-- Names taken from a module are on its front door.
-- Only a module calls out of the repo, and only a module keeps a store.
+- A feature's `uses` names exactly the modules it imports, and no others.
+- Every name taken from a module is on its front door, `default` included.
+- Only a module reaches outside its container, and only a module keeps a
+  store.

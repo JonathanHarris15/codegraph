@@ -47,7 +47,13 @@ export const readCode = (path: string, text: string): FileCode => {
       code.imports.push({ from: statement.moduleSpecifier.text, line: lineOf(statement), names: takenBy(statement) })
   }
 
-  const walk = (node: ts.Node): void => {
+  // A statement's own first line, so a require deep in a file reports the
+  // line a person would write its wire's words on, as an import does.
+  const isStatement = (node: ts.Node): boolean =>
+    node.kind >= ts.SyntaxKind.FirstStatement && node.kind <= ts.SyntaxKind.LastStatement
+  const bound = new Set<ts.Node>()
+  const walk = (node: ts.Node, at: number): void => {
+    const line = isStatement(node) ? lineOf(node) : at
     if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && /^\/[\w\-/:]*$/.test(node.text))
       code.addresses.push(node.text)
     // An address built as it runs, `/notes/${id}`, stands for any value there.
@@ -55,10 +61,43 @@ export const readCode = (path: string, text: string): FileCode => {
       const built = node.head.text + node.templateSpans.map((span) => ':any' + span.literal.text).join('')
       if (/^\/[\w\-/:]*$/.test(built)) code.addresses.push(built)
     }
-    node.forEachChild(walk)
+    // `const { a } = require('./m')` reaches the same way an import does, and
+    // takes the names it picks out; the module whole is `*`.
+    if (ts.isVariableDeclaration(node) && node.initializer) {
+      const call = ts.isAwaitExpression(node.initializer) ? node.initializer.expression : node.initializer
+      const from = asksFor(call)
+      if (from) {
+        bound.add(call)
+        code.imports.push({ from, line, names: pickedOut(node.name) })
+      }
+    }
+    const from = asksFor(node)
+    if (from && !bound.has(node)) code.imports.push({ from, line, names: ['*'] })
+    node.forEachChild((child) => walk(child, line))
   }
-  walk(file)
+  walk(file, 1)
   return code
+}
+
+/** What a `require('…')` or an `import('…')` reaches, where its address is
+ *  written out. A container written in CommonJS makes its wires this way, and
+ *  the reader must see them, or nothing a tag says could match (ADR 0008). */
+const asksFor = (node: ts.Node): string | null => {
+  if (!ts.isCallExpression(node)) return null
+  const called = node.expression
+  const asks = (ts.isIdentifier(called) && called.text === 'require') || called.kind === ts.SyntaxKind.ImportKeyword
+  const [first] = node.arguments
+  return asks && first && ts.isStringLiteral(first) ? first.text : null
+}
+
+/** The names a require picks out of what it reaches, or `*` for the whole of
+ *  it, which is held to no front door. */
+const pickedOut = (name: ts.BindingName): string[] => {
+  if (!ts.isObjectBindingPattern(name)) return ['*']
+  return name.elements.map((element) => {
+    const taken = element.propertyName ?? element.name
+    return !element.dotDotDotToken && ts.isIdentifier(taken) ? taken.text : '*'
+  })
 }
 
 /** The names an import or re-export takes from the file it reaches. */
