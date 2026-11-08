@@ -1,5 +1,5 @@
 // codegraph: feature show-annotations in workspace
-// codegraph: uses places, projects, sync, members
+// codegraph: uses annotations, places, projects, reader, sync, members
 import type { Layer } from '../modules/annotations/index.js'
 import { iMay } from '../modules/members/index.js'
 import { keyIsShared, mapsNow, readLayers, takeUpMerges } from '../modules/places/index.js'

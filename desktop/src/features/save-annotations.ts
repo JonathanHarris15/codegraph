@@ -1,5 +1,5 @@
 // codegraph: feature save-annotations in workspace
-// codegraph: uses annotations, places, projects, sync, together, members
+// codegraph: uses annotations, places, projects, reader, sync, together, members
 import { type Layer } from '../modules/annotations/index.js'
 import { iMay } from '../modules/members/index.js'
 import { mapsNow, onLocalMap, readLayers, writeLayers } from '../modules/places/index.js'

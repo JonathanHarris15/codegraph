@@ -1,4 +1,4 @@
-// codegraph: test ui projects
+// codegraph: test ui projects, settings
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

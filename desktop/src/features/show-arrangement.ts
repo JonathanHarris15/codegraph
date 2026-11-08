@@ -1,5 +1,5 @@
 // codegraph: feature show-arrangement in workspace
-// codegraph: uses arrangements, places, projects, sync, members
+// codegraph: uses arrangements, places, projects, reader, sync, members
 import type { Arrangement } from '../modules/arrangements/index.js'
 import { iMay } from '../modules/members/index.js'
 import { keyIsShared, mapsNow, readSpots, takeUpMerges } from '../modules/places/index.js'

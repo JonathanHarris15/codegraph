@@ -1,4 +1,4 @@
-// codegraph: test ui canvas
+// codegraph: test ui canvas, sketch
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { type ElectronApplication, type Locator, type Page } from 'playwright'

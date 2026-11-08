@@ -1,5 +1,6 @@
 // codegraph: module cloud
-// codegraph: fakes firebase because the project is not set up yet, and tests cannot reach one
+// A folder standing in for Firebase, for tests and for trying the app as two
+// members on one computer (`npm run together`), until Firebase is set up.
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { CloudOffline, type Cloud, type Doc, type Member, type Room, type RoomNow, type Seen } from './schema.js'

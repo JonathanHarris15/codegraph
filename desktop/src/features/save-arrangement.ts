@@ -1,5 +1,5 @@
 // codegraph: feature save-arrangement in workspace
-// codegraph: uses arrangements, places, projects, sync, together, members
+// codegraph: uses arrangements, places, projects, reader, sync, together, members
 import type { Arrangement } from '../modules/arrangements/index.js'
 import { iMay } from '../modules/members/index.js'
 import { mapsNow, onLocalMap, readSpots, writeSpots } from '../modules/places/index.js'

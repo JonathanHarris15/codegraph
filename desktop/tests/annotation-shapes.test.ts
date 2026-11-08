@@ -1,4 +1,4 @@
-// codegraph: test annotation-layer
+// codegraph: test ui canvas
 import { describe, expect, it } from 'vitest'
 import { SHAPE_GROUPS, SHAPES, WAS, shapeOf } from '../src/ui/components/annotation-shapes.js'
 
