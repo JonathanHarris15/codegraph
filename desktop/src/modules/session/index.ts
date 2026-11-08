@@ -6,7 +6,7 @@
  *  told, and this computer following what changes online. Signing in by token
  *  and by typing a code both end here. */
 import { theCloud } from '../cloud/index.js'
-import { GithubRefused, forgetToken, saveToken, savedToken, whoFully } from '../github/index.js'
+import { forgetToken, problemWithGithub, savedToken, saveToken, whoFully } from '../github/index.js'
 import { forgetMember, rememberMember, whoIsIn } from '../members/index.js'
 import { startFollowing, stopFollowing } from '../sync/index.js'
 
@@ -25,13 +25,7 @@ export const signIn = async (token: string): Promise<SignedIn> => {
     return { ok: true, account: found.login }
   } catch (refusal) {
     forgetToken()
-    return {
-      ok: false,
-      problem:
-        refusal instanceof GithubRefused
-          ? refusal.message
-          : 'Could not reach GitHub. Check the connection and try again.',
-    }
+    return { ok: false, problem: problemWithGithub(refusal) }
   }
 }
 

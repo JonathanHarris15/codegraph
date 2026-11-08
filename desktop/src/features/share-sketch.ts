@@ -1,7 +1,7 @@
 // codegraph: feature share-sketch in workspace
 // codegraph: uses sketches, github, members, sync, cloud
 import { isConnected } from '../modules/cloud/index.js'
-import { findAccount, GithubRefused, savedToken } from '../modules/github/index.js'
+import { findAccount, problemWithGithub, savedToken } from '../modules/github/index.js'
 import { whoIsIn, type Changed } from '../modules/members/index.js'
 import { LOOSE, readSketch, writeSketch } from '../modules/sketches/index.js'
 import { sendRemoval, sendUp, sketchPath } from '../modules/sync/index.js'
@@ -27,6 +27,6 @@ export const shareSketch = async (sketchId: string, login: string, role: 'collab
     if (wasPrivate) await sendRemoval(wasPrivate)
     return { ok: true }
   } catch (refusal) {
-    return { ok: false, problem: refusal instanceof GithubRefused ? refusal.message : 'Could not reach GitHub.' }
+    return { ok: false, problem: problemWithGithub(refusal) }
   }
 }

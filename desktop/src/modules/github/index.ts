@@ -1,5 +1,5 @@
 // codegraph: module github
-// codegraph: front door useFolder, useKeystore, tokenIsSafe, saveToken, savedToken, forgetToken, whoAmI, whoFully, findAccount, startDeviceSignIn, askDeviceSignIn, listRepos, codegraphRepos, GithubRepo, GithubAccount, DeviceSignIn, GithubRefused, Keystore
+// codegraph: front door useFolder, useKeystore, tokenIsSafe, saveToken, savedToken, forgetToken, whoAmI, whoFully, findAccount, startDeviceSignIn, askDeviceSignIn, listRepos, codegraphRepos, GithubRepo, GithubAccount, DeviceSignIn, GithubRefused, problemWithGithub, Keystore
 import { GithubRefused, askDeviceSignIn, findAccount, listRepos, projectsServed, startDeviceSignIn, whoAmI, whoFully, type GithubRepo } from './api.js'
 import {
   forgetToken,
@@ -58,3 +58,8 @@ export const codegraphRepos = async (token: string): Promise<(GithubRepo & { pro
     return projects ? [{ ...repo, projects }] : []
   })
 }
+
+/** What to tell a person when asking GitHub went wrong: what GitHub said, if it
+ *  said no, or that it could not be reached. */
+export const problemWithGithub = (refusal: unknown): string =>
+  refusal instanceof GithubRefused ? refusal.message : 'Could not reach GitHub. Check the connection and try again.'

@@ -1,6 +1,6 @@
 // codegraph: feature invite-member in workspace
 // codegraph: uses github, members, projects, sync
-import { GithubRefused, findAccount, savedToken } from '../modules/github/index.js'
+import { findAccount, problemWithGithub, savedToken } from '../modules/github/index.js'
 import { iMay, whoIsIn, type Changed, type Role } from '../modules/members/index.js'
 import { findProject, keepProject } from '../modules/projects/index.js'
 import { sendProject } from '../modules/sync/index.js'
@@ -21,6 +21,6 @@ export const inviteMember = async (projectId: string, login: string, role: Exclu
     await sendProject(projectId)
     return { ok: true }
   } catch (refusal) {
-    return { ok: false, problem: refusal instanceof GithubRefused ? refusal.message : 'Could not reach GitHub.' }
+    return { ok: false, problem: problemWithGithub(refusal) }
   }
 }

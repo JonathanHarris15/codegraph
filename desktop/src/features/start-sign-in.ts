@@ -1,6 +1,6 @@
 // codegraph: feature start-sign-in in workspace
 // codegraph: uses github, machine
-import { GithubRefused, startDeviceSignIn, type DeviceSignIn } from '../modules/github/index.js'
+import { problemWithGithub, startDeviceSignIn, type DeviceSignIn } from '../modules/github/index.js'
 import { githubClientId } from '../modules/machine/index.js'
 
 export type SignInStarted = { ok: true; started: DeviceSignIn } | { ok: false; problem: string }
@@ -13,6 +13,6 @@ export const startSignIn = async (): Promise<SignInStarted> => {
   try {
     return { ok: true, started: await startDeviceSignIn(clientId) }
   } catch (refusal) {
-    return { ok: false, problem: refusal instanceof GithubRefused ? refusal.message : 'Could not reach GitHub. Check the connection and try again.' }
+    return { ok: false, problem: problemWithGithub(refusal) }
   }
 }
