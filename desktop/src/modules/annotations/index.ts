@@ -1,9 +1,9 @@
 // codegraph: module annotations
 // codegraph: front door useFolder, readAnnotations, writeAnnotations, hasAnnotations, annotationMarks, annotationKeys, removeAnnotations, annotationWords, firstLayer, Annotation, AnnotationEnd, Layer, Pointer
-import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
 import type { Layer } from './schema.js'
+import { keepWhole } from '../machine/index.js'
 
 export { firstLayer } from './schema.js'
 export { annotationWords } from './words.js'
@@ -41,10 +41,7 @@ export const readAnnotations = (projectId: string, key = ''): Layer[] => {
 /** Written to a neighbour first, then moved over, so a crash cannot shred it. */
 export const writeAnnotations = (projectId: string, layers: Layer[], key = '', marks: AnnotationMarks = annotationMarks(projectId, key)): void => {
   const file = fileOf(projectId, key)
-  mkdirSync(dirname(file), { recursive: true })
-  const beside = `${file}.${randomUUID().slice(0, 8)}`
-  writeFileSync(beside, JSON.stringify({ layers, ...marks }, null, 2), 'utf8')
-  renameSync(beside, file)
+  keepWhole(file, JSON.stringify({ layers, ...marks }, null, 2))
 }
 
 /** For telling when a branch these notes are on has been merged. */

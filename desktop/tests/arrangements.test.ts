@@ -4,7 +4,7 @@ import { saveArrangement } from '../src/features/save-arrangement.js'
 import { showArrangement } from '../src/features/show-arrangement.js'
 import { forgetting, movedTo, roomKey, useFolder as useArrangements } from '../src/modules/arrangements/index.js'
 import { addProject, addSoftwareSystem, useFolder as useProjects } from '../src/modules/projects/index.js'
-import { aMappedRepo, closeYard, openYard, type Yard } from './yard.js'
+import { aMappedRepo, aReaderOf, closeYard, openYard, type Yard } from './yard.js'
 
 let yard: Yard
 let projectId = ''
@@ -52,6 +52,18 @@ describe('where a person has moved a map about', () => {
   it('is none for a project nobody has moved anything on', async () => {
     expect(await showArrangement('nobody')).toEqual([])
   })
+
+  it('keeps every move while another program reads the files', async () => {
+    const stop = await aReaderOf(yard.home)
+    try {
+      const stopAt = Date.now() + 3000
+      let x = 0
+      while (Date.now() < stopAt) await saveArrangement(projectId, [{ id: web(), x: ++x, y: 0 }])
+      expect(await showArrangement(projectId)).toEqual([{ id: web(), x, y: 0 }])
+    } finally {
+      stop()
+    }
+  }, 15_000)
 })
 
 describe('moving things on an arrangement', () => {

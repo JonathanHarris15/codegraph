@@ -1,9 +1,10 @@
 // codegraph: module card-types
 // codegraph: front door useFolder, readCardTypes, writeCardTypes, rememberLooks, CardType
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import type { CardType } from './schema.js'
+import { keepWhole } from '../machine/index.js'
 
 export type { CardType } from './schema.js'
 
@@ -44,8 +45,5 @@ export const rememberLooks = (drawn: { name: string; icon: string; shape: CardTy
 /** Written to a neighbour first, then moved over, so a crash cannot shred it. */
 export const writeCardTypes = (types: CardType[]): void => {
   const file = fileOf()
-  mkdirSync(dirname(file), { recursive: true })
-  const beside = `${file}.${randomUUID().slice(0, 8)}`
-  writeFileSync(beside, JSON.stringify({ types }, null, 2), 'utf8')
-  renameSync(beside, file)
+  keepWhole(file, JSON.stringify({ types }, null, 2))
 }

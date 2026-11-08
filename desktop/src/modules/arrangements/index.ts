@@ -1,9 +1,9 @@
 // codegraph: module arrangements
 // codegraph: front door useFolder, readArrangement, writeArrangement, readArrangementFile, writeArrangementFile, arrangementKeys, removeArrangements, movedTo, forgetting, roomKey, Arrangement, ArrangementFile, Spot
-import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
 import type { Arrangement } from './schema.js'
+import { keepWhole } from '../machine/index.js'
 
 export { forgetting, movedTo, roomKey } from './schema.js'
 export type { Arrangement, Spot } from './schema.js'
@@ -53,10 +53,7 @@ export const readArrangement = (projectId: string, key = ''): Arrangement => rea
 /** Written to a neighbour first, then moved over, so a crash cannot shred it. */
 export const writeArrangementFile = (projectId: string, kept: ArrangementFile, key = ''): void => {
   const file = fileOf(projectId, key)
-  mkdirSync(dirname(file), { recursive: true })
-  const beside = `${file}.${randomUUID().slice(0, 8)}`
-  writeFileSync(beside, JSON.stringify(kept, null, 2), 'utf8')
-  renameSync(beside, file)
+  keepWhole(file, JSON.stringify(kept, null, 2))
 }
 
 export const writeArrangement = (projectId: string, spots: Arrangement, key = ''): void =>

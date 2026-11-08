@@ -1,8 +1,7 @@
 // codegraph: tooling
-import { spawn } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { CloudOffline, openFolderCloud, type Cloud, type Member, type RoomNow } from '../src/modules/cloud/index.js'
-import { closeYard, openYard, type Yard } from './yard.js'
+import { aReaderOf, closeYard, openYard, type Yard } from './yard.js'
 
 const ana: Member = { id: '1', login: 'ana', name: 'Ana', avatar: '' }
 const ben: Member = { id: '2', login: 'ben', name: 'Ben', avatar: '' }
@@ -120,10 +119,9 @@ describe('the online side', () => {
     it('keeps saving while another program reads the folder', async () => {
       // The other window, polling: on Windows a file open for reading cannot be
       // written over, so a save has to wait its turn rather than throw.
-      const reader = spawn(process.execPath, ['-e', READ_EVERYTHING, yard.path], { stdio: 'ignore' })
+      const stop = await aReaderOf(yard.path)
       try {
         const mine = cloud.room('r', ana)
-        await new Promise((go) => setTimeout(go, 300))
         const stopAt = Date.now() + 3000
         let changes = 0
         for (let i = 0; Date.now() < stopAt; i++) {
@@ -134,24 +132,9 @@ describe('the online side', () => {
         expect((await cloud.read('projects/a'))?.['count']).toBe(changes)
         await mine.leave()
       } finally {
-        reader.kill()
+        stop()
       }
     }, 15_000)
   })
 })
 
-/** Reads every file under a folder, over and over, as fast as it can. */
-const READ_EVERYTHING = `
-const { readdirSync, readFileSync } = require('node:fs')
-const { join } = require('node:path')
-const walk = (dir) => {
-  let names = []
-  try { names = readdirSync(dir, { withFileTypes: true }) } catch { return }
-  for (const one of names) {
-    const path = join(dir, one.name)
-    if (one.isDirectory()) walk(path)
-    else try { readFileSync(path) } catch {}
-  }
-}
-for (;;) walk(process.argv[1])
-`

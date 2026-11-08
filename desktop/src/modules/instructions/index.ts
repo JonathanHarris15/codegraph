@@ -1,13 +1,14 @@
 // codegraph: module instructions
 // codegraph: front door instructionsFor, defaultFor, topics, editsOf, keepEdit, putBackDefault, useFolder, Topic, Edit
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import proposals from './proposals.md?raw'
 import setup from './setup.md?raw'
 import tags from './tags.md?raw'
 import workingHere from './working-here.md?raw'
 import type { Edit, Instructions } from './schema.js'
+import { keepWhole } from '../machine/index.js'
 
 export type { Edit } from './schema.js'
 
@@ -58,10 +59,7 @@ const kept = (): Instructions => {
 /** Written to a neighbour first, then moved over, so a crash cannot shred it. */
 const write = (all: Instructions): void => {
   const file = fileOf()
-  mkdirSync(dirname(file), { recursive: true })
-  const beside = `${file}.${randomUUID().slice(0, 8)}`
-  writeFileSync(beside, JSON.stringify(all, null, 2), 'utf8')
-  renameSync(beside, file)
+  keepWhole(file, JSON.stringify(all, null, 2))
 }
 
 /** Every edit a person has made to a topic, oldest first. */

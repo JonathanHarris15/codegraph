@@ -1,13 +1,14 @@
 // codegraph: module machine
-// codegraph: front door appFolder, devRendererUrl, keystore, askForFolder, useChooser, askForPicture, usePicturePicker, mcpServerFile, appFolderAnywhere, watchFolders, realFolder, sameFolder, githubClientId, cloudFolder, firebaseSettings, Keystore
+// codegraph: front door keepWhole, appFolder, devRendererUrl, keystore, askForFolder, useChooser, askForPicture, usePicturePicker, mcpServerFile, appFolderAnywhere, watchFolders, realFolder, sameFolder, githubClientId, cloudFolder, firebaseSettings, Keystore
 
 /** This computer and the window around the app: where files are kept, the
  *  operating system's keystore, the folder picker, and what the build says.
  *  Everything here comes from outside the program, so it is asked for
  *  lazily: away from the app — in a test, say — each answer is a plain one. */
-import { existsSync, realpathSync, watch, type FSWatcher } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import { existsSync, mkdirSync, realpathSync, renameSync, rmSync, watch, writeFileSync, type FSWatcher } from 'node:fs'
 import { homedir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import type { FirebaseSettings } from '../cloud/index.js'
 
 type Electron = typeof import('electron')
@@ -148,6 +149,34 @@ export const appFolderAnywhere = (): string => {
   if (process.platform === 'win32') return join(process.env['APPDATA'] ?? join(home, 'AppData', 'Roaming'), 'codegraph-desktop')
   if (process.platform === 'darwin') return join(home, 'Library', 'Application Support', 'codegraph-desktop')
   return join(process.env['XDG_CONFIG_HOME'] ?? join(home, '.config'), 'codegraph-desktop')
+}
+
+/** What Windows says, for a moment, when a file is open in another program. */
+const BUSY = new Set(['EPERM', 'EACCES', 'EBUSY'])
+const KEEP_TRIES = 100
+/** Something to wait on, for a short pause that blocks. */
+const pause = new Int32Array(new SharedArrayBuffer(4))
+
+/** Writes a file whole: to a neighbour first, then moved over, so a crash
+ *  cannot shred it and a reader never sees half. On Windows a file another
+ *  program has open cannot be written over for that moment, so it waits a
+ *  little and tries again. */
+export const keepWhole = (file: string, text: string): void => {
+  mkdirSync(dirname(file), { recursive: true })
+  const beside = `${file}.${randomUUID().slice(0, 8)}.tmp`
+  writeFileSync(beside, text, 'utf8')
+  for (let tries = 0; ; tries++) {
+    try {
+      renameSync(beside, file)
+      return
+    } catch (error) {
+      if (!BUSY.has((error as NodeJS.ErrnoException).code ?? '') || tries >= KEEP_TRIES) {
+        rmSync(beside, { force: true })
+        throw error
+      }
+      Atomics.wait(pause, 0, 0, 2)
+    }
+  }
 }
 
 /** The one name this computer has for a folder, whichever name it was reached

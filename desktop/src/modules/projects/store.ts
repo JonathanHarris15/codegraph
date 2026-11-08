@@ -1,8 +1,9 @@
 // codegraph: module projects
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { emptyWorkspace, shortNameOf, type Project, type Workspace } from './schema.js'
+import { keepWhole } from '../machine/index.js'
 
 let folder = ''
 
@@ -45,10 +46,7 @@ export const read = (): Workspace => {
 /** Written to a neighbour first, then moved over, so a crash cannot shred it. */
 export const write = (workspace: Workspace): void => {
   const path = file()
-  mkdirSync(dirname(path), { recursive: true })
-  const beside = path + '.' + randomUUID().slice(0, 8)
-  writeFileSync(beside, JSON.stringify(workspace, null, 2), 'utf8')
-  renameSync(beside, path)
+  keepWhole(path, JSON.stringify(workspace, null, 2))
 }
 
 export const newId = (): string => randomUUID()

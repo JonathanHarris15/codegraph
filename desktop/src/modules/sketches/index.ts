@@ -1,9 +1,10 @@
 // codegraph: module sketches
 // codegraph: front door LOOSE, SHARED_WITH_ME, keepMockupBytes, useFolder, sketchesFolder, listSketches, newSketch, readSketch, writeSketch, removeSketch, listFolders, newFolder, readFolder, writeFolder, removeFolder, tidyFolders, withNotesAsAnnotations, keepMockup, mockupFile, mockupUrl, blankCard, hubOf, isHub, looksDrawn, wireOfHub, Sketch, SketchCard, SketchWire, Note, Level, CardState, CardLook, CardShape, SketchFolder
 import { randomUUID } from 'node:crypto'
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
-import { dirname, extname, join } from 'node:path'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { extname, join } from 'node:path'
 import type { Sketch, SketchCard, SketchFolder } from './schema.js'
+import { keepWhole } from '../machine/index.js'
 
 export { LOOSE, SHARED_WITH_ME, blankCard, hubOf, isHub, looksDrawn, wireOfHub } from './schema.js'
 export type { CardLook, CardShape, CardState, Level, Note, Sketch, SketchCard, SketchFolder, SketchWire } from './schema.js'
@@ -56,10 +57,7 @@ export const readSketch = (projectId: string, sketchId: string): Sketch | null =
 /** Written to a neighbour first, then moved over, so a crash cannot shred it. */
 export const writeSketch = (sketch: Sketch): void => {
   const path = fileOf(sketch.projectId, sketch.id)
-  mkdirSync(dirname(path), { recursive: true })
-  const beside = path + '.' + randomUUID().slice(0, 8)
-  writeFileSync(beside, JSON.stringify(sketch, null, 2), 'utf8')
-  renameSync(beside, path)
+  keepWhole(path, JSON.stringify(sketch, null, 2))
 }
 
 /** Folders are kept apart from the sketches, one file each, under their library. */
@@ -87,10 +85,7 @@ export const readFolder = (library: string, id: string): SketchFolder | null => 
 
 export const writeFolder = (one: SketchFolder): void => {
   const path = folderFile(one.library, one.id)
-  mkdirSync(dirname(path), { recursive: true })
-  const beside = path + '.' + randomUUID().slice(0, 8)
-  writeFileSync(beside, JSON.stringify(one, null, 2), 'utf8')
-  renameSync(beside, path)
+  keepWhole(path, JSON.stringify(one, null, 2))
 }
 
 export const removeFolder = (library: string, id: string): void => {

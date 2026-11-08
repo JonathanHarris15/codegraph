@@ -2,9 +2,10 @@
 // codegraph: front door useFolder, sayWhere, whereIs, agentsFolder, Whereabouts
 // codegraph: store whereabouts as Whereabouts
 import { createHash } from 'node:crypto'
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { realFolder } from '../machine/index.js'
+import { keepWhole } from '../machine/index.js'
 
 /** Where an agent says it is working in one repo, so the canvas can follow
  *  it: the card, by the name a proposal gives it, and a few words. */
@@ -41,9 +42,7 @@ export const sayWhere = (repo: string, card: string, words: string): void => {
   }
   mkdirSync(agentsFolder(), { recursive: true })
   const said: Whereabouts = { repo: resolve(repo), card, words, at: new Date().toISOString() }
-  const beside = `${file}.${process.pid}`
-  writeFileSync(beside, JSON.stringify(said), 'utf8')
-  renameSync(beside, file)
+  keepWhole(file, JSON.stringify(said))
 }
 
 /** Where the agent in a repo last said it was, if it said so lately. */

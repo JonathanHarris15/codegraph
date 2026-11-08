@@ -1,8 +1,8 @@
 // codegraph: module sync
 // codegraph: front door useFolder, useHeard, startFollowing, stopFollowing, pull, sendUp, sendSketch, sendFolder, sendMap, sendProject, sendEverything, sendRemoval, catchUp, follow, listRevisions, restoreRevision, pendingCount, removeEverything, projectPath, sketchPath, folderPath, Revision
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
 import { annotationKeys, readAnnotations, removeAnnotations, writeAnnotations, type Layer } from '../annotations/index.js'
 import { arrangementKeys, readArrangementFile, removeArrangements, writeArrangementFile, type Arrangement } from '../arrangements/index.js'
 import { CloudOffline, theCloud, type Doc, type Member } from '../cloud/index.js'
@@ -11,6 +11,7 @@ import { keyIsShared, PROJECT_KEY } from '../places/index.js'
 import { keepProject, listProjects, removeProject, type Project } from '../projects/index.js'
 import { keepMockupBytes, listFolders, listSketches, LOOSE, mockupFile, readFolder, readSketch, removeFolder, removeSketch, SHARED_WITH_ME, writeFolder, writeSketch, type Sketch, type SketchCard, type SketchFolder } from '../sketches/index.js'
 import { mergeDoc, sameDoc, tally, wordsFor } from '../together/index.js'
+import { keepWhole } from '../machine/index.js'
 
 let folder = ''
 
@@ -29,10 +30,7 @@ const inFolder = (...parts: string[]): string => {
 }
 
 const kept = (file: string, doc: unknown): void => {
-  mkdirSync(dirname(file), { recursive: true })
-  const beside = `${file}.${randomUUID().slice(0, 8)}`
-  writeFileSync(beside, JSON.stringify(doc), 'utf8')
-  renameSync(beside, file)
+  keepWhole(file, JSON.stringify(doc))
 }
 
 const lastSeenFile = (path: string): string => inFolder('seen', `${encodeURIComponent(path)}.json`)

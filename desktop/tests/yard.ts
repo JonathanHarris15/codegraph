@@ -1,5 +1,5 @@
 // codegraph: tooling
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -18,6 +18,30 @@ import { useFolder as useSyncFolder } from '../src/modules/sync/index.js'
 
 /** A scratch yard for a test: real folders, real git, thrown away after. */
 export type Yard = { path: string; home: string }
+
+/** Another program reading every file under a folder, over and over, as fast
+ *  as it can: the other window, polling. On Windows a file open for reading
+ *  cannot be written over for that moment. Hands back how to stop it. */
+export const aReaderOf = async (folder: string): Promise<() => void> => {
+  const reader = spawn(process.execPath, ['-e', READ_EVERYTHING, folder], { stdio: 'ignore' })
+  await new Promise((go) => setTimeout(go, 300))
+  return () => reader.kill()
+}
+
+const READ_EVERYTHING = `
+const { readdirSync, readFileSync } = require('node:fs')
+const { join } = require('node:path')
+const walk = (dir) => {
+  let names = []
+  try { names = readdirSync(dir, { withFileTypes: true }) } catch { return }
+  for (const one of names) {
+    const path = join(dir, one.name)
+    if (one.isDirectory()) walk(path)
+    else try { readFileSync(path) } catch {}
+  }
+}
+for (;;) walk(process.argv[1])
+`
 
 export const git = (cwd: string, ...args: string[]): string =>
   execFileSync('git', args, { cwd, encoding: 'utf8', windowsHide: true }).trim()
