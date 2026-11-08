@@ -13,6 +13,7 @@ import { reportWork } from '../features/report-work.js'
 import { useFolder as useAgentsFolder } from '../modules/agents/index.js'
 import { useFolder as useAnnotationsFolder } from '../modules/annotations/index.js'
 import { useFolder as useCardTypesFolder } from '../modules/card-types/index.js'
+import { useFolder as useInstructionsFolder } from '../modules/instructions/index.js'
 import { appFolderAnywhere } from '../modules/machine/index.js'
 import { useFolder as useProjectsFolder } from '../modules/projects/index.js'
 import { useFolder as useSketchesFolder } from '../modules/sketches/index.js'
@@ -29,6 +30,7 @@ useSketchesFolder(appFolderAnywhere())
 useAgentsFolder(appFolderAnywhere())
 useAnnotationsFolder(appFolderAnywhere())
 useCardTypesFolder(appFolderAnywhere())
+useInstructionsFolder(appFolderAnywhere())
 const text = (words: string) => ({ content: [{ type: 'text' as const, text: words }] })
 
 const serve = async (): Promise<void> => {
@@ -101,6 +103,10 @@ const serve = async (): Promise<void> => {
 
   server.prompt('setup', 'Set this repo up for codegraph, in one sweep.', () => ({
     messages: [{ role: 'user', content: { type: 'text', text: giveInstructions('setup') } }],
+  }))
+
+  server.prompt('proposal', "Build the proposal on this branch, or make one from a project's sketch.", () => ({
+    messages: [{ role: 'user', content: { type: 'text', text: giveInstructions('proposals') } }],
   }))
 
   await server.connect(new StdioServerTransport())

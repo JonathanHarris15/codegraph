@@ -2,6 +2,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { AgentConnection } from '../features/connect-agent.js'
 import type { Connected } from '../features/connect-github.js'
+import type { InstructionsView } from '../features/show-instructions.js'
 import type { CloudView } from '../features/list-github-software-systems.js'
 import type { ProjectView } from '../features/list-projects.js'
 import type { Linked } from '../features/link-software-system.js'
@@ -21,6 +22,7 @@ import type { Whereabouts } from '../features/say-where.js'
 import type { Session } from '../features/show-session.js'
 import type { SignInStarted } from '../features/start-sign-in.js'
 import type { DeviceSignIn } from '../modules/github/index.js'
+import type { Edit } from '../modules/instructions/index.js'
 import type { Role } from '../modules/members/index.js'
 import type { Layer } from '../modules/annotations/index.js'
 import type { Arrangement } from '../modules/arrangements/index.js'
@@ -43,6 +45,9 @@ export type Api = {
   chooseBranch: (projectId: string, systemId: string, branch: string) => Promise<void>
   showAnnotations: (projectId: string, points?: Record<string, Point>) => Promise<Layer[]>
   saveAnnotations: (projectId: string, layers: Layer[], points?: Record<string, Point>, seen?: Layer[]) => Promise<Layer[]>
+  showInstructions: () => Promise<InstructionsView[]>
+  editInstructions: (topic: string, text: string) => Promise<Edit | null>
+  resetInstructions: (topic: string) => Promise<Edit | null>
   showCardTypes: () => Promise<CardType[]>
   saveCardTypes: (types: CardType[]) => Promise<void>
   showArrangement: (projectId: string, points?: Record<string, Point>) => Promise<Arrangement>
@@ -103,6 +108,9 @@ const api: Api = {
   chooseBranch: (projectId, systemId, branch) => ipcRenderer.invoke('branch:choose', projectId, systemId, branch),
   showAnnotations: (projectId, points = {}) => ipcRenderer.invoke('annotations:show', projectId, points),
   saveAnnotations: (projectId, layers, points = {}, seen) => ipcRenderer.invoke('annotations:save', projectId, layers, points, seen),
+  showInstructions: () => ipcRenderer.invoke('instructions:show'),
+  editInstructions: (topic, text) => ipcRenderer.invoke('instructions:edit', topic, text),
+  resetInstructions: (topic) => ipcRenderer.invoke('instructions:reset', topic),
   showCardTypes: () => ipcRenderer.invoke('card-types:show'),
   saveCardTypes: (types) => ipcRenderer.invoke('card-types:save', types),
   showArrangement: (projectId, points = {}) => ipcRenderer.invoke('arrangement:show', projectId, points),

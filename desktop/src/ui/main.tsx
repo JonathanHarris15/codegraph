@@ -10,25 +10,30 @@ import './design-system/theme.css'
 import { wearTheme } from './design-system/kit.js'
 import { CanvasPage } from './pages/canvas.js'
 import { ProjectsPage } from './pages/projects.js'
+import { SettingsPage } from './pages/settings.js'
 import { SketchPage } from './pages/sketch.js'
 
 /** Which page the window shows, kept in the address so a reload stays put. */
 const projectInAddress = (): string => window.location.hash.match(/^#\/projects\/(.+)$/)?.[1] ?? ''
+const settingsInAddress = (): boolean => window.location.hash === '#/settings'
 
 const sketchInAddress = (): string => window.location.hash.match(/^#\/sketches\/(.+\/.+)$/)?.[1] ?? ''
 
 const App = () => {
   const [project, setProject] = useState(projectInAddress)
   const [sketch, setSketch] = useState(sketchInAddress)
+  const [settings, setSettings] = useState(settingsInAddress)
   useEffect(() => {
     const moved = (): void => {
       setProject(projectInAddress())
       setSketch(sketchInAddress())
+      setSettings(settingsInAddress())
     }
     window.addEventListener('hashchange', moved)
     return () => window.removeEventListener('hashchange', moved)
   }, [])
   const [library = '', sketchId = ''] = sketch.split('/')
+  if (settings) return <SettingsPage onLeave={() => (window.location.hash = '')} />
   return sketch ? (
     <SketchPage key={sketch} library={library} sketchId={sketchId} onLeave={() => (window.location.hash = '#/sketches')} />
   ) : project ? (

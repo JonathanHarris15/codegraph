@@ -330,3 +330,22 @@ _Avoid_: version, save, commit, snapshot
 **Gallery**:
 The page listing the projects a member is on.
 _Avoid_: dashboard, grid, home
+## Instructions
+
+**Instructions**:
+What codegraph tells an agent, by topic: how to set a repo up, the tag rules,
+how to make and build a proposal, and the block a set-up repo carries in its
+own context file. An agent asks for them through the MCP.
+_Avoid_: prompt, rules, docs, guidance
+
+**Default**:
+The words codegraph ships with for a topic. A person who has written their own
+can always put it back.
+_Avoid_: original, built-in, factory, stock
+
+**Edit**:
+One saved state of a topic's instructions: the words as they stood, when they
+were kept, and whether a person wrote them or put the default back. The newest
+is what agents are told, and none is ever taken away, so nothing a person has
+written is lost.
+_Avoid_: version, revision, draft, history entry

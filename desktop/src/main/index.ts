@@ -6,6 +6,7 @@ import { useFolder as useAnnotationsFolder } from '../modules/annotations/index.
 import { useFolder as useArrangementsFolder } from '../modules/arrangements/index.js'
 import { useFolder as useCardTypesFolder } from '../modules/card-types/index.js'
 import { savedToken, useFolder as useGithubFolder, useKeystore } from '../modules/github/index.js'
+import { useFolder as useInstructionsFolder } from '../modules/instructions/index.js'
 import { openFirebaseCloud, openFolderCloud, theCloud, useCloud } from '../modules/cloud/index.js'
 import { appFolder, cloudFolder, devRendererUrl, firebaseSettings, keystore } from '../modules/machine/index.js'
 import { useFolder as useMembersFolder, whoIsIn } from '../modules/members/index.js'
@@ -25,6 +26,7 @@ const wireModules = async (): Promise<void> => {
   useAnnotationsFolder(home)
   useArrangementsFolder(home)
   useCardTypesFolder(home)
+  useInstructionsFolder(home)
   useGithubFolder(home)
   useMembersFolder(home)
   useSyncFolder(home)

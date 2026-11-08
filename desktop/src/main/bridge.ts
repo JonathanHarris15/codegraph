@@ -13,6 +13,7 @@ import { connectAgent } from '../features/connect-agent.js'
 import { connectGithub } from '../features/connect-github.js'
 import { createProject } from '../features/create-project.js'
 import { deleteSketch } from '../features/delete-sketch.js'
+import { editInstructions } from '../features/edit-instructions.js'
 import { listPoints } from '../features/list-points.js'
 import { listSketches } from '../features/list-sketches.js'
 import { listFolders } from '../features/list-folders.js'
@@ -22,10 +23,12 @@ import { moveFolder } from '../features/move-folder.js'
 import { deleteFolder } from '../features/delete-folder.js'
 import { fileSketch } from '../features/file-sketch.js'
 import { openSketch } from '../features/open-sketch.js'
+import { resetInstructions } from '../features/reset-instructions.js'
 import { saveSketch } from '../features/save-sketch.js'
 import { listGithubSoftwareSystems } from '../features/list-github-software-systems.js'
 import { listProjects } from '../features/list-projects.js'
 import { linkSoftwareSystem } from '../features/link-software-system.js'
+import { showInstructions } from '../features/show-instructions.js'
 import { showMap, type Card } from '../features/show-map.js'
 import { startSketch } from '../features/start-sketch.js'
 import { signOutGithub } from '../features/sign-out-github.js'
@@ -107,6 +110,9 @@ export const openBridge = (): void => {
   ipcMain.handle('annotations:save', (_event, projectId: string, layers: Layer[], points: Record<string, Point>, seen?: Layer[]) =>
     saveAnnotations(projectId, layers, points, seen),
   )
+  ipcMain.handle('instructions:show', () => showInstructions())
+  ipcMain.handle('instructions:edit', (_event, topic: string, text: string) => editInstructions(topic, text))
+  ipcMain.handle('instructions:reset', (_event, topic: string) => resetInstructions(topic))
   ipcMain.handle('card-types:show', () => showCardTypes())
   ipcMain.handle('card-types:save', (_event, types: CardType[]) => saveCardTypes(types))
   ipcMain.handle('arrangement:show', (_event, projectId: string, points: Record<string, Point>) => showArrangement(projectId, points))

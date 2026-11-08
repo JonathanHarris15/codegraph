@@ -173,6 +173,9 @@ export const ProjectsPage = ({ onOpen, onOpenSketch }: { onOpen: (projectId: str
           <Button look="bare" onClick={() => setOpen('agent')}>
             Your agent
           </Button>
+          <Button look="bare" onClick={() => (window.location.hash = '#/settings')}>
+            Settings
+          </Button>
           <ThemeSwitch />
           <Button onClick={() => void refresh()} disabled={refreshing}>
             {refreshing ? 'Checking GitHub…' : 'Refresh'}

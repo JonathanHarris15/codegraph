@@ -122,6 +122,37 @@ export const Field = ({
   </label>
 )
 
+/** A field for many lines of words a person writes and reads back, like what
+ *  codegraph tells their agents. Mono where the words are markdown, so the
+ *  shape of a list or a code block reads as it will be read. */
+export const Lines = ({
+  label,
+  value,
+  onChange,
+  rows = 20,
+  mono = false,
+  readOnly = false,
+}: {
+  label: string
+  value: string
+  onChange?: (value: string) => void
+  rows?: number
+  mono?: boolean
+  readOnly?: boolean
+}) => (
+  <label className="ds-field">
+    <span className="ds-label">{label}</span>
+    <textarea
+      className={mono ? 'ds-input ds-lines ds-lines--mono' : 'ds-input ds-lines'}
+      value={value}
+      rows={rows}
+      readOnly={readOnly}
+      spellCheck={false}
+      onChange={(event) => onChange?.(event.target.value)}
+    />
+  </label>
+)
+
 /** A short, flat list of words to pick from. Where the list groups, or a row
  *  needs a second line, use a button and a panel instead. */
 export const Select = ({

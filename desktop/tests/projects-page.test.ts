@@ -125,3 +125,50 @@ describe('the projects screen in the real app', () => {
     expect(await page.locator('.sketch-row').count()).toBe(0)
   }, 30_000)
 })
+
+describe('the settings screen in the real app', () => {
+  const editor = () => page.getByLabel('What your agents are told')
+
+  it('opens from the header, with every topic codegraph tells an agent about', async () => {
+    await page.getByRole('button', { name: 'Settings' }).click()
+    expect(await shown(page.getByRole('heading', { name: 'Settings' }))).toBe('Settings')
+    const topics = page.getByRole('group', { name: 'Topics' })
+    expect(await shown(topics)).toContain('setup')
+    expect(await shown(topics)).toContain('working-here')
+    expect(await shown(page.getByText('No edits yet'))).toContain('No edits yet')
+  })
+
+  it('takes a person own words, and says the topic is theirs now', async () => {
+    await page.getByRole('button', { name: 'Instructions for tags' }).click()
+    expect(await editor().inputValue()).toContain('# Codegraph')
+    await editor().fill('Tag every file. Say what each wire is for.')
+    await page.getByRole('button', { name: 'Save' }).click()
+    expect(await shown(page.getByText('Yours'))).toBe('Yours')
+    expect(await shown(page.getByText('In force now'))).toBe('In force now')
+  })
+
+  it('puts the default back, and still has what was written', async () => {
+    await page.getByRole('button', { name: 'Put the default back' }).click()
+    await page.getByText('Default put back').first().waitFor({ timeout: PATIENCE })
+    expect(await editor().inputValue()).toContain('# Codegraph')
+    expect(await page.getByRole('button', { name: 'Put this back' }).count()).toBe(1)
+  })
+
+  it('puts an old edit back in force', async () => {
+    await page.getByRole('button', { name: 'Put this back' }).first().click()
+    await page.waitForTimeout(300)
+    expect(await editor().inputValue()).toBe('Tag every file. Say what each wire is for.')
+  })
+
+  it('reads an edit without putting it back', async () => {
+    await page.getByRole('button', { name: 'Read' }).first().click()
+    expect(await page.getByLabel(/^What it said on/).count()).toBe(1)
+    await page.getByRole('button', { name: 'Hide' }).first().click()
+    expect(await page.getByLabel(/^What it said on/).count()).toBe(0)
+  })
+
+  it('goes back to the projects', async () => {
+    await page.getByRole('button', { name: 'Back to projects' }).click()
+    expect(await shown(page.getByRole('heading', { name: 'Projects' }))).toBe('Projects')
+  })
+})
