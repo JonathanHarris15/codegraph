@@ -1,5 +1,5 @@
 // codegraph: test ui canvas
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { type ElectronApplication, type Locator, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -30,9 +30,17 @@ const drag = async (one: Locator, dx: number, dy: number): Promise<void> => {
   await page.mouse.up()
   await page.waitForTimeout(400)
 }
-const kept = (): { id: string; x: number; y: number }[] =>
-  // The map's own layout, kept for the branch being looked at (ADR 0019).
-  JSON.parse(readFileSync(join(yard.home, 'arrangements', 'notes-app', encodeURIComponent('notes@local:main') + '.json'), 'utf8')).spots
+/** The map's own layout, kept for the branch being looked at (ADR 0019): none
+ *  until the first save lands. */
+const kept = (): { id: string; x: number; y: number }[] => {
+  const file = join(yard.home, 'arrangements', 'notes-app', encodeURIComponent('notes@local:main') + '.json')
+  return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')).spots : []
+}
+/** The layout once a save has landed. A save asks git where the branch stands,
+ *  which takes the best part of a second on Windows, so the move shows on the
+ *  page well before it reaches the file. */
+const keptOnceSaved = () =>
+  expect.poll(() => kept().map((spot) => spot.id), { timeout: PATIENCE })
 
 beforeAll(async () => {
   yard = openYard('rearrange')
@@ -80,9 +88,8 @@ describe('moving a map about', () => {
   })
 
   it('keeps where it was put beside the map, so it is there next time', async () => {
-    const spots = kept()
-    expect(spots.length).toBeGreaterThan(1)
-    expect(spots.map((s) => s.id)).toContain('notes/container:web')
+    await keptOnceSaved().toContain('notes/container:web')
+    expect(kept().length).toBeGreaterThan(1)
   })
 
   it("drags a wire's words out from under whatever they sit on", async () => {
@@ -100,6 +107,7 @@ describe('moving a map about', () => {
     // A wire bent through a sentence is two curves; a smooth one is one.
     const bent = (): Promise<number> =>
       page.$$eval('.map-wire path', (paths) => paths.filter((path) => (path.getAttribute('d') ?? '').split('C').length > 2).length)
+    await keptOnceSaved().toContainEqual(expect.stringContaining('>'))
     const moved = kept().find((spot) => spot.id.includes('>'))!
     const joined = onBoard(moved.id.split('>')[0]!)
     expect(await bent()).toBeGreaterThan(0)
@@ -113,7 +121,7 @@ describe('moving a map about', () => {
     await page.mouse.up()
     await page.waitForTimeout(400)
     expect(await bent()).toBe(0)
-    expect(kept().map((spot) => spot.id)).not.toContain(moved.id)
+    await keptOnceSaved().not.toContain(moved.id)
 
     // And now it goes along with the wire.
     const said = page.locator('.map-sentence').first()
@@ -132,7 +140,7 @@ describe('moving a map about', () => {
     await page.waitForTimeout(500)
     const back = await boxOf(card('web'))
     expect(back.x).toBeGreaterThan(moved.x + 80)
-    expect(kept().map((s) => s.id)).not.toContain('notes/container:web')
+    await keptOnceSaved().not.toContain('notes/container:web')
   })
 
   it('fills the screen with the card under the pointer when F is pressed', async () => {

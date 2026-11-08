@@ -5,7 +5,7 @@ import type { SketchListed } from '../../features/list-sketches.js'
 import type { MapShown, SystemShown } from '../../features/show-map.js'
 import type { Layer } from '../../modules/annotations/index.js'
 import { forgetting, movedTo, type Arrangement } from '../../modules/arrangements/schema.js'
-import { sameDoc, undoStep } from '../../modules/together/index.js'
+import { mergeItems, sameDoc, undoStep } from '../../modules/together/index.js'
 import type { Point } from '../../modules/reader/index.js'
 import type { Sketch } from '../../modules/sketches/index.js'
 import { Button, ThemeSwitch } from '../design-system/kit.js'
@@ -110,17 +110,31 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
   const [spots, setSpots] = useState<Arrangement>([])
   const spotsSeen = useRef<Arrangement>([])
   const spotsNow = useRef<Arrangement>([])
+  /** One save at a time. A save still on its way is this window's own, so the
+   *  next one waits for it and works from what it kept: otherwise a card put back
+   *  straight after a drag reads as someone else having moved it, and stays. */
+  const spotsSaving = useRef<Promise<void>>(Promise.resolve())
+  const spotsLast = useRef<Arrangement>([])
+  const saveSpotsNow = async (next: Arrangement): Promise<void> => {
+    // Moved again since: the save queued behind this one carries it.
+    if (spotsLast.current !== next) return
+    const merged = await window.codegraph.saveArrangement(projectId, next, atNow.current, spotsSeen.current)
+    spotsSeen.current = merged
+    if (spotsLast.current !== next) {
+      // Moved again while it went: keep those moves on top of what it brought.
+      keepSpots(mergeItems(next, spotsNow.current, merged))
+      return
+    }
+    if (spotsNow.current === next && !sameDoc(merged, next)) {
+      spotsNow.current = merged
+      setSpots(merged)
+    }
+  }
   const keepSpots = (next: Arrangement): void => {
     setSpots(next)
     spotsNow.current = next
-    void window.codegraph.saveArrangement(projectId, next, atNow.current, spotsSeen.current).then((merged) => {
-      if (spotsNow.current !== next) return
-      spotsSeen.current = merged
-      if (!sameDoc(merged, next)) {
-        spotsNow.current = merged
-        setSpots(merged)
-      }
-    })
+    spotsLast.current = next
+    spotsSaving.current = spotsSaving.current.then(() => saveSpotsNow(next)).catch(() => undefined)
   }
   const rearrange = (moves: Arrangement, letGo: string[] = []): void => keepSpots(forgetting(movedTo(spots, moves), letGo))
   const forget = (ids: string[]): void => keepSpots(forgetting(spots, ids))

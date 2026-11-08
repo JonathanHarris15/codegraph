@@ -17,7 +17,10 @@ let page: Page
 const picked = (): Locator => page.locator('.map-anno--picked')
 const note = (): Locator => page.getByRole('button', { name: /Annotation: .*out here/ })
 const beside = (): Locator => page.getByRole('button', { name: /Annotation: .*beside web/ })
-/** The notes as kept: once saved, each goes to the file for its map's branch. */
+/** The notes as kept: once saved, each goes to the file for its map's branch.
+ *  A save waits half a second for more drawing, then asks git where the branch
+ *  stands, which takes the best part of a second on Windows: wait for it. */
+const SAVED = { timeout: PATIENCE }
 const kept = (): Layer[] => {
   const onMain = join(yard.home, 'annotations', 'notes-app', encodeURIComponent('notes@local:main') + '.json')
   const file = existsSync(onMain) ? onMain : join(yard.home, 'annotations', 'notes-app.json')
@@ -129,7 +132,7 @@ describe('picking with Shift around an open card', () => {
     await page.mouse.down()
     await page.mouse.move(box.x + box.width / 2 + 50, box.y + box.height / 2 + 20, { steps: 8 })
     await page.mouse.up()
-    await expect.poll(() => kept()[0]!.items.find((one) => one.id === 'outer')!.x).toBeGreaterThan(was.x + 10)
+    await expect.poll(() => kept()[0]!.items.find((one) => one.id === 'outer')!.x, SAVED).toBeGreaterThan(was.x + 10)
     expect(await openArea().count()).toBe(1)
     await letGo()
     expect(await picked().count()).toBe(0)
@@ -175,7 +178,7 @@ describe('picking with Shift around an open card', () => {
     const [from, to] = await round(note())
     await shiftBox(from, to)
     await page.keyboard.press('Delete')
-    await expect.poll(() => kept()[0]!.items.map((one) => one.id)).toEqual(['beside'])
+    await expect.poll(() => kept()[0]!.items.map((one) => one.id), SAVED).toEqual(['beside'])
     expect(await openArea().count()).toBe(1)
   })
 })
