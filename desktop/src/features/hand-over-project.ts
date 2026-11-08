@@ -1,9 +1,8 @@
 // codegraph: feature hand-over-project in workspace
 // codegraph: uses members, projects, sync
-import { may, roleOf, whoIsIn } from '../modules/members/index.js'
+import { iMay, whoIsIn, type Changed } from '../modules/members/index.js'
 import { keepProject, listProjects } from '../modules/projects/index.js'
 import { sendProject } from '../modules/sync/index.js'
-import type { Changed } from './invite-member.js'
 
 /** Gives a project to another of its members. Nothing moves: it just points at a
  *  new owner (ADR 0016). The old owner stays on as a co-owner. */
@@ -11,7 +10,7 @@ export const handOverProject = async (projectId: string, memberId: string): Prom
   const me = whoIsIn()
   const project = listProjects().find((p) => p.id === projectId)
   if (!me || !project?.online) return { ok: false, problem: 'That project is not online.' }
-  if (!may(roleOf(project, me.id), 'hand-over')) return { ok: false, problem: 'Only the owner can hand a project over.' }
+  if (!iMay(project, 'hand-over')) return { ok: false, problem: 'Only the owner can hand a project over.' }
   if (!project.members?.some((m) => m.id === memberId)) return { ok: false, problem: 'They need to be on the project first.' }
   keepProject({
     ...project,

@@ -1,7 +1,7 @@
 // codegraph: feature save-annotations in workspace
 // codegraph: uses annotations, places, projects, sync, together, members
 import { type Layer } from '../modules/annotations/index.js'
-import { may, roleOf, whoIsIn } from '../modules/members/index.js'
+import { iMay } from '../modules/members/index.js'
 import { mapsNow, onLocalMap, readLayers, writeLayers } from '../modules/places/index.js'
 import { listProjects } from '../modules/projects/index.js'
 import type { Point } from '../modules/reader/index.js'
@@ -15,7 +15,7 @@ export const saveAnnotations = async (projectId: string, layers: Layer[], points
   const project = listProjects().find((p) => p.id === projectId)
   if (!project) return layers
   const maps = await mapsNow(project.systems, points)
-  const allowed = may(roleOf(project, whoIsIn()?.id ?? ''), 'draw')
+  const allowed = iMay(project, 'draw')
   const now = readLayers(projectId, maps)
   const merged = seen ? mergeItems(seen, layers, now) : layers
   const kept = allowed

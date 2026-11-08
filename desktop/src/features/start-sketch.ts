@@ -2,7 +2,7 @@
 // codegraph: uses projects, sketches, sync, members
 import { randomUUID } from 'node:crypto'
 import { listProjects } from '../modules/projects/index.js'
-import { may, roleOf, whoIsIn } from '../modules/members/index.js'
+import { iMay } from '../modules/members/index.js'
 import { sendSketch } from '../modules/sync/index.js'
 import { blankCard, LOOSE, newSketch, writeSketch, type Level, type Sketch, type SketchCard } from '../modules/sketches/index.js'
 
@@ -43,7 +43,7 @@ const fromMap = (card: MapCard): SketchCard => ({
 export const startSketch = async (projectId: string, name: string, snapshot?: MapCard): Promise<Sketch> => {
   const project = listProjects().find((p) => p.id === projectId)
   if (!project && projectId !== LOOSE) throw new Error('no project with that id')
-  if (project && !may(roleOf(project, whoIsIn()?.id ?? ''), 'draw')) throw new Error('a viewer cannot start a sketch here')
+  if (project && !iMay(project, 'draw')) throw new Error('a viewer cannot start a sketch here')
   const sketch = snapshot
     ? newSketch(projectId, name, fromMap(snapshot), `A snapshot of the map, ${new Date().toISOString().slice(0, 10)}`)
     : newSketch(projectId, name, blankCard(project?.id ?? randomUUID(), project?.name ?? name, 'project', 'project'))

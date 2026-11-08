@@ -2,10 +2,9 @@
 // codegraph: uses sketches, github, members, sync, cloud
 import { isConnected } from '../modules/cloud/index.js'
 import { findAccount, GithubRefused, savedToken } from '../modules/github/index.js'
-import { whoIsIn } from '../modules/members/index.js'
+import { whoIsIn, type Changed } from '../modules/members/index.js'
 import { LOOSE, readSketch, writeSketch } from '../modules/sketches/index.js'
 import { sendRemoval, sendUp, sketchPath } from '../modules/sync/index.js'
-import type { Changed } from './invite-member.js'
 
 /** Shares a loose sketch with someone by GitHub username. Whoever shares it stays
  *  its owner. It moves out from under them online, to stand on its own. */
