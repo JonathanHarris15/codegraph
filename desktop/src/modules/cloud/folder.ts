@@ -9,6 +9,11 @@ const POLL_MS = 40
 const BEAT_MS = 500
 const GONE_MS = 2000
 const LOCK_TRIES = 400
+const PUT_TRIES = 100
+/** What Windows says when a file is open elsewhere for a moment. */
+const BUSY = new Set(['EPERM', 'EACCES', 'EBUSY'])
+/** Something to wait on, for a short pause that blocks. */
+const pause = new Int32Array(new SharedArrayBuffer(4))
 
 const safe = (part: string): string => encodeURIComponent(part)
 
@@ -29,11 +34,24 @@ export const openFolderCloud = (root: string, reachable: () => boolean = () => t
       return null
     }
   }
+  /** Writes a document whole. On Windows a file another program has open cannot
+   *  be written over for that moment, so it waits a little and tries again. */
   const put = (file: string, doc: Doc): void => {
     mkdirSync(dirname(file), { recursive: true })
     const beside = `${file}.${randomUUID().slice(0, 8)}.tmp`
     writeFileSync(beside, JSON.stringify(doc), 'utf8')
-    renameSync(beside, file)
+    for (let tries = 0; ; tries++) {
+      try {
+        renameSync(beside, file)
+        return
+      } catch (error) {
+        if (!BUSY.has((error as NodeJS.ErrnoException).code ?? '') || tries >= PUT_TRIES) {
+          rmSync(beside, { force: true })
+          throw error
+        }
+        Atomics.wait(pause, 0, 0, 2)
+      }
+    }
   }
   const listDir = (collection: string): Doc[] => {
     const dir = dirOf(collection)
@@ -98,7 +116,12 @@ export const openFolderCloud = (root: string, reachable: () => boolean = () => t
 
     const beat = (): void => {
       if (left || !reachable()) return
-      put(mine, { member, state, beat: Date.now() } as unknown as Doc)
+      try {
+        put(mine, { member, state, beat: Date.now() } as unknown as Doc)
+      } catch {
+        // A missed beat is no loss: the next comes well before anyone counts
+        // this member gone. Thrown from a timer, it would stop the whole app.
+      }
     }
     beat()
     const timer = setInterval(beat, BEAT_MS)
