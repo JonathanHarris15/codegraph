@@ -5,13 +5,14 @@ import { useFolder as useAgentsFolder } from '../modules/agents/index.js'
 import { useFolder as useAnnotationsFolder } from '../modules/annotations/index.js'
 import { useFolder as useArrangementsFolder } from '../modules/arrangements/index.js'
 import { useFolder as useCardTypesFolder } from '../modules/card-types/index.js'
-import { savedToken, useFolder as useGithubFolder, useKeystore } from '../modules/github/index.js'
+import { useFolder as useGithubFolder, useKeystore } from '../modules/github/index.js'
 import { useFolder as useInstructionsFolder } from '../modules/instructions/index.js'
-import { openFirebaseCloud, openFolderCloud, theCloud, useCloud } from '../modules/cloud/index.js'
-import { appFolder, cloudFolder, devRendererUrl, firebaseSettings, keystore } from '../modules/machine/index.js'
-import { useFolder as useMembersFolder, whoIsIn } from '../modules/members/index.js'
+import { openFirebaseCloud, openFolderCloud, useCloud } from '../modules/cloud/index.js'
+import { appFolder, cloudFolder, devRendererUrl, firebaseSettings, githubHost, keystore } from '../modules/machine/index.js'
+import { useFolder as useMembersFolder } from '../modules/members/index.js'
 import { useMirrors } from '../modules/repo/index.js'
-import { startFollowing, useFolder as useSyncFolder, useHeard } from '../modules/sync/index.js'
+import { signInAgain } from '../modules/session/index.js'
+import { useFolder as useSyncFolder, useHeard } from '../modules/sync/index.js'
 import { useFolder as useProjectsFolder } from '../modules/projects/index.js'
 import { useFolder as useSketchesFolder } from '../modules/sketches/index.js'
 import { openBridge } from './bridge.js'
@@ -30,7 +31,7 @@ const wireModules = async (): Promise<void> => {
   useGithubFolder(home)
   useMembersFolder(home)
   useSyncFolder(home)
-  useMirrors(home, process.env['CODEGRAPH_GITHUB_HOST'] || undefined)
+  useMirrors(home, githubHost() || undefined)
 
   // The online side: a folder standing in for it when one is named, Firebase
   // otherwise, and with neither the app runs on this computer alone.
@@ -90,10 +91,7 @@ void app.whenReady().then(async () => {
   useHeard((what) => {
     for (const window of BrowserWindow.getAllWindows()) window.webContents.send('cloud:changed', what)
   })
-  const me = whoIsIn()
-  // Firebase forgets a sign-in when the app closes; the token GitHub gave is
-  // kept, so it signs in again. Offline, it tries again when next needed.
-  if (me) void (theCloud()?.signIn(savedToken(), me) ?? Promise.resolve()).catch(() => undefined).then(() => startFollowing(me))
+  void signInAgain()
   openWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) openWindow()

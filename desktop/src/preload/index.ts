@@ -1,7 +1,7 @@
 // codegraph: shell
 import { contextBridge, ipcRenderer } from 'electron'
 import type { AgentConnection } from '../features/connect-agent.js'
-import type { Connected } from '../features/connect-github.js'
+import type { SignedIn } from '../modules/session/index.js'
 import type { InstructionsView } from '../features/show-instructions.js'
 import type { CloudView } from '../features/list-github-software-systems.js'
 import type { ProjectView } from '../features/list-projects.js'
@@ -33,7 +33,7 @@ export type Api = {
   listProjects: (fetchFirst?: boolean) => Promise<ProjectView[]>
   createProject: (name: string, shortName?: string) => Promise<{ id: string }>
   linkSoftwareSystem: (projectId: string, path?: string) => Promise<Linked>
-  connectGithub: (token: string) => Promise<Connected>
+  connectGithub: (token: string) => Promise<SignedIn>
   connectAgent: () => Promise<AgentConnection>
   agreeShallowSystem: (projectId: string, name: string, sameAs?: string) => Promise<{ id: string }>
   signOutGithub: () => Promise<void>
@@ -68,7 +68,7 @@ export type Api = {
   watchProject: (projectId: string, onChange: () => void) => () => void
   showSession: () => Promise<Session>
   startSignIn: () => Promise<SignInStarted>
-  finishSignIn: (started: DeviceSignIn) => Promise<Connected>
+  finishSignIn: (started: DeviceSignIn) => Promise<SignedIn>
   putProjectOnline: (projectId: string) => Promise<Changed>
   inviteMember: (projectId: string, login: string, role: Exclude<Role, 'owner'>) => Promise<Changed>
   changeRole: (projectId: string, memberId: string, role: Exclude<Role, 'owner'>) => Promise<Changed>

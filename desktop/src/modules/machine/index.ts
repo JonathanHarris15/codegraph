@@ -1,5 +1,5 @@
 // codegraph: module machine
-// codegraph: front door keepWhole, appFolder, devRendererUrl, keystore, askForFolder, useChooser, askForPicture, usePicturePicker, mcpServerFile, appFolderAnywhere, watchFolders, realFolder, sameFolder, githubClientId, cloudFolder, firebaseSettings, Keystore
+// codegraph: front door keepWhole, appFolder, devRendererUrl, keystore, askForFolder, useChooser, askForPicture, usePicturePicker, mcpServerFile, appFolderAnywhere, watchFolders, realFolder, sameFolder, githubClientId, githubHost, cloudFolder, firebaseSettings, Keystore
 
 /** This computer and the window around the app: where files are kept, the
  *  operating system's keystore, the folder picker, and what the build says.
@@ -58,6 +58,10 @@ export const githubClientId = (): string => process.env['CODEGRAPH_GITHUB_CLIENT
 /** A folder standing in for the online side, for trying the app with no Firebase
  *  project. Two copies of the app pointed at one folder see each other. */
 export const cloudFolder = (): string => process.env['CODEGRAPH_CLOUD_FOLDER'] ?? ''
+
+/** Where GitHub copies are fetched from instead of github.com, as in tests;
+ *  '' for GitHub itself. */
+export const githubHost = (): string => process.env['CODEGRAPH_GITHUB_HOST'] ?? ''
 
 /** The Firebase project the app works with online, or null when it is turned
  *  off (`CODEGRAPH_CLOUD=off`, as in tests). None of this is secret: what each
