@@ -1,13 +1,14 @@
 // codegraph: module sync
-// codegraph: front door useFolder, useHeard, startFollowing, stopFollowing, pull, sendUp, sendSketch, sendFolder, sendMap, sendProject, sendEverything, sendRemoval, catchUp, follow, listRevisions, restoreRevision, pendingCount, removeEverything, projectPath, sketchPath, folderPath, Revision
+// codegraph: front door useFolder, useHeard, startFollowing, stopFollowing, pull, sendUp, sendSketch, sendFolder, sendMap, settleMaps, sendProject, sendEverything, sendRemoval, catchUp, follow, listRevisions, restoreRevision, pendingCount, removeEverything, projectPath, sketchPath, folderPath, Revision
 import { randomUUID } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { annotationKeys, readAnnotations, removeAnnotations, writeAnnotations, type Layer } from '../annotations/index.js'
 import { arrangementKeys, readArrangementFile, removeArrangements, writeArrangementFile, type Arrangement } from '../arrangements/index.js'
 import { CloudOffline, theCloud, type Doc, type Member } from '../cloud/index.js'
-import { whoIsIn } from '../members/index.js'
-import { keyIsShared, PROJECT_KEY } from '../places/index.js'
+import { iMay, whoIsIn } from '../members/index.js'
+import { keyIsShared, mapsNow, PROJECT_KEY, takeUpMerges, type MapAt } from '../places/index.js'
+import type { Point } from '../reader/index.js'
 import { findProject, keepProject, listProjects, removeProject, type Project } from '../projects/index.js'
 import { keepMockupBytes, listFolders, listSketches, LOOSE, mockupFile, readFolder, readSketch, removeFolder, removeSketch, SHARED_WITH_ME, writeFolder, writeSketch, type Sketch, type SketchCard, type SketchFolder } from '../sketches/index.js'
 import { mergeDoc, sameDoc, tally, wordsFor } from '../together/index.js'
@@ -417,6 +418,16 @@ export const sendFolder = async (library: string, id: string): Promise<void> => 
 export const sendMap = async (projectId: string, keys: string[]): Promise<void> => {
   if (!findProject(projectId)?.online) return
   for (const key of keys) if (keyIsShared(key)) await sendUp(`${mapsPath(projectId)}/${encodeURIComponent(key)}`)
+}
+
+/** A project's maps as they are being looked at, once each has taken up the
+ *  arrangement and annotations of any branch merged into it, and sent that up.
+ *  Someone who cannot change a shared map leaves it to someone who can. */
+export const settleMaps = async (project: Project, points: Record<string, Point>): Promise<MapAt[]> => {
+  const maps = await mapsNow(project.systems, points)
+  const allowed = iMay(project, 'draw')
+  for (const at of maps) if (allowed || !keyIsShared(at.key)) await sendMap(project.id, await takeUpMerges(project.id, at.folder, at, at.mainRef))
+  return maps
 }
 
 /** Sends everything that could not go up before. */
