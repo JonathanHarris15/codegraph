@@ -12,6 +12,6 @@ export const renameProject = async (projectId: string, name: string): Promise<Ch
   if (!name.trim()) return { ok: false, problem: 'Give it a name.' }
   if (project.online && !iMay(project, 'rename')) return { ok: false, problem: 'A viewer cannot rename a project.' }
   rename(projectId, name)
-  if (project.online) await sendProject(projectId)
+  await sendProject(projectId)
   return { ok: true }
 }

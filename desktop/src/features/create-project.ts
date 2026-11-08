@@ -2,7 +2,7 @@
 // codegraph: uses projects, cloud, members, sync
 import { isConnected } from '../modules/cloud/index.js'
 import { whoIsIn } from '../modules/members/index.js'
-import { addProject, keepProject } from '../modules/projects/index.js'
+import { addProject, putOnline } from '../modules/projects/index.js'
 import { sendProject } from '../modules/sync/index.js'
 
 /** Starts an empty project and hands back its id, so the page can open it
@@ -13,7 +13,7 @@ export const createProject = async (name: string, shortName = ''): Promise<{ id:
   const project = addProject(name, shortName)
   const me = whoIsIn()
   if (isConnected() && me) {
-    keepProject({ ...project, online: true, ownerId: me.id, members: [{ ...me, role: 'owner' }] })
+    putOnline(project.id, me)
     await sendProject(project.id)
   }
   return { id: project.id }

@@ -43,6 +43,6 @@ export const linkSoftwareSystem = async (projectId: string, path?: string): Prom
     path: folder,
     remote: facts.remote,
   })
-  if (project?.online && !already) await sendProject(projectId)
+  if (!already) await sendProject(projectId)
   return { ok: true, needsSetup: !isSetUp(facts) && !facts.setUpHere, name: added.name }
 }

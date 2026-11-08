@@ -15,6 +15,6 @@ export const agreeShallowSystem = async (
   const project = findProject(projectId)
   if (project && !iMay(project, 'add-repo')) return { id: '' }
   const added = addShallowSystem(projectId, name, sameAs)
-  if (findProject(projectId)?.online) await sendProject(projectId)
+  await sendProject(projectId)
   return { id: added.id }
 }

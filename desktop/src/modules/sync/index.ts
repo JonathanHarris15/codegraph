@@ -400,7 +400,9 @@ const sendNow = async (path: string, says?: string): Promise<void> => {
   }
 }
 
-export const sendProject = (projectId: string): Promise<void> => sendUp(projectPath(projectId))
+export const sendProject = async (projectId: string): Promise<void> => {
+  if (findProject(projectId)?.online) await sendUp(projectPath(projectId))
+}
 
 /** Sends up a sketch that has just been kept. */
 export const sendSketch = async (sketch: Sketch): Promise<void> => {
