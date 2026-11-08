@@ -9,7 +9,8 @@ import { wireOfHub, type CardLook } from '../../modules/sketches/schema.js'
 import { CardLookEditor } from './card-look-editor.js'
 import { BLANK_LOOK, TEMPLATES, lookOf } from './card-looks.js'
 import { Glyph } from './kind-glyph.js'
-import { MapCanvas, remember, remembered, walk, type Together } from './map-canvas.js'
+import { MapCanvas, remember, remembered, type Together } from './map-canvas.js'
+import { walk } from './map-layout.js'
 import {
   addWire,
   align,

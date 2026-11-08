@@ -33,17 +33,29 @@ import { KeyList } from './key-list.js'
 import { ContextBar, type Picking } from './context-bar.js'
 import { KindGlyph, LookGlyph, kindClass, lookClass } from './kind-glyph.js'
 import {
+  between,
   boundsOf,
+  curve,
+  deeper,
+  facing,
+  holds,
+  inBox,
   isFrame,
+  keyOf,
   layOut,
   loopSides,
   openLevels,
+  overlaps,
+  reachingOpen,
   resized,
   roomAround,
   sentenceWidth,
+  shallower,
+  sideOf,
   sizeOf,
-  reachingOpen,
   spread,
+  springy,
+  walk,
   wirePath,
   wireThrough,
   type AnnoThing,
@@ -135,17 +147,6 @@ const WHEEL_GLIDE_MS = 140
 const STEP_MS = 320
 /** How long cards take to settle as a card opens or closes. */
 const SETTLE_MS = 420
-
-/** How far along a settling card is, given how much of the time has gone: it
- *  moves off fast, goes a little past where it is going, and comes back. */
-const springy = (t: number): number => 1 - Math.exp(-6 * t) * Math.cos(6 * t)
-
-const between = (a: Box, b: Box, by: number): Box => ({
-  x: a.x + (b.x - a.x) * by,
-  y: a.y + (b.y - a.y) * by,
-  w: a.w + (b.w - a.w) * by,
-  h: a.h + (b.h - a.h) * by,
-})
 
 /** How much of the board's visible space a newly opened card takes. */
 const ROOM_ACROSS = 0.7
@@ -279,73 +280,6 @@ type Live = {
   line?: { from: Spot; to: Spot; target: string }
   /** The room of an open card whose handle is being dragged. */
   room?: { id: string; box: Box }
-}
-
-/** The card a path of ids leads to, and every card on the way. */
-export const walk = <C extends { id: string; children: C[] }>(root: C, path: string[]): C[] => {
-  const trail = [root]
-  for (const id of path.slice(1)) {
-    const next = trail[trail.length - 1]!.children.find((c) => c.id === id)
-    if (!next) break
-    trail.push(next)
-  }
-  return trail
-}
-
-/** Whether a card is the one with an id, or has it somewhere inside. */
-const holds = (card: DrawnCard, id: string): boolean => card.id === id || card.children.some((c) => holds(c, id))
-
-/** Opening a card carries on through any level with only one card in it,
- *  since there is nothing to choose there (ADR 0002). On a sketch it stops at
- *  the card asked for: an empty card is somewhere to draw. */
-const deeper = (trail: DrawnCard[], drawing: boolean): string[] => {
-  const path = trail.map((c) => c.id)
-  if (drawing) return path
-  let last = trail[trail.length - 1]!
-  while (last.children.length === 1 && last.children[0]!.children.length > 0) {
-    last = last.children[0]!
-    path.push(last.id)
-  }
-  return path
-}
-
-/** Backing out skips back over those same levels. */
-const shallower = (trail: DrawnCard[], drawing: boolean): string[] => {
-  const path = trail.map((c) => c.id)
-  path.pop()
-  if (drawing) return path
-  while (path.length > 1 && walk(trail[0]!, path).at(-1)!.children.length === 1) path.pop()
-  return path
-}
-
-/** What a wire is known by: its own id on a sketch, else the two cards it
- *  joins and how. It is how an arrangement finds the wire's sentence. */
-const keyOf = (wire: DrawnWire): string => wire.id ?? `${wire.from}>${wire.to}>${wire.kind}`
-
-const inBox = (at: Spot, box: Box): boolean => at.x >= box.x && at.x <= box.x + box.w && at.y >= box.y && at.y <= box.y + box.h
-const overlaps = (a: Box, b: Box): boolean => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
-
-/** The middle of one side of a box, where a wire drawn from it leaves. */
-const sideOf = (box: Box, side: Side): Spot =>
-  side === 'n'
-    ? { x: box.x + box.w / 2, y: box.y }
-    : side === 's'
-      ? { x: box.x + box.w / 2, y: box.y + box.h }
-      : side === 'e'
-        ? { x: box.x + box.w, y: box.y + box.h / 2 }
-        : { x: box.x, y: box.y + box.h / 2 }
-
-/** The side of a box that faces a spot. */
-const facing = (box: Box, at: Spot): Side => {
-  const dx = at.x - (box.x + box.w / 2)
-  const dy = at.y - (box.y + box.h / 2)
-  return Math.abs(dx) / box.w > Math.abs(dy) / box.h ? (dx > 0 ? 'e' : 'w') : dy > 0 ? 's' : 'n'
-}
-
-/** A gentle curve from one spot to another, leaving and arriving level. */
-const curve = (a: Spot, b: Spot): string => {
-  const bend = Math.max(30, Math.abs(b.x - a.x) / 2) * (b.x >= a.x ? 1 : -1)
-  return `M ${a.x} ${a.y} C ${a.x + bend} ${a.y}, ${b.x - bend} ${b.y}, ${b.x} ${b.y}`
 }
 
 /** The outline of a card that is not a plain box, if it is one. */
