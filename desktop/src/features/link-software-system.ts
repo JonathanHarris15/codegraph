@@ -2,7 +2,7 @@
 // codegraph: uses projects, repo, machine, members, sync
 import { askForFolder } from '../modules/machine/index.js'
 import { iMay } from '../modules/members/index.js'
-import { addSoftwareSystem, listProjects } from '../modules/projects/index.js'
+import { addSoftwareSystem, findProject } from '../modules/projects/index.js'
 import { sendProject } from '../modules/sync/index.js'
 import { folderName, isRepo, isSetUp, readSoftwareSystem } from '../modules/repo/index.js'
 
@@ -33,7 +33,7 @@ export const linkSoftwareSystem = async (projectId: string, path?: string): Prom
   }
 
   const facts = await readSoftwareSystem(folder)
-  const project = listProjects().find((p) => p.id === projectId)
+  const project = findProject(projectId)
   // A viewer can still link a working copy of a repo already on the project.
   const already = project?.systems.some((s) => s.remote && s.remote === facts.remote)
   if (project && !already && !iMay(project, 'add-repo'))

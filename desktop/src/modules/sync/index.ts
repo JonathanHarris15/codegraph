@@ -8,7 +8,7 @@ import { arrangementKeys, readArrangementFile, removeArrangements, writeArrangem
 import { CloudOffline, theCloud, type Doc, type Member } from '../cloud/index.js'
 import { whoIsIn } from '../members/index.js'
 import { keyIsShared, PROJECT_KEY } from '../places/index.js'
-import { keepProject, listProjects, removeProject, type Project } from '../projects/index.js'
+import { findProject, keepProject, listProjects, removeProject, type Project } from '../projects/index.js'
 import { keepMockupBytes, listFolders, listSketches, LOOSE, mockupFile, readFolder, readSketch, removeFolder, removeSketch, SHARED_WITH_ME, writeFolder, writeSketch, type Sketch, type SketchCard, type SketchFolder } from '../sketches/index.js'
 import { mergeDoc, sameDoc, tally, wordsFor } from '../together/index.js'
 import { keepWhole } from '../machine/index.js'
@@ -76,7 +76,7 @@ export const sketchPath = (sketch: Pick<Sketch, 'id' | 'projectId' | 'memberIds'
     const me = whoIsIn()
     return me ? `members/${me.id}/sketches/${sketch.id}` : ''
   }
-  return listProjects().find((p) => p.id === sketch.projectId)?.online ? `projects/${sketch.projectId}/sketches/${sketch.id}` : ''
+  return findProject(sketch.projectId)?.online ? `projects/${sketch.projectId}/sketches/${sketch.id}` : ''
 }
 
 /** Where a folder of sketches lives online: with its project, or privately under
@@ -86,7 +86,7 @@ export const folderPath = (library: string, id: string): string => {
     const me = whoIsIn()
     return me ? `members/${me.id}/folders/${id}` : ''
   }
-  return listProjects().find((p) => p.id === library)?.online ? `projects/${library}/folders/${id}` : ''
+  return findProject(library)?.online ? `projects/${library}/folders/${id}` : ''
 }
 
 // ---- This computer's copy of each kind of document ----
@@ -108,7 +108,7 @@ const projectDoc = (project: Project): Doc => ({
 })
 
 const projectFromDoc = (doc: Doc): Project => {
-  const here = listProjects().find((p) => p.id === doc['id'])
+  const here = findProject(String(doc['id']))
   const systems = doc['systems'] as { id: string; name: string; remote: string }[]
   return {
     id: String(doc['id']),
@@ -158,7 +158,7 @@ const localOf = (path: string): Local | null => {
   if (top === 'projects' && a && !kind)
     return {
       read: () => {
-        const project = listProjects().find((p) => p.id === a)
+        const project = findProject(a)
         return project?.online ? projectDoc(project) : null
       },
       write: (doc) => {
@@ -275,7 +275,7 @@ const nameOfTarget = (target: string, doc: Doc | null): string => {
   const key = decodeURIComponent(b ?? '')
   if (key === PROJECT_KEY) return "the project's top level"
   const [systemId = '', map = ''] = key.split('@')
-  const system = listProjects().find((p) => p.id === projectId)?.systems.find((s) => s.id === systemId)
+  const system = findProject(projectId ?? '')?.systems.find((s) => s.id === systemId)
   return `the map of ${system?.name ?? 'a software system'} on ${map.replace(/^(github|commit):/, '')}`
 }
 
@@ -415,7 +415,7 @@ export const sendFolder = async (library: string, id: string): Promise<void> => 
 
 /** Sends up the maps just written. A local map stays on this computer. */
 export const sendMap = async (projectId: string, keys: string[]): Promise<void> => {
-  if (!listProjects().find((p) => p.id === projectId)?.online) return
+  if (!findProject(projectId)?.online) return
   for (const key of keys) if (keyIsShared(key)) await sendUp(`${mapsPath(projectId)}/${encodeURIComponent(key)}`)
 }
 

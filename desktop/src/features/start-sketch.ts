@@ -1,7 +1,7 @@
 // codegraph: feature start-sketch in workspace
 // codegraph: uses projects, sketches, sync, members
 import { randomUUID } from 'node:crypto'
-import { listProjects } from '../modules/projects/index.js'
+import { findProject } from '../modules/projects/index.js'
 import { iMay } from '../modules/members/index.js'
 import { sendSketch } from '../modules/sync/index.js'
 import { blankCard, LOOSE, newSketch, writeSketch, type Level, type Sketch, type SketchCard } from '../modules/sketches/index.js'
@@ -41,7 +41,7 @@ const fromMap = (card: MapCard): SketchCard => ({
 /** Starts a sketch in a project's library: blank, or a snapshot of the map
  *  the person is looking at, to draw a change over. */
 export const startSketch = async (projectId: string, name: string, snapshot?: MapCard): Promise<Sketch> => {
-  const project = listProjects().find((p) => p.id === projectId)
+  const project = findProject(projectId)
   if (!project && projectId !== LOOSE) throw new Error('no project with that id')
   if (project && !iMay(project, 'draw')) throw new Error('a viewer cannot start a sketch here')
   const sketch = snapshot

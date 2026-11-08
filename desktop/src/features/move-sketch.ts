@@ -2,7 +2,7 @@
 // codegraph: uses sketches, projects, members, sync
 import { cpSync, existsSync } from 'node:fs'
 import { iMay, type Changed } from '../modules/members/index.js'
-import { listProjects } from '../modules/projects/index.js'
+import { findProject } from '../modules/projects/index.js'
 import { LOOSE, readSketch, removeSketch, sketchesFolder, writeSketch } from '../modules/sketches/index.js'
 import { sendSketch, sendUp, sketchPath } from '../modules/sync/index.js'
 
@@ -10,7 +10,7 @@ import { sendSketch, sendUp, sketchPath } from '../modules/sync/index.js'
  *  was shared with who is not on the project loses it. It only goes this way. */
 export const moveSketch = async (sketchId: string, projectId: string): Promise<Changed> => {
   const sketch = readSketch(LOOSE, sketchId)
-  const project = listProjects().find((p) => p.id === projectId)
+  const project = findProject(projectId)
   if (!sketch) return { ok: false, problem: 'That sketch is not in your own library.' }
   if (!project) return { ok: false, problem: 'That project is not on this computer.' }
   if (!iMay(project, 'draw')) return { ok: false, problem: 'A viewer cannot add a sketch to this project.' }

@@ -1,8 +1,7 @@
 // codegraph: feature file-sketch in workspace
 // codegraph: uses sketches, sync
-import { readFolder, readSketch, writeSketch } from '../modules/sketches/index.js'
+import { mayFileIn, readFolder, readSketch, writeSketch, type FolderDone } from '../modules/sketches/index.js'
 import { sendSketch } from '../modules/sync/index.js'
-import { mayFileIn, type FolderDone } from './make-folder.js'
 
 /** Puts a sketch in a folder of its library, or at its top with ''. Filing it is
  *  not changing it, so when it was last changed stays as it was. */

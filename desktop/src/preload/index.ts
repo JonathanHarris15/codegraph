@@ -9,7 +9,6 @@ import type { Linked } from '../features/link-software-system.js'
 import type { MockupAdded } from '../features/add-mockup.js'
 import type { SketchListed } from '../features/list-sketches.js'
 import type { SketchFolder } from '../features/list-folders.js'
-import type { FolderDone } from '../features/make-folder.js'
 import type { Switched } from '../features/switch-branch.js'
 import type { SketchOpened } from '../features/open-sketch.js'
 import type { Card, MapShown } from '../features/show-map.js'
@@ -27,7 +26,7 @@ import type { Role } from '../modules/members/index.js'
 import type { Layer } from '../modules/annotations/index.js'
 import type { Arrangement } from '../modules/arrangements/index.js'
 import type { CardType } from '../modules/card-types/index.js'
-import type { Sketch } from '../modules/sketches/index.js'
+import type { FolderDone, Sketch } from '../modules/sketches/index.js'
 
 /** What the window may ask for: one call per feature, nothing else. */
 export type Api = {

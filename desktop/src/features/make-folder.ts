@@ -1,19 +1,7 @@
 // codegraph: feature make-folder in workspace
-// codegraph: uses sketches, projects, members, sync
-import { iMay } from '../modules/members/index.js'
-import { listProjects } from '../modules/projects/index.js'
-import { LOOSE, newFolder, readFolder, writeFolder, type SketchFolder } from '../modules/sketches/index.js'
+// codegraph: uses sketches, sync
+import { mayFileIn, newFolder, readFolder, writeFolder, type FolderDone } from '../modules/sketches/index.js'
 import { sendFolder } from '../modules/sync/index.js'
-
-export type FolderDone = { ok: boolean; folder?: SketchFolder; problem?: string }
-
-/** Whether this person may change the folders of a library: their own always,
- *  a project's unless they only view it, and never what others shared with them. */
-export const mayFileIn = (library: string): boolean => {
-  if (library === LOOSE) return true
-  const project = listProjects().find((p) => p.id === library)
-  return Boolean(project && iMay(project, 'draw'))
-}
 
 /** Makes a folder in a sketch library, at its top or inside another folder. */
 export const makeFolder = async (library: string, name: string, parentId = ''): Promise<FolderDone> => {

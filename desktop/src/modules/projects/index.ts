@@ -1,5 +1,5 @@
 // codegraph: module projects
-// codegraph: front door useFolder, listProjects, addProject, renameProject, keepProject, removeProject, addSoftwareSystem, removeSoftwareSystem, chooseBranch, knownRemotes, addShallowSystem, Project, SoftwareSystem, ShallowSystem, ProjectMember, Workspace
+// codegraph: front door useFolder, listProjects, findProject, addProject, renameProject, keepProject, removeProject, addSoftwareSystem, removeSoftwareSystem, chooseBranch, knownRemotes, addShallowSystem, Project, SoftwareSystem, ShallowSystem, ProjectMember, Workspace
 import { sameFolder } from '../machine/index.js'
 import { shortNameOf, type Project, type ShallowSystem, type SoftwareSystem } from './schema.js'
 import { newId, read, useFolder, write } from './store.js'
@@ -8,6 +8,9 @@ export { useFolder }
 export type { Project, ProjectMember, ShallowSystem, SoftwareSystem, Workspace } from './schema.js'
 
 export const listProjects = (): Project[] => read().projects
+
+/** The project with this id, if this computer has it. */
+export const findProject = (id: string): Project | undefined => listProjects().find((p) => p.id === id)
 
 /** Makes a project, with the short name it is given or one from its name,
  *  never one another project already has. */

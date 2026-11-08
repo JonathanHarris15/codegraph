@@ -1,8 +1,7 @@
 // codegraph: feature rename-folder in workspace
 // codegraph: uses sketches, sync
-import { readFolder, writeFolder } from '../modules/sketches/index.js'
+import { mayFileIn, readFolder, writeFolder, type FolderDone } from '../modules/sketches/index.js'
 import { sendFolder } from '../modules/sync/index.js'
-import { mayFileIn, type FolderDone } from './make-folder.js'
 
 /** Gives a folder of sketches a new name. */
 export const renameFolder = async (library: string, id: string, name: string): Promise<FolderDone> => {
