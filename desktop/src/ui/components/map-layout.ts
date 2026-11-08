@@ -39,6 +39,9 @@ export type DrawnCard = Omit<Card, 'children' | 'wires'> & {
 }
 
 export type Box = { x: number; y: number; w: number; h: number }
+export type Spot = { x: number; y: number }
+/** A side of a box. */
+export type Side = 'n' | 'e' | 's' | 'w'
 export type Placed = { card: DrawnCard; box: Box }
 
 const GAP_X = 120
