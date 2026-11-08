@@ -44,6 +44,9 @@ With neither, the app runs on one computer as it always did.
 
 Electron runs features in the main process, so every call from the page goes
 through `src/main/bridge.ts` — one channel per feature, nothing else in it.
+A feature the window needs goes in the bridge's `FEATURES` and the preload's
+`NAMES`; the window's types come from the feature itself, and fail to compile
+until both lists have it.
 
 ## How to work here
 
