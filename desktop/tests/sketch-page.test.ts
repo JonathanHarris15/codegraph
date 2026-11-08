@@ -31,6 +31,14 @@ const spot = async (across: number, down: number): Promise<{ x: number; y: numbe
   return { x: box.x + box.width * across, y: box.y + box.height * down }
 }
 
+/** The sketch drawer, out and ready; clicking the bar again would put it away. */
+const theDrawer = async (): Promise<Locator> => {
+  const drawer = page.getByRole('complementary', { name: 'Sketches' })
+  if (!(await drawer.isVisible())) await page.getByRole('button', { name: /^Sketches/ }).first().click()
+  await drawer.waitFor({ state: 'visible', timeout: PATIENCE })
+  return drawer
+}
+
 const card = (name: string): Locator => page.locator('.map-world').getByRole('button', { name, exact: true })
 const wire = (said: string): Locator => page.getByRole('button', { name: `Wire: ${said}` })
 
@@ -325,5 +333,29 @@ describe('drawing a sketch in the real app', () => {
     expect(await shown(card('write-note'))).toContain('feature')
     await settle()
     await picture('sketch-2-from-map')
+  })
+
+  it('asks before it throws a sketch away, and keeps it when the answer is no', async () => {
+    const drawer = await theDrawer()
+    await drawer.getByRole('button', { name: 'More for Search' }).click()
+    await drawer.getByRole('button', { name: 'Throw away Search' }).click()
+
+    const asking = page.getByRole('dialog', { name: 'Throw this sketch away?' })
+    expect(await shown(asking)).toContain('Search')
+    expect(await shown(asking)).toContain('cannot be undone')
+    await asking.getByRole('button', { name: 'Keep it' }).click()
+    await asking.waitFor({ state: 'detached', timeout: PATIENCE })
+    expect(await drawer.getByRole('button', { name: /^Search/ }).count()).toBe(1)
+  })
+
+  it('throws it away when the answer is yes', async () => {
+    const drawer = await theDrawer()
+    await drawer.getByRole('button', { name: 'More for Search' }).click()
+    await drawer.getByRole('button', { name: 'Throw away Search' }).click()
+    await page
+      .getByRole('dialog', { name: 'Throw this sketch away?' })
+      .getByRole('button', { name: 'Throw it away' })
+      .click()
+    await drawer.getByRole('button', { name: /^Search/ }).waitFor({ state: 'detached', timeout: PATIENCE })
   })
 })

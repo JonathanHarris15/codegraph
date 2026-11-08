@@ -2,7 +2,7 @@
 import { Camera, FilePlus, Plus } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { SketchListed } from '../../features/list-sketches.js'
-import { Button } from '../design-system/kit.js'
+import { Button, Sheet } from '../design-system/kit.js'
 import { dragSketch, FolderBrowser, FolderPickSheet, shownIn, useFolders } from './folders.js'
 import { Glyph } from './kind-glyph.js'
 
@@ -10,8 +10,9 @@ const when = (iso: string): string => new Date(iso).toLocaleString(undefined, { 
 
 /** A project's sketches, in a drawer that slides in from the side: open
  *  one, or start one from the quiet button under the list, blank or from a
- *  snapshot of the map. Throwing one away is behind a menu, because a
- *  sketch is somebody's thinking. */
+ *  snapshot of the map. Throwing one away is behind a menu and then asked
+ *  about, because a sketch is somebody's thinking and nothing brings it
+ *  back. */
 export const SketchLibrary = ({
   library,
   shown,
@@ -49,6 +50,8 @@ export const SketchLibrary = ({
   const [choosing, setChoosing] = useState(false)
   const [at, setAt] = useState('')
   const [filing, setFiling] = useState<SketchListed | null>(null)
+  /** The sketch being asked about before it goes, if any. */
+  const [throwing, setThrowing] = useState<SketchListed | null>(null)
   const { folders, reload } = useFolders(library)
   const here = at && folders.some((f) => f.id === at) ? at : ''
   const inHere = sketches.filter((s) => shownIn(s.folderId, folders) === here)
@@ -56,6 +59,7 @@ export const SketchLibrary = ({
     if (!shown) {
       setChoosing(false)
       setMenu('')
+      setThrowing(null)
     }
   }, [shown])
 
@@ -130,7 +134,7 @@ export const SketchLibrary = ({
                         type="button"
                         onClick={() => {
                           setMenu('')
-                          onDelete(s.id)
+                          setThrowing(s)
                         }}
                       >
                         Throw away {s.name}
@@ -158,6 +162,30 @@ export const SketchLibrary = ({
           }
           onClose={() => setFiling(null)}
         />
+      ) : null}
+
+      {throwing ? (
+        <Sheet title="Throw this sketch away?" onClose={() => setThrowing(null)}>
+          <div className="ds-hint">
+            <strong>{throwing.name}</strong> goes for good, with everything drawn on it and every
+            mockup dropped on it. It cannot be undone. A proposal already made from it stays where
+            it is.
+          </div>
+          <div className="ds-sheet-actions">
+            <Button look="bare" onClick={() => setThrowing(null)}>
+              Keep it
+            </Button>
+            <Button
+              look="danger"
+              onClick={() => {
+                onDelete(throwing.id)
+                setThrowing(null)
+              }}
+            >
+              Throw it away
+            </Button>
+          </div>
+        </Sheet>
       ) : null}
 
       {!canDraw ? null : choosing ? (
