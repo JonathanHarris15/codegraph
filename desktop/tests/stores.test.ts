@@ -130,4 +130,20 @@ describe('stores and their shapes', () => {
   it('needs no tag on a schema file', async () => {
     expect((await checkRepo(repo, live)).filter((m) => m.file.endsWith('.json'))).toEqual([])
   })
+
+  it('holds every store to a schema, at the tag that keeps it', async () => {
+    const unshaped = (await checkRepo(repo, live)).filter((m) => m.says.includes('no schema'))
+    expect(unshaped).toEqual([
+      {
+        file: 'app/modules/people/people.js',
+        line: 5,
+        says: 'The store people/prayer_requests has no schema. Write one in JSON Schema beside this file, have module people check every write against it, and name it in the tag: `store prayer_requests in firestore inside people from prayer_requests.schema.json`.',
+      },
+      {
+        file: 'app/modules/rosters.js',
+        line: 3,
+        says: 'The store roles has no schema. Write one in JSON Schema beside this file, have module rosters check every write against it, and name it in the tag: `store roles in firestore from roles.schema.json`.',
+      },
+    ])
+  })
 })

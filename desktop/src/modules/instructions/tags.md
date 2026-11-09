@@ -163,3 +163,5 @@ a tag. It helps to know what it will read:
 - Every name taken from a module is on its front door, `default` included.
 - Only a module reaches outside its container, and only a module keeps a
   store.
+- Every store names its schema with `from`, a JSON Schema the module that
+  keeps it checks every write against.

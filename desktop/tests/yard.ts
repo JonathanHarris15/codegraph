@@ -167,13 +167,20 @@ export const aMappedRepo = (yard: Yard, name = 'notes'): string => {
     'app/modules/notes.ts': [
       '// codegraph: module notes',
       '// codegraph: front door saveNote, listNotes, Note',
-      '// codegraph: store notes in db',
+      '// codegraph: store notes in db from notes.schema.json',
       'export type Note = { id: string; text: string }',
       'export const saveNote = (text: string): Note => ({ id: "1", text })',
       'export const listNotes = (): Note[] => []',
       "export const tellOwner = () => fetch('https://mail.example') // codegraph: wire to mailer: tells the owner",
       '',
     ].join('\n'),
+    'app/modules/notes.schema.json': JSON.stringify({
+      type: 'object',
+      description: 'Every note someone has kept',
+      required: ['text'],
+      additionalProperties: false,
+      properties: { text: { type: 'string', description: 'What the note says' } },
+    }),
     'app/features/write-note.ts': [
       '// codegraph: feature write-note uses notes',
       "import { saveNote } from '~/modules/notes' // codegraph: wire keeps the note",

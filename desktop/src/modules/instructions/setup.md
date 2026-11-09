@@ -35,6 +35,9 @@ Read the whole repo before changing any of it. Decide:
   `as`: `module jobs as queue`. The map draws it as that, and the word
   reaches the person's card library. The four kinds still say which rules
   the component keeps to.
+- **Stores**: every kind of thing the repo keeps, in each database or folder
+  of files, which stores live inside the records of another, and which module
+  should own each one. Section 2b says what each gets.
 - **What it reaches outside**: every call out of a container — another
   system, somebody else's API — gets `wire to <name>:`. Name the system the
   way a person would say it, not the library or the URL: the app offers that
@@ -75,6 +78,52 @@ Three things every sub-agent gets wrong unless it is told, so tell it:
 - A `require` or an `await import(...)` is an import like any other, with its
   words on the line its statement starts on.
 
+## 2b. Stores, and the shape of what they keep
+
+Every store gets a schema the module that keeps it runs: a JSON Schema file
+beside the tagged file, named in its tag with `from`, which the module checks
+every write against. The map draws each store's fields from it, and the check
+reports any store without one. Do this for every database and every folder of
+files the repo keeps things in.
+
+Setup reshapes the code, never the data. What is already stored stays exactly
+as it is, so the schema describes the records as the code really writes them:
+
+1. **Find every store.** Search for every place the code names one: a
+   collection, a table, a folder of files. In a document database these names
+   are often typed out by hand all over the code; find them all, including
+   spelling slips, which quietly read or write an empty store. A store that
+   lives inside each record of another (a sub-collection) is an inner store:
+   `store involvement in db inside people`.
+2. **Give each one a module.** Only that module reads and writes it. Move every
+   other read and write into it, behind its front door, and have the rest of
+   the code take the store's name from it instead of typing it out.
+3. **Write its schema from the writes.** Read every place a record of it is
+   written and list each field the code sets, with what it holds. A field every
+   write sets goes in `required`. A field that holds another record's id gets
+   `"pointsAt": "<store>"` and a `description` saying what it is for: that
+   description is the wire's words on the map. Spell each field as it is
+   stored, even where the name is odd: renaming it changes the data.
+4. **Fixed only where the code proves it.** Set `"additionalProperties": false`
+   only when every write goes through code you can read and sets no other
+   field. Where people using the app add fields of their own, or old records
+   may hold fields the code no longer writes, leave it open and say what
+   other fields hold: `"additionalProperties": { "type": "string" }`.
+5. **Check every write against it.** The module validates each record before
+   it writes it, with whatever JSON Schema validator the repo already has, or
+   a small one added for it. A write that does not fit fails loudly instead of
+   saving quietly. This is the point of the schema, and why setup must run
+   where the tests cover the writes: run them, and fix the schema, not the
+   test, where a real write does not fit.
+
+What setup does not do: rename fields, split or merge stores, close an open
+store, or touch a single stored record. Each of those changes the data, and
+needs a migration a person can look at first. List them for the person
+instead, as changes worth sketching; they become proposals.
+
+Give each store's schema to the sub-agent whose slice holds the module that
+keeps it, along with every place outside its slice that writes that store.
+
 ## 3. Clear out the old codegraph
 
 Delete everything the legacy codegraph plugin left behind:
@@ -93,7 +142,7 @@ Carry over legacy tags whose meaning holds, rather than writing them again:
 | `feature X in S uses …` | `feature X uses …` |
 | `page`, `start page` | the same |
 | `component X`, `design system` | `module X`, `module design-system` |
-| `store X as Y` | `store X in <the container it is kept in>` |
+| `store X as Y` | `store X in <the container it is kept in> from <its schema>` |
 | `test`, `fakes`, `shape of`, `tooling` | the same |
 
 `schedule`, `event` and `command` tags become `trigger <name> schedule`, and
@@ -122,4 +171,6 @@ named after the page component. Add `codegraph-screenshots/` to
 - Commit everything on the branch in one commit, `Set up codegraph`.
 - Tell the person, plainly: the containers you found, what you moved and
   why, anything you left alone and why, and that merging the branch
-  finishes it.
+  finishes it. Name the stores you left open, and the changes to stored data
+  worth making — misspelt fields, stores to split or close — as sketches for
+  them to draw and hand back as proposals.

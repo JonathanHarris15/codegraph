@@ -284,9 +284,12 @@ hold the code to it. Decided in ADR 0023. Proven on Mosaic, which keeps about
   A new module that keeps only stores the proposal draws counts as part of
   them. Over the map, a new store is drawn faint with its fields, and a
   changed one is marked to build until its schema matches.
-- **CG-8.5** Setup and the check: the setup instructions write one schema per
-  store in its owning module, check every write against it, and take store
-  names from that module. The check reports a store with its shape unknown.
+- **CG-8.5** (done) Setup and the check: the setup instructions find every
+  store, give each one module, write its schema from the writes the code really
+  makes, fixed only where the code proves it, and check every write against it;
+  they leave the data alone and list changes to it as sketches to draw. The
+  check reports a store whose tag names no schema, at that tag, with the fix.
+  Every repo already set up fails the check until its stores have schemas.
 - **CG-8.6** (ask) Set Mosaic's stores up for real, on a branch, and try it
   before merging.
 
