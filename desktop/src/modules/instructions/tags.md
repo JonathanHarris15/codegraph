@@ -86,7 +86,17 @@ nothing else. Files with the same tag make one component.
   `front door default, saveNote`.
 - `uses` on a feature lists exactly the modules it imports.
 - `store` goes on the schema that defines what is kept, in the module that
-  owns it, and names the container it is kept in.
+  owns it, and names the container it is kept in. Two more words may follow,
+  in this order. `inside <store>` marks an inner store, one that lives inside
+  each record of another and goes with it, like each person's own prayer
+  requests: `store prayer_requests in db inside people`. Name an inner store's
+  store by its path, `people/involvement`. `from <file>` names the JSON Schema
+  the module checks what it keeps against, beside the tagged file and ending
+  `.schema.json`: `store people in db from people.schema.json`. The map reads
+  the store's fields from it. `additionalProperties: false` makes a shape
+  fixed; without it the shape is open. A field holding another record's id
+  says `"pointsAt": "<store>"`, and its `description` is the wire's words. A
+  store with no `from` shows with its shape unknown.
 - `at` gives a page its address where it has one. `start page` marks where a
   person lands.
 - `fakes <what> because <why>` and `shape of <store>` may also appear.
@@ -140,6 +150,7 @@ a tag. It helps to know what it will read:
 | `keeps` | a module's `store` tag, to the container it names | written for you |
 | `leads to` | a page holding another page's address | read from the code |
 | `calls` | a `wire to <name>:` tag | yours |
+| `points at` | a field with `pointsAt` in a store's schema, to that store | the field's `description`, or its name |
 
 ## What the check holds you to
 

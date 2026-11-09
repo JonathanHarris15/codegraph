@@ -9,7 +9,9 @@ export type FileTags = {
     | { kind: 'tooling' }
     | null
   frontDoor: string[]
-  stores: { name: string; in: string }[]
+  /** `store X in Y`, then `inside Z` for an inner store and `from P` for
+   *  the schema its shape is read from, beside this file. */
+  stores: { name: string; in: string; inside: string; from: string }[]
   /** Words for the wire made on a line, by line number from 1. */
   wires: Map<number, { to: string; words: string }>
   problems: string[]
@@ -56,7 +58,8 @@ export const readTags = (path: string, text: string): FileTags => {
     if ((match = said.match(/^wire\s+(.+)$/))) waiting = wire(match[1]!)
     else if ((match = said.match(/^module\s+(\S+)(?:\s+as\s+(.+))?$/))) component('module', match[1]!, { type: match[2] ?? '' })
     else if ((match = said.match(/^front door\s+(.+)$/))) tags.frontDoor.push(...list(match[1]!))
-    else if ((match = said.match(/^store\s+(\S+)\s+in\s+(\S+)$/))) tags.stores.push({ name: match[1]!, in: match[2]! })
+    else if ((match = said.match(/^store\s+(\S+)\s+in\s+(\S+)(?:\s+inside\s+(\S+))?(?:\s+from\s+(\S+))?$/)))
+      tags.stores.push({ name: match[1]!, in: match[2]!, inside: match[3] ?? '', from: match[4] ?? '' })
     else if ((match = said.match(/^feature\s+(\S+)(?:\s+as\s+(.+?))?(?:\s+uses\s+(.+))?$/)))
       component('feature', match[1]!, { type: match[2] ?? '', uses: list(match[3] ?? '') })
     else if ((match = said.match(/^(start\s+)?page\s+(\S+)(?:\s+as\s+(.+?))?(?:\s+at\s+(\S+))?$/)))

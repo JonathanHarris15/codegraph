@@ -258,10 +258,11 @@ See what a database holds, design the one it should become, and have setup
 hold the code to it. Decided in ADR 0023. Proven on Mosaic, which keeps about
 60 Firestore stores with nothing holding their shape.
 
-- **CG-8.1** The reader reads stores: `store X in Y inside Z` for an inner
-  store, and the shape from the JSON Schema the tag sits on — each field, fixed
-  or open, what an open part holds, and `pointsAt`. A store with no schema to
-  read has its shape unknown.
+- **CG-8.1** (done) The reader reads stores: `store X in Y inside Z from
+  P.schema.json`, and the shape from that JSON Schema — each field, fixed or
+  open, what an open part holds, and `pointsAt` as `points at` wires between
+  stores. A store with no schema to read has its shape unknown. Nothing draws
+  them yet: the canvas skips wires between stores until CG-8.2.
 - **CG-8.2** Stores on the map: a database opens to its store cards, fields on
   their faces, inner stores inside their stores, `points at` wires between
   them, and `keeps` wires reaching the store. The MCP's `map` says the same.

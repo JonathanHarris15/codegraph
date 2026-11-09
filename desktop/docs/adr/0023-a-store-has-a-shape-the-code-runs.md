@@ -60,12 +60,15 @@ id **points at** that store.
 ### Where a shape is written
 
 On the schema the owning module runs, which already carries the store's tag
-(ADR 0008). The tag gains `inside` for an inner store:
+(ADR 0008). The tag gains `inside` for an inner store, and `from` for the
+schema file beside it, since a JSON file has no comment to carry a tag:
 
 ```js
-// codegraph: store people in mosaic-db
-// codegraph: store involvement in mosaic-db inside people
+// codegraph: store people in mosaic-db from people.schema.json
+// codegraph: store involvement in mosaic-db inside people from involvement.schema.json
 ```
+
+A schema file ends `.schema.json`, so the reader knows to read it.
 
 The first schema the reader understands is JSON Schema, because it names no
 language, the code can check writes against it at run time, and it already

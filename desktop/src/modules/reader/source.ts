@@ -9,13 +9,15 @@ import type { Point } from './schema.js'
 const started = promisify(execFile)
 
 const SOURCE = /\.(ts|tsx|js|jsx|mjs|cjs|mts|cts|py|rb|go|rs|java|kt|swift|cs|php|sql|prisma|css|scss|html|vue|svelte|sh)$/i
+/** A JSON Schema a store's shape is read from (ADR 0023). */
+const SCHEMA = /\.schema\.json$/i
 const ALSO = new Set(['codegraph.config.json', PROPOSAL, 'tsconfig.json', 'jsconfig.json'])
 const TOO_BIG = 1024 * 1024
 
-/** The files the reader cares about: source it can tag, and the few config
- *  files it reads whole. */
+/** The files the reader cares about: source it can tag, the schemas stores
+ *  are shaped by, and the few config files it reads whole. */
 export const wanted = (path: string): boolean =>
-  (SOURCE.test(path) && !path.includes('node_modules/')) || ALSO.has(path)
+  ((SOURCE.test(path) || SCHEMA.test(path)) && !path.includes('node_modules/')) || ALSO.has(path)
 
 const git = async (cwd: string, args: string[]): Promise<string> => {
   try {

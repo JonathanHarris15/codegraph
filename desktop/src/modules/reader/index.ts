@@ -1,5 +1,5 @@
 // codegraph: module reader
-// codegraph: front door readMap, listPoints, pointFor, checkRepo, proposalProgress, measure, proposalFrom, changesAnything, blankProposal, idOfName, componentName, live, outsideId, PROPOSAL, PROPOSAL_FOLDER, Point, SystemMap, Component, Container, CodeFile, Wire, WireKind, ComponentKind, Mismatch, Proposal, ProposedContainer, ProposedComponent, ProposedWire, Progress, ProposalItem, ItemState, DrawnCard, FromDrawing
+// codegraph: front door readMap, listPoints, pointFor, checkRepo, proposalProgress, measure, proposalFrom, changesAnything, blankProposal, idOfName, componentName, live, outsideId, storeId, PROPOSAL, PROPOSAL_FOLDER, Point, SystemMap, Component, Container, CodeFile, Store, Shape, Field, Holds, Wire, WireKind, ComponentKind, Mismatch, Proposal, ProposedContainer, ProposedComponent, ProposedWire, Progress, ProposalItem, ItemState, DrawnCard, FromDrawing
 import { existsSync, readFileSync } from 'node:fs'
 import { extname, join } from 'node:path'
 import { buildMap, type Mismatch } from './build.js'
@@ -10,12 +10,25 @@ import { baseOf, filesAt, pictureAt, pointsIn } from './source.js'
 
 export { pointFor } from './source.js'
 
-export { live, outsideId } from './schema.js'
+export { live, outsideId, storeId } from './schema.js'
 export { blankProposal, componentName, idOfName, measure, PROPOSAL, PROPOSAL_FOLDER } from './proposal.js'
 export { changesAnything, proposalFrom } from './drawn.js'
 export type { DrawnCard, FromDrawing } from './drawn.js'
 export type { Mismatch } from './build.js'
-export type { CodeFile, Component, ComponentKind, Container, Point, SystemMap, Wire, WireKind } from './schema.js'
+export type {
+  CodeFile,
+  Component,
+  ComponentKind,
+  Container,
+  Field,
+  Holds,
+  Point,
+  Shape,
+  Store,
+  SystemMap,
+  Wire,
+  WireKind,
+} from './schema.js'
 export type {
   ItemState,
   Progress,
