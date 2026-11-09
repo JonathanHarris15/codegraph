@@ -39,6 +39,24 @@ describe('an agent asking how codegraph works', () => {
     expect(said).toContain('- tags: ')
   })
 
+  it('gets how to set a design system up and keep it (ADR 0024)', async () => {
+    const said = await agent.call('instructions', { topic: 'design-system' })
+    expect(said).toMatch(/^# A design system the code runs/)
+    for (const part of ['DESIGN.md', '`theme`', '--colors-', 'ui block', 'states', '/__codegraph/ui-block', 'recipes/', 'follows', 'exception', '"dev"', 'working-on'])
+      expect(said).toContain(part)
+  })
+
+  it('is told every tag the reader knows, in the tag rules', async () => {
+    const tags = await agent.call('instructions', { topic: 'tags' })
+    for (const tag of ['codegraph: ui block', 'codegraph: states', 'codegraph: theme', 'codegraph: exception', ' follows ', '"dev"'])
+      expect(tags).toContain(tag)
+  })
+
+  it('is sent to the design system from setup, and from the block a set-up repo carries', async () => {
+    expect(await agent.call('instructions', { topic: 'setup' })).toContain('topic `design-system`')
+    expect(await agent.call('instructions', { topic: 'working-here' })).toContain('design-system')
+  })
+
   it('can be started on setup by a prompt', async () => {
     const prompt = await agent.client.getPrompt({ name: 'setup' })
     const first = prompt.messages[0]?.content

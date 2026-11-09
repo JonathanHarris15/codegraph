@@ -282,9 +282,10 @@ name one to an agent knowing the agent sees the same thing. The check catches
 drift as it happens, instead of an audit finding it a quarter later.
 
 Setup on an older repo finds a lot of raw values. Replacing them is the bulk of
-the sweep, and a page can look slightly different afterwards where two
-near-identical greys become one. Its branch has to be looked at before it is
-merged.
+the sweep. Setup keeps every distinct value, so nothing looks different
+afterwards; where two are nearly the same, it lists them for the person to
+settle later, in the token view. A DESIGN.md from an older repo is therefore
+longer than one a designer would write, until the person prunes it.
 
 The live view depends on the repo's dev server starting. A repo whose dev
 server needs secrets or a database to start shows screenshots until it can.

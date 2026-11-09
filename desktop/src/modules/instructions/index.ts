@@ -3,6 +3,7 @@
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import designSystem from './design-system.md?raw'
 import proposals from './proposals.md?raw'
 import setup from './setup.md?raw'
 import tags from './tags.md?raw'
@@ -18,6 +19,10 @@ export type { Edit } from './schema.js'
 const texts = {
   setup: { about: 'How to set a repo up for codegraph, in one sweep', text: setup },
   tags: { about: 'The config, the tags and the words on wires, and what the check holds code to', text: tags },
+  'design-system': {
+    about: "How to set up and keep a repo's design system: DESIGN.md, the theme, UI blocks and their states, recipes, and the live view's page",
+    text: designSystem,
+  },
   proposals: {
     about: 'What a proposal is, how to make one from a sketch, and how to build one until the check passes',
     text: proposals,

@@ -51,6 +51,9 @@ Codegraph follows C4, from the outside in.
   its code lives in. A container with no code here, like a database, has no
   folders. Every component file sits under exactly one container's folders.
   Tests and tooling may sit anywhere.
+- `"dev"` on a container, where it has a dev server: the address it answers
+  at on this computer, as `"dev": "http://localhost:5173"`. The live view
+  shows UI blocks from it. Only an address on this computer is taken.
 
 A kind is a few plain words. The ones the app draws from the start are
 browser app, server, desktop app, database, files on disk, function and
@@ -106,6 +109,28 @@ nothing else. Files with the same tag make one component.
   person lands.
 - `fakes <what> because <why>` and `shape of <store>` may also appear.
 - Type declaration files (`.d.ts`) need no tag.
+
+The design system adds a few more (call `instructions` with topic
+`design-system` for how to set one up):
+
+```tsx
+// codegraph: page account at /account follows settings-page   (the recipe it follows)
+// codegraph: ui block settings/SettingsRow    (beside the file's own tag; the folder, then the name it exports)
+// codegraph: states SettingsRow               (a file of states for that block, instead of a component tag)
+/* codegraph: theme */                         (beside its module's tag: the file that makes DESIGN.md's tokens)
+color: '#ff6600' // codegraph: exception the brand logo's own orange
+```
+
+- `follows <recipe>` ends a page's tag: the recipe in `recipes/` it is laid
+  out by.
+- `ui block <folder>/<Name>` names a piece of screen in a component's file.
+  Add one line per UI block the file holds.
+- `states <Name>` is a file's whole tag: it renders each named state of one
+  UI block, one export each, and is part of no component, like a test.
+- `theme` marks the one file that turns DESIGN.md's tokens into CSS
+  variables, `--colors-action` for `colors.action`.
+- `exception <why>` goes at the end of a line, or on its own line above it,
+  that breaks the design system on purpose. It must say why.
 
 ## Words on wires
 
@@ -170,3 +195,13 @@ a tag. It helps to know what it will read:
   store.
 - Every store names its schema with `from`: a JSON Schema the module that
   keeps it checks every write against, or the Prisma model the database runs.
+- Where the repo has a DESIGN.md: one file is tagged `theme` and matches it,
+  token for token; no component's file uses a raw colour, or a raw size on a
+  padding, margin, gap or radius, where a token belongs; and none uses a raw
+  token a purpose token names. A line with an exception is listed apart, with
+  why, and does not fail the check.
+- A UI block is a name its file has, in a component; a states file is for a
+  UI block there is.
+- A page that follows a recipe uses every UI block its skeleton names; a
+  recipe's reference is a page that follows it; a skeleton names only UI
+  blocks.

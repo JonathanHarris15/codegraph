@@ -168,10 +168,20 @@ picture of each page they reach to `codegraph-screenshots/<page name>.png`,
 named after the page component. Add `codegraph-screenshots/` to
 `.gitignore`. The map shows these on the page map.
 
-## 6. Check, and hand it over
+## 6. The design system
+
+If the repo has a browser app, set its design system up in this same sweep,
+as a slice of its own sub-agent: its tokens in `DESIGN.md`, the theme made
+from them, its UI blocks and their states, its recipes, and the page the
+live view opens. Call `instructions` with topic `design-system` for how, and
+hand that sub-agent the whole of it. Like the rest of setup, it records how
+the app looks now and changes nothing a person sees.
+
+## 7. Check, and hand it over
 
 - Run the repo's own tests and type checks. Setup must not break them.
-- Call `check` and fix what it lists, until it lists nothing.
+- Call `check` and fix what it lists, until it lists nothing but exceptions
+  a line gives a reason for.
 - Commit everything on the branch in one commit, `Set up codegraph`.
 - Tell the person, plainly: the containers you found, what you moved and
   why, anything you left alone and why, and that merging the branch

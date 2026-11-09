@@ -339,7 +339,7 @@ recipes. Decided in ADR 0024.
   screenshots of their states.
 - **CG-9.8** (done) The live view follows the agent: `working-on` can name a UI block,
   and the pane moves to it and changes as its files do.
-- **CG-9.9** Setup: a `design-system` topic in the instructions. Setup writes
+- **CG-9.9** (done) Setup: a `design-system` topic in the instructions. Setup writes
   DESIGN.md from the values the code really uses, makes the theme from it,
   swaps raw values for tokens, tags UI blocks, writes their states, gives them
   live addresses, and writes a recipe for each kind of page three or more pages
