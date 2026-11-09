@@ -32,6 +32,7 @@ const NAMES: Record<keyof Features, true> = {
   listPoints: true,
   switchBranch: true,
   chooseBranch: true,
+  changeToken: true,
   showAnnotations: true,
   saveAnnotations: true,
   showInstructions: true,

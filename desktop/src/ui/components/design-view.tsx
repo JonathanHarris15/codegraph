@@ -107,17 +107,151 @@ const Links = ({ title, ids, onPick }: { title: string; ids: string[]; onPick: (
     </div>
   ) : null
 
+/** What a person can do to the tokens, when the map is of their own working
+ *  copy: change one, and hear back where it went. */
+export type Changing = (tokenId: string, value: string) => Promise<{ ok: boolean; branch: string; problem: string }>
+
+const SIX_HEX = /^#[0-9a-f]{6}$/i
+const PIXELS = /^(\d+(?:\.\d+)?)px$/
+
+/** The controls for one token's value: a picker for a colour, a slider for
+ *  a size in pixels, a list of the tokens a purpose token could name, and
+ *  the value as text for anything else. Nothing is written until Save. */
+const Editor = ({
+  token,
+  tokens,
+  draft,
+  onDraft,
+  onChange,
+}: {
+  token: Token
+  tokens: Token[]
+  draft: string
+  onDraft: (value: string) => void
+  onChange: Changing
+}) => {
+  const [busy, setBusy] = useState(false)
+  const [said, setSaid] = useState('')
+  const [problem, setProblem] = useState('')
+  useEffect(() => {
+    setSaid('')
+    setProblem('')
+  }, [token.id])
+  const save = async (): Promise<void> => {
+    setBusy(true)
+    const done = await onChange(token.id, draft)
+    setBusy(false)
+    setProblem(done.problem)
+    setSaid(done.ok ? `Saved to DESIGN.md on ${done.branch}. The code still has the old value until it is brought along.` : '')
+  }
+  const pixels = draft.match(PIXELS)
+  const max = token.group === 'rounded' ? 48 : 96
+  const others = tokens.filter((t) => t.group === token.group && t.id !== token.id && !t.parts.length)
+  return (
+    <div className="design-editor">
+      <span className="ds-label">Change it</span>
+      {token.tier === 'purpose' ? (
+        <select
+          className="ds-input"
+          aria-label={`Token ${token.id} names`}
+          value={draft}
+          onChange={(e) => onDraft(e.target.value)}
+        >
+          {draft.startsWith('{') && !others.some((t) => `{${t.id}}` === draft) ? <option value={draft}>{draft}</option> : null}
+          {others.map((t) => (
+            <option key={t.id} value={`{${t.id}}`}>
+              {`{${t.id}}`} {t.value}
+            </option>
+          ))}
+        </select>
+      ) : null}
+      {token.tier === 'raw' && token.group === 'colors' && SIX_HEX.test(draft) ? (
+        <input
+          type="color"
+          className="design-colour"
+          aria-label={`Pick a colour for ${token.id}`}
+          value={draft.toLowerCase()}
+          onChange={(e) => onDraft(e.target.value)}
+        />
+      ) : null}
+      {token.tier === 'raw' && (token.group === 'spacing' || token.group === 'rounded') && pixels ? (
+        <input
+          type="range"
+          className="design-slider"
+          aria-label={`Drag ${token.id}`}
+          min={0}
+          max={Math.max(max, Number(pixels[1]))}
+          step={1}
+          value={Number(pixels[1])}
+          onChange={(e) => onDraft(`${e.target.value}px`)}
+        />
+      ) : null}
+      <input
+        className="ds-input design-value"
+        aria-label={`Value of ${token.id}`}
+        value={draft}
+        spellCheck={false}
+        onChange={(e) => onDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && draft !== token.written) void save()
+        }}
+      />
+      <div className="ds-row">
+        <Button onClick={() => void save()} disabled={busy || draft === token.written}>
+          {busy ? 'Saving…' : 'Save to DESIGN.md'}
+        </Button>
+        {draft !== token.written ? (
+          <Button look="bare" onClick={() => onDraft(token.written)}>
+            Put back
+          </Button>
+        ) : null}
+      </div>
+      <span className="ds-hint">Saving never writes on the main line: there it starts a branch first.</span>
+      {problem ? (
+        <span className="ds-problem" role="alert">
+          {problem}
+        </span>
+      ) : null}
+      {said ? (
+        <span className="ds-hint" role="status">
+          {said}
+        </span>
+      ) : null}
+    </div>
+  )
+}
+
 /** One token up close: how it is written, what it comes to, what it names,
- *  and everything it feeds. */
-const Picked = ({ token, byId, onPick }: { token: Token; byId: Map<string, Token>; onPick: (id: string) => void }) => {
+ *  and everything it feeds; and, where the person may, a way to change it. */
+const Picked = ({
+  token,
+  byId,
+  onPick,
+  onChange,
+  why,
+}: {
+  token: Token
+  byId: Map<string, Token>
+  onPick: (id: string) => void
+  onChange?: Changing | undefined
+  why: string
+}) => {
   const named = new Set(token.namedBy)
+  const [draft, setDraft] = useState(token.written)
+  useEffect(() => setDraft(token.written), [token.id, token.written])
+  const target = draft.match(/^\{([^{}]+)\}$/)?.[1]
+  const shown: Token = draft === token.written ? token : { ...token, written: draft, value: target ? (byId.get(target)?.value ?? '') : draft }
   return (
     <aside className="design-picked" aria-label={`Token ${token.id}`}>
       <div className="ds-row" style={{ justifyContent: 'space-between' }}>
         <span className="design-picked-name">{token.id}</span>
         <Badge>{TIER[token.tier]}</Badge>
       </div>
-      <Sample token={token} byId={byId} big />
+      <Sample token={shown} byId={byId} big />
+      {onChange && !token.parts.length ? (
+        <Editor token={token} tokens={[...byId.values()]} draft={draft} onDraft={setDraft} onChange={onChange} />
+      ) : null}
+      {!onChange && why ? <span className="ds-hint">{why}</span> : null}
       {token.parts.length ? (
         <dl className="design-parts">
           {token.parts.map((p) => (
@@ -159,8 +293,20 @@ const Picked = ({ token, byId, onPick }: { token: Token; byId: Map<string, Token
 }
 
 /** A software system's DESIGN.md, drawn: every token as what it is, never as
- *  text, and one picked token up close (ADR 0024). */
-export const DesignView = ({ design, onClose }: { design: DesignSystem; onClose: () => void }) => {
+ *  text, and one picked token up close (ADR 0024). Given a way to change
+ *  tokens, the picked one can be changed; without, the view only looks. */
+export const DesignView = ({
+  design,
+  onClose,
+  onChange,
+  why = '',
+}: {
+  design: DesignSystem
+  onClose: () => void
+  onChange?: Changing | undefined
+  /** Why tokens cannot be changed here, when they cannot. */
+  why?: string
+}) => {
   const [pickedId, setPickedId] = useState('')
   const byId = new Map(design.tokens.map((t) => [t.id, t]))
   const picked = byId.get(pickedId)
@@ -236,7 +382,7 @@ export const DesignView = ({ design, onClose }: { design: DesignSystem; onClose:
             </section>
           ) : null}
         </div>
-        {picked ? <Picked token={picked} byId={byId} onPick={setPickedId} /> : null}
+        {picked ? <Picked token={picked} byId={byId} onPick={setPickedId} onChange={onChange} why={why} /> : null}
       </div>
     </section>
   )

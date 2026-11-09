@@ -1,5 +1,5 @@
 // codegraph: module repo
-// codegraph: front door isRepo, remoteName, mainLineRef, isSetUp, readSoftwareSystem, folderName, writeProposal, removeProposal, proposalPicture, headOf, makeBranch, switchBranch, useMirrors, mirrorFolder, fetchMirror, tipOf, isAncestor, mergeBase, fetchWorkingCopy, proposalsOnBranches, RepoFacts, SetupFacts, Picture, Reach
+// codegraph: front door isRepo, remoteName, mainLineRef, isSetUp, readSoftwareSystem, folderName, readWorkingFile, writeWorkingFile, writeProposal, removeProposal, proposalPicture, headOf, makeBranch, switchBranch, useMirrors, mirrorFolder, fetchMirror, tipOf, isAncestor, mergeBase, fetchWorkingCopy, proposalsOnBranches, RepoFacts, SetupFacts, Picture, Reach
 import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
 import { isRepo, mainLineRef, readGit, remoteName, type GitFacts } from './git.js'
@@ -8,6 +8,7 @@ import { isSetUp, noSetup, readSetupAt, type SetupFacts } from './setup.js'
 
 export { isRepo, isSetUp, mainLineRef, remoteName }
 export { headOf, makeBranch, proposalPicture, removeProposal, writeProposal } from './proposal.js'
+export { readWorkingFile, writeWorkingFile } from './files.js'
 export type { Picture } from './proposal.js'
 export { switchBranch } from './switch.js'
 export type { SetupFacts } from './setup.js'

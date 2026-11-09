@@ -3,6 +3,7 @@ import { ipcMain } from 'electron'
 import { addMockup } from '../features/add-mockup.js'
 import { agreeShallowSystem } from '../features/agree-shallow-system.js'
 import { changeRole } from '../features/change-role.js'
+import { changeToken } from '../features/change-token.js'
 import { chooseBranch } from '../features/choose-branch.js'
 import { connectAgent } from '../features/connect-agent.js'
 import { connectGithub } from '../features/connect-github.js'
@@ -71,6 +72,7 @@ export const FEATURES = {
   listPoints,
   switchBranch,
   chooseBranch,
+  changeToken,
   showAnnotations,
   saveAnnotations,
   showInstructions,

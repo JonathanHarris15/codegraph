@@ -5729,3 +5729,32 @@ button.map-restyle:hover {
   white-space: pre-line;
   color: var(--ink-soft);
 }
+
+.design-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--surface-sunken);
+}
+
+.design-colour {
+  width: 100%;
+  height: 40px;
+  padding: 0;
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-md);
+  background: none;
+  cursor: pointer;
+}
+
+.design-slider {
+  width: 100%;
+  accent-color: var(--kind-page);
+}
+
+.design-value {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}

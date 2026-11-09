@@ -1,5 +1,5 @@
 // codegraph: module reader
-import { parse } from 'yaml'
+import { isScalar, parse, parseDocument, Scalar } from 'yaml'
 
 /** Where a repo keeps its design system's tokens and the words behind them,
  *  in Google's open DESIGN.md format (ADR 0024). */
@@ -87,7 +87,27 @@ const MADE_OF_PARTS = new Set<TokenGroup>(['typography', 'components'])
 const REFERENCE = /\{([^{}]+)\}/g
 const WHOLE_REFERENCE = /^\{([^{}]+)\}$/
 const DIMENSION = /^-?\d*\.?\d+(px|em|rem)$/
-const COLOUR = /^(#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})|[a-z]+|[a-z-]+\(.*\))$/i
+/** CSS's own colour names, which DESIGN.md accepts as colours. */
+const NAMED = new Set(
+  (
+    'aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown burlywood ' +
+    'cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray ' +
+    'darkgreen darkgrey darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen ' +
+    'darkslateblue darkslategray darkslategrey darkturquoise darkviolet deeppink deepskyblue dimgray dimgrey dodgerblue ' +
+    'firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite gold goldenrod gray green greenyellow grey honeydew ' +
+    'hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan ' +
+    'lightgoldenrodyellow lightgray lightgreen lightgrey lightpink lightsalmon lightseagreen lightskyblue lightslategray ' +
+    'lightslategrey lightsteelblue lightyellow lime limegreen linen magenta maroon mediumaquamarine mediumblue ' +
+    'mediumorchid mediumpurple mediumseagreen mediumslateblue mediumspringgreen mediumturquoise mediumvioletred ' +
+    'midnightblue mintcream mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid ' +
+    'palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum powderblue purple ' +
+    'rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silver skyblue ' +
+    'slateblue slategray slategrey snow springgreen steelblue tan teal thistle tomato turquoise violet wheat white ' +
+    'whitesmoke yellow yellowgreen transparent currentcolor'
+  ).split(' '),
+)
+const COLOUR_FORM = /^(#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})|(rgba?|hsla?|hwb|oklch|oklab|lch|lab|color-mix|color)\(.*\))$/i
+const COLOUR = { test: (value: string): boolean => COLOUR_FORM.test(value) || NAMED.has(value.toLowerCase()) }
 const FENCED_YAML = /^```ya?ml\s*\n([\s\S]*?)^```\s*$/gm
 
 const asText = (value: unknown): string => (value === null || value === undefined ? '' : String(value))
@@ -231,4 +251,64 @@ export const readDesign = (text: string): DesignSystem => {
     sections: sectionsOf(body),
     problems,
   }
+}
+
+/** Where each yaml block sits in the file: the front matter and every
+ *  fenced block, by the offsets of its yaml. */
+const blocksIn = (text: string): { start: number; end: number }[] => {
+  const blocks: { start: number; end: number }[] = []
+  const front = text.match(/^(﻿?---\r?\n)([\s\S]*?)\r?\n---[ \t]*(\r?\n|$)/)
+  if (front) blocks.push({ start: front[1]!.length, end: front[1]!.length + front[2]!.length })
+  for (const m of text.matchAll(/^```ya?ml[ \t]*\r?\n([\s\S]*?)^```[ \t]*$/gm)) {
+    const start = m.index + m[0].indexOf(m[1]!)
+    blocks.push({ start, end: start + m[1]!.length })
+  }
+  return blocks
+}
+
+/** A value written the way the one it replaces was: quoted the same, and
+ *  quoted anyway where yaml would read it as something else. */
+const inStyle = (value: string, style: Scalar['type']): string => {
+  if (style === Scalar.QUOTE_SINGLE) return `'${value.replace(/'/g, "''")}'`
+  if (style === Scalar.QUOTE_DOUBLE || /^[#{[&*!|>'"%@`]|: | #|^\s|\s$/.test(value)) return JSON.stringify(value)
+  return value
+}
+
+/** Why a value will not do for a token, or '' when it will. */
+const refusal = (id: string, group: TokenGroup, part: string, value: string, known: (id: string) => boolean): string => {
+  const named = value.match(WHOLE_REFERENCE)?.[1]
+  if (named) return known(named) ? '' : `There is no token ${named} to name`
+  if (!value || /[\r\n]/.test(value)) return `${id} needs a value on one line`
+  if (group === 'colors' || /color$/i.test(part)) return COLOUR.test(value) ? '' : `${id} is a colour, and "${value}" is not one`
+  if (group === 'rounded' || ['rounded', 'fontSize', 'letterSpacing'].includes(part))
+    return DIMENSION.test(value) ? '' : `${id} needs a unit (px, em or rem), so not "${value}"`
+  if (group === 'spacing')
+    return DIMENSION.test(value) || /^-?\d*\.?\d+$/.test(value) ? '' : `${id} is a size (px, em or rem) or a plain number, so not "${value}"`
+  return ''
+}
+
+/** DESIGN.md with one token's value changed, or one part of a type style
+ *  or block token (`typography.body-md.fontSize`), and every other line left
+ *  as it was. Says why instead when the token is not there or the value
+ *  will not do. */
+export const changeToken = (text: string, id: string, value: string): { text: string } | { problem: string } => {
+  const { tokens } = readDesign(text)
+  const token =
+    tokens.find((t) => t.id === id) ?? tokens.find((t) => t.parts.some((p) => `${t.id}.${p.name}` === id))
+  if (!token) return { problem: `There is no token ${id} in ${DESIGN}` }
+  const part = token.id === id ? '' : id.slice(token.id.length + 1)
+  if (token.parts.length && !part) return { problem: `${id} is made of parts; change one of them` }
+  const known = (named: string): boolean =>
+    named !== token.id && tokens.some((t) => t.id === named || t.parts.some((p) => `${t.id}.${p.name}` === named))
+  const why = refusal(id, token.group, part, value.trim(), known)
+  if (why) return { problem: why }
+
+  const path = part ? [token.group, token.name, part] : [token.group, token.name]
+  for (const block of blocksIn(text)) {
+    const node = parseDocument(text.slice(block.start, block.end)).getIn(path, true)
+    if (!isScalar(node) || !node.range) continue
+    const [from, to] = node.range
+    return { text: text.slice(0, block.start + from) + inStyle(value.trim(), node.type) + text.slice(block.start + to) }
+  }
+  return { problem: `${id} is not written as a single value the app can change` }
 }

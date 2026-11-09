@@ -730,7 +730,26 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
 
         {showMembers && shown ? <MembersSheet projectId={projectId} onClose={() => setShowMembers(false)} /> : null}
 
-        {showDesign && design ? <DesignView design={design} onClose={closeDesign} /> : null}
+        {showDesign && design && systemShown ? (
+          <DesignView
+            design={design}
+            onClose={closeDesign}
+            onChange={
+              systemShown.path && systemShown.point.kind === 'live'
+                ? async (tokenId, value) => {
+                    const done = await window.codegraph.changeToken(projectId, systemShown.id, tokenId, value)
+                    if (done.ok) await load(pointsNow.current)
+                    return done
+                  }
+                : undefined
+            }
+            why={
+              !systemShown.path
+                ? 'This repo is not on your computer, so its tokens can only be looked at here.'
+                : 'You are looking at another point in its history. Choose the folder as it is now to change tokens.'
+            }
+          />
+        ) : null}
 
         {(
           <SketchLibrary

@@ -1,9 +1,9 @@
 // codegraph: test ui canvas
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { type ElectronApplication, type Locator, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { aMappedRepo, closeYard, openTheApp, openYard, type Yard } from './yard.js'
+import { aMappedRepo, closeYard, git, openTheApp, openYard, type Yard } from './yard.js'
 
 /** The built app showing a software system's DESIGN.md as what each token
  *  is, never as text: a swatch, a space, a corner, a line of type, and what
@@ -43,6 +43,7 @@ Quiet, so the work stands out.
 let yard: Yard
 let app: ElectronApplication
 let page: Page
+let repo = ''
 
 const view = (): Locator => page.getByRole('region', { name: 'Design system Daylight' })
 const token = (id: string): Locator => view().locator(`[data-token="${id}"]`)
@@ -55,7 +56,7 @@ const picture = async (name: string): Promise<void> => {
 
 beforeAll(async () => {
   yard = openYard('design-page')
-  const repo = aMappedRepo(yard)
+  repo = aMappedRepo(yard)
   writeFileSync(join(repo, 'DESIGN.md'), DESIGN)
   writeFileSync(
     join(yard.home, 'projects.json'),
@@ -133,6 +134,44 @@ describe('looking at a design system', () => {
   it('jumps to a token named in the panel', async () => {
     await page.getByRole('complementary', { name: 'Token components.button-primary' }).getByRole('button', { name: 'colors.action' }).click()
     await page.getByRole('complementary', { name: 'Token colors.action' }).waitFor({ timeout: PATIENCE })
+  })
+
+  it('changes a colour: previews it, then on the main line saves it on a new branch, and what names it follows', async () => {
+    await token('colors.blue-500').click()
+    const panel = page.getByRole('complementary', { name: 'Token colors.blue-500' })
+    await panel.getByLabel('Value of colors.blue-500').fill('#dc2626')
+    expect(await style(panel.locator('.design-sample'), 'background-color')).toBe('rgb(220, 38, 38)')
+    expect(await style(sample('colors.action'), 'background-color')).toBe('rgb(37, 99, 235)')
+
+    await panel.getByRole('button', { name: 'Save to DESIGN.md' }).click()
+    await expect.poll(() => style(sample('colors.action'), 'background-color'), { timeout: PATIENCE }).toBe('rgb(220, 38, 38)')
+    expect(await style(sample('components.button-primary'), 'background-color')).toBe('rgb(220, 38, 38)')
+    expect(await panel.getByRole('status').textContent()).toContain('design/colors-blue-500')
+    expect(git(repo, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('design/colors-blue-500')
+    expect(readFileSync(join(repo, 'DESIGN.md'), 'utf8')).toContain('blue-500: "#dc2626"')
+    await picture('d9-3-colour')
+  })
+
+  it('drags a space wider, on the branch it is already on', async () => {
+    await token('spacing.md').click()
+    const panel = page.getByRole('complementary', { name: 'Token spacing.md' })
+    await panel.getByLabel('Drag spacing.md').fill('40')
+    expect(await panel.getByLabel('Value of spacing.md').inputValue()).toBe('40px')
+    await panel.getByRole('button', { name: 'Save to DESIGN.md' }).click()
+    await expect.poll(() => style(sample('spacing.md'), 'width'), { timeout: PATIENCE }).toBe('40px')
+    expect(git(repo, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('design/colors-blue-500')
+  })
+
+  it('says why a value will not do, and writes nothing', async () => {
+    await token('rounded.md').click()
+    const panel = page.getByRole('complementary', { name: 'Token rounded.md' })
+    const before = readFileSync(join(repo, 'DESIGN.md'), 'utf8')
+    await panel.getByLabel('Value of rounded.md').fill('8')
+    await panel.getByRole('button', { name: 'Save to DESIGN.md' }).click()
+    expect(await panel.getByRole('alert').textContent({ timeout: PATIENCE })).toContain('needs a unit')
+    expect(readFileSync(join(repo, 'DESIGN.md'), 'utf8')).toBe(before)
+    await panel.getByRole('button', { name: 'Put back' }).click()
+    expect(await panel.getByLabel('Value of rounded.md').inputValue()).toBe('8px')
   })
 
   it('closes back to the map', async () => {

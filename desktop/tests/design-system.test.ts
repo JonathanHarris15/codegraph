@@ -2,7 +2,7 @@
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { live, readMap, type DesignSystem, type Token } from '../src/modules/reader/index.js'
+import { changeToken, live, readDesign, readMap, type DesignSystem, type Token } from '../src/modules/reader/index.js'
 import { aMappedRepo, closeYard, git, openYard, type Yard } from './yard.js'
 
 let yard: Yard
@@ -142,6 +142,57 @@ describe('reading a DESIGN.md', () => {
     const now = await readMap(repo, live)
     expect(then.design?.tokens.find((t) => t.id === 'colors.action')?.value).toBe('#2563eb')
     expect(now.design?.tokens.find((t) => t.id === 'colors.action')?.value).toBe('#dc2626')
+  })
+})
+
+describe('changing one token', () => {
+  const FILE = [
+    '---',
+    'name: Daylight',
+    'colors:',
+    '  # The one accent.',
+    '  blue-500: "#2563eb"',
+    '  action: "{colors.blue-500}"',
+    'rounded:',
+    '  md: 8px',
+    '---',
+    '',
+    '## Layout',
+    '',
+    'An 8px rhythm.',
+    '',
+    '```yaml',
+    'spacing:',
+    '  sm: 8px',
+    '  md: 16px',
+    '```',
+    '',
+  ].join('\n')
+
+  const changed = (id: string, value: string): string => {
+    const done = changeToken(FILE, id, value)
+    if ('problem' in done) throw new Error(done.problem)
+    return done.text
+  }
+
+  it('changes only that value, keeping every other line as it was', () => {
+    expect(changed('colors.blue-500', '#dc2626')).toBe(FILE.replace('"#2563eb"', '"#dc2626"'))
+  })
+
+  it('changes a value kept in a yaml block under a heading', () => {
+    expect(changed('spacing.md', '24px')).toBe(FILE.replace('  md: 16px', '  md: 24px'))
+  })
+
+  it('points a purpose token at another token', () => {
+    const text = changed('colors.action', '{colors.blue-500}')
+    expect(readDesign(text).tokens.find((t) => t.id === 'colors.action')?.value).toBe('#2563eb')
+  })
+
+  it('refuses what the format would not take, and says why', () => {
+    expect(changeToken(FILE, 'colors.blue-500', 'bright')).toEqual({ problem: 'colors.blue-500 is a colour, and "bright" is not one' })
+    expect(changeToken(FILE, 'rounded.md', '8')).toEqual({ problem: 'rounded.md needs a unit (px, em or rem), so not "8"' })
+    expect(changeToken(FILE, 'colors.action', '{colors.red}')).toEqual({ problem: 'There is no token colors.red to name' })
+    expect(changeToken(FILE, 'colors.nope', '#000')).toEqual({ problem: 'There is no token colors.nope in DESIGN.md' })
   })
 })
 

@@ -321,7 +321,7 @@ recipes. Decided in ADR 0024.
   each radius a corner, each type style a line set in it. Picking a token shows
   what it names and everything that names it, down to the UI blocks. Text and
   background pairs show their contrast.
-- **CG-9.3** Changing a token in the view writes DESIGN.md in the working
+- **CG-9.3** (done) Changing a token in the view writes DESIGN.md in the working
   copy, making a branch first on the main line.
 - **CG-9.4** The check: the theme matches DESIGN.md; no raw value where a token
   belongs; nothing skips a purpose token for a raw one; an exception says why
