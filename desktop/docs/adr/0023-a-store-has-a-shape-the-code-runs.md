@@ -78,6 +78,14 @@ points at another store says so with `"pointsAt": "people"`, and its
 `description` is the wire's words. Zod and TypeScript types come after, each
 with its own reader, as languages do.
 
+A database that runs its own schema already says the shape, and a JSON Schema
+beside it would only be a second copy to drift. A Prisma model is read as it
+is: `from ../../prisma/schema.prisma#Note` names the file and the model. A
+table holds only its columns, so its shape is fixed; a relation's `fields`
+column points at the store its model shapes; `///` words are what a field or
+store says. Added when indie-stack, kept in SQLite through Prisma, was the
+first repo set up for stores.
+
 A store with no schema the reader can read is drawn with its shape unknown,
 never guessed. Once a repo is set up, the check reports it.
 

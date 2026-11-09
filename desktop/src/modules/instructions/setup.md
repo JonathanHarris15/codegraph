@@ -80,8 +80,12 @@ Three things every sub-agent gets wrong unless it is told, so tell it:
 
 ## 2b. Stores, and the shape of what they keep
 
-Every store gets a schema the module that keeps it runs: a JSON Schema file
-beside the tagged file, named in its tag with `from`, which the module checks
+Every store gets a schema the module that keeps it runs, named in its tag with
+`from`. Where the database already runs one, as a SQL database through Prisma
+does, name that model and write nothing new: `store notes in db from
+../../prisma/schema.prisma#Note`. Give its foreign keys `///` words saying what
+they are for, which are only comments and change no table. Everywhere else,
+write a JSON Schema file beside the tagged file, which the module checks
 every write against. The map draws each store's fields from it, and the check
 reports any store without one. Do this for every database and every folder of
 files the repo keeps things in.

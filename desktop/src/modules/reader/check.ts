@@ -111,7 +111,7 @@ export const checkFiles = (files: Map<string, string>, point: Point): Mismatch[]
     add({
       file: tagged.file,
       line: tagged.said.line,
-      says: `The store ${store.path} has no schema. Write one in JSON Schema beside this file, have ${named(keeper)} check every write against it, and name it in the tag: \`store ${store.name} in ${store.container}${inside} from ${store.name}.schema.json\`.`,
+      says: `The store ${store.path} has no schema. Write one in JSON Schema beside this file, have ${named(keeper)} check every write against it, and name it in the tag: \`store ${store.name} in ${store.container}${inside} from ${store.name}.schema.json\`. Where the database already runs one, such as a Prisma model, name that instead.`,
     })
   }
 

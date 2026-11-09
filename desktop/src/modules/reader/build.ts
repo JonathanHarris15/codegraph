@@ -16,6 +16,7 @@ import {
   type WireKind,
 } from './schema.js'
 import { PROPOSAL, readProposal } from './proposal.js'
+import { readPrismaShape } from './prisma.js'
 import { readShape } from './shape.js'
 import { readTags, type FileTags } from './tags.js'
 
@@ -279,7 +280,7 @@ const pointing = (shape: Shape, before = ''): { place: string; field: Field }[] 
  *  (ADR 0023). */
 const readStores = (kept: { path: string; component: Component; said: FileTags['stores'][number] }[], files: Map<string, string>, facts: Facts): void => {
   const { map, problems } = facts
-  const byPath = new Map<string, Store & { file: string }>()
+  const byPath = new Map<string, Store & { file: string; model: string }>()
   const keeperOf = new Map<string, Component>()
   for (const { path, component, said } of kept) {
     const where = said.inside ? `${said.inside}/${said.name}` : said.name
@@ -299,9 +300,10 @@ const readStores = (kept: { path: string; component: Component; said: FileTags['
       container: said.in,
       keeper: component.id,
       says: '',
-      schema: said.from ? besides(path, said.from) : '',
+      schema: said.from ? besides(path, said.from.split('#')[0]!) : '',
       shape: null,
       file: path,
+      model: said.from.split('#')[1] ?? '',
     })
   }
 
@@ -315,6 +317,22 @@ const readStores = (kept: { path: string; component: Component; said: FileTags['
       problems.push({ ...at, says: `${store.file} shapes ${store.name} by ${store.schema}, which is not there` })
       continue
     }
+    if (store.schema.endsWith('.prisma')) {
+      // A Prisma schema holds many models; the tag says which is this store's.
+      const read = store.model ? readPrismaShape(text, store.model) : null
+      if (!read) {
+        problems.push({
+          ...at,
+          says: store.model
+            ? `${store.file} shapes ${store.name} by ${store.schema}, which has no model ${store.model}`
+            : `${store.file} shapes ${store.name} by ${store.schema} without saying which model: end it with #<Model>`,
+        })
+        continue
+      }
+      store.shape = read.shape
+      store.says = read.says
+      continue
+    }
     const read = readShape(text)
     if (!read) {
       problems.push({ file: store.schema, line: 1, says: `${store.schema} is not JSON the reader can read` })
@@ -323,6 +341,14 @@ const readStores = (kept: { path: string; component: Component; said: FileTags['
     store.shape = read.shape
     store.says = read.says
   }
+
+  // A Prisma field points at a model; the store that model shapes is what it
+  // points at on the map.
+  const byModel = new Map([...byPath.values()].filter((s) => s.model).map((s) => [`${s.schema}#${s.model}`, s.path]))
+  for (const store of byPath.values())
+    if (store.model && store.shape)
+      for (const field of store.shape.fields)
+        if (field.pointsAt) field.pointsAt = byModel.get(`${store.schema}#${field.pointsAt}`) ?? field.pointsAt
 
   const all = [...byPath.values()]
   for (const store of all) {
@@ -343,5 +369,5 @@ const readStores = (kept: { path: string; component: Component; said: FileTags['
       map.wires.push({ from: store.id, to: target.id, kind: 'points at', words: field.says || place })
     }
   }
-  map.stores = all.map(({ file: _file, ...store }) => store)
+  map.stores = all.map(({ file: _file, model: _model, ...store }) => store)
 }

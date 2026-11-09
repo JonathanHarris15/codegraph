@@ -96,7 +96,12 @@ nothing else. Files with the same tag make one component.
   the store's fields from it. `additionalProperties: false` makes a shape
   fixed; without it the shape is open. A field holding another record's id
   says `"pointsAt": "<store>"`, and its `description` is the wire's words. A
-  store with no `from` shows with its shape unknown.
+  store with no `from` shows with its shape unknown. Where the database already
+  runs a schema that says the store's shape, name that instead of writing a
+  second one: a Prisma model is `from ../../prisma/schema.prisma#Note`, the file
+  beside the tagged one and the model after `#`. A Prisma relation's `fields`
+  column points at the store its model shapes, and `///` words above a field
+  are the wire's words.
 - `at` gives a page its address where it has one. `start page` marks where a
   person lands.
 - `fakes <what> because <why>` and `shape of <store>` may also appear.
@@ -163,5 +168,5 @@ a tag. It helps to know what it will read:
 - Every name taken from a module is on its front door, `default` included.
 - Only a module reaches outside its container, and only a module keeps a
   store.
-- Every store names its schema with `from`, a JSON Schema the module that
-  keeps it checks every write against.
+- Every store names its schema with `from`: a JSON Schema the module that
+  keeps it checks every write against, or the Prisma model the database runs.
