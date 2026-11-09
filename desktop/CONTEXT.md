@@ -228,7 +228,8 @@ _Avoid_: directory, sketch gallery
 **Folder**:
 A place inside a sketch library to keep sketches in, which can hold other folders.
 A project's folders are shared by everyone on it; a member's own follow them.
-Deleting one keeps what was in it, a level up.
+Deleting one keeps what was in it, a level up. A design system's UI blocks are
+kept in folders too, but theirs are read from the code, not made in the app.
 _Avoid_: directory, collection, group
 
 **Loose sketch**:
@@ -293,6 +294,54 @@ is gone, nothing it did not draw has changed since the commit it was drawn on,
 the tests pass and every file is tagged. Building it ends the proposal; the
 sketch it came from stays.
 _Avoid_: done, complete, merged, shipped
+
+## The design system
+
+**Design system**:
+How a software system looks, held to its code: its DESIGN.md, its UI blocks and
+its recipes. Each software system has its own, since its own code runs it. The
+module that draws it is still a module.
+_Avoid_: style guide, theme, brand, UI kit
+
+**Token**:
+One named value in DESIGN.md: a colour, a space, a corner radius, a type style.
+A raw token is the value itself, a purpose token says what it is for, and a
+block token is what one UI block uses; each may name the one above it. The
+code's theme is made from them.
+_Avoid_: variable, constant, style, design value
+
+**UI block**:
+A named piece of screen that pages are built from, like a settings row or a
+date picker, and the name a person uses to point an agent at it. It lives inside
+a component, at the code level, and is not one itself. Always "UI block" in
+full, never "block" alone.
+_Avoid_: component, part, widget, element, block (alone)
+
+**Option**:
+One value a UI block takes, read from its code, with what each choice means
+written beside it.
+_Avoid_: prop, parameter, argument, variant
+
+**State**:
+A named situation a UI block or page can be in, such as loading, empty, save
+failed or no permission, which can be shown on its own.
+_Avoid_: story, case, mode, variant
+
+**Recipe**:
+How one kind of page lays itself out: what it is for and not for, a reference
+page, the UI blocks it is built from, and its rules, states and what not to do.
+A page names the recipe it follows.
+_Avoid_: pattern, template (that is a card type), layout, guideline
+
+**Exception**:
+A place in the code that breaks the design system on purpose and says why.
+Not drift.
+_Avoid_: override, waiver, escape hatch
+
+**Live view**:
+A pane beside the canvas showing a UI block, or a recipe's reference page,
+running from the repo's own code as it stands now, which a person can try.
+_Avoid_: preview, playground, sandbox, storybook
 
 ## Setting up
 

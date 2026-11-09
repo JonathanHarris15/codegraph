@@ -308,3 +308,49 @@ that skips the code is caught too.
 
 Still rough: a `points at` line drawn by hand on a sketch, or one left behind
 when a field stops pointing, is not tidied up; only the field counts.
+
+## Checkpoint 9: The design system
+
+See how a software system looks, try its UI blocks, and hold its pages to their
+recipes. Decided in ADR 0024.
+
+- **CG-9.1** The reader reads DESIGN.md at a repo's root, in Google's format:
+  each token, its tier (raw, purpose, block), what it names, and the words under
+  it. The MCP's `map` says them.
+- **CG-9.2** The token view: each colour a swatch, each space a box that size,
+  each radius a corner, each type style a line set in it. Picking a token shows
+  what it names and everything that names it, down to the UI blocks. Text and
+  background pairs show their contrast.
+- **CG-9.3** Changing a token in the view writes DESIGN.md in the working
+  copy, making a branch first on the main line.
+- **CG-9.4** The check: the theme matches DESIGN.md; no raw value where a token
+  belongs; nothing skips a purpose token for a raw one; an exception says why
+  and is listed apart.
+- **CG-9.5** UI blocks: the reader reads `ui block` tags, their folders, their
+  options and what each means, and their states files. The design system
+  module opens to its UI blocks by folder, each with its screenshot.
+- **CG-9.6** Recipes: the reader reads `recipes/`, and pages that say
+  `follows`. The page map marks each page with its recipe; a recipe opens to its
+  words beside its reference page. The check holds a page to its recipe's
+  UI blocks, and the reference page to its recipe.
+- **CG-9.7** The live view: a pane running a UI block's states, or a
+  recipe's reference page, from the repo's own dev server, with a control for
+  each option. Web apps only to start, React on Vite first; native apps get
+  screenshots of their states.
+- **CG-9.8** The live view follows the agent: `working-on` can name a UI block,
+  and the pane moves to it and changes as its files do.
+- **CG-9.9** Setup: a `design-system` topic in the instructions. Setup writes
+  DESIGN.md from the values the code really uses, makes the theme from it,
+  swaps raw values for tokens, tags UI blocks, writes their states, gives them
+  live addresses, and writes a recipe for each kind of page three or more pages
+  share.
+- **CG-9.10** (ask) Set a real repo's design system up, on a branch, and try it
+  before merging. Ask: which repo.
+
+**Try it:** open a set-up web app's design system, drag a space wider and watch
+the UI blocks that use it move. Ask the agent to give `SettingsRow` a hint under
+its label, and watch the live view change as it works.
+
+Later: one design system shared by several software systems; tokens from Figma;
+suggesting a new UI block or recipe when several pages build the same thing by
+hand; contrast measured on the running page.
