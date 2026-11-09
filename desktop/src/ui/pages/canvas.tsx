@@ -12,6 +12,7 @@ import { Button, ThemeSwitch } from '../design-system/kit.js'
 import { MapCanvas, type Together } from '../components/map-canvas.js'
 import { walk } from '../components/map-layout.js'
 import { BranchPicker } from '../components/branch-picker.js'
+import { DesignView } from '../components/design-view.js'
 import { ProposalPanel } from '../components/proposal-panel.js'
 import { SketchEditor } from '../components/sketch-editor.js'
 import { SketchLibrary } from '../components/sketch-library.js'
@@ -482,6 +483,9 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
   const canMoveHere = canDraw || (focusSystem !== undefined && !sharedMaps[focusSystem.id])
   const [showRevisions, setShowRevisions] = useState(false)
   const [showMembers, setShowMembers] = useState(false)
+  const [showDesign, setShowDesign] = useState(false)
+  const closeDesign = useCallback(() => setShowDesign(false), [])
+  const design = sketch ? null : (systemShown?.design ?? null)
 
   const sketchTrail = sketch ? walk(sketch.root, sketchPath) : []
   const showing = sketch ? sketchTrail : trail
@@ -582,6 +586,11 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
               <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} />
               Follow the agent
             </label>
+          ) : null}
+          {design ? (
+            <Button look="bare" onClick={() => setShowDesign(!showDesign)}>
+              Design system
+            </Button>
           ) : null}
           {!sketch && problems.length > 0 ? (
             <button type="button" className="map-count" onClick={() => setShowProblems(!showProblems)}>
@@ -720,6 +729,8 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
         ) : null}
 
         {showMembers && shown ? <MembersSheet projectId={projectId} onClose={() => setShowMembers(false)} /> : null}
+
+        {showDesign && design ? <DesignView design={design} onClose={closeDesign} /> : null}
 
         {(
           <SketchLibrary

@@ -1,4 +1,6 @@
 // codegraph: test feature show-map
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createProject } from '../src/features/create-project.js'
 import { linkSoftwareSystem } from '../src/features/link-software-system.js'
@@ -51,6 +53,16 @@ describe('the map of a project', () => {
     const mailer = child((await showMap(await aProject(true))).card, 'mailer')
     expect(mailer?.setUp).toBe(false)
     expect(mailer?.children).toEqual([])
+  })
+
+  it('hands each software system its design system, set up or not', async () => {
+    const id = await aProject(true)
+    const mailer = join(yard.path, 'mailer')
+    writeFileSync(join(mailer, 'DESIGN.md'), '---\nname: Post\ncolors:\n  ink: "#111"\n---\n')
+    const shown = await showMap(id)
+    const design = (name: string) => shown.systems.find((s) => s.name === name)?.design
+    expect(design('mailer')?.tokens.map((t) => [t.id, t.value])).toEqual([['colors.ink', '#111']])
+    expect(design('notes')).toBeNull()
   })
 
   it('draws wires at every level, from the wires between components', async () => {

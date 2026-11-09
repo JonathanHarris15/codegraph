@@ -35,6 +35,40 @@ export type Token = {
   names: string[]
   /** The tokens that name it. */
   namedBy: string[]
+  /** Every token that comes to it, directly or through others, nearest first. */
+  feeds: string[]
+  /** For a UI block token with a text and a background colour, how well the
+   *  one reads on the other by WCAG's sum: 4.5 and up reads at any size, 3 and
+   *  up only large. Null when there is no pair, or a colour it cannot measure. */
+  contrast: number | null
+}
+
+/** A colour as red, green and blue from 0 to 255, for the sorts it can be
+ *  measured in: hex, and rgb() with plain numbers. */
+const channels = (colour: string): [number, number, number] | null => {
+  const hex = colour.trim().match(/^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i)?.[1]
+  if (hex) {
+    const full = hex.length <= 4 ? [...hex].map((c) => c + c).join('') : hex
+    return [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16)) as [number, number, number]
+  }
+  const rgb = colour.trim().match(/^rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/i)
+  return rgb ? [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])] : null
+}
+
+const lightness = ([r, g, b]: [number, number, number]): number => {
+  const linear = (c: number): number => {
+    const s = c / 255
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+  }
+  return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
+}
+
+const contrastOf = (one: string, other: string): number | null => {
+  const a = channels(one)
+  const b = channels(other)
+  if (!a || !b) return null
+  const [light, dark] = [lightness(a), lightness(b)].sort((x, y) => y - x) as [number, number]
+  return (light + 0.05) / (dark + 0.05)
 }
 
 /** A software system's DESIGN.md, as its tokens and the words under its
@@ -122,7 +156,7 @@ export const readDesign = (text: string): DesignSystem => {
       const said = parts.length ? parts.map((p) => p.written) : [written]
       const names = [...new Set(said.flatMap((s) => [...s.matchAll(REFERENCE)].map((m) => m[1]!)))]
       const tier: TokenTier = group === 'components' ? 'block' : names.length ? 'purpose' : 'raw'
-      tokens.push({ id, group, name, tier, written, value: '', parts, names, namedBy: [] })
+      tokens.push({ id, group, name, tier, written, value: '', parts, names, namedBy: [], feeds: [], contrast: null })
     }
   }
 
@@ -163,6 +197,24 @@ export const readDesign = (text: string): DesignSystem => {
     }
     if (t.parts.length) for (const p of t.parts) p.value = follow(p.written, t, [t.id])
     else t.value = follow(t.written, t, [t.id])
+  }
+
+  for (const t of tokens) {
+    const seen = new Set<string>([t.id])
+    let ring = t.namedBy
+    while (ring.length) {
+      const next: string[] = []
+      for (const id of ring) {
+        if (seen.has(id)) continue
+        seen.add(id)
+        t.feeds.push(id)
+        next.push(...(byId.get(id)?.namedBy ?? []))
+      }
+      ring = next
+    }
+    const part = (name: string): string => t.parts.find((p) => p.name === name)?.value ?? ''
+    if (t.tier === 'block' && part('backgroundColor') && part('textColor'))
+      t.contrast = contrastOf(part('textColor'), part('backgroundColor'))
   }
 
   for (const t of tokens) {

@@ -5234,6 +5234,8 @@ button.map-restyle:hover {
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
 /* Settings: what codegraph tells your agents, in a person's own words. A
    topic down the side, its words and their history beside it. */
 .settings {
@@ -5366,6 +5368,8 @@ button.map-restyle:hover {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
 .settings-topic {
   display: grid;
   gap: 2px;
@@ -5439,4 +5443,289 @@ button.map-restyle:hover {
   .settings {
     grid-template-columns: 1fr;
   }
+}
+
+/* ---- a software system's design system, drawn (ADR 0024) ----------------- */
+
+.design-view {
+  position: absolute;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  background: var(--canvas-000);
+  color: var(--ink-000);
+}
+
+.design-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6) var(--space-4);
+  border-bottom: var(--stroke-edge) solid var(--line-hair);
+  background: var(--surface-000);
+}
+
+.design-title {
+  margin: 0;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 600;
+}
+
+.design-says {
+  margin: var(--space-1) 0 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.design-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.design-groups {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: var(--space-5) var(--space-6) var(--space-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.design-group-title {
+  margin: 0 0 var(--space-3);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.design-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: var(--space-3);
+}
+
+.design-group--typography .design-tiles,
+.design-group--components .design-tiles {
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+
+.design-token {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: var(--surface-000);
+  border: var(--stroke-edge) solid var(--line-hair);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-chip);
+  cursor: pointer;
+}
+
+.design-token:hover {
+  border-color: var(--line-edge);
+}
+
+.design-token[aria-pressed='true'] {
+  border-color: var(--pick-ring);
+  box-shadow: 0 0 0 1px var(--pick-ring);
+}
+
+.design-token:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.design-token-name {
+  margin-top: var(--space-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.design-token-value,
+.design-token-tier {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  overflow-wrap: anywhere;
+}
+
+.design-swatch {
+  height: 64px;
+  border-radius: var(--radius-md);
+  border: var(--stroke-edge) solid var(--line-hair);
+}
+
+.design-picked .design-swatch {
+  height: 120px;
+}
+
+/* A space is drawn at its real size, as a filled bar. */
+.design-space-track {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  padding-left: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.design-space {
+  box-sizing: border-box;
+  height: 32px;
+  min-width: 1px;
+  background: var(--kind-page);
+  opacity: 0.75;
+  border-radius: 2px;
+  flex: none;
+}
+
+.design-count {
+  height: 64px;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  color: var(--ink-soft);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-md);
+}
+
+/* A corner is drawn on one big square, so a small radius still shows. */
+.design-corner {
+  width: 64px;
+  height: 64px;
+  border: 2px solid var(--kind-structure);
+  background: var(--kind-structure-wash);
+}
+
+.design-type {
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.design-block-stage {
+  min-height: 88px;
+  display: grid;
+  place-items: center;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: repeating-conic-gradient(var(--surface-sunken) 0 25%, transparent 0 50%) 0 0 / 16px 16px;
+}
+
+.design-block {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.design-unknown {
+  height: 64px;
+  display: grid;
+  place-items: center;
+  color: var(--ink-faint);
+  font-size: 12px;
+  border-radius: var(--radius-md);
+  border: var(--stroke-edge) dashed var(--line-edge);
+}
+
+.design-picked {
+  width: var(--library-w);
+  flex: none;
+  overflow: auto;
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  border-left: var(--stroke-edge) solid var(--line-hair);
+  background: var(--surface-000);
+}
+
+.design-picked-name {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.design-parts {
+  margin: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.design-parts > div {
+  display: grid;
+  grid-template-columns: 112px 1fr;
+  gap: var(--space-2);
+}
+
+.design-parts dt {
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
+.design-parts dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.design-contrast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.design-contrast-ratio {
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.design-links {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+
+.design-links .ds-button {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.design-problems {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--state-problem-wash);
+  color: var(--state-problem);
+}
+
+.design-problems ul {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+}
+
+.design-words {
+  max-width: 640px;
+  margin-bottom: var(--space-4);
+}
+
+.design-words p {
+  margin: var(--space-1) 0 0;
+  white-space: pre-line;
+  color: var(--ink-soft);
 }

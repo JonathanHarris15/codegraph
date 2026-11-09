@@ -113,6 +113,18 @@ describe('reading a DESIGN.md', () => {
     expect(token('colors.ink')?.namedBy).toEqual([])
   })
 
+  it('says everything a token feeds, through every token between', () => {
+    expect(token('colors.blue-500')?.feeds).toEqual(['colors.action', 'components.button-primary'])
+    expect(token('rounded.md')?.feeds).toEqual(['components.button-primary'])
+    expect(token('components.button-primary')?.feeds).toEqual([])
+  })
+
+  it('measures how well a UI block token’s text reads on its background', () => {
+    // #ffffff on #2563eb, by the WCAG sum.
+    expect(token('components.button-primary')?.contrast).toBeCloseTo(5.17, 1)
+    expect(token('colors.action')?.contrast).toBeNull()
+  })
+
   it('keeps the words under each heading, without the yaml', () => {
     expect(design.sections).toEqual([
       { heading: 'Overview', words: 'Quiet, so the work stands out.' },
@@ -158,6 +170,11 @@ describe('a DESIGN.md that does not hold together', () => {
   it('says when a colour is not one, or a radius has no unit', async () => {
     const d = await read('---\nname: X\ncolors:\n  a: "not a colour"\nrounded:\n  sm: 4\n---\n')
     expect(d.problems).toEqual(['colors.a is not a colour: "not a colour"', 'rounded.sm needs a unit (px, em or rem): "4"'])
+  })
+
+  it('leaves contrast unknown where a colour is not one it can measure', async () => {
+    const d = await read('---\nname: X\ncomponents:\n  chip:\n    backgroundColor: "oklch(70% 0.1 200)"\n    textColor: "#000"\n---\n')
+    expect(d.tokens[0]?.contrast).toBeNull()
   })
 
   it('says when the yaml cannot be read', async () => {

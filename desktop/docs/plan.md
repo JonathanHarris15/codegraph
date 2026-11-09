@@ -317,7 +317,7 @@ recipes. Decided in ADR 0024.
 - **CG-9.1** (done) The reader reads DESIGN.md at a repo's root, in Google's format:
   each token, its tier (raw, purpose, block), what it names, and the words under
   it. The MCP's `map` says them.
-- **CG-9.2** The token view: each colour a swatch, each space a box that size,
+- **CG-9.2** (done) The token view: each colour a swatch, each space a box that size,
   each radius a corner, each type style a line set in it. Picking a token shows
   what it names and everything that names it, down to the UI blocks. Text and
   background pairs show their contrast.

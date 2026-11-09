@@ -7,11 +7,12 @@ import { savedToken } from '../modules/github/index.js'
 import { roleOf, whoIsIn, type Role } from '../modules/members/index.js'
 import { mapKey, readingFolder } from '../modules/places/index.js'
 import { chooseBranch, findProject, type Project, type ProjectMember, type SoftwareSystem } from '../modules/projects/index.js'
-import { idOfName, pointFor, PROPOSAL, proposalProgress, readMap, type Point, type Progress, type SystemMap } from '../modules/reader/index.js'
+import { idOfName, pointFor, PROPOSAL, proposalProgress, readMap, type DesignSystem, type Point, type Progress, type SystemMap } from '../modules/reader/index.js'
 import { fetchMirror, mainLineRef, proposalsOnBranches, type Reach } from '../modules/repo/index.js'
 import { listSketches } from '../modules/sketches/index.js'
 
 export type { Card, CardState, CardWire, Level, WireEnds } from '../modules/cards/index.js'
+export type { DesignSystem, Token, TokenGroup, TokenPart, TokenTier } from '../modules/reader/index.js'
 
 /** Where an agent says it is working, as the card the canvas follows. */
 export type AgentShown = { card: string; name: string; words: string; at: string }
@@ -43,6 +44,8 @@ export type SystemShown = {
   /** How far the code has got toward the proposal at this point. */
   proposal: Progress | null
   agent: AgentShown | null
+  /** Its DESIGN.md at this point, set up or not; null when it has none. */
+  design: DesignSystem | null
 }
 
 export type MapShown = {
@@ -123,6 +126,7 @@ export const showMap = async (projectId: string, points: Record<string, Point> =
       problems: map.problems,
       proposal: map.proposal && folder ? await proposalProgress(folder, map) : null,
       agent: said ? { card: `${system.id}/${idOfName(said.card)}`, name: said.card, words: said.words, at: said.at } : null,
+      design: map.design,
     })
     answersTo.set(system.name.toLowerCase(), system.id)
     if (system.remote) answersTo.set(system.remote.split('/').pop()!.toLowerCase(), system.id)
