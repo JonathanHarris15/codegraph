@@ -251,3 +251,36 @@ Still rough:
 - The stock card library is per computer, as before; it does not go online.
 - The drawing options a directly drawn proposal used (`floor`, `locked`) are left in
   the canvas, unused.
+
+## Checkpoint 8: Stores and their shapes
+
+See what a database holds, design the one it should become, and have setup
+hold the code to it. Decided in ADR 0023. Proven on Mosaic, which keeps about
+60 Firestore stores with nothing holding their shape.
+
+- **CG-8.1** The reader reads stores: `store X in Y inside Z` for an inner
+  store, and the shape from the JSON Schema the tag sits on — each field, fixed
+  or open, what an open part holds, and `pointsAt`. A store with no schema to
+  read has its shape unknown.
+- **CG-8.2** Stores on the map: a database opens to its store cards, fields on
+  their faces, inner stores inside their stores, `points at` wires between
+  them, and `keeps` wires reaching the store. The MCP's `map` says the same.
+- **CG-8.3** Stores on a sketch: add a store in a database, edit its fields on
+  the card, set it fixed or open, draw one inside another, wire one to point
+  at another. A snapshot carries stores as they stand; the MCP's `sketch`
+  says them.
+- **CG-8.4** Stores in a proposal: the file lists each store it adds, changes
+  or crosses out with its whole shape, and the built rule holds the schema to
+  it. A proposal that changes what is stored carries its migration.
+- **CG-8.5** Setup and the check: the setup instructions write one schema per
+  store in its owning module, check every write against it, and take store
+  names from that module. The check reports a store with its shape unknown.
+- **CG-8.6** (ask) Set Mosaic's stores up for real, on a branch, and try it
+  before merging.
+
+**Try it:** open Mosaic's database, open `people`, see its inner stores and
+everything that points at it. Snapshot it, close an open store on the sketch,
+and hand it to the agent as a proposal with its migration.
+
+Later: the shape writes the field checks in Firestore's own rules, so a write
+that skips the code is caught too.
