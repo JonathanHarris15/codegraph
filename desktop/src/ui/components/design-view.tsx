@@ -3,7 +3,7 @@ import { useEffect, useState, type CSSProperties } from 'react'
 import type { DesignSystem, RecipeShown, Token, TokenGroup, UiBlock } from '../../features/show-map.js'
 import { Badge, Button } from '../design-system/kit.js'
 import { RecipesView } from './recipes-view.js'
-import { UiBlocksView } from './ui-blocks-view.js'
+import { UiBlocksView, type AgentAtBlock } from './ui-blocks-view.js'
 
 /** The groups in the order a person reads a design system, each with what
  *  it is called on screen. */
@@ -365,6 +365,7 @@ export const DesignView = ({
   design,
   uiBlocks,
   recipes,
+  agent = null,
   onClose,
   onChange,
   why = '',
@@ -372,12 +373,19 @@ export const DesignView = ({
   design: DesignSystem | null
   uiBlocks: UiBlock[]
   recipes: RecipeShown[]
+  /** The UI block an agent says it is working on, which the view follows. */
+  agent?: AgentAtBlock | null
   onClose: () => void
   onChange?: Changing | undefined
   /** Why tokens cannot be changed here, when they cannot. */
   why?: string
 }) => {
-  const [tab, setTab] = useState<'tokens' | 'blocks' | 'recipes'>(design ? 'tokens' : uiBlocks.length ? 'blocks' : 'recipes')
+  const [tab, setTab] = useState<'tokens' | 'blocks' | 'recipes'>(
+    agent ? 'blocks' : design ? 'tokens' : uiBlocks.length ? 'blocks' : 'recipes',
+  )
+  useEffect(() => {
+    if (agent?.uiBlock) setTab('blocks')
+  }, [agent?.uiBlock])
 
   useEffect(() => {
     const keys = (event: KeyboardEvent): void => {
@@ -410,7 +418,7 @@ export const DesignView = ({
         </Button>
       </header>
       {tab === 'blocks' ? (
-        <UiBlocksView blocks={uiBlocks} />
+        <UiBlocksView blocks={uiBlocks} agent={agent} />
       ) : tab === 'recipes' ? (
         <RecipesView recipes={recipes} />
       ) : design ? (

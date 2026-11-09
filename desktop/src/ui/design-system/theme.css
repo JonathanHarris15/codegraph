@@ -5916,6 +5916,21 @@ button.map-restyle:hover {
   gap: var(--space-3);
 }
 
+.live-agent {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--state-good-wash);
+  color: var(--state-good);
+  font-size: 13px;
+}
+
+.live-agent-who {
+  font-weight: 600;
+}
+
 .live-states {
   display: flex;
   flex-wrap: wrap;

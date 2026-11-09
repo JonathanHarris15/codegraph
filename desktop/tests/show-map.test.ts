@@ -1,5 +1,5 @@
 // codegraph: test feature show-map
-import { writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createProject } from '../src/features/create-project.js'
@@ -145,5 +145,17 @@ describe('the map of a branch with a proposal', () => {
     const agent = (await showMap(id)).systems[0]?.agent
     expect(agent).toMatchObject({ name: 'web/page search', words: 'writing the page' })
     expect(agent?.card.endsWith('/web:page:search')).toBe(true)
+    expect(agent?.uiBlock).toBe('')
+  })
+
+  it('follows an agent at work on a UI block to the component it lives in', async () => {
+    const { id, repo } = await aProposed()
+    useAgents(yard.home)
+    mkdirSync(join(repo, 'app', 'ui'), { recursive: true })
+    writeFileSync(join(repo, 'app', 'ui', 'row.tsx'), '// codegraph: module ui\n// codegraph: ui block settings/SettingsRow\nexport const SettingsRow = () => null\n')
+    sayWhere(repo, 'ui block settings/SettingsRow', 'adding a hint')
+    const agent = (await showMap(id)).systems[0]?.agent
+    expect(agent).toMatchObject({ name: 'ui block settings/SettingsRow', uiBlock: 'settings/SettingsRow', words: 'adding a hint' })
+    expect(agent?.card.endsWith('/web:module:ui')).toBe(true)
   })
 })

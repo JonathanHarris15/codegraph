@@ -1,5 +1,5 @@
 // codegraph: component ui-blocks-view
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { UiBlock, UiOption } from '../../features/show-map.js'
 import { Badge, Button } from '../design-system/kit.js'
 import { LiveFrame } from './live-view.js'
@@ -211,6 +211,10 @@ const PickedBlock = ({
   )
 }
 
+/** The UI block an agent says it is working on, by folder and name, and
+ *  its words. */
+export type AgentAtBlock = { uiBlock: string; words: string }
+
 /** Where the live view finds a UI block: in a state, or with the options a
  *  person has set (ADR 0024). */
 const liveAddress = (block: UiBlock, state: string, set: Given): string =>
@@ -224,9 +228,9 @@ const liveAddress = (block: UiBlock, state: string, set: Given): string =>
  *  and one picked up close (ADR 0024). A picked block with a dev server can
  *  be seen live: running from the repo's own code, in any of its states, or
  *  with its options set by hand. */
-export const UiBlocksView = ({ blocks }: { blocks: UiBlock[] }) => {
-  const [pickedPath, setPickedPath] = useState('')
-  const [live, setLive] = useState(false)
+export const UiBlocksView = ({ blocks, agent = null }: { blocks: UiBlock[]; agent?: AgentAtBlock | null }) => {
+  const [pickedPath, setPickedPath] = useState(agent?.uiBlock ?? '')
+  const [live, setLive] = useState(Boolean(agent?.uiBlock))
   const [stateShown, setStateShown] = useState('')
   const [set, setSet] = useState<Given>({})
   const picked = blocks.find((b) => pathOf(b) === pickedPath)
@@ -235,6 +239,13 @@ export const UiBlocksView = ({ blocks }: { blocks: UiBlock[] }) => {
     setStateShown('')
     setSet({})
   }
+  // Wherever the agent says it is working, the view goes too, live; the
+  // dev server then redraws the block as the agent changes its files.
+  useEffect(() => {
+    if (!agent?.uiBlock) return
+    pick(agent.uiBlock)
+    setLive(true)
+  }, [agent?.uiBlock])
   const setOne = (name: string, raw: string): void => {
     const option = picked?.options.find((o) => o.name === name)
     if (!option) return
@@ -249,6 +260,12 @@ export const UiBlocksView = ({ blocks }: { blocks: UiBlock[] }) => {
       <div className="design-groups">
         {showingLive ? (
           <section className="live-stage" aria-label={`${picked.name}, live`}>
+            {agent?.uiBlock === pathOf(picked) ? (
+              <div className="live-agent" role="status" aria-label="The agent is working on this UI block">
+                <span className="live-agent-who">Your agent is working on this</span>
+                {agent.words ? <span>{agent.words}</span> : null}
+              </div>
+            ) : null}
             <div className="live-states" role="group" aria-label="Show it">
               <button type="button" aria-pressed={stateShown === ''} onClick={() => setStateShown('')}>
                 With the options set

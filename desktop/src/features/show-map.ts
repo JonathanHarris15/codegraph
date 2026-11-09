@@ -14,8 +14,24 @@ import { listSketches } from '../modules/sketches/index.js'
 export type { Card, CardState, CardWire, Level, WireEnds } from '../modules/cards/index.js'
 export type { DesignSystem, Token, TokenGroup, TokenPart, TokenTier, UiBlock, UiOption, UiState } from '../modules/reader/index.js'
 
-/** Where an agent says it is working, as the card the canvas follows. */
-export type AgentShown = { card: string; name: string; words: string; at: string }
+/** Where an agent says it is working, as the card the canvas follows, and
+ *  the UI block the live view follows, by its folder and name, when it
+ *  names one ('' otherwise). */
+export type AgentShown = { card: string; name: string; words: string; at: string; uiBlock: string }
+
+/** The card and UI block an agent's words name: a UI block is followed on
+ *  the canvas to the component it lives in (ADR 0024). */
+const agentAt = (systemId: string, said: { card: string; words: string; at: string }, map: SystemMap): AgentShown => {
+  const asked = said.card.match(/^ui block\s+(.+)$/i)?.[1]
+  const block = asked ? map.uiBlocks.find((b) => (b.folder ? `${b.folder}/${b.name}` : b.name) === asked) : undefined
+  return {
+    card: `${systemId}/${block ? block.component : idOfName(said.card)}`,
+    name: said.card,
+    words: said.words,
+    at: said.at,
+    uiBlock: block ? asked! : '',
+  }
+}
 
 /** How a member can get at a software system's code right now. */
 export type SystemReach = Reach | 'not-on-github'
@@ -143,7 +159,7 @@ export const showMap = async (projectId: string, points: Record<string, Point> =
       setUp: map.setUp,
       problems: map.problems,
       proposal: map.proposal && folder ? await proposalProgress(folder, map) : null,
-      agent: said ? { card: `${system.id}/${idOfName(said.card)}`, name: said.card, words: said.words, at: said.at } : null,
+      agent: said ? agentAt(system.id, said, map) : null,
       design: map.design,
       uiBlocks: map.uiBlocks,
       recipes: recipesShown(map),

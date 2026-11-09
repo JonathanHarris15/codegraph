@@ -5,6 +5,7 @@ import type { AddressInfo } from 'node:net'
 import { join } from 'node:path'
 import { type ElectronApplication, type Locator, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { sayWhere, useFolder as useAgents } from '../src/modules/agents/index.js'
 import { aMappedRepo, aPicture, closeYard, git, openTheApp, openYard, type Yard } from './yard.js'
 
 /** The built app showing a software system's DESIGN.md as what each token
@@ -47,6 +48,7 @@ let app: ElectronApplication
 let page: Page
 let repo = ''
 let devServer: Server
+let devPort = 0
 
 const view = (): Locator => page.getByRole('region', { name: 'Design system Daylight' })
 const token = (id: string): Locator => view().locator(`[data-token="${id}"]`)
@@ -121,7 +123,8 @@ beforeAll(async () => {
     res.end(`<p id="echo">${said.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</p>`)
   })
   await new Promise<void>((done) => devServer.listen(0, '127.0.0.1', done))
-  const dev = `http://127.0.0.1:${(devServer.address() as AddressInfo).port}`
+  devPort = (devServer.address() as AddressInfo).port
+  const dev = `http://127.0.0.1:${devPort}`
   const config = JSON.parse(readFileSync(join(repo, 'codegraph.config.json'), 'utf8')) as { containers: Record<string, Record<string, unknown>> }
   config.containers.web!.dev = dev
   writeFileSync(join(repo, 'codegraph.config.json'), JSON.stringify(config))
@@ -323,5 +326,25 @@ describe('looking at a design system', () => {
     expect(await page.locator('.map-world [data-card$="/web:page:new-note"] .map-recipe').count()).toBe(0)
     await chip.scrollIntoViewIfNeeded()
     await picture('d9-6-page-map')
+  })
+
+  it('opens to the UI block an agent says it is working on, live, and keeps up as it changes the file', async () => {
+    await new Promise<void>((done) => devServer.listen(devPort, '127.0.0.1', done))
+    useAgents(yard.home)
+    sayWhere(repo, 'ui block settings/SettingsRow', 'adding a hint')
+
+    const told = view().getByRole('status', { name: 'The agent is working on this UI block' })
+    expect(await told.textContent({ timeout: PATIENCE })).toContain('adding a hint')
+    await expect
+      .poll(() => page.frameLocator('iframe.live-page').locator('#echo').textContent({ timeout: PATIENCE }), { timeout: PATIENCE })
+      .toBe('settings/SettingsRow||')
+
+    const file = join(repo, 'app', 'ui', 'settings-row.tsx')
+    writeFileSync(file, readFileSync(file, 'utf8').replace('  label: string', '  label: string\n  /** A line under the label. */\n  hint?: string'))
+    const panel = page.getByRole('complementary', { name: 'UI block settings/SettingsRow' })
+    await panel.locator('[data-option="hint"]').waitFor({ timeout: PATIENCE })
+    expect(await panel.getByLabel('Option hint').count()).toBe(1)
+    await picture('d9-8-agent')
+    sayWhere(repo, '', '')
   })
 })

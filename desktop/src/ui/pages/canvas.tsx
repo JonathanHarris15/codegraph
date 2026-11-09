@@ -485,6 +485,15 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
   const [showMembers, setShowMembers] = useState(false)
   const [showDesign, setShowDesign] = useState(false)
   const closeDesign = useCallback(() => setShowDesign(false), [])
+  // An agent at work on a UI block opens the design view to it, live, once
+  // each time it names another; closing the view is respected until then.
+  const agentBlock = !sketch && follow && working && working.id === systemShown?.id ? (working.agent?.uiBlock ?? '') : ''
+  const followedBlock = useRef('')
+  useEffect(() => {
+    if (agentBlock === followedBlock.current) return
+    followedBlock.current = agentBlock
+    if (agentBlock) setShowDesign(true)
+  }, [agentBlock])
   const design = sketch ? null : (systemShown?.design ?? null)
   const uiBlocks = sketch ? [] : (systemShown?.uiBlocks ?? [])
   const recipes = sketch ? [] : (systemShown?.recipes ?? [])
@@ -738,6 +747,7 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
             design={design}
             uiBlocks={uiBlocks}
             recipes={recipes}
+            agent={agentBlock ? { uiBlock: agentBlock, words: working?.agent?.words ?? '' } : null}
             onClose={closeDesign}
             onChange={
               systemShown.path && systemShown.point.kind === 'live'

@@ -92,9 +92,14 @@ const serve = async (): Promise<void> => {
 
   server.tool(
     'working-on',
-    "Says which card you are building, so the person's canvas follows you there. Call it before each card of a proposal, and with no card when you stop.",
+    "Says which card you are building, so the person's canvas follows you there. Call it before each card of a proposal, before you work on a UI block, and with no card when you stop.",
     {
-      card: z.string().optional().describe('The card, named as the proposal names it: `web`, or `web/page search`. Leave out when you stop.'),
+      card: z
+        .string()
+        .optional()
+        .describe(
+          'The card, named as the proposal names it: `web`, or `web/page search`. Or a UI block, so the live view shows it as you change it: `ui block settings/SettingsRow`. Leave out when you stop.',
+        ),
       words: z.string().optional().describe('A few words on what you are doing there.'),
       repo: z.string().optional().describe('The repo folder; the folder the agent works in if left out.'),
     },

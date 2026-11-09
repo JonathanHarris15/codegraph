@@ -337,7 +337,7 @@ recipes. Decided in ADR 0024.
   recipe's reference page, from the repo's own dev server, with a control for
   each option. Web apps only to start, React on Vite first; native apps get
   screenshots of their states.
-- **CG-9.8** The live view follows the agent: `working-on` can name a UI block,
+- **CG-9.8** (done) The live view follows the agent: `working-on` can name a UI block,
   and the pane moves to it and changes as its files do.
 - **CG-9.9** Setup: a `design-system` topic in the instructions. Setup writes
   DESIGN.md from the values the code really uses, makes the theme from it,

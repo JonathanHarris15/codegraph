@@ -227,10 +227,16 @@ origin, which only codegraph's own dev mode could give, is refused.
 
 Each option the code can be given by hand has a control: a list for one with
 choices, a box for text or a number. Changing one reloads the block with it.
-A state sets its own options, so while one is shown the controls rest. The dev server reloads as files
-change, so while an agent works on a UI block the pane changes with it. The
-agent already reports which card it is on (`working-on`); naming a UI block
-there moves the pane to it.
+A state sets its own options, so while one is shown the controls rest.
+
+The dev server reloads as files change, so while an agent works on a UI block
+the pane changes with it, and codegraph rereads the block's options as its
+file changes. The agent already reports which card it is on (`working-on`);
+it names a UI block there as `ui block settings/SettingsRow`, or by its name
+alone where only one has it. The canvas then follows it to the component the
+block lives in, and, while the person follows the agent, the design view
+opens on that block, live, with the agent's words above it. Closed, it stays
+closed until the agent names another block.
 
 **Web apps first.** Only a browser app can be shown this way without
 writing a runner for each kind of app. It starts with React on Vite, which this
