@@ -224,7 +224,9 @@ h3 {
 .kind-of--module { --k: var(--kind-module); --kw: var(--kind-module-wash); }
 .kind-of--trigger { --k: var(--kind-trigger); --kw: var(--kind-trigger-wash); }
 .kind-of--database,
-.kind-of--files-on-disk { --k: var(--kind-keep); --kw: var(--kind-keep-wash); }
+.kind-of--files-on-disk,
+.kind-of--store,
+.kind-of--inner-store { --k: var(--kind-keep); --kw: var(--kind-keep-wash); }
 .kind-of--file { --k: var(--kind-code); --kw: var(--kind-code-wash); }
 
 /* ---- the kit -------------------------------------------------------- */
@@ -1148,6 +1150,135 @@ h3 {
 
 .map-more {
   color: var(--ink-faint);
+}
+
+.map-fields {
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+  font: 400 12px/18px var(--font-mono);
+}
+
+.map-field {
+  display: flex;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+.map-field-name {
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: none;
+  max-width: 55%;
+}
+
+.map-field-name--needed {
+  font-weight: 600;
+}
+
+.map-field-holds {
+  color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.map-field-points {
+  color: var(--kind-keep);
+}
+
+.store-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.store-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-2);
+  border: var(--stroke-edge) solid var(--line-hair);
+  border-radius: var(--radius-card, 8px);
+}
+
+.store-field-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.store-field-name {
+  flex: 1;
+  font-family: var(--font-mono);
+}
+
+.store-field-drop {
+  border: 0;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  padding: var(--space-1);
+}
+
+.store-field-needed,
+.store-fields-rest label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.store-fields-rest {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.map-add-field {
+  margin-top: var(--space-1);
+  padding: 2px var(--space-1);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--kind-keep);
+  font: 500 12px/18px var(--font-mono);
+  cursor: pointer;
+}
+
+.map-add-field:hover,
+.map-add-field:focus-visible {
+  background: var(--kind-keep-wash);
+  outline: none;
+}
+
+.map-add-field-row {
+  display: flex;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+
+.map-add-field-name,
+.map-add-field-holds {
+  min-width: 0;
+  height: 22px;
+  padding: 0 var(--space-1);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-xs);
+  background: var(--surface-000);
+  color: var(--ink);
+  font: 400 12px/18px var(--font-mono);
+}
+
+.map-add-field-name {
+  flex: 1;
+}
+
+.map-add-field-holds {
+  flex: none;
+  max-width: 45%;
 }
 
 .map-names {
@@ -4669,6 +4800,60 @@ button.map-restyle:hover {
   height: 24px;
   padding: 0 6px;
   font-size: 12px;
+}
+
+.map-store-pop {
+  position: absolute;
+  z-index: 6;
+  overflow-y: auto;
+  padding: var(--space-3);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-lg);
+  background: var(--surface-000);
+  box-shadow: var(--shadow-float);
+}
+
+.store-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.store-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+}
+
+.store-inside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-top: var(--space-2);
+  border-top: var(--stroke-edge) solid var(--line-hair);
+}
+
+.store-inside-list {
+  margin: 0;
+  padding-left: var(--space-3);
+  font: 400 12px/18px var(--font-mono);
+  color: var(--ink-soft);
+}
+
+.store-inside-add {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.store-inside-add .ds-input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+}
+
+.map-act-words {
+  font-size: 12.5px;
 }
 
 .map-look-pop {

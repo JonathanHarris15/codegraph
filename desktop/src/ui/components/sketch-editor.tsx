@@ -1,15 +1,16 @@
 // codegraph: component sketch-editor
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Sketch, SketchCard } from '../../modules/sketches/index.js'
+import type { Sketch, SketchCard, SketchField } from '../../modules/sketches/index.js'
 import { undoStep } from '../../modules/together/index.js'
 import { sentenceOf } from '../../modules/wording/index.js'
 import { Button, Field, Select } from '../design-system/kit.js'
 import type { CardType } from '../../modules/card-types/schema.js'
-import { wireOfHub, type CardLook } from '../../modules/sketches/schema.js'
+import { isStore, wireOfHub, type CardLook } from '../../modules/sketches/schema.js'
 import { CardLookEditor } from './card-look-editor.js'
 import { BLANK_LOOK, TEMPLATES, lookOf } from './card-looks.js'
 import { Glyph } from './kind-glyph.js'
 import { MapCanvas, remember, remembered, type Together } from './map-canvas.js'
+import { StoreEditor, StoreFields } from './store-fields.js'
 import { walk } from './map-layout.js'
 import {
   addWire,
@@ -32,9 +33,16 @@ import {
   remove,
   retext,
   rewire,
+  setFields,
+  addStoreInside,
   wireKinds,
   type Clip,
 } from './sketch-edits.js'
+
+/** The names of every store drawn in a sketch, for a field to point at. */
+const storesIn = (card: SketchCard): string[] => [
+  ...new Set([...(isStore(card.kind) && card.name.trim() ? [card.name.trim()] : []), ...card.children.flatMap(storesIn)]),
+]
 
 /** What Copy last held, for as long as the window is open, so a person can
  *  copy from one sketch, or one level, and paste into another. */
@@ -278,6 +286,17 @@ export const SketchEditor = ({
   }
 
   const picked = selected.length === 1 ? pick(focus, selected[0]!) : null
+
+  /** Changes a store's fields, wiring it to any store a field now points at, or
+   *  whether it is fixed or open. Typing in one store's fields is one undo. */
+  const changeStore = (id: string, { fields, others }: { fields?: SketchField[] | null; others?: string }): void =>
+    change(
+      (f) =>
+        others !== undefined
+          ? changeCard(f, id, fields !== undefined ? { fields, others } : { others })
+          : setFields(f, id, fields ?? null),
+      `fields:${id}`,
+    )
   /** A card's name, or for a hub, the name of the card at the far end of its
    *  wire, however many hubs that takes. */
   const nameOf = (id: string, depth = trail.length - 1): string => {
@@ -358,6 +377,25 @@ export const SketchEditor = ({
           cardTypes,
           onCardTypes: keepCardTypes,
           onMockup: (id) => onAddMockup(id),
+          // Each field added on the card is a step of its own to undo.
+          onAddField: (id, field) =>
+            change((f) => {
+              const card = f.children.find((c) => c.id === id)
+              return setFields(f, id, [...(card?.fields ?? []), { ...field, needed: false, pointsAt: '' }])
+            }),
+          storeEditor: (id, onClose) => {
+            const card = focus.children.find((c) => c.id === id)
+            if (!card) return null
+            return (
+              <StoreEditor
+                card={card}
+                stores={storesIn(sketch.root).filter((name) => name !== card.name)}
+                onChange={(shape) => changeStore(id, shape)}
+                onAdd={(name) => change((f) => addStoreInside(f, id, name)[0])}
+                onClose={onClose}
+              />
+            )
+          },
           onRemove: (ids) => change((f) => remove(f, ids)),
           onAlign: (ids, how) => change((f) => align(f, ids, how)),
         }}
@@ -439,7 +477,16 @@ export const SketchEditor = ({
                 value={picked.card.name}
                 onChange={(name) => change((f) => changeCard(f, picked.card.id, { name }), `name:${picked.card.id}`)}
               />
-              {ownTypesAt(picked.card.level) ? (
+              {isStore(picked.card.kind) ? (
+                <>
+                  <div className="ds-hint">A store is its own kind of card: its fields say what it keeps.</div>
+                  <StoreFields
+                    card={picked.card}
+                    stores={storesIn(sketch.root).filter((name) => name !== picked.card.name)}
+                    onChange={(shape) => changeStore(picked.card.id, shape)}
+                  />
+                </>
+              ) : ownTypesAt(picked.card.level) ? (
                 picked.card.kind === 'database' || picked.card.kind === 'page' ? (
                   <div className="ds-hint">
                     {picked.card.kind === 'database' ? 'A database is its own kind of card, not a look.' : 'A page holds a mockup, so it is its own kind of card.'}

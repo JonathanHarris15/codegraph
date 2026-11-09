@@ -21,7 +21,10 @@ const proposalWords = (progress: Progress): string[] => {
   return [
     `The proposal on this branch is not built yet${about}.`,
     ...(left.length
-      ? [`Still to do (${left.length} of ${progress.items.length}):`, ...left.map((i) => `- ${TODO[i.state]} ${i.what === 'wire' ? 'the wire ' : ''}${i.name}`)]
+      ? [
+          `Still to do (${left.length} of ${progress.items.length}):`,
+          ...left.flatMap((i) => [`- ${TODO[i.state]} ${i.what === 'wire' ? 'the wire ' : ''}${i.name}`, ...(i.left ?? []).map((l) => `  - ${l}`)]),
+        ]
       : []),
     ...(progress.unasked.length
       ? ['Changed, but the proposal does not draw it. Undo it, or add it to the proposal and say so:', ...progress.unasked.map((u) => `- ${u}`)]

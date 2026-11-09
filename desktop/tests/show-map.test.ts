@@ -70,9 +70,9 @@ describe('the map of a project', () => {
     const notes = child(shown.card, 'notes')
     const keeps = notes?.wires.find((w) => w.kind === 'keeps')
     // web keeps notes in db: drawn between the containers, but it is module
-    // notes, inside web, that does the keeping.
+    // notes, inside web, that does the keeping, of the store notes inside db.
     expect(keeps?.ends.map((end) => [end.from.split('/').pop(), end.to.split('/').pop()])).toEqual([
-      ['web:module:notes', 'container:db'],
+      ['web:module:notes', 'store:db:notes'],
     ])
     const calls = shown.card.wires[0]
     expect(calls?.ends.map((end) => end.from.split('/').pop())).toEqual(['web:module:notes'])

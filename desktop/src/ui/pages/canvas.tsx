@@ -512,7 +512,7 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
             onChange={(e) => changed({ ...sketch, name: e.target.value })}
           />
         ) : null}
-        <Trail steps={showing.map((card) => ({ id: card.id, name: card.name, level: card.level }))} onGo={goTo} />
+        <Trail steps={showing.map((card) => ({ id: card.id, name: card.name, level: card.level, kind: card.kind }))} onGo={goTo} />
         <div className="map-bar-end">
           {online ? (
             <span className="together-bar" aria-label="Who is here">

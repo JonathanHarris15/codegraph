@@ -81,7 +81,7 @@ describe('the canvas in the real app', () => {
   it('opens a software system and shows its containers, wired together', async () => {
     await page.getByRole('button', { name: 'Open notes' }).dblclick()
     expect(await shown(page.getByRole('button', { name: 'Open web' }))).toContain('browser app')
-    expect(await shown(page.getByLabel('db', { exact: true }))).toContain('database')
+    expect(await shown(page.getByRole('button', { name: 'Open db', exact: true }))).toContain('database')
     // Opening notes keeps the project level around it, so its wires are on
     // screen too: name the one we mean rather than taking the first.
     expect(await page.getByLabel('Wire: web keeps notes in db').count()).toBe(1)

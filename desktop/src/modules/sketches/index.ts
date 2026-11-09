@@ -1,5 +1,5 @@
 // codegraph: module sketches
-// codegraph: front door LOOSE, SHARED_WITH_ME, keepMockupBytes, useFolder, sketchesFolder, listSketches, newSketch, readSketch, writeSketch, removeSketch, listFolders, newFolder, readFolder, writeFolder, removeFolder, tidyFolders, mayFileIn, withNotesAsAnnotations, keepMockup, mockupFile, mockupUrl, blankCard, hubOf, isHub, looksDrawn, wireOfHub, Sketch, SketchCard, SketchWire, Note, Level, CardState, CardLook, CardShape, SketchFolder, FolderDone
+// codegraph: front door LOOSE, SHARED_WITH_ME, isStore, keepMockupBytes, useFolder, sketchesFolder, listSketches, newSketch, readSketch, writeSketch, removeSketch, listFolders, newFolder, readFolder, writeFolder, removeFolder, tidyFolders, mayFileIn, withNotesAsAnnotations, keepMockup, mockupFile, mockupUrl, blankCard, hubOf, isHub, looksDrawn, wireOfHub, Sketch, SketchCard, SketchField, SketchWire, Note, Level, CardState, CardLook, CardShape, SketchFolder, FolderDone
 import { randomUUID } from 'node:crypto'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { extname, join } from 'node:path'
@@ -9,8 +9,8 @@ import { iMay } from '../members/index.js'
 import { findProject } from '../projects/index.js'
 import { LOOSE } from './schema.js'
 
-export { LOOSE, SHARED_WITH_ME, blankCard, hubOf, isHub, looksDrawn, wireOfHub } from './schema.js'
-export type { CardLook, CardShape, CardState, Level, Note, Sketch, SketchCard, SketchFolder, SketchWire } from './schema.js'
+export { LOOSE, SHARED_WITH_ME, blankCard, hubOf, isHub, isStore, looksDrawn, wireOfHub } from './schema.js'
+export type { CardLook, CardShape, CardState, Level, Note, Sketch, SketchCard, SketchField, SketchFolder, SketchWire } from './schema.js'
 
 /** What came of a change to a library's folders, and the folder as it now is. */
 export type FolderDone = { ok: boolean; folder?: SketchFolder; problem?: string }

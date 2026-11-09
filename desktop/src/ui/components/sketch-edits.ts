@@ -1,7 +1,7 @@
 // codegraph: component sketch-editor
-import type { Level, Note, SketchCard, SketchWire } from '../../modules/sketches/index.js'
+import type { Level, Note, SketchCard, SketchField, SketchWire } from '../../modules/sketches/index.js'
 import type { CardType } from '../../modules/card-types/schema.js'
-import { blankCard, isHub, wireOfHub, hubOf, type CardLook } from '../../modules/sketches/schema.js'
+import { blankCard, isHub, isStore, wireOfHub, hubOf, type CardLook } from '../../modules/sketches/schema.js'
 import type { Arrangement } from '../../modules/arrangements/schema.js'
 import { BLANK_LOOK, TEMPLATES } from './card-looks.js'
 import { sizeOf, wordsWidth } from './map-layout.js'
@@ -29,6 +29,25 @@ export const kindsAt: Record<Level, string[]> = {
   component: ['card', 'page'],
   code: ['file'],
 }
+
+/** What is drawn inside a database, or files on disk: its stores. */
+const keepsThings = (kind: string): boolean => kind === 'database' || kind === 'files on disk'
+
+/** The level drawn inside a card. A store's inner stores are drawn inside it
+ *  at its own level, since they are stores too, not code (ADR 0023). */
+export const levelIn = (card: { level: Level; kind: string }): Level =>
+  isStore(card.kind) ? card.level : levelInside[card.level]
+
+/** What can be put inside a card: inside a database, stores; inside a store,
+ *  the stores that live inside it; anywhere else, what its level offers. */
+export const choicesIn = (card: { level: Level; kind: string }, types: CardType[] = []): { name: string; choices: CardChoice[] }[] =>
+  keepsThings(card.kind) && card.level === 'container'
+    ? [{ name: '', choices: [storeChoice('store')] }]
+    : isStore(card.kind)
+      ? [{ name: '', choices: [storeChoice('inner store')] }]
+      : choicesAt(levelIn(card), types)
+
+const storeChoice = (kind: string): CardChoice => ({ key: kind, kind, hint: kindHints[kind] ?? '' })
 
 /** The kinds code already has words for, each a template. */
 const kindsInCode: Partial<Record<Level, string[]>> = {
@@ -108,6 +127,8 @@ export const kindHints: Record<string, string> = {
   module: 'Real work behind a small front door',
   trigger: 'Starts a feature on a schedule or event',
   file: 'Code, and the names in it',
+  store: 'Keeps one kind of record, field by field',
+  'inner store': 'Lives inside each record of its store',
 }
 
 /** The kinds for one level, grouped the way the canvas lays them out, for
@@ -120,7 +141,7 @@ export const kindGroups = (level: Level): { name: string; kinds: string[] }[] =>
       ]
     : [{ name: '', kinds: kindsAt[level] }]
 
-export const wireKinds = ['uses', 'asks', 'reads', 'starts', 'keeps', 'leads to', 'calls']
+export const wireKinds = ['uses', 'asks', 'reads', 'starts', 'keeps', 'leads to', 'calls', 'points at']
 
 /** The kind a wire drawn between two cards most likely is, which the person
  *  can change. */
@@ -128,6 +149,8 @@ export const kindBetween = (from: SketchCard | undefined, to: SketchCard | undef
   // A person uses the software; they do not call it.
   from?.kind === 'person'
     ? 'uses'
+    : isStore(from?.kind ?? '') && isStore(to?.kind ?? '')
+    ? 'points at'
     : from?.kind === 'page' && to?.kind === 'page'
     ? 'leads to'
     : from?.kind === 'page' && to?.kind === 'feature'
@@ -179,9 +202,10 @@ export const placeCard = (
   hub?: { into: boolean; kind: string },
   look?: CardLook,
 ): [SketchCard, string] => {
-  const level = levelInside[focus.level]
-  const type = kind || kindsAt[level][0] || ''
-  const blank = blankCard(newId(), '', level, type)
+  const level = levelIn(focus)
+  const type = kind || choicesIn(focus)[0]?.choices[0]?.kind || kindsAt[level][0] || ''
+  // A new store is fixed, with no fields yet: the shape is the person's to say.
+  const blank = { ...blankCard(newId(), '', level, type), ...(isStore(type) ? { fields: [], others: '' } : {}) }
   const shown = look ?? (type === 'card' ? BLANK_LOOK : undefined)
   const card: SketchCard = shown ? { ...blank, look: shown } : blank
   const { w, h } = sizeOf(card)
@@ -290,6 +314,30 @@ export const changeCard = (focus: SketchCard, id: string, change: Partial<Sketch
   ...focus,
   children: focus.children.map((c) => (c.id === id ? { ...c, ...change } : c)),
 })
+
+/** Sets a store's fields. A field that points at a store drawn beside it
+ *  wires the two, unless they are wired that way already, worded by the field. */
+export const setFields = (focus: SketchCard, id: string, fields: SketchField[] | null): SketchCard => {
+  let next = changeCard(focus, id, { fields })
+  for (const field of fields ?? []) {
+    const target = field.pointsAt && focus.children.find((c) => c.id !== id && isStore(c.kind) && c.name === field.pointsAt)
+    if (!target || next.wires.some((w) => w.from === id && w.to === target.id && w.kind === 'points at')) continue
+    const [wired, wireId] = addWire(next, id, target.id, 'points at')
+    next = field.name ? changeWire(wired, wireId, { words: field.name }) : wired
+  }
+  return next
+}
+
+/** Adds a store, by name, inside a card on the level: a store inside a
+ *  database, or an inner store inside a store. It is fixed with no fields yet,
+ *  and the canvas lays it out. */
+export const addStoreInside = (focus: SketchCard, holderId: string, name: string): [SketchCard, string] => {
+  const holder = focus.children.find((c) => c.id === holderId)
+  if (!holder) return [focus, '']
+  const kind = isStore(holder.kind) ? 'inner store' : 'store'
+  const store: SketchCard = { ...blankCard(newId(), name, levelIn(holder), kind), fields: [], others: '' }
+  return [changeCard(focus, holderId, { children: [...holder.children, store] }), store.id]
+}
 
 export const changeWire = (focus: SketchCard, id: string, change: Partial<SketchWire>): SketchCard => ({
   ...focus,

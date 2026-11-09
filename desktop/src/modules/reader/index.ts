@@ -1,5 +1,5 @@
 // codegraph: module reader
-// codegraph: front door readMap, listPoints, pointFor, checkRepo, proposalProgress, measure, proposalFrom, changesAnything, blankProposal, idOfName, componentName, live, outsideId, PROPOSAL, PROPOSAL_FOLDER, Point, SystemMap, Component, Container, CodeFile, Wire, WireKind, ComponentKind, Mismatch, Proposal, ProposedContainer, ProposedComponent, ProposedWire, Progress, ProposalItem, ItemState, DrawnCard, FromDrawing
+// codegraph: front door readMap, listPoints, pointFor, checkRepo, proposalProgress, measure, proposalFrom, changesAnything, blankProposal, idOfName, componentName, live, outsideId, storeId, holdsWords, PROPOSAL, PROPOSAL_FOLDER, storeName, shapeGaps, ProposedStore, ProposedField, Point, SystemMap, Component, Container, CodeFile, Store, Shape, Field, Holds, Wire, WireKind, ComponentKind, Mismatch, Proposal, ProposedContainer, ProposedComponent, ProposedWire, Progress, ProposalItem, ItemState, DrawnCard, FromDrawing
 import { existsSync, readFileSync } from 'node:fs'
 import { extname, join } from 'node:path'
 import { buildMap, type Mismatch } from './build.js'
@@ -10,12 +10,26 @@ import { baseOf, filesAt, pictureAt, pointsIn } from './source.js'
 
 export { pointFor } from './source.js'
 
-export { live, outsideId } from './schema.js'
-export { blankProposal, componentName, idOfName, measure, PROPOSAL, PROPOSAL_FOLDER } from './proposal.js'
+export { live, outsideId, storeId } from './schema.js'
+export { blankProposal, componentName, idOfName, measure, PROPOSAL, PROPOSAL_FOLDER, shapeGaps, storeName } from './proposal.js'
 export { changesAnything, proposalFrom } from './drawn.js'
+export { holdsWords } from './shape.js'
 export type { DrawnCard, FromDrawing } from './drawn.js'
 export type { Mismatch } from './build.js'
-export type { CodeFile, Component, ComponentKind, Container, Point, SystemMap, Wire, WireKind } from './schema.js'
+export type {
+  CodeFile,
+  Component,
+  ComponentKind,
+  Container,
+  Field,
+  Holds,
+  Point,
+  Shape,
+  Store,
+  SystemMap,
+  Wire,
+  WireKind,
+} from './schema.js'
 export type {
   ItemState,
   Progress,
@@ -23,6 +37,8 @@ export type {
   ProposalItem,
   ProposedComponent,
   ProposedContainer,
+  ProposedField,
+  ProposedStore,
   ProposedWire,
 } from './proposal.js'
 
@@ -77,5 +93,5 @@ export const proposalProgress = async (repo: string, map?: SystemMap): Promise<P
   if (!now.proposal) return null
   const sha = await baseOf(repo, now.proposal.base)
   const base = sha ? await readMap(repo, { kind: 'commit', sha, title: '' }) : null
-  return measure(now, now.proposal, base?.setUp ? base : null)
+  return measure(now, now.proposal, base?.setUp ? base : null, (path) => existsSync(join(repo, path)))
 }

@@ -29,8 +29,8 @@ export type ComponentKind = 'module' | 'feature' | 'page' | 'trigger'
 /** How one card reaches another, read as the verb of a sentence: a page
  *  asks a feature, reads a module; a feature uses a module; a trigger starts
  *  a feature; a module keeps things in a store; a page leads to a page; a
- *  software system calls another. */
-export type WireKind = 'uses' | 'asks' | 'reads' | 'starts' | 'keeps' | 'leads to' | 'calls'
+ *  software system calls another; a store points at a store. */
+export type WireKind = 'uses' | 'asks' | 'reads' | 'starts' | 'keeps' | 'leads to' | 'calls' | 'points at'
 
 /** One file at the bottom level, with the names declared in it. */
 export type CodeFile = {
@@ -68,8 +68,54 @@ export type Container = {
   stores: string[]
 }
 
-/** A wire read from the code. From is a component; to is a component, a
- *  container that keeps things, or something outside the repo by name. */
+/** What a field holds (ADR 0023). Anything is loose: the schema does not say. */
+export type Holds =
+  | { kind: 'text' | 'number' | 'whole number' | 'yes or no' | 'date' | 'nothing' | 'anything' }
+  | { kind: 'one of'; choices: string[] }
+  | { kind: 'list'; of: Holds }
+  | { kind: 'record'; shape: Shape }
+
+/** One named value in a record. */
+export type Field = {
+  name: string
+  holds: Holds
+  says: string
+  /** Every record has it. */
+  needed: boolean
+  /** The store whose records its id, or each id in its list, belongs to, as
+   *  the schema names it; '' for none. */
+  pointsAt: string
+}
+
+/** A store's fields, or a record's inside one. A fixed shape lists every
+ *  field a record may have; an open one says what any other field holds. */
+export type Shape = { fixed: true; fields: Field[]; others: null } | { fixed: false; fields: Field[]; others: Holds }
+
+/** One kind of thing kept in a database or on disk, owned by one module. */
+export type Store = {
+  /** store:container:path */
+  id: string
+  name: string
+  /** Its name, after the path of the store it lives inside, if any:
+   *  people/involvement. Unique within its container. */
+  path: string
+  /** The path of the store whose every record holds one of these; '' for none. */
+  inside: string
+  container: string
+  /** The component that keeps it. */
+  keeper: string
+  says: string
+  /** The schema file its shape is read from; '' for none. */
+  schema: string
+  /** null when there is no schema to read it from: unknown, never guessed. */
+  shape: Shape | null
+}
+
+export const storeId = (container: string, path: string): string => `store:${container}:${path}`
+
+/** A wire read from the code. From is a component or a store; to is a
+ *  component, a container that keeps things, a store, or something outside
+ *  the repo by name. */
 export type Wire = {
   from: string
   to: string
@@ -85,6 +131,8 @@ export type SystemMap = {
   projects: string[]
   containers: Container[]
   components: Component[]
+  /** What each database or folder on disk keeps, inner stores too. */
+  stores: Store[]
   wires: Wire[]
   /** Calls out of the repo: `wire to <name>`. */
   outside: Wire[]

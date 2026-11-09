@@ -1,6 +1,6 @@
 // codegraph: component map-canvas
 import type { Card } from '../../features/show-map.js'
-import { hubOf, type CardLook } from '../../modules/sketches/schema.js'
+import { hubOf, isStore, type CardLook } from '../../modules/sketches/schema.js'
 import { CARD_SHAPES, drawnShape } from './card-looks.js'
 
 /** A wire as the canvas draws it, from the map or from a sketch. */
@@ -81,9 +81,25 @@ const NOTE_SIZE = { w: 180, h: 60 }
 /** Pages are drawn as frames for their screenshot, the rest as cards. */
 export const isFrame = (card: DrawnCard): boolean => card.level === 'component' && (card.role ?? card.kind) === 'page'
 
+/** How many of a store's fields its card lists before it says how many more. */
+export const FIELDS_SHOWN = 8
+
+/** A store's card is as tall as the fields it lists, a line for any more, a
+ *  line for what an open one takes, its inner stores, and on a sketch the row
+ *  where a field is added; on the map that row is a little air. */
+const storeHeight = (card: DrawnCard): number => {
+  const fields = card.fields ?? []
+  const lines = Math.min(fields.length, FIELDS_SHOWN) + (fields.length > FIELDS_SHOWN ? 1 : 0) + (card.others ? 1 : 0)
+  return 96 + (card.says ? 22 : 0) + lines * 18 + (card.children.length ? 28 : 0) + ADD_FIELD_ROW
+}
+
+/** The row on a store's card where a field is added. */
+const ADD_FIELD_ROW = 28
+
 export const sizeOf = (card: DrawnCard): { w: number; h: number } => {
   const shape = drawnShape(card)
   if (shape) return { w: CARD_SHAPES[shape].w, h: CARD_SHAPES[shape].h }
+  if (isStore(card.kind)) return { w: 260, h: storeHeight(card) }
   return isFrame(card)
     ? { w: 260, h: 200 }
     : card.level === 'code'

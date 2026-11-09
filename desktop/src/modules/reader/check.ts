@@ -97,5 +97,23 @@ export const checkFiles = (files: Map<string, string>, point: Point): Mismatch[]
         add({ file: path, line: 1, says: `A store is kept by a module, but ${named(component)} keeps ${store.name}.` })
   }
 
+  // Every store has a schema the module that keeps it runs (ADR 0023). One
+  // whose schema could not be read is told already, where it was named.
+  for (const store of map.stores) {
+    if (store.schema) continue
+    const keeper = map.components.find((c) => c.id === store.keeper)
+    const tagged = keeper?.files
+      .map((f) => ({ file: f.path, said: tagsOf.get(f.path)?.stores.find((s) => s.name === store.name && s.in === store.container && s.inside === store.inside) }))
+      .find((t) => t.said)
+    // A store kept by anything but a module is told already: that comes first.
+    if (!keeper || keeper.kind !== 'module' || !tagged?.said) continue
+    const inside = store.inside ? ` inside ${store.inside}` : ''
+    add({
+      file: tagged.file,
+      line: tagged.said.line,
+      says: `The store ${store.path} has no schema. Write one in JSON Schema beside this file, have ${named(keeper)} check every write against it, and name it in the tag: \`store ${store.name} in ${store.container}${inside} from ${store.name}.schema.json\`. Where the database already runs one, such as a Prisma model, name that instead.`,
+    })
+  }
+
   return found.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line)
 }

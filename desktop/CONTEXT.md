@@ -62,7 +62,8 @@ _Avoid_: API, interface, exports, public surface
 
 **Store**:
 One kind of thing kept in a container that keeps things, a database or files
-on disk, and owned by one module.
+on disk, and owned by one module. A Firestore collection, a SQL table and a
+folder of files are each a store. It holds records, and its card shows its shape.
 _Avoid_: table, collection, model, entity
 
 **Feature**:
@@ -79,6 +80,45 @@ _Avoid_: screen, view, route, template
 A component that starts a feature without a page: a schedule, an event from
 outside, or a command someone types.
 _Avoid_: hook, handler, entry point, cron
+
+## What a store holds
+
+**Record**:
+One thing kept in a store: a person, a service, a roster entry.
+_Avoid_: document, row, entry, item
+
+**Field**:
+One named value in a record, and what it holds: text, a number, a date, a
+list, or a record of its own.
+_Avoid_: key, column, property, attribute
+
+**Shape**:
+A store's fields and what each holds. Read only from a schema the code runs,
+never from a comment or the live data; a store with no schema to read has its
+shape unknown, not guessed.
+_Avoid_: schema (for this), model, type, structure
+
+**Fixed**:
+A shape that lists every field a record may have. Any other field is wrong.
+_Avoid_: discrete, strict, closed, rigid
+
+**Open**:
+A shape whose records may carry fields it does not list. It still says what an
+unlisted field holds, or that it can hold anything, which is loose. A field
+holding a record of its own is fixed or open too, so a fixed store can keep an
+open map inside it.
+_Avoid_: continuous, dynamic, free-form, schemaless
+
+**Inner store**:
+A store that lives inside each record of another and goes when its record goes,
+like each person's own prayer requests. Drawn as a card inside its store's card.
+_Avoid_: sub-collection, child, nested store, subtable
+
+**Points at**:
+What a field does when it holds another record's id. Drawn as a wire from one
+store to the other, worded by the field: roster points at people for who is
+serving.
+_Avoid_: foreign key, reference, relation, link
 
 ## The map
 

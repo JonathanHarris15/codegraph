@@ -31,7 +31,7 @@ import { CardPalette } from './card-palette.js'
 import { hotkeyFor } from './hotkeys.js'
 import { KeyList } from './key-list.js'
 import { ContextBar, type Picking } from './context-bar.js'
-import { KindGlyph, LookGlyph, kindClass, lookClass } from './kind-glyph.js'
+import { isStore, KindGlyph, LookGlyph, kindClass, lookClass } from './kind-glyph.js'
 import {
   between,
   boundsOf,
@@ -73,7 +73,7 @@ import {
 import { CardFace, Sentence, kindWords } from './map-faces.js'
 import { Overview } from './overview.js'
 import { QuickAdd } from './quick-add.js'
-import { choicesAt, endsAtHub, hubOfWire, levelInside, ownTypesAt, type Alignment, type Arrangement, type CardChoice } from './sketch-edits.js'
+import { choicesIn, endsAtHub, hubOfWire, levelIn, levelInside, ownTypesAt, type Alignment, type Arrangement, type CardChoice } from './sketch-edits.js'
 import { TogetherLayer, type Other } from './together-layer.js'
 import { ToolRail } from './tool-rail.js'
 import { ZoomBar } from './zoom-bar.js'
@@ -129,6 +129,11 @@ export type Drawing = {
   cardTypes: CardType[]
   onCardTypes: (types: CardType[]) => void
   onMockup: (id: string) => void
+  /** The design of a store, or a database's stores, shown beside it on the
+   *  board; left out where stores cannot be designed. */
+  storeEditor?: (id: string, onClose: () => void) => ReactNode
+  /** A field written straight onto a store's card. */
+  onAddField?: (id: string, field: { name: string; holds: string }) => void
   onRemove: (ids: string[]) => void
   onAlign: (ids: string[], how: Alignment) => void
   /** Drawing over the map: cards of this level are not opened, since what
@@ -303,11 +308,25 @@ type Hub = {
   wire: string
 }
 
-/** Whether a card's icon, type and colour are a person's to change. A database
- *  and a page are their own kinds, and a card on the context level is one of
- *  three. */
+/** Whether a card's icon, type and colour are a person's to change. A database,
+ *  a store and a page are their own kinds, and a card on the context level is
+ *  one of three. */
 const restyles = (card: DrawnCard): boolean =>
-  ownTypesAt(card.level) && card.kind !== 'database' && (card.role ?? card.kind) !== 'page'
+  ownTypesAt(card.level) && card.kind !== 'database' && !isStore(card.kind) && (card.role ?? card.kind) !== 'page'
+
+/** A database or a store holds stores, which are not a look a person makes up. */
+const holdsStores = (card: { level: DrawnCard['level']; kind: string }): boolean =>
+  isStore(card.kind) || (card.level === 'container' && (card.kind === 'database' || card.kind === 'files on disk'))
+
+/** Whether anything can be drawn inside a card: anything but code, and a
+ *  store, whose inner stores sit at its own level. */
+const holdsCards = (card: { level: DrawnCard['level']; kind: string }): boolean =>
+  levelInside[card.level] !== card.level || isStore(card.kind)
+
+/** How wide the design of a store is, beside it on the board. */
+const STORE_EDITOR_WIDTH = 300
+/** How much of the board's height the design of a store wants, at most. */
+const STORE_EDITOR_ROOM = 560
 
 /** How wide a hub is on the board. */
 const HUB_SIZE = 16
@@ -315,9 +334,9 @@ const HUB_SIZE = 16
 /** How far a level is from the one in hand: how faded it is. */
 const upClass = (up: number): string => (up > 0 ? ` map-up map-up--${Math.min(up, 3)}` : '')
 
-/** Everything the library offers on a level, in one list. */
-const pickChoice = (level: Parameters<typeof choicesAt>[0], types: CardType[]): CardChoice[] =>
-  choicesAt(level, types).flatMap((group) => group.choices)
+/** Everything the library offers inside a card, in one list. */
+const pickChoice = (card: Parameters<typeof choicesIn>[0], types: CardType[]): CardChoice[] =>
+  choicesIn(card, types).flatMap((group) => group.choices)
 
 export const MapCanvas = ({
   root,
@@ -435,6 +454,8 @@ export const MapCanvas = ({
   } | null>(null)
   /** The card whose icon is being picked. */
   const [iconsFor, setIconsFor] = useState('')
+  /** The store, or database, whose design is open beside it. */
+  const [storeFor, setStoreFor] = useState('')
   /** The menu a right-click opened, and what it was over. */
   const [menu, setMenu] = useState<{ screen: Spot; inside: Spot; ids: string[] } | null>(null)
   /** Asking what to put where a wire was dropped, or the board double-clicked. */
@@ -499,8 +520,8 @@ export const MapCanvas = ({
   const typesHere = drawing?.cardTypes
   /** What the library and the quick menu offer on this level. */
   const choices = useMemo(
-    () => (drawing ? pickChoice(levelInside[focus.level], typesHere ?? []) : []),
-    [Boolean(drawing), focus.level, typesHere],
+    () => (drawing ? pickChoice(focus, typesHere ?? []) : []),
+    [Boolean(drawing), focus.level, focus.kind, typesHere],
   )
 
   // Where a person has moved a map's cards and sentences. It is laid over the
@@ -1355,7 +1376,7 @@ export const MapCanvas = ({
       else if (hotkey.do === 'shape') armShape(hotkey.kind)
       else if (hotkey.do === 'card') {
         // The numbers count down the card library, so they follow the level.
-        const key = levelInside[focus.level] === focus.level ? undefined : choices[hotkey.index]?.key
+        const key = holdsCards(focus) ? choices[hotkey.index]?.key : undefined
         if (key) armCard(key)
       } else if (hotkey.do === 'palette') openPalette(!palette)
       else if (hotkey.do === 'keys') setKeysOpen((open) => !open)
@@ -2084,6 +2105,9 @@ export const MapCanvas = ({
           level: card.card.level,
           page: card.card.kind === 'page',
           opens: canOpen(card.card),
+          ...(drawing.storeEditor && holdsStores(card.card)
+            ? { stores: isStore(card.card.kind) ? ('store' as const) : ('database' as const) }
+            : {}),
         },
         box: card.box,
       }
@@ -2207,7 +2231,7 @@ export const MapCanvas = ({
   const editingNote = editing ? noteBoxes.find((n) => n.note.id === editing.id) : undefined
   const editingWire = editing ? shapes.inner.find((one) => one.wire.id === editing.id) : undefined
   const pickedWire = drawing && selected.length === 1 ? shapes.inner.find((one) => one.wire.id === selected[0]) : undefined
-  const childLevel = levelInside[focus.level]
+  const childLevel = levelIn(focus)
   const liftedChoice = lifting ? choices.find((one) => one.key === lifting.kind) : undefined
   const armedChoice = armed ? choices.find((one) => one.key === armed) : undefined
 
@@ -2252,11 +2276,11 @@ export const MapCanvas = ({
           }}
         />
         </SidePanel>
-      ) : drawing && palette && childLevel !== focus.level ? (
+      ) : drawing && palette && holdsCards(focus) ? (
         <SidePanel key="cards" name="cards" start={216}>
         <CardPalette
-          groups={choicesAt(childLevel, drawing.cardTypes)}
-          canMakeTypes={ownTypesAt(childLevel)}
+          groups={choicesIn(focus, drawing.cardTypes)}
+          canMakeTypes={ownTypesAt(childLevel) && !holdsStores(focus)}
           types={drawing.cardTypes}
           armed={armed}
           onArm={(kind) => {
@@ -2516,6 +2540,11 @@ export const MapCanvas = ({
                 onPress={canMove ? press(p.card.id) : undefined}
                 onHandle={drawing ? pressHandle(p.card.id) : undefined}
                 onEdit={(says) => startEditing(p.card.id, says)}
+                onAddField={
+                  drawing?.onAddField && isStore(p.card.kind) && !drawing.locked?.includes(p.card.id)
+                    ? (field) => drawing.onAddField!(p.card.id, field)
+                    : undefined
+                }
               />
             )
           })}
@@ -2993,7 +3022,7 @@ export const MapCanvas = ({
 
         {keysOpen ? <KeyList onClose={() => setKeysOpen(false)} /> : null}
 
-        {picking ? (
+        {picking && !(storeFor && selected.length === 1 && selected[0] === storeFor) ? (
           <ContextBar
             key={selected.join(',')}
             picking={picking.what}
@@ -3014,6 +3043,7 @@ export const MapCanvas = ({
               if (card) openCard(card.card, workAt)
             }}
             onMockup={(id) => drawing?.onMockup(id)}
+            onStore={(id) => setStoreFor(storeFor === id ? '' : id)}
             onAlign={(ids, how) => drawing?.onAlign(ids, how)}
             locked={selected.length === 1 && Boolean(drawing?.locked?.includes(selected[0]!))}
             removeName={drawing?.removeName}
@@ -3023,6 +3053,31 @@ export const MapCanvas = ({
             }}
           />
         ) : null}
+
+        {/* While a store's design is open beside it, it stands in for the bar. */}
+        {storeFor && drawing?.storeEditor && selected.length === 1 && selected[0] === storeFor && where.get(storeFor) ? (() => {
+          const box = where.get(storeFor)!
+          const width = frame.current?.clientWidth ?? 0
+          const height = frame.current?.clientHeight ?? 0
+          const right = view.x + (box.x + box.w) * view.k + 12
+          // Beside the card, on whichever side has room for it, and level with
+          // its top unless that leaves too little of the board below to work in.
+          const left = right + STORE_EDITOR_WIDTH < width ? right : Math.max(8, view.x + box.x * view.k - STORE_EDITOR_WIDTH - 12)
+          const top = Math.max(8, Math.min(view.y + box.y * view.k, height - Math.min(STORE_EDITOR_ROOM, height - 16) - 8))
+          return (
+            <div
+              className="map-store-pop"
+              style={{ left, top, width: STORE_EDITOR_WIDTH, maxHeight: Math.max(160, height - top - 8) }}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
+              onDoubleClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
+              onWheel={(event) => event.stopPropagation()}
+            >
+              {drawing.storeEditor(storeFor, () => setStoreFor(''))}
+            </div>
+          )
+        })() : null}
 
         {iconsFor && drawing && where.get(iconsFor) ? (() => {
           const box = where.get(iconsFor)!

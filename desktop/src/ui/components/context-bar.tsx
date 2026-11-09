@@ -8,7 +8,19 @@ import { wireKinds, type Alignment, type CardChoice } from './sketch-edits.js'
 
 /** What is picked, as the bar over it needs to know. */
 export type Picking =
-  | { what: 'card'; id: string; kind: string; look?: CardLook; restyles?: boolean; level: Level; page: boolean; opens: boolean }
+  | {
+      what: 'card'
+      id: string
+      kind: string
+      look?: CardLook
+      restyles?: boolean
+      level: Level
+      page: boolean
+      opens: boolean
+      /** A store, whose fields and inner stores can be designed, or a
+       *  database, whose stores can. */
+      stores?: 'store' | 'database'
+    }
   | { what: 'wire'; id: string; kind: string }
   | { what: 'note'; id: string }
   | { what: 'many'; ids: string[]; cards: number }
@@ -52,6 +64,7 @@ export const ContextBar = ({
   onEdit,
   onOpen,
   onMockup,
+  onStore,
   onAlign,
   onRemove,
   locked = false,
@@ -69,6 +82,8 @@ export const ContextBar = ({
   onEdit: (id: string) => void
   onOpen: (id: string) => void
   onMockup: (id: string) => void
+  /** Opens the design of a store, or of a database's stores, beside it. */
+  onStore?: (id: string) => void
   onAlign: (ids: string[], how: Alignment) => void
   onRemove: (ids: string[]) => void
   /** From the code: it keeps its kind and words, and can only be crossed out. */
@@ -142,6 +157,15 @@ export const ContextBar = ({
       ) : null}
       {picking.what === 'card' && picking.opens ? (
         <Act glyph="inside" name="Draw inside it" onAct={() => onOpen(picking.id)} />
+      ) : null}
+      {picking.what === 'card' && picking.stores && onStore && !locked ? (
+        <Act
+          glyph="fields"
+          name={picking.stores === 'store' ? 'Fields and inner stores' : 'Its stores'}
+          onAct={() => onStore(picking.id)}
+        >
+          <span className="map-act-words">{picking.stores === 'store' ? 'Fields' : 'Stores'}</span>
+        </Act>
       ) : null}
       {picking.what === 'card' && picking.page ? (
         <Act glyph="mockup" name="Add a mockup" onAct={() => onMockup(picking.id)} />

@@ -251,3 +251,60 @@ Still rough:
 - The stock card library is per computer, as before; it does not go online.
 - The drawing options a directly drawn proposal used (`floor`, `locked`) are left in
   the canvas, unused.
+
+## Checkpoint 8: Stores and their shapes
+
+See what a database holds, design the one it should become, and have setup
+hold the code to it. Decided in ADR 0023. Proven on Mosaic, which keeps about
+60 Firestore stores with nothing holding their shape.
+
+- **CG-8.1** (done) The reader reads stores: `store X in Y inside Z from
+  P.schema.json`, and the shape from that JSON Schema — each field, fixed or
+  open, what an open part holds, and `pointsAt` as `points at` wires between
+  stores. A store with no schema to read has its shape unknown. Nothing draws
+  them yet: the canvas skips wires between stores until CG-8.2.
+- **CG-8.2** (done) Stores on the map: a database opens to its store cards,
+  fields on their faces, inner stores inside their stores, `points at` wires
+  between them, and `keeps` wires reaching the store. The MCP's `map` says the
+  same, a field to a line. A store card lists eight fields and says how many
+  more; a field every record has is in bold, and one that points at a store
+  shows that store instead of what it holds.
+- **CG-8.3** (done) Stores on a sketch: inside a database the card library
+  offers only a store, and inside a store only an inner store. A picked store's
+  fields are written in the panel beside the board, not on the card: a row
+  each, with what it holds, what it points at, and whether every record has it.
+  A new store is fixed with no fields; switching it to open asks what any other
+  field holds. Pointing a field at a store drawn beside it wires the two. A
+  snapshot carries stores as they stand; the MCP's `sketch` says them.
+  After trying it, the same design opens beside the card on the board, from
+  "Fields" on the bar over a picked store: fields with their type (text,
+  numbers, yes or no, a date, choices, a list of any of these, a record), and
+  the store's inner stores, with a box to add one. On a picked database the
+  bar's "Stores" lists its stores and adds one. A record's own fields are not
+  drawn yet; it is "a record", for the agent to settle.
+- **CG-8.4** (done) Stores in a proposal: the file lists each store it adds,
+  changes or crosses out with its whole shape, and the built rule holds the
+  schema to it, saying what each store still lacks. A change that touches the
+  records already kept names its migration, and is not built until the script
+  is there; crossing a store out needs none, since its records are left alone.
+  A new module that keeps only stores the proposal draws counts as part of
+  them. Over the map, a new store is drawn faint with its fields, and a
+  changed one is marked to build until its schema matches.
+- **CG-8.5** (done) Setup and the check: the setup instructions find every
+  store, give each one module, write its schema from the writes the code really
+  makes, fixed only where the code proves it, and check every write against it;
+  they leave the data alone and list changes to it as sketches to draw. The
+  check reports a store whose tag names no schema, at that tag, with the fix.
+  Every repo already set up fails the check until its stores have schemas.
+- **CG-8.6** (ask) Set Mosaic's stores up for real, on a branch, and try it
+  before merging.
+
+**Try it:** open Mosaic's database, open `people`, see its inner stores and
+everything that points at it. Snapshot it, close an open store on the sketch,
+and hand it to the agent as a proposal with its migration.
+
+Later: the shape writes the field checks in Firestore's own rules, so a write
+that skips the code is caught too.
+
+Still rough: a `points at` line drawn by hand on a sketch, or one left behind
+when a field stops pointing, is not tidied up; only the field counts.

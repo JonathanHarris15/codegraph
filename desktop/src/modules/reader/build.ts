@@ -5,12 +5,19 @@ import {
   type Component,
   type ComponentKind,
   type Container,
+  storeId,
+  type Field,
+  type Holds,
   type Point,
+  type Shape,
+  type Store,
   type SystemMap,
   type Wire,
   type WireKind,
 } from './schema.js'
 import { PROPOSAL, readProposal } from './proposal.js'
+import { readPrismaShape } from './prisma.js'
+import { readShape } from './shape.js'
 import { readTags, type FileTags } from './tags.js'
 
 export const CONFIG = 'codegraph.config.json'
@@ -96,6 +103,7 @@ export const readFacts = (point: Point, files: Map<string, string>): Facts => {
     projects: config?.projects ?? [],
     containers: [],
     components: [],
+    stores: [],
     wires: [],
     outside: [],
     problems: [],
@@ -122,6 +130,7 @@ export const readFacts = (point: Point, files: Map<string, string>): Facts => {
   const codeOf = new Map<string, FileCode>()
   const componentOf = facts.componentOf
   const byId = new Map<string, Component>()
+  const kept: { path: string; component: Component; said: FileTags['stores'][number] }[] = []
 
   for (const [path, text] of files) {
     if (path === CONFIG || path === PROPOSAL || path === 'tsconfig.json' || path === 'jsconfig.json') continue
@@ -182,9 +191,11 @@ export const readFacts = (point: Point, files: Map<string, string>): Facts => {
         continue
       }
       keeper.stores.push(store.name)
-      map.wires.push({ from: id, to: keeper.id, kind: 'keeps', words: `keeps ${store.name}` })
+      kept.push({ path, component, said: store })
     }
   }
+
+  readStores(kept, files, facts)
 
   // Wires from imports, and calls out of the repo.
   const paths = new Set(files.keys())
@@ -244,4 +255,119 @@ export const readFacts = (point: Point, files: Map<string, string>): Facts => {
   }
 
   return done()
+}
+
+const parted = (path: string): string[] => path.split('/').filter((part) => part && part !== '.')
+
+/** A path written beside a file, from the top of the repo. */
+const besides = (file: string, written: string): string => {
+  const parts = parted(file).slice(0, -1)
+  for (const part of parted(written)) part === '..' ? parts.pop() : parts.push(part)
+  return parts.join('/')
+}
+
+/** Every field in a shape that points at a store, by its place in the
+ *  record: photo.ownerId. */
+const pointing = (shape: Shape, before = ''): { place: string; field: Field }[] =>
+  shape.fields.flatMap((field) => {
+    const place = before + field.name
+    const inner = (holds: Holds): { place: string; field: Field }[] =>
+      holds.kind === 'record' ? pointing(holds.shape, `${place}.`) : holds.kind === 'list' ? inner(holds.of) : []
+    return [...(field.pointsAt ? [{ place, field }] : []), ...inner(field.holds)]
+  })
+
+/** The stores each module keeps, their shapes, and what they point at
+ *  (ADR 0023). */
+const readStores = (kept: { path: string; component: Component; said: FileTags['stores'][number] }[], files: Map<string, string>, facts: Facts): void => {
+  const { map, problems } = facts
+  const byPath = new Map<string, Store & { file: string; model: string }>()
+  const keeperOf = new Map<string, Component>()
+  for (const { path, component, said } of kept) {
+    const where = said.inside ? `${said.inside}/${said.name}` : said.name
+    const key = `${said.in}:${where}`
+    map.wires.push({ from: component.id, to: storeId(said.in, where), kind: 'keeps', words: `keeps ${said.name}` })
+    const first = keeperOf.get(key)
+    if (first) {
+      problems.push({ file: path, line: 1, says: `${where} is kept by both ${first.kind} ${first.name} and ${component.kind} ${component.name}` })
+      continue
+    }
+    keeperOf.set(key, component)
+    byPath.set(key, {
+      id: storeId(said.in, where),
+      name: said.name,
+      path: where,
+      inside: said.inside,
+      container: said.in,
+      keeper: component.id,
+      says: '',
+      schema: said.from ? besides(path, said.from.split('#')[0]!) : '',
+      shape: null,
+      file: path,
+      model: said.from.split('#')[1] ?? '',
+    })
+  }
+
+  for (const store of byPath.values()) {
+    const at = { file: store.file, line: 1 }
+    if (store.inside && !byPath.has(`${store.container}:${store.inside}`))
+      problems.push({ ...at, says: `${store.file} keeps ${store.name} inside ${store.inside}, which is not a store in ${store.container}` })
+    if (!store.schema) continue
+    const text = files.get(store.schema)
+    if (text === undefined) {
+      problems.push({ ...at, says: `${store.file} shapes ${store.name} by ${store.schema}, which is not there` })
+      continue
+    }
+    if (store.schema.endsWith('.prisma')) {
+      // A Prisma schema holds many models; the tag says which is this store's.
+      const read = store.model ? readPrismaShape(text, store.model) : null
+      if (!read) {
+        problems.push({
+          ...at,
+          says: store.model
+            ? `${store.file} shapes ${store.name} by ${store.schema}, which has no model ${store.model}`
+            : `${store.file} shapes ${store.name} by ${store.schema} without saying which model: end it with #<Model>`,
+        })
+        continue
+      }
+      store.shape = read.shape
+      store.says = read.says
+      continue
+    }
+    const read = readShape(text)
+    if (!read) {
+      problems.push({ file: store.schema, line: 1, says: `${store.schema} is not JSON the reader can read` })
+      continue
+    }
+    store.shape = read.shape
+    store.says = read.says
+  }
+
+  // A Prisma field points at a model; the store that model shapes is what it
+  // points at on the map.
+  const byModel = new Map([...byPath.values()].filter((s) => s.model).map((s) => [`${s.schema}#${s.model}`, s.path]))
+  for (const store of byPath.values())
+    if (store.model && store.shape)
+      for (const field of store.shape.fields)
+        if (field.pointsAt) field.pointsAt = byModel.get(`${store.schema}#${field.pointsAt}`) ?? field.pointsAt
+
+  const all = [...byPath.values()]
+  for (const store of all) {
+    if (!store.shape) continue
+    for (const { place, field } of pointing(store.shape)) {
+      const named = field.pointsAt
+      const exact = byPath.get(`${store.container}:${named}`)
+      const byName = all.filter((s) => s.container === store.container && s.name === named)
+      const target = exact ?? (byName.length === 1 ? byName[0] : undefined)
+      if (!target) {
+        problems.push({
+          file: store.schema,
+          line: 1,
+          says: `The field ${place} of ${store.path} points at ${named}, which is not a store in ${store.container}`,
+        })
+        continue
+      }
+      map.wires.push({ from: store.id, to: target.id, kind: 'points at', words: field.says || place })
+    }
+  }
+  map.stores = all.map(({ file: _file, model: _model, ...store }) => store)
 }

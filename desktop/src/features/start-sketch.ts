@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { findProject } from '../modules/projects/index.js'
 import { iMay } from '../modules/members/index.js'
 import { sendSketch } from '../modules/sync/index.js'
-import { blankCard, LOOSE, newSketch, writeSketch, type Level, type Sketch, type SketchCard } from '../modules/sketches/index.js'
+import { blankCard, LOOSE, newSketch, writeSketch, type Level, type Sketch, type SketchCard, type SketchField } from '../modules/sketches/index.js'
 
 /** A card of the map, as the page hands it over to snapshot. */
 export type MapCard = {
@@ -19,12 +19,16 @@ export type MapCard = {
   start: boolean
   setUp: boolean
   names: string[]
+  /** A store's fields, null when its shape is unknown. */
+  fields?: SketchField[] | null
+  others?: string
   children: MapCard[]
   wires: { from: string; to: string; kind: string; words: string }[]
 }
 
 /** A card of the map as a sketch card: the same, with room for a mockup and
- *  notes, and no screenshot, since a sketch is not the code. */
+ *  notes, and no screenshot, since a sketch is not the code. A store keeps
+ *  its fields. */
 const fromMap = (card: MapCard): SketchCard => ({
   ...blankCard(card.id, card.name, card.level, card.kind),
   ...(card.role ? { role: card.role } : {}),
@@ -34,6 +38,7 @@ const fromMap = (card: MapCard): SketchCard => ({
   start: card.start,
   setUp: card.setUp,
   names: [...card.names],
+  ...(card.fields !== undefined ? { fields: card.fields && card.fields.map((f) => ({ ...f })), others: card.others ?? '' } : {}),
   children: card.children.map(fromMap),
   wires: card.wires.map((w) => ({ id: randomUUID(), from: w.from, to: w.to, kind: w.kind, words: w.words })),
 })

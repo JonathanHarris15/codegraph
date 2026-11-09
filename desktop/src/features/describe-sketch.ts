@@ -4,8 +4,19 @@
 import { annotationWords } from '../modules/annotations/index.js'
 import { listProjects } from '../modules/projects/index.js'
 import { live, readMap } from '../modules/reader/index.js'
-import { listSketches, mockupFile, readSketch, wireOfHub, withNotesAsAnnotations, type SketchCard } from '../modules/sketches/index.js'
+import { isStore, listSketches, mockupFile, readSketch, wireOfHub, withNotesAsAnnotations, type SketchCard } from '../modules/sketches/index.js'
 import { sentenceOf } from '../modules/wording/index.js'
+
+/** A store drawn on a sketch and its fields, a field to a line (ADR 0023). */
+const storeWords = (card: SketchCard, pad: string, name: string): string[] => {
+  if (!card.fields) return [`${pad}${name}: shape unknown${card.says ? `. ${card.says}` : ''}`]
+  return [
+    `${pad}${name}${card.says ? `: ${card.says}` : ''} (${card.others ? `open to ${card.others}` : 'fixed'})`,
+    ...card.fields.map(
+      (f) => `${pad}  ${f.name}: ${f.holds}${f.needed ? ', needed' : ''}${f.pointsAt ? `, points at ${f.pointsAt}` : ''}`,
+    ),
+  ]
+}
 
 /** One sketch in words an agent reads and works from: every level, each card
  *  with its kind and what it is for, every wire with its words, the notes,
@@ -35,7 +46,8 @@ export const describeSketch = async (repo: string, name: string, shortName = '')
     const walk = (card: SketchCard, depth: number, around?: SketchCard): void => {
       const pad = '  '.repeat(depth)
       const extra = [card.at ? `at ${card.at}` : '', card.start ? 'start page' : ''].filter(Boolean)
-      out.push(`${pad}${named(card)}${extra.length ? ` (${extra.join('; ')})` : ''}${card.says ? `: ${card.says}` : ''}`)
+      if (isStore(card.kind)) out.push(...storeWords(card, pad, named(card)))
+      else out.push(`${pad}${named(card)}${extra.length ? ` (${extra.join('; ')})` : ''}${card.says ? `: ${card.says}` : ''}`)
       if (card.mockup) out.push(`${pad}  mockup: ${mockupFile(project.id, sketch.id, card.mockup)}`)
       for (const child of card.children) walk(child, depth + 1, card)
       const byId = new Map(card.children.map((c) => [c.id, c]))

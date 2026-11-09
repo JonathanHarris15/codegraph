@@ -49,6 +49,53 @@ container by its name, `web`, and a component inside one, `web/page search`.
   drawing, a wire's by the names it reads as, `from>kind>to`. It means
   nothing to the code: leave it as it is.
 
+### Stores
+
+A proposal can add, change or cross out stores, the kinds of record a database
+keeps. Each lists the whole shape the store should have, not just what changes:
+
+```json
+"stores": [
+  {
+    "container": "firestore",
+    "path": "people/involvement",
+    "says": "What each person is part of",
+    "fields": [
+      { "name": "roleId", "holds": "text", "needed": true, "pointsAt": "roles" },
+      { "name": "since", "holds": "date", "needed": false, "pointsAt": "" }
+    ],
+    "others": "",
+    "migration": "scripts/migrate-involvement.js"
+  },
+  { "container": "firestore", "path": "roles", "says": "", "fields": null, "others": "", "gone": true }
+]
+```
+
+- `path` is the store's name, after the store it lives inside for an inner
+  store: `people/involvement` is tagged `store involvement in firestore inside people`.
+- `fields` is every field it should have. `holds` is said the way the map says
+  it: text, number, whole number, yes or no, date, a list of text, a record,
+  anything, or choices like `male or female`. `needed` means every record has
+  it. `pointsAt` names the store whose record its id belongs to. `null` leaves
+  the shape as it is.
+- `others` is `""` for a fixed store: a record has only these fields. Otherwise
+  it says what any other field holds, and the store is open.
+- A store is built when its JSON Schema says exactly this. Write the schema
+  the store's tag names with `from`, and have the module that keeps it check
+  every write against it. A new store needs a module to keep it; making one is
+  part of building the store, so the check does not ask for it to be drawn.
+- `migration` is the script that moves the records already kept to the new
+  shape. The check asks for one when a change touches those records: a field
+  taken away or holding something else, one every record must now have, a
+  store closed, or a store whose shape nobody knew. Write it, name it here,
+  and tell the person it must be run against the live database. Never run it
+  yourself.
+- Crossing a store out stops the code using it. Its records stay where they
+  are: deleting them is the person's call, not yours.
+- Which store a field points at is said by its `pointsAt`, never by a wire.
+  A `points at` line drawn on a sketch with no field behind it is a drawing,
+  not a change: ask which field it means.
+
 ## Making one from a sketch
 
 1. Read the sketch: the `sketch` tool, by name. Open each mockup it names.

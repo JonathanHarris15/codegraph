@@ -1,5 +1,6 @@
 // codegraph: component trail
 import type { Level } from '../../features/show-map.js'
+import { isStore } from './kind-glyph.js'
 
 const LEVEL_WORD: Record<Level, string> = {
   project: 'project',
@@ -12,12 +13,13 @@ const LEVEL_WORD: Record<Level, string> = {
 /** Where you are. Each step goes back to it; the last one is where you are.
  *  The level word under each name teaches the five levels, which a person
  *  needs taught once, and answers why a project and its software system can
- *  carry the same name. */
+ *  carry the same name. A store says it is one: it is not a component.
+ */
 export const Trail = ({
   steps,
   onGo,
 }: {
-  steps: { id: string; name: string; level: Level }[]
+  steps: { id: string; name: string; level: Level; kind?: string }[]
   onGo: (i: number) => void
 }) => (
   <nav className="map-trail" aria-label="Where you are">
@@ -37,7 +39,7 @@ export const Trail = ({
             onClick={() => onGo(i)}
           >
             <span>{step.name || 'Unnamed'}</span>
-            <span className="map-trail-level">{LEVEL_WORD[step.level]}</span>
+            <span className="map-trail-level">{step.kind && isStore(step.kind) ? step.kind : LEVEL_WORD[step.level]}</span>
           </button>
         </span>
       )

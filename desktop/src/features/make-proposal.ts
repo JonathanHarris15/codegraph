@@ -11,8 +11,11 @@ import {
   PROPOSAL,
   proposalFrom,
   readMap,
+  storeName,
   type DrawnCard,
   type Proposal,
+  type ProposedStore,
+  type SystemMap,
 } from '../modules/reader/index.js'
 import { headOf, readSoftwareSystem, writeProposal, type Picture } from '../modules/repo/index.js'
 import { looksDrawn, listSketches, mockupFile, readSketch, type Sketch, type SketchCard } from '../modules/sketches/index.js'
@@ -27,18 +30,30 @@ const drawnFor = (sketch: Sketch, system: SoftwareSystem): SketchCard | undefine
 }
 
 const counted = (proposal: Proposal): string => {
-  const all = [...proposal.containers, ...proposal.components, ...proposal.wires]
+  const all = [...proposal.containers, ...proposal.components, ...proposal.wires, ...proposal.stores]
   const gone = all.filter((x) => x.gone).length
   const parts = [all.length - gone ? `${all.length - gone} to build` : '', gone ? `${gone} to take away` : ''].filter(Boolean)
   return parts.join(' and ')
 }
 
-const listOf = (proposal: Proposal): string[] => [
+/** A store the proposal draws, and every field it should have. */
+const storeLines = (s: ProposedStore, map: SystemMap): string[] => {
+  const there = map.stores.some((m) => m.container === s.container && m.path === s.path)
+  if (s.gone) return [`- take away ${storeName(s)}`]
+  const how = s.fields ? (s.others ? `, open to ${s.others}` : ', fixed') : ''
+  return [
+    `- ${there ? 'change' : 'build'} ${storeName(s)}${how}${s.says ? `: ${s.says}` : ''}`,
+    ...(s.fields ?? []).map((f) => `    ${f.name}: ${f.holds}${f.needed ? ', needed' : ''}${f.pointsAt ? `, points at ${f.pointsAt}` : ''}`),
+  ]
+}
+
+const listOf = (proposal: Proposal, map: SystemMap): string[] => [
   ...proposal.containers.map((c) => `- ${c.gone ? 'take away' : 'build'} container ${c.name}${c.kind ? ` (${c.kind})` : ''}${c.says ? `: ${c.says}` : ''}`),
   ...proposal.components.map(
     (c) => `- ${c.gone ? 'take away' : 'build'} ${c.container}/${c.kind} ${c.name}${c.type ? `, tagged as ${c.type}` : ''}${c.at ? ` at ${c.at}` : ''}${c.says ? `: ${c.says}` : ''}${c.mockup ? ` (mockup ${c.mockup})` : ''}`,
   ),
   ...proposal.wires.map((w) => `- ${w.gone ? 'take away' : 'build'} the wire ${w.from} ${w.kind} ${w.to}${w.words ? `: ${w.words}` : ''}`),
+  ...proposal.stores.flatMap((s) => storeLines(s, map)),
 ]
 
 /** Makes the proposal on the branch an agent works on from a sketch of the
@@ -114,7 +129,7 @@ export const makeProposal = async (repo: string, name: string, shortName = '', r
   writeProposal(repo, proposal, pictures)
   return [
     `Wrote the proposal to ${PROPOSAL} on ${facts.branch}: ${counted(proposal)}.`,
-    ...listOf(proposal),
+    ...listOf(proposal, map),
     '',
     'Call `check` to see what is left; it fails until the proposal is built. Call `working-on` before each card. Push now, and again as parts get built, so other members can watch.',
     ...elsewhere,
