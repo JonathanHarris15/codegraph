@@ -3,7 +3,15 @@
 // codegraph: command check
 import { checkRepo, proposalProgress, PROPOSAL_FOLDER, type Mismatch, type Progress } from '../modules/reader/index.js'
 
-export type Checked = { clean: boolean; mismatches: Mismatch[]; proposal: Progress | null; words: string }
+export type Checked = {
+  clean: boolean
+  mismatches: Mismatch[]
+  /** Breaks of the design system an exception says are on purpose, with
+   *  why. Listed apart; they do not fail the check (ADR 0024). */
+  exceptions: Mismatch[]
+  proposal: Progress | null
+  words: string
+}
 
 const TODO: Record<string, string> = { 'to build': 'build', 'to remove': 'take away' }
 
@@ -37,7 +45,16 @@ const proposalWords = (progress: Progress): string[] => {
  *  its branch if there is one, and says what does not fit, one line each,
  *  the way an agent or a person fixes them. */
 export const checkCode = async (repo: string): Promise<Checked> => {
-  const [mismatches, proposal] = await Promise.all([checkRepo(repo), proposalProgress(repo)])
+  const [found, proposal] = await Promise.all([checkRepo(repo), proposalProgress(repo)])
+  const mismatches = found.filter((m) => !m.onPurpose)
+  const exceptions = found.filter((m) => m.onPurpose)
+  const onPurpose = exceptions.length
+    ? [
+        '',
+        `${exceptions.length} ${exceptions.length === 1 ? 'break' : 'breaks'} of the design system on purpose:`,
+        ...exceptions.map((m) => `${m.file}${m.line ? `:${m.line}` : ''}  ${m.says} Why: ${m.onPurpose}`),
+      ]
+    : []
   const tags =
     mismatches.length === 0
       ? ['Nothing to fix: the code fits its tags and config.']
@@ -45,6 +62,6 @@ export const checkCode = async (repo: string): Promise<Checked> => {
           `${mismatches.length} ${mismatches.length === 1 ? 'thing does' : 'things do'} not fit:`,
           ...mismatches.map((m) => `${m.file}${m.line ? `:${m.line}` : ''}  ${m.says}`),
         ]
-  const words = [...tags, ...(proposal ? ['', ...proposalWords(proposal)] : [])].join('\n')
-  return { clean: mismatches.length === 0 && proposal === null, mismatches, proposal, words }
+  const words = [...tags, ...onPurpose, ...(proposal ? ['', ...proposalWords(proposal)] : [])].join('\n')
+  return { clean: mismatches.length === 0 && proposal === null, mismatches, exceptions, proposal, words }
 }

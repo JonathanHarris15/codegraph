@@ -29,7 +29,15 @@ type Config = {
 }
 
 /** Something in a repo that does not fit its tags, where it is, in plain words. */
-export type Mismatch = { file: string; line: number; says: string }
+export type Mismatch = {
+  file: string
+  line: number
+  says: string
+  /** Why the code breaks the design system here on purpose, when an
+   *  exception says so (ADR 0024). Such a mismatch is listed apart, and
+   *  does not fail the check. */
+  onPurpose?: string
+}
 
 /** One import that reaches from one component into another. */
 export type Link = { path: string; line: number; from: Component; to: Component; names: string[] }

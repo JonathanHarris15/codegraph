@@ -14,6 +14,11 @@ export type FileTags = {
   stores: { name: string; in: string; inside: string; from: string; line: number }[]
   /** Words for the wire made on a line, by line number from 1. */
   wires: Map<number, { to: string; words: string }>
+  /** The file is where the code makes DESIGN.md's tokens (ADR 0024). */
+  theme: boolean
+  /** Lines that break the design system on purpose, by line number from 1,
+   *  with why; '' where no why was given. */
+  exceptions: Map<number, string>
   problems: string[]
 }
 
@@ -21,6 +26,8 @@ export type FileTags = {
 const OWN_LINE = /^\s*(?:\/\/|#|--|\/\*+|<!--|\{\/\*)\s*codegraph:\s*(.*?)\s*(?:\*+\/\}?|-->)?\s*$/
 /** A wire's words trailing the code on its line. */
 const TRAILING = /(?:\/\/|#|--|\/\*+|<!--|\{\/\*)\s*codegraph:\s*wire\s+(.*?)\s*(?:\*+\/\}?|-->)?\s*$/
+/** An exception trailing the code on its line, with why or without. */
+const TRAILING_EXCEPTION = /(?:\/\/|#|--|\/\*+|<!--|\{\/\*)\s*codegraph:\s*exception\b\s*(.*?)\s*(?:\*+\/\}?|-->)?\s*$/
 
 const list = (words: string): string[] =>
   words
@@ -34,7 +41,7 @@ const wire = (said: string): { to: string; words: string } => {
 }
 
 export const readTags = (path: string, text: string): FileTags => {
-  const tags: FileTags = { role: null, frontDoor: [], stores: [], wires: new Map(), problems: [] }
+  const tags: FileTags = { role: null, frontDoor: [], stores: [], wires: new Map(), theme: false, exceptions: new Map(), problems: [] }
   const lines = text.split(/\r?\n/)
   const setRole = (role: NonNullable<FileTags['role']>): void => {
     if (tags.role) tags.problems.push(`${path} says what it belongs to more than once`)
@@ -44,18 +51,27 @@ export const readTags = (path: string, text: string): FileTags => {
     setRole({ kind, name, type: '', uses: [], at: '', start: false, trigger: '', ...more })
 
   let waiting: { to: string; words: string } | null = null
+  let excepting: string | null = null
   lines.forEach((line, index) => {
     const own = line.match(OWN_LINE)
     if (!own) {
       const trailing = line.match(TRAILING)
       if (trailing) tags.wires.set(index + 1, wire(trailing[1]!))
       else if (waiting && line.trim()) tags.wires.set(index + 1, waiting)
-      if (line.trim()) waiting = null
+      const exception = line.match(TRAILING_EXCEPTION)
+      if (exception) tags.exceptions.set(index + 1, exception[1]!.trim())
+      else if (excepting !== null && line.trim()) tags.exceptions.set(index + 1, excepting)
+      if (line.trim()) {
+        waiting = null
+        excepting = null
+      }
       return
     }
     const said = own[1]!
     let match: RegExpMatchArray | null
-    if ((match = said.match(/^wire\s+(.+)$/))) waiting = wire(match[1]!)
+    if ((match = said.match(/^exception\b\s*(.*)$/))) excepting = match[1]!.trim()
+    else if (said === 'theme') tags.theme = true
+    else if ((match = said.match(/^wire\s+(.+)$/))) waiting = wire(match[1]!)
     else if ((match = said.match(/^module\s+(\S+)(?:\s+as\s+(.+))?$/))) component('module', match[1]!, { type: match[2] ?? '' })
     else if ((match = said.match(/^front door\s+(.+)$/))) tags.frontDoor.push(...list(match[1]!))
     else if ((match = said.match(/^store\s+(\S+)\s+in\s+(\S+)(?:\s+inside\s+(\S+))?(?:\s+from\s+(\S+))?$/)))

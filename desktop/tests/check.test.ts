@@ -160,3 +160,129 @@ describe('checking a repo against its tags', () => {
     expect(says(found)).toEqual(["loose.ts is not in any container's folders"])
   })
 })
+
+describe('holding the code to its DESIGN.md (ADR 0024)', () => {
+  const DESIGN = [
+    '---',
+    'name: Daylight',
+    'colors:',
+    '  blue-500: "#2563eb"',
+    '  paper: "#ffffff"',
+    '  action: "{colors.blue-500}"',
+    'spacing:',
+    '  md: 16px',
+    'rounded:',
+    '  md: 8px',
+    '---',
+    '',
+  ].join('\n')
+  const THEME = [
+    '/* codegraph: module design-system */',
+    '/* codegraph: theme */',
+    ':root {',
+    '  --colors-blue-500: #2563EB;',
+    '  --colors-paper: #fff;',
+    '  --colors-action: var(--colors-blue-500);',
+    '  --spacing-md: 16px;',
+    '  --rounded-md: 8px;',
+    '}',
+    '',
+  ].join('\n')
+  const page = (...lines: string[]): string => ['// codegraph: page styled at /styled', ...lines, ''].join('\n')
+
+  it('finds nothing wrong when the theme matches DESIGN.md and the code uses its tokens', async () => {
+    const found = await checkWith({
+      'DESIGN.md': DESIGN,
+      'app/theme.css': THEME,
+      'app/pages/styled.tsx': page("export const S = () => <b style={{ color: 'var(--colors-action)', padding: 'var(--spacing-md)' }} />"),
+    })
+    expect(found).toEqual([])
+  })
+
+  it('wants a file tagged as the theme the code makes from DESIGN.md', async () => {
+    const found = await checkWith({ 'DESIGN.md': DESIGN })
+    expect(found).toEqual([
+      { file: 'DESIGN.md', line: 1, says: 'DESIGN.md has tokens, but no file is tagged `theme` to say where the code makes them.' },
+    ])
+  })
+
+  it('holds the theme to DESIGN.md, token for token', async () => {
+    const theme = THEME.replace('  --colors-paper: #fff;\n', '')
+      .replace('--spacing-md: 16px', '--spacing-md: 12px')
+      .replace('}', '  --colors-ink: #111;\n}')
+    const found = await checkWith({ 'DESIGN.md': DESIGN, 'app/theme.css': theme })
+    expect(found).toEqual([
+      { file: 'app/theme.css', line: 1, says: 'The theme has no --colors-paper for colors.paper, which DESIGN.md has as #ffffff.' },
+      { file: 'app/theme.css', line: 6, says: '--spacing-md is 12px here, but DESIGN.md has spacing.md as 16px.' },
+      { file: 'app/theme.css', line: 8, says: '--colors-ink is not a token in DESIGN.md. Add it there, or take it out of the theme.' },
+    ])
+  })
+
+  it('names a raw colour where a token belongs, and the token that has that value', async () => {
+    const found = await checkWith({
+      'DESIGN.md': DESIGN,
+      'app/theme.css': THEME,
+      'app/pages/styled.tsx': page(
+        '// A colour in a comment, #abc, is not one.',
+        "export const S = () => <b style={{ color: '#FFF', background: 'rgb(1, 2, 3)' }} />",
+      ),
+    })
+    expect(found).toEqual([
+      { file: 'app/pages/styled.tsx', line: 3, says: 'A raw colour, #FFF, where a token belongs: colors.paper is that colour, so use var(--colors-paper).' },
+      { file: 'app/pages/styled.tsx', line: 3, says: 'A raw colour, rgb(1, 2, 3), where a token belongs. Add it to DESIGN.md, or use one it has.' },
+    ])
+  })
+
+  it('names a raw space or corner where a token belongs, in styles and stylesheets', async () => {
+    const found = await checkWith({
+      'DESIGN.md': DESIGN,
+      'app/theme.css': THEME,
+      'app/pages/card.css': '/* codegraph: page styled */\n.card {\n  padding: 16px;\n  border-radius: 3px;\n  margin: 0;\n  width: 200px;\n}\n',
+      'app/pages/styled.tsx': page("export const S = () => <b style={{ gap: '12px' }} />"),
+    })
+    expect(says(found)).toEqual([
+      'A raw size, 16px, where a token belongs: spacing.md is that size, so use var(--spacing-md).',
+      'A raw corner, 3px, where a token belongs. Add it to DESIGN.md, or use one it has.',
+      'A raw size, 12px, where a token belongs. Add it to DESIGN.md, or use one it has.',
+    ])
+  })
+
+  it('names code that skips a purpose token for the raw one under it', async () => {
+    const found = await checkWith({
+      'DESIGN.md': DESIGN,
+      'app/theme.css': THEME,
+      'app/pages/styled.tsx': page("export const S = () => <b style={{ color: 'var(--colors-blue-500)', background: 'var(--colors-paper)' }} />"),
+    })
+    expect(found).toEqual([
+      {
+        file: 'app/pages/styled.tsx',
+        line: 2,
+        says: 'It uses colors.blue-500, a raw token, where a token for what it is for belongs: colors.action names it.',
+      },
+    ])
+  })
+
+  it('lets an exception break the design system on purpose, and keeps why, apart', async () => {
+    const found = await checkWith({
+      'DESIGN.md': DESIGN,
+      'app/theme.css': THEME,
+      'app/pages/styled.tsx': page(
+        "export const Logo = () => <b style={{ color: '#ff6600' }} /> // codegraph: exception the brand logo's own orange",
+        '// codegraph: exception the map tiles come in this grey',
+        "export const Tile = () => <b style={{ background: '#e5e5e5' }} />",
+        "export const Odd = () => <b style={{ color: '#123456' }} /> // codegraph: exception",
+      ),
+    })
+    expect(found).toEqual([
+      { file: 'app/pages/styled.tsx', line: 2, says: 'A raw colour, #ff6600, where a token belongs. Add it to DESIGN.md, or use one it has.', onPurpose: "the brand logo's own orange" },
+      { file: 'app/pages/styled.tsx', line: 4, says: 'A raw colour, #e5e5e5, where a token belongs. Add it to DESIGN.md, or use one it has.', onPurpose: 'the map tiles come in this grey' },
+      { file: 'app/pages/styled.tsx', line: 5, says: 'An exception says why it breaks the design system, after `exception`.' },
+      { file: 'app/pages/styled.tsx', line: 5, says: 'A raw colour, #123456, where a token belongs. Add it to DESIGN.md, or use one it has.' },
+    ])
+  })
+
+  it('leaves colours alone in a repo with no DESIGN.md to hold them to', async () => {
+    const found = await checkWith({ 'app/pages/styled.tsx': page("export const S = () => <b style={{ color: '#fff' }} />") })
+    expect(found).toEqual([])
+  })
+})

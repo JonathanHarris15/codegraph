@@ -57,6 +57,34 @@ describe('the check, called straight', () => {
   })
 })
 
+describe('the check, with breaks of the design system made on purpose', () => {
+  it('lists each exception apart, with why, and still passes', async () => {
+    const files: Record<string, string> = {
+      'DESIGN.md': '---\nname: X\ncolors:\n  ink: "#111111"\n---\n',
+      'app/theme.css': '/* codegraph: module design-system */\n/* codegraph: theme */\n:root { --colors-ink: #111111; }\n',
+      'app/pages/logo.tsx':
+        "// codegraph: page logo at /logo\nexport const Logo = () => <b style={{ color: '#ff6600' }} /> // codegraph: exception the brand's own orange\n",
+    }
+    for (const [path, text] of Object.entries(files)) writeFileSync(join(repo, path), text)
+    try {
+      const checked = await checkCode(repo)
+      expect(checked.clean).toBe(true)
+      expect(checked.mismatches).toEqual([])
+      expect(checked.exceptions.map((m) => m.onPurpose)).toEqual(["the brand's own orange"])
+      expect(checked.words).toBe(
+        [
+          'Nothing to fix: the code fits its tags and config.',
+          '',
+          '1 break of the design system on purpose:',
+          "app/pages/logo.tsx:2  A raw colour, #ff6600, where a token belongs. Add it to DESIGN.md, or use one it has. Why: the brand's own orange",
+        ].join('\n'),
+      )
+    } finally {
+      for (const path of Object.keys(files)) rmSync(join(repo, path))
+    }
+  })
+})
+
 describe('the check in a terminal, the way CI runs it', () => {
   it('passes a repo whose code fits', () => {
     expect(checkFromTerminal(repo).code).toBe(0)

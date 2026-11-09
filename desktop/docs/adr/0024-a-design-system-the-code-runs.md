@@ -74,18 +74,43 @@ how each is written:
 - **Block**: what one UI block uses, in the `components` group (Google's word,
   kept so the file stays theirs). `components.button-primary.backgroundColor: "{colors.action}"`.
 
-The code runs DESIGN.md because the theme it styles with (CSS variables, a
-Tailwind theme) is made from it, not written beside it. Setup arranges that.
+The code runs DESIGN.md because the theme it styles with is made from it,
+not written beside it. Setup arranges that. The theme is one file, tagged
+`theme` beside its module's tag, holding one CSS variable per token, named
+by the token's path with a dash for the dot: `colors.action` is
+`--colors-action`, and a purpose token names its raw one the CSS way,
+`--colors-action: var(--colors-blue-500)`.
+
+```css
+/* codegraph: module design-system */
+/* codegraph: theme */
+:root {
+  --colors-blue-500: #2563eb;
+  --colors-action: var(--colors-blue-500);
+}
+```
+
 The check then holds the code to it:
 
-- the theme matches DESIGN.md, token for token;
-- no UI block or page uses a raw value (a hex colour, a pixel size) where a
-  token belongs;
-- no UI block or page reaches past a purpose token for a raw one.
+- the theme matches DESIGN.md, token for token, and has none it does not;
+- no component's file uses a raw value where a token belongs: a colour
+  (hex, `rgb()`, `hsl()`), or a size or corner (`px`, `rem`, `em`) given to
+  a padding, margin, gap or radius. Where DESIGN.md has a token of that
+  value, the check names it;
+- no component's file reaches past a purpose token for a raw one that a
+  purpose token names.
 
-Breaking one of these on purpose is allowed if the line says why:
+Breaking one of these on purpose is allowed if the line says why, at its end
+or on a line of its own above it, as a wire's words are:
 `// codegraph: exception the brand logo's own blue`. An **exception** is not
-drift, and the check lists it apart.
+drift: the check lists it apart, with why, and still passes. One with no why
+is a mismatch.
+
+For now the check holds only tokens of one value each: colours, spacing and
+corners. Type styles and UI block tokens are made of parts, and the theme
+has no settled way to spell them yet; they come when one is chosen. Only the
+first value the theme gives a variable is compared, so a dark theme that
+gives it another is not read.
 
 **On screen**, DESIGN.md is never shown as text. Each token is drawn as what it
 is: a colour as a swatch, a space as a box that size, a radius as a corner at

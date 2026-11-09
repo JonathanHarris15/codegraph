@@ -1,5 +1,6 @@
 // codegraph: module reader
 import { CONFIG, readFacts, type Mismatch } from './build.js'
+import { checkDesign } from './design-check.js'
 import type { Component, Point } from './schema.js'
 
 const CODE = /\.(ts|tsx|js|jsx|mjs|cjs|mts|cts|py|rb|go|rs|java|kt|swift|cs|php|vue|svelte)$/i
@@ -114,6 +115,9 @@ export const checkFiles = (files: Map<string, string>, point: Point): Mismatch[]
       says: `The store ${store.path} has no schema. Write one in JSON Schema beside this file, have ${named(keeper)} check every write against it, and name it in the tag: \`store ${store.name} in ${store.container}${inside} from ${store.name}.schema.json\`. Where the database already runs one, such as a Prisma model, name that instead.`,
     })
   }
+
+  // Each line is its own place to fix, so these are kept even when two say the same.
+  if (map.design) found.push(...checkDesign(map.design, files, tagsOf, componentOf))
 
   return found.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line)
 }
