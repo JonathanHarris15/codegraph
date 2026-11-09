@@ -15,6 +15,7 @@ import {
   type Wire,
   type WireKind,
 } from './schema.js'
+import { DESIGN, readDesign } from './design.js'
 import { PROPOSAL, readProposal } from './proposal.js'
 import { readPrismaShape } from './prisma.js'
 import { readShape } from './shape.js'
@@ -108,11 +109,14 @@ export const readFacts = (point: Point, files: Map<string, string>): Facts => {
     outside: [],
     problems: [],
     proposal: null,
+    design: null,
     mockups: {},
   }
   const facts: Facts = { map, tagsOf: new Map(), componentOf: new Map(), links: [], calls: [], problems }
   const unread: string[] = []
   map.proposal = readProposal(files.get(PROPOSAL), unread)
+  const design = files.get(DESIGN)
+  map.design = design === undefined ? null : readDesign(design)
   problems.push(...unread.map((says) => ({ file: PROPOSAL, line: 1, says })))
   const done = (): Facts => {
     map.problems = problems.map((p) => p.says)
@@ -133,7 +137,7 @@ export const readFacts = (point: Point, files: Map<string, string>): Facts => {
   const kept: { path: string; component: Component; said: FileTags['stores'][number] }[] = []
 
   for (const [path, text] of files) {
-    if (path === CONFIG || path === PROPOSAL || path === 'tsconfig.json' || path === 'jsconfig.json') continue
+    if (path === CONFIG || path === PROPOSAL || path === DESIGN || path === 'tsconfig.json' || path === 'jsconfig.json') continue
     const tags = readTags(path, text)
     tagsOf.set(path, tags)
     problems.push(...tags.problems.map((says) => ({ file: path, line: 1, says })))

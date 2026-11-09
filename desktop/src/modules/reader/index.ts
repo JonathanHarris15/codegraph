@@ -1,5 +1,5 @@
 // codegraph: module reader
-// codegraph: front door readMap, listPoints, pointFor, checkRepo, proposalProgress, measure, proposalFrom, changesAnything, blankProposal, idOfName, componentName, live, outsideId, storeId, holdsWords, PROPOSAL, PROPOSAL_FOLDER, storeName, shapeGaps, ProposedStore, ProposedField, Point, SystemMap, Component, Container, CodeFile, Store, Shape, Field, Holds, Wire, WireKind, ComponentKind, Mismatch, Proposal, ProposedContainer, ProposedComponent, ProposedWire, Progress, ProposalItem, ItemState, DrawnCard, FromDrawing
+// codegraph: front door DESIGN, DesignSystem, Token, TokenGroup, TokenPart, TokenTier, readMap, listPoints, pointFor, checkRepo, proposalProgress, measure, proposalFrom, changesAnything, blankProposal, idOfName, componentName, live, outsideId, storeId, holdsWords, PROPOSAL, PROPOSAL_FOLDER, storeName, shapeGaps, ProposedStore, ProposedField, Point, SystemMap, Component, Container, CodeFile, Store, Shape, Field, Holds, Wire, WireKind, ComponentKind, Mismatch, Proposal, ProposedContainer, ProposedComponent, ProposedWire, Progress, ProposalItem, ItemState, DrawnCard, FromDrawing
 import { existsSync, readFileSync } from 'node:fs'
 import { extname, join } from 'node:path'
 import { buildMap, type Mismatch } from './build.js'
@@ -16,6 +16,8 @@ export { changesAnything, proposalFrom } from './drawn.js'
 export { holdsWords } from './shape.js'
 export type { DrawnCard, FromDrawing } from './drawn.js'
 export type { Mismatch } from './build.js'
+export { DESIGN } from './design.js'
+export type { DesignSystem, Token, TokenGroup, TokenPart, TokenTier } from './design.js'
 export type {
   CodeFile,
   Component,

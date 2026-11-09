@@ -1,4 +1,6 @@
 // codegraph: test feature describe-map
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { describeMap } from '../src/features/describe-map.js'
 import { aMappedRepo, anAgentIn, closeYard, openYard, type Yard } from './yard.js'
@@ -19,6 +21,47 @@ afterAll(async () => {
 describe('the map in words, called straight', () => {
   it('says plainly when a repo is not set up', async () => {
     expect(await describeMap(yard.home)).toMatch(/^This repo has no codegraph.config.json/)
+  })
+
+  it('says the design system, each token with its tier and what it comes to', async () => {
+    const repo = aMappedRepo(yard, 'designed')
+    writeFileSync(
+      join(repo, 'DESIGN.md'),
+      [
+        '---',
+        'name: Daylight',
+        'description: Calm neutrals and one accent.',
+        'colors:',
+        '  blue-500: "#2563eb"',
+        '  action: "{colors.blue-500}"',
+        '  paper: "#fff"',
+        'components:',
+        '  button-primary:',
+        '    backgroundColor: "{colors.action}"',
+        '    textColor: "{colors.paper}"',
+        '    padding: 12px',
+        '  broken:',
+        '    textColor: "{colors.nope}"',
+        '---',
+      ].join('\n'),
+    )
+    const said = await describeMap(repo)
+    expect(said).toContain(
+      [
+        'Design system Daylight, from DESIGN.md: Calm neutrals and one accent.',
+        '  colors.blue-500 (raw) #2563eb',
+        '  colors.action (purpose) {colors.blue-500}, which is #2563eb',
+        '  colors.paper (raw) #fff',
+        '  components.button-primary (block):',
+        '    backgroundColor {colors.action}, which is #2563eb',
+        '    textColor {colors.paper}, which is #fff',
+        '    padding 12px',
+        '  components.broken (block):',
+        '    textColor {colors.nope}, which is not known',
+        '  Does not hold together:',
+        '    components.broken names {colors.nope}, which is not a token',
+      ].join('\n'),
+    )
   })
 })
 

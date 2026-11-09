@@ -3,6 +3,7 @@ import { execFile, spawn } from 'node:child_process'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
+import { DESIGN } from './design.js'
 import { PROPOSAL } from './proposal.js'
 import type { Point } from './schema.js'
 
@@ -11,7 +12,7 @@ const started = promisify(execFile)
 const SOURCE = /\.(ts|tsx|js|jsx|mjs|cjs|mts|cts|py|rb|go|rs|java|kt|swift|cs|php|sql|prisma|css|scss|html|vue|svelte|sh)$/i
 /** A JSON Schema a store's shape is read from (ADR 0023). */
 const SCHEMA = /\.schema\.json$/i
-const ALSO = new Set(['codegraph.config.json', PROPOSAL, 'tsconfig.json', 'jsconfig.json'])
+const ALSO = new Set(['codegraph.config.json', PROPOSAL, DESIGN, 'tsconfig.json', 'jsconfig.json'])
 const TOO_BIG = 1024 * 1024
 
 /** The files the reader cares about: source it can tag, the schemas stores

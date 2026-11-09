@@ -4,18 +4,44 @@
 import { annotationWords, readAnnotations } from '../modules/annotations/index.js'
 import { sameFolder } from '../modules/machine/index.js'
 import { listProjects } from '../modules/projects/index.js'
-import { holdsWords, live, readMap, type Point, type Store, type SystemMap } from '../modules/reader/index.js'
+import { DESIGN, holdsWords, live, readMap, type DesignSystem, type Point, type Store, type SystemMap } from '../modules/reader/index.js'
 import { sentenceOf } from '../modules/wording/index.js'
 
 const pointWords = (point: Point): string =>
   point.kind === 'live' ? 'the live folder' : point.kind === 'branch' ? `branch ${point.name}` : `commit ${point.sha.slice(0, 7)}`
 
+/** A value as written, and what it comes to when that is a name. */
+const valueWords = (written: string, value: string): string =>
+  written.startsWith('{') ? `${written}, which is ${value || 'not known'}` : written
+
+/** A DESIGN.md's tokens in words: each with its tier, as written, and what
+ *  it comes to (ADR 0024). */
+const designWords = (design: DesignSystem | null): string[] => {
+  if (!design) return []
+  const out = [`Design system ${design.name || '(unnamed)'}, from ${DESIGN}${design.description ? `: ${design.description}` : ''}`]
+  for (const t of design.tokens) {
+    if (!t.parts.length) {
+      out.push(`  ${t.id} (${t.tier}) ${valueWords(t.written, t.value)}`)
+      continue
+    }
+    out.push(`  ${t.id} (${t.tier}):`)
+    for (const p of t.parts) out.push(`    ${p.name} ${valueWords(p.written, p.value)}`)
+  }
+  if (design.problems.length) out.push('  Does not hold together:', ...design.problems.map((p) => `    ${p}`))
+  return [...out, '']
+}
+
 /** A repo's map in words an agent reads: containers, components and their
- *  files, and every wire with what it is for. */
+ *  files, every wire with what it is for, and its design system. */
 export const describeMap = async (repo: string, point: Point = live): Promise<string> => {
   const map: SystemMap = await readMap(repo, point)
   if (!map.setUp)
-    return `This repo has no codegraph.config.json, so it is not set up for codegraph yet. Read at ${pointWords(point)}.`
+    return [
+      `This repo has no codegraph.config.json, so it is not set up for codegraph yet. Read at ${pointWords(point)}.`,
+      ...(map.design ? ['', ...designWords(map.design)] : []),
+    ]
+      .join('\n')
+      .trimEnd()
 
   const nameOf = new Map<string, string>([
     ...map.components.map((c) => [c.id, `${c.kind} ${c.name}`] as const),
@@ -68,6 +94,7 @@ export const describeMap = async (repo: string, point: Point = live): Promise<st
     for (const p of map.problems) out.push(`  ${p}`)
     out.push('')
   }
+  out.push(...designWords(map.design))
   out.push(...annotationsOver(repo, map))
   return out.join('\n').trimEnd()
 }

@@ -64,11 +64,15 @@ We take the open format, not one of our own, so a DESIGN.md written for
 another tool works here and one written here works there.
 
 A token is one named value: a colour, a space, a corner radius, a type style.
-Tokens come in three tiers, and a token may name another with `{token}`:
+Google's format keeps them in groups (`colors`, `typography`, `rounded`,
+`spacing`, `components`), and a token may name another by its path, as
+`{colors.blue-500}`. Tokens come in three tiers, which the reader tells from
+how each is written:
 
-- **Raw**: the value itself. `blue-500: #2563eb`.
-- **Purpose**: what it is for. `action: {blue-500}`.
-- **Block**: what one UI block uses. `button-background: {action}`.
+- **Raw**: the value itself. `colors.blue-500: "#2563eb"`.
+- **Purpose**: what it is for, naming another token. `colors.action: "{colors.blue-500}"`.
+- **Block**: what one UI block uses, in the `components` group (Google's word,
+  kept so the file stays theirs). `components.button-primary.backgroundColor: "{colors.action}"`.
 
 The code runs DESIGN.md because the theme it styles with (CSS variables, a
 Tailwind theme) is made from it, not written beside it. Setup arranges that.

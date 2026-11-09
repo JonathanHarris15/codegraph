@@ -1,4 +1,5 @@
 // codegraph: module reader
+import type { DesignSystem } from './design.js'
 import type { Proposal } from './proposal.js'
 
 /** Where in a repo's history to read it: the folder as it is now, with
@@ -140,6 +141,8 @@ export type SystemMap = {
   problems: string[]
   /** The change drawn over this map on this branch, if there is one. */
   proposal: Proposal | null
+  /** Its DESIGN.md, read whether or not the repo is set up; null when it has none. */
+  design: DesignSystem | null
   /** The proposal's mockups, by the id of the page each is for, as data URLs. */
   mockups: Record<string, string>
 }
