@@ -377,6 +377,12 @@ export const SketchEditor = ({
           cardTypes,
           onCardTypes: keepCardTypes,
           onMockup: (id) => onAddMockup(id),
+          // Each field added on the card is a step of its own to undo.
+          onAddField: (id, field) =>
+            change((f) => {
+              const card = f.children.find((c) => c.id === id)
+              return setFields(f, id, [...(card?.fields ?? []), { ...field, needed: false, pointsAt: '' }])
+            }),
           storeEditor: (id, onClose) => {
             const card = focus.children.find((c) => c.id === id)
             if (!card) return null

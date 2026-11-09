@@ -1237,6 +1237,50 @@ h3 {
   gap: var(--space-1);
 }
 
+.map-add-field {
+  margin-top: var(--space-1);
+  padding: 2px var(--space-1);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--kind-keep);
+  font: 500 12px/18px var(--font-mono);
+  cursor: pointer;
+}
+
+.map-add-field:hover,
+.map-add-field:focus-visible {
+  background: var(--kind-keep-wash);
+  outline: none;
+}
+
+.map-add-field-row {
+  display: flex;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+
+.map-add-field-name,
+.map-add-field-holds {
+  min-width: 0;
+  height: 22px;
+  padding: 0 var(--space-1);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-xs);
+  background: var(--surface-000);
+  color: var(--ink);
+  font: 400 12px/18px var(--font-mono);
+}
+
+.map-add-field-name {
+  flex: 1;
+}
+
+.map-add-field-holds {
+  flex: none;
+  max-width: 45%;
+}
+
 .map-names {
   margin: var(--space-2) 0 0;
   padding: 0;

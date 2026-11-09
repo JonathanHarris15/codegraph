@@ -1,5 +1,5 @@
 // codegraph: component map-canvas
-import type { PointerEvent, ReactNode } from 'react'
+import { useState, type PointerEvent, type ReactNode } from 'react'
 import type { Said } from '../../modules/wording/index.js'
 import { CARD_SHAPES, drawnShape, lookOf } from './card-looks.js'
 import { Glyph, KindGlyph, LookGlyph, isStore, keeps, kindClass, lookClass } from './kind-glyph.js'
@@ -42,6 +42,82 @@ const Fields = ({ card }: { card: DrawnCard }) => {
   )
 }
 
+/** What a field can be made to hold straight on its card. Choices and lists
+ *  are set in the store's design beside it. */
+const QUICK_TYPES = ['text', 'number', 'whole number', 'yes or no', 'date', 'a record', 'anything']
+
+/** A field written on a store's card itself: a button, then a row to name the
+ *  field and say what it holds. Enter adds it and leaves the row ready for the
+ *  next; Escape, or moving away with nothing typed, puts the button back. */
+const AddField = ({ store, onAdd }: { store: string; onAdd: (field: { name: string; holds: string }) => void }) => {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [holds, setHolds] = useState('text')
+  const keep = (event: { stopPropagation: () => void }): void => event.stopPropagation()
+  const add = (): void => {
+    if (name.trim()) onAdd({ name: name.trim(), holds })
+    setName('')
+  }
+  if (!open)
+    return (
+      <button
+        type="button"
+        className="map-add-field"
+        aria-label={`Add a field to ${store || 'this store'}`}
+        onPointerDown={keep}
+        onDoubleClick={keep}
+        onClick={(event) => {
+          keep(event)
+          setOpen(true)
+        }}
+      >
+        + Add a field
+      </button>
+    )
+  return (
+    <div
+      className="map-add-field-row"
+      onPointerDown={keep}
+      onClick={keep}
+      onDoubleClick={keep}
+      onBlur={(event) => {
+        // Moving out of the row adds what was typed, and closes it.
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
+        add()
+        setOpen(false)
+      }}
+    >
+      <input
+        className="map-add-field-name"
+        aria-label={`Name of a new field of ${store || 'this store'}`}
+        placeholder="fieldName"
+        autoFocus
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') add()
+          if (event.key === 'Escape') {
+            setName('')
+            setOpen(false)
+          }
+        }}
+      />
+      <select
+        className="map-add-field-holds"
+        aria-label={`What the new field of ${store || 'this store'} holds`}
+        value={holds}
+        onChange={(event) => setHolds(event.target.value)}
+      >
+        {QUICK_TYPES.map((type) => (
+          <option key={type} value={type}>
+            {type}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
 const Chips = ({ card }: { card: DrawnCard }) => (
   <div className="map-chips">
     {card.children.slice(0, 6).map((child) => (
@@ -53,11 +129,12 @@ const Chips = ({ card }: { card: DrawnCard }) => (
   </div>
 )
 
-const Inside = ({ card }: { card: DrawnCard }) => {
+const Inside = ({ card, onAddField }: { card: DrawnCard; onAddField?: (field: { name: string; holds: string }) => void }) => {
   if (isStore(card.kind))
     return (
       <>
         {card.fields ? <Fields card={card} /> : null}
+        {onAddField ? <AddField store={card.name} onAdd={onAddField} /> : null}
         {card.children.length ? <Chips card={card} /> : null}
       </>
     )
@@ -99,6 +176,7 @@ export const CardFace = ({
   onPress,
   onHandle,
   onEdit,
+  onAddField,
 }: {
   placed: Placed
   picture: string
@@ -131,6 +209,8 @@ export const CardFace = ({
   onHandle?: (side: Side, event: PointerEvent<HTMLSpanElement>) => void
   /** Double-clicked one of its fields: its name, or what it is for. */
   onEdit?: (says?: boolean) => void
+  /** A store being drawn: a field written straight onto its card. */
+  onAddField?: (field: { name: string; holds: string }) => void
 }) => {
   const { card, box } = placed
   const locked = up > 0
@@ -209,7 +289,7 @@ export const CardFace = ({
           {card.says}
         </div>
       ) : null}
-      {shape ? null : <Inside card={card} />}
+      {shape ? null : <Inside card={card} onAddField={onAddField} />}
     </>
   )
   return (

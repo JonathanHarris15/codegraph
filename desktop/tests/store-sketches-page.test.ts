@@ -97,6 +97,30 @@ describe('stores on a sketch', () => {
     expect(await page.locator('.map-field-name--needed').filter({ hasText: 'title' }).count()).toBe(1)
   })
 
+  it('adds fields on the store card itself, one after another', async () => {
+    await page.getByRole('button', { name: 'Add a field to services' }).click()
+    const name = page.getByLabel('Name of a new field of services')
+    await name.waitFor({ timeout: PATIENCE })
+    await name.fill('heldOn')
+    await page.getByLabel('What the new field of services holds').selectOption('date')
+    await name.press('Enter')
+    await name.fill('location')
+    await page.getByLabel('What the new field of services holds').selectOption('text')
+    await name.press('Enter')
+    await name.press('Escape')
+    await expect
+      .poll(() => lines('services'), { timeout: PATIENCE })
+      .toEqual(['titletext', 'leaderId→ people', 'heldOndate', 'locationtext'])
+    expect(await page.getByRole('button', { name: 'Add a field to services' }).count()).toBe(1)
+    await picture('store-add-on-card')
+    // Each field added is undone on its own, back to the two the rest of these
+    // tests expect.
+    await page.keyboard.press('Control+Z')
+    await expect.poll(() => lines('services'), { timeout: PATIENCE }).toEqual(['titletext', 'leaderId→ people', 'heldOndate'])
+    await page.keyboard.press('Control+Z')
+    await expect.poll(() => lines('services'), { timeout: PATIENCE }).toEqual(['titletext', 'leaderId→ people'])
+  })
+
   it('wires the store to the one a field points at', async () => {
     await expect
       .poll(() => page.getByRole('button', { name: /^Wire: services points at people/ }).count(), { timeout: PATIENCE })

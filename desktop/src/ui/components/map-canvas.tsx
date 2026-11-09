@@ -132,6 +132,8 @@ export type Drawing = {
   /** The design of a store, or a database's stores, shown beside it on the
    *  board; left out where stores cannot be designed. */
   storeEditor?: (id: string, onClose: () => void) => ReactNode
+  /** A field written straight onto a store's card. */
+  onAddField?: (id: string, field: { name: string; holds: string }) => void
   onRemove: (ids: string[]) => void
   onAlign: (ids: string[], how: Alignment) => void
   /** Drawing over the map: cards of this level are not opened, since what
@@ -2538,6 +2540,11 @@ export const MapCanvas = ({
                 onPress={canMove ? press(p.card.id) : undefined}
                 onHandle={drawing ? pressHandle(p.card.id) : undefined}
                 onEdit={(says) => startEditing(p.card.id, says)}
+                onAddField={
+                  drawing?.onAddField && isStore(p.card.kind) && !drawing.locked?.includes(p.card.id)
+                    ? (field) => drawing.onAddField!(p.card.id, field)
+                    : undefined
+                }
               />
             )
           })}
