@@ -448,7 +448,8 @@ h3 {
   display: grid;
   place-items: center;
   padding: var(--space-6);
-  z-index: 10;
+  /* Over everything on the page, the map's bar (80) included. */
+  z-index: 90;
 }
 
 .ds-sheet {
@@ -510,7 +511,10 @@ h3 {
   padding: 0 var(--space-4);
   border-bottom: var(--stroke-edge) solid var(--line-hair);
   background: var(--surface-100);
-  z-index: 2;
+  /* Above everything in the body (canvas layers, side panels at 60, the
+     design page at 70), so the lists it drops down, like the branch
+     picker's, open over them. Small windows over the page sit higher still. */
+  z-index: 80;
 }
 
 .map-body {

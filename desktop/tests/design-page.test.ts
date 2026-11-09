@@ -167,6 +167,21 @@ describe('looking at a design system', () => {
     expect(await view().textContent()).toContain('Quiet, so the work stands out.')
   })
 
+  it('lets the branch list open over it, not behind it', async () => {
+    await page.getByRole('button', { name: 'Branch of notes' }).click()
+    const menu = page.getByRole('menu', { name: 'Branches of notes' })
+    await menu.waitFor({ timeout: PATIENCE })
+    const onTop = await menu.evaluate((el) => {
+      const box = el.getBoundingClientRect()
+      const there = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)
+      return there !== null && el.contains(there)
+    })
+    expect(onTop).toBe(true)
+    await page.getByRole('button', { name: 'Branch of notes' }).click()
+    await menu.waitFor({ state: 'hidden', timeout: PATIENCE })
+    expect(await view().count()).toBe(1)
+  })
+
   it('draws each colour as a swatch of itself', async () => {
     expect(await style(sample('colors.blue-500'), 'background-color')).toBe('rgb(37, 99, 235)')
     expect(await style(sample('colors.action'), 'background-color')).toBe('rgb(37, 99, 235)')
