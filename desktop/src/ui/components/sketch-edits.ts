@@ -328,6 +328,17 @@ export const setFields = (focus: SketchCard, id: string, fields: SketchField[] |
   return next
 }
 
+/** Adds a store, by name, inside a card on the level: a store inside a
+ *  database, or an inner store inside a store. It is fixed with no fields yet,
+ *  and the canvas lays it out. */
+export const addStoreInside = (focus: SketchCard, holderId: string, name: string): [SketchCard, string] => {
+  const holder = focus.children.find((c) => c.id === holderId)
+  if (!holder) return [focus, '']
+  const kind = isStore(holder.kind) ? 'inner store' : 'store'
+  const store: SketchCard = { ...blankCard(newId(), name, levelIn(holder), kind), fields: [], others: '' }
+  return [changeCard(focus, holderId, { children: [...holder.children, store] }), store.id]
+}
+
 export const changeWire = (focus: SketchCard, id: string, change: Partial<SketchWire>): SketchCard => ({
   ...focus,
   wires: focus.wires.map((w) => (w.id === id ? { ...w, ...change } : w)),

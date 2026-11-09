@@ -1,6 +1,6 @@
 // codegraph: component sketch-editor
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Sketch, SketchCard } from '../../modules/sketches/index.js'
+import type { Sketch, SketchCard, SketchField } from '../../modules/sketches/index.js'
 import { undoStep } from '../../modules/together/index.js'
 import { sentenceOf } from '../../modules/wording/index.js'
 import { Button, Field, Select } from '../design-system/kit.js'
@@ -10,7 +10,7 @@ import { CardLookEditor } from './card-look-editor.js'
 import { BLANK_LOOK, TEMPLATES, lookOf } from './card-looks.js'
 import { Glyph } from './kind-glyph.js'
 import { MapCanvas, remember, remembered, type Together } from './map-canvas.js'
-import { StoreFields } from './store-fields.js'
+import { StoreEditor, StoreFields } from './store-fields.js'
 import { walk } from './map-layout.js'
 import {
   addWire,
@@ -34,6 +34,7 @@ import {
   retext,
   rewire,
   setFields,
+  addStoreInside,
   wireKinds,
   type Clip,
 } from './sketch-edits.js'
@@ -285,6 +286,17 @@ export const SketchEditor = ({
   }
 
   const picked = selected.length === 1 ? pick(focus, selected[0]!) : null
+
+  /** Changes a store's fields, wiring it to any store a field now points at, or
+   *  whether it is fixed or open. Typing in one store's fields is one undo. */
+  const changeStore = (id: string, { fields, others }: { fields?: SketchField[] | null; others?: string }): void =>
+    change(
+      (f) =>
+        others !== undefined
+          ? changeCard(f, id, fields !== undefined ? { fields, others } : { others })
+          : setFields(f, id, fields ?? null),
+      `fields:${id}`,
+    )
   /** A card's name, or for a hub, the name of the card at the far end of its
    *  wire, however many hubs that takes. */
   const nameOf = (id: string, depth = trail.length - 1): string => {
@@ -365,6 +377,19 @@ export const SketchEditor = ({
           cardTypes,
           onCardTypes: keepCardTypes,
           onMockup: (id) => onAddMockup(id),
+          storeEditor: (id, onClose) => {
+            const card = focus.children.find((c) => c.id === id)
+            if (!card) return null
+            return (
+              <StoreEditor
+                card={card}
+                stores={storesIn(sketch.root).filter((name) => name !== card.name)}
+                onChange={(shape) => changeStore(id, shape)}
+                onAdd={(name) => change((f) => addStoreInside(f, id, name)[0])}
+                onClose={onClose}
+              />
+            )
+          },
           onRemove: (ids) => change((f) => remove(f, ids)),
           onAlign: (ids, how) => change((f) => align(f, ids, how)),
         }}
@@ -452,15 +477,7 @@ export const SketchEditor = ({
                   <StoreFields
                     card={picked.card}
                     stores={storesIn(sketch.root).filter((name) => name !== picked.card.name)}
-                    onChange={({ fields, others }) =>
-                      change(
-                        (f) =>
-                          others !== undefined
-                            ? changeCard(f, picked.card.id, fields !== undefined ? { fields, others } : { others })
-                            : setFields(f, picked.card.id, fields ?? null),
-                        `fields:${picked.card.id}`,
-                      )
-                    }
+                    onChange={(shape) => changeStore(picked.card.id, shape)}
                   />
                 </>
               ) : ownTypesAt(picked.card.level) ? (

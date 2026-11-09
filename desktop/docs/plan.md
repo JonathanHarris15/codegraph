@@ -276,6 +276,12 @@ hold the code to it. Decided in ADR 0023. Proven on Mosaic, which keeps about
   A new store is fixed with no fields; switching it to open asks what any other
   field holds. Pointing a field at a store drawn beside it wires the two. A
   snapshot carries stores as they stand; the MCP's `sketch` says them.
+  After trying it, the same design opens beside the card on the board, from
+  "Fields" on the bar over a picked store: fields with their type (text,
+  numbers, yes or no, a date, choices, a list of any of these, a record), and
+  the store's inner stores, with a box to add one. On a picked database the
+  bar's "Stores" lists its stores and adds one. A record's own fields are not
+  drawn yet; it is "a record", for the agent to settle.
 - **CG-8.4** (done) Stores in a proposal: the file lists each store it adds,
   changes or crosses out with its whole shape, and the built rule holds the
   schema to it, saying what each store still lacks. A change that touches the

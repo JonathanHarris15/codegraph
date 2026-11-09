@@ -121,6 +121,7 @@ export const TOOL_GLYPHS = {
   redo: Redo2,
   copy: Copy,
   inside: SquareArrowOutUpRight,
+  fields: Table2,
   cards: Shapes,
   keys: Keyboard,
   alignLeft: AlignStartVertical,

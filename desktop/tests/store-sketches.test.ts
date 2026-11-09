@@ -4,7 +4,8 @@ import { describeSketch } from '../src/features/describe-sketch.js'
 import { startSketch, type MapCard } from '../src/features/start-sketch.js'
 import { addProject, addSoftwareSystem, useFolder as useProjects } from '../src/modules/projects/index.js'
 import { blankCard, useFolder as useSketches, writeSketch, type SketchCard } from '../src/modules/sketches/index.js'
-import { choicesIn, kindBetween, placeCard, setFields } from '../src/ui/components/sketch-edits.js'
+import { addStoreInside, choicesIn, kindBetween, placeCard, setFields } from '../src/ui/components/sketch-edits.js'
+import { choiceWords, typeOf } from '../src/ui/components/store-fields.js'
 import { aChurchRepo, closeYard, openYard, type Yard } from './yard.js'
 
 let yard: Yard
@@ -72,6 +73,29 @@ describe('drawing stores on a sketch', () => {
     const twice = setFields(once, 'r', [field, { ...field, name: 'leaderId' }])
     expect(twice.children.find((c) => c.id === 'r')!.fields).toHaveLength(2)
     expect(twice.wires.map((w) => [w.from, w.to, w.kind, w.words])).toEqual([['r', 'p', 'points at', 'personId']])
+  })
+})
+
+describe('designing a store beside the board', () => {
+  it('adds a store inside a database, and an inner store inside a store, fixed and empty', () => {
+    const focus = blankCard('sys', 'church', 'system', 'software system')
+    focus.children.push(database())
+    const [withStore, storeId] = addStoreInside(focus, 'db', 'people')
+    const db = withStore.children[0]!
+    expect(db.children.map((c) => [c.id, c.name, c.kind, c.level, c.fields, c.others])).toEqual([[storeId, 'people', 'store', 'component', [], '']])
+    const inStore = { ...database(), children: [] as SketchCard[] }
+    inStore.children.push({ ...blankCard('p', 'people', 'component', 'store'), fields: [] })
+    const [withInner] = addStoreInside(inStore, 'p', 'prayer_requests')
+    expect(withInner.children[0]!.children[0]).toMatchObject({ name: 'prayer_requests', kind: 'inner store', level: 'component', fields: [] })
+  })
+
+  it('reads what a field holds back into a type, and says choices as the map does', () => {
+    expect(typeOf('whole number')).toEqual({ type: 'whole number', of: '', choices: [] })
+    expect(typeOf('a list of date')).toEqual({ type: 'a list', of: 'date', choices: [] })
+    expect(typeOf('a record of url, open to anything').type).toBe('a record')
+    expect(typeOf('draft, sent or paid')).toEqual({ type: 'choices', of: '', choices: ['draft', 'sent', 'paid'] })
+    expect(choiceWords(['draft', 'sent', 'paid'])).toBe('draft, sent or paid')
+    expect(choiceWords(['male', 'female'])).toBe('male or female')
   })
 })
 
