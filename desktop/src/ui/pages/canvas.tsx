@@ -497,7 +497,9 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
   const design = sketch ? null : (systemShown?.design ?? null)
   const uiBlocks = sketch ? [] : (systemShown?.uiBlocks ?? [])
   const recipes = sketch ? [] : (systemShown?.recipes ?? [])
-  const hasDesign = design !== null || uiBlocks.length > 0 || recipes.length > 0
+  // Every software system has a design page, even one with nothing in it
+  // yet: that page says how to start one.
+  const hasDesign = !sketch && systemShown !== undefined
 
   const sketchTrail = sketch ? walk(sketch.root, sketchPath) : []
   const showing = sketch ? sketchTrail : trail

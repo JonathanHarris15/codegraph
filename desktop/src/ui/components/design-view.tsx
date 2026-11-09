@@ -2,6 +2,7 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import type { DesignSystem, RecipeShown, Token, TokenGroup, UiBlock } from '../../features/show-map.js'
 import { Badge, Button } from '../design-system/kit.js'
+import { DesignStart } from './design-start.js'
 import { RecipesView } from './recipes-view.js'
 import { UiBlocksView, type AgentAtBlock } from './ui-blocks-view.js'
 
@@ -395,40 +396,43 @@ export const DesignView = ({
     return () => window.removeEventListener('keydown', keys)
   }, [onClose])
 
+  // With nothing at all yet, the page is one panel saying how to start.
+  const nothing = !design && uiBlocks.length === 0 && recipes.length === 0
+
   return (
-    <section className="design-view" aria-label={`Design system ${design?.name || 'with no name'}`}>
+    <section className="design-view" aria-label={design?.name ? `Design system ${design.name}` : 'Design system'}>
       <header className="design-head">
         <div>
           <h2 className="design-title">{design?.name || 'Design system'}</h2>
           {design?.description ? <p className="design-says">{design.description}</p> : null}
         </div>
-        <div className="design-tabs" role="tablist" aria-label="What to look at">
-          <button type="button" role="tab" aria-selected={tab === 'tokens'} onClick={() => setTab('tokens')}>
-            Tokens{design ? ` (${design.tokens.length})` : ''}
-          </button>
-          <button type="button" role="tab" aria-selected={tab === 'blocks'} onClick={() => setTab('blocks')}>
-            UI blocks ({uiBlocks.length})
-          </button>
-          <button type="button" role="tab" aria-selected={tab === 'recipes'} onClick={() => setTab('recipes')}>
-            Recipes ({recipes.length})
-          </button>
-        </div>
+        {nothing ? null : (
+          <div className="design-tabs" role="tablist" aria-label="What to look at">
+            <button type="button" role="tab" aria-selected={tab === 'tokens'} onClick={() => setTab('tokens')}>
+              Tokens{design ? ` (${design.tokens.length})` : ''}
+            </button>
+            <button type="button" role="tab" aria-selected={tab === 'blocks'} onClick={() => setTab('blocks')}>
+              UI blocks ({uiBlocks.length})
+            </button>
+            <button type="button" role="tab" aria-selected={tab === 'recipes'} onClick={() => setTab('recipes')}>
+              Recipes ({recipes.length})
+            </button>
+          </div>
+        )}
         <Button look="bare" onClick={onClose}>
           Close
         </Button>
       </header>
-      {tab === 'blocks' ? (
-        <UiBlocksView blocks={uiBlocks} agent={agent} />
+      {nothing ? (
+        <DesignStart part="all" />
+      ) : tab === 'blocks' ? (
+        uiBlocks.length ? <UiBlocksView blocks={uiBlocks} agent={agent} /> : <DesignStart part="blocks" />
       ) : tab === 'recipes' ? (
-        <RecipesView recipes={recipes} />
+        recipes.length ? <RecipesView recipes={recipes} /> : <DesignStart part="recipes" />
       ) : design ? (
         <TokensBody design={design} onChange={onChange} why={why} />
       ) : (
-        <div className="design-body">
-          <div className="design-groups">
-            <div className="ds-empty">This repo has no DESIGN.md yet, so it has no tokens to show.</div>
-          </div>
-        </div>
+        <DesignStart part="tokens" />
       )}
     </section>
   )

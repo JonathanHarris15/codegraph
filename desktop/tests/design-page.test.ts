@@ -132,7 +132,18 @@ beforeAll(async () => {
     join(yard.home, 'projects.json'),
     JSON.stringify({
       version: 2,
-      projects: [{ id: 'notes-app', name: 'Notes', createdAt: '', systems: [{ id: 'notes', name: 'notes', path: repo, remote: '' }] }],
+      projects: [
+        {
+          id: 'notes-app',
+          name: 'Notes',
+          createdAt: '',
+          systems: [
+            { id: 'notes', name: 'notes', path: repo, remote: '' },
+            // A second repo with no design system at all, to show the page says how to start one.
+            { id: 'plain', name: 'plain', path: aMappedRepo(yard, 'plain'), remote: '' },
+          ],
+        },
+      ],
     }),
   )
   app = await openTheApp(yard.home)
@@ -346,5 +357,20 @@ describe('looking at a design system', () => {
     expect(await panel.getByLabel('Option hint').count()).toBe(1)
     await picture('d9-8-agent')
     sayWhere(repo, '', '')
+  })
+
+  it('has a design page in every software system, and one with nothing yet says how to start', async () => {
+    await view().getByRole('button', { name: 'Close' }).click()
+    await page.getByRole('navigation', { name: 'Where you are' }).getByRole('button').first().click()
+    await page.getByRole('button', { name: 'Open plain' }).dblclick({ timeout: PATIENCE })
+    await page.getByRole('button', { name: 'Design system' }).click({ timeout: PATIENCE })
+    const empty = page.getByRole('region', { name: 'Design system', exact: true })
+    const start = empty.getByRole('region', { name: 'How to start the design system' })
+    expect(await start.textContent({ timeout: PATIENCE })).toContain('This software system has no design system yet.')
+    expect(await start.textContent()).toContain('Set up the design system for codegraph.')
+    expect(await start.getByRole('button', { name: 'Copy' }).count()).toBe(1)
+    expect(await empty.getByRole('tablist').count()).toBe(0)
+    await picture('d9-empty')
+    await empty.getByRole('button', { name: 'Close' }).click()
   })
 })

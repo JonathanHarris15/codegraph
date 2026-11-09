@@ -243,6 +243,14 @@ writing a runner for each kind of app. It starts with React on Vite, which this
 app uses. Native apps get screenshots of their states and no
 live view until there is a reason to build one.
 
+### Where a person finds it
+
+Every software system has a design page, reached from the bar over its map,
+whether or not it has a design system yet. One with nothing yet is never
+blank: it says what a design system is, gives the words to hand an agent to
+set one up, and shows the first file to write by hand. A page with some parts
+and not others says the same on each empty tab, for that part.
+
 ### What setup does
 
 A `design-system` topic in the instructions tells the agent how to set a repo's
