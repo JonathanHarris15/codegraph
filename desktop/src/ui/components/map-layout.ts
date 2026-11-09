@@ -81,9 +81,21 @@ const NOTE_SIZE = { w: 180, h: 60 }
 /** Pages are drawn as frames for their screenshot, the rest as cards. */
 export const isFrame = (card: DrawnCard): boolean => card.level === 'component' && (card.role ?? card.kind) === 'page'
 
+/** How many of a store's fields its card lists before it says how many more. */
+export const FIELDS_SHOWN = 8
+
+/** A store's card is as tall as the fields it lists, a line for any more, a
+ *  line for what an open one takes, and its inner stores. */
+const storeHeight = (card: DrawnCard): number => {
+  const fields = card.fields ?? []
+  const lines = Math.min(fields.length, FIELDS_SHOWN) + (fields.length > FIELDS_SHOWN ? 1 : 0) + (card.others ? 1 : 0)
+  return 96 + (card.says ? 22 : 0) + lines * 18 + (card.children.length ? 28 : 0)
+}
+
 export const sizeOf = (card: DrawnCard): { w: number; h: number } => {
   const shape = drawnShape(card)
   if (shape) return { w: CARD_SHAPES[shape].w, h: CARD_SHAPES[shape].h }
+  if (card.fields !== undefined) return { w: 260, h: storeHeight(card) }
   return isFrame(card)
     ? { w: 260, h: 200 }
     : card.level === 'code'

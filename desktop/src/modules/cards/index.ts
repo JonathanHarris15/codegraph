@@ -1,7 +1,7 @@
 // codegraph: module cards
-// codegraph: front door card, join, systemCard, withLooks, Card, CardWire, CardState, Level, WireEnds
+// codegraph: front door card, join, systemCard, withLooks, holdsWords, Card, CardField, CardWire, CardState, Level, WireEnds
 import type { CardType } from '../card-types/index.js'
-import { idOfName, type SystemMap } from '../reader/index.js'
+import { idOfName, type Holds, type Shape, type Store, type SystemMap } from '../reader/index.js'
 
 export type Level = 'project' | 'system' | 'container' | 'component' | 'code'
 
@@ -23,6 +23,9 @@ export type CardWire = {
   ends: WireEnds[]
   state?: CardState
 }
+
+/** One field of a store, as its card lists it: what it holds, in words. */
+export type CardField = { name: string; holds: string; needed: boolean; pointsAt: string }
 
 /** One thing on the canvas, with what is inside it already laid out as
  *  cards and the wires between them, so the page only has to draw. */
@@ -52,6 +55,12 @@ export type Card = {
   state?: CardState
   /** A software system this member cannot open right now, and why, in words. */
   outOfReach?: string
+  /** A store's fields; null when its shape is unknown. Left out for anything
+   *  that is not a store. */
+  fields?: CardField[] | null
+  /** What any field a store does not list may hold, for an open one; '' for
+   *  a fixed one (ADR 0023). */
+  others?: string
   children: Card[]
   wires: CardWire[]
 }
@@ -98,36 +107,85 @@ export const join = (wires: CardWire[], wire: CardWire): void => {
     if (!same.ends.some((e) => e.from === end.from && e.to === end.to)) same.ends.push(end)
 }
 
+/** What a field holds, said the way a person would. */
+export const holdsWords = (holds: Holds): string => {
+  switch (holds.kind) {
+    case 'one of':
+      return holds.choices.length > 1
+        ? `${holds.choices.slice(0, -1).join(', ')} or ${holds.choices[holds.choices.length - 1]}`
+        : (holds.choices[0] ?? 'nothing')
+    case 'list':
+      return `a list of ${holdsWords(holds.of)}`
+    case 'record': {
+      const named = holds.shape.fields.map((f) => f.name)
+      const of = named.length ? ` of ${named.join(', ')}` : ''
+      return holds.shape.fixed ? `a record${of}` : `a record${of}, open to ${holdsWords(holds.shape.others)}`
+    }
+    default:
+      return holds.kind
+  }
+}
+
+const fieldsOf = (shape: Shape | null): CardField[] | null =>
+  shape && shape.fields.map((f) => ({ name: f.name, holds: holdsWords(f.holds), needed: f.needed, pointsAt: f.pointsAt }))
+
+/** A store's card, with the stores that live inside it drawn inside it. */
+const storeCard = (store: Store, stores: Store[], at: (inside: string) => string): Card =>
+  card(at(store.id), store.name, 'component', {
+    kind: store.inside ? 'inner store' : 'store',
+    says: store.shape ? store.says : 'Its shape is unknown: no schema says it.',
+    fields: fieldsOf(store.shape),
+    others: store.shape && !store.shape.fixed ? holdsWords(store.shape.others) : '',
+    children: stores
+      .filter((inner) => inner.container === store.container && inner.inside === store.path)
+      .map((inner) => storeCard(inner, stores, at)),
+  })
+
 export const systemCard = (id: string, name: string, map: SystemMap): Card => {
   const at = (inside: string): string => `${id}/${inside}`
+  const stores = map.stores ?? []
   const containers = map.containers.map((container) =>
     card(at(container.id), container.name, 'container', {
       kind: container.kind,
       says: container.says || (container.stores.length ? `Keeps ${container.stores.join(', ')}` : ''),
-      children: map.components
-        .filter((component) => component.container === container.name)
-        .map((component) =>
-          card(at(component.id), component.name, 'component', {
-            kind: component.type || component.kind,
-            ...(component.type ? { role: component.kind } : {}),
-            says: component.kind === 'trigger' ? `On a ${component.trigger}` : '',
-            at: component.at,
-            start: component.start,
-            shot: component.shot,
-            children: component.files.map((file) =>
-              card(at(`${component.id}/${file.path}`), file.path.split('/').pop() ?? file.path, 'code', {
-                kind: 'file',
-                says: file.path,
-                names: file.names,
-              }),
-            ),
-          }),
-        ),
+      children: [
+        ...stores
+          .filter((store) => store.container === container.name && !store.inside)
+          .map((store) => storeCard(store, stores, at)),
+        ...map.components
+          .filter((component) => component.container === container.name)
+          .map((component) =>
+            card(at(component.id), component.name, 'component', {
+              kind: component.type || component.kind,
+              ...(component.type ? { role: component.kind } : {}),
+              says: component.kind === 'trigger' ? `On a ${component.trigger}` : '',
+              at: component.at,
+              start: component.start,
+              shot: component.shot,
+              children: component.files.map((file) =>
+                card(at(`${component.id}/${file.path}`), file.path.split('/').pop() ?? file.path, 'code', {
+                  kind: 'file',
+                  says: file.path,
+                  names: file.names,
+                }),
+              ),
+            }),
+          ),
+      ],
     }),
   )
 
   const containerOf = new Map<string, string>()
   for (const component of map.components) containerOf.set(component.id, `container:${component.container}`)
+  for (const store of stores) containerOf.set(store.id, `container:${store.container}`)
+  /** The card a store is drawn in at its container's level: itself, or the
+   *  store at the top it lives inside. */
+  const topOf = (storeId: string): string => {
+    const store = stores.find((s) => s.id === storeId)
+    if (!store?.inside) return storeId
+    const top = store.path.split('/')[0]!
+    return stores.find((s) => s.container === store.container && s.path === top)?.id ?? storeId
+  }
   const holder = new Map(containers.map((c) => [c.id, c]))
   const system = card(id, name, 'system', {
     kind: 'software system',
@@ -141,8 +199,13 @@ export const systemCard = (id: string, name: string, map: SystemMap): Card => {
     const to = containerOf.get(wire.to) ?? (wire.to.startsWith('container:') ? wire.to : undefined)
     if (!from || !to) continue
     const ends = [{ from: at(wire.from), to: at(wire.to) }]
-    if (from === to) join(holder.get(at(from))!.wires, { ...wire, from: at(wire.from), to: at(wire.to), ends })
-    else join(system.wires, { ...wire, from: at(from), to: at(to), ends })
+    if (from === to) {
+      // Inside one container, a wire joins the cards at that level: a store
+      // inside another is drawn by the store at the top. One that points at
+      // the store it lives in needs no wire to say so.
+      const [high, low] = [topOf(wire.from), topOf(wire.to)]
+      if (high !== low) join(holder.get(at(from))!.wires, { ...wire, from: at(high), to: at(low), ends })
+    } else join(system.wires, { ...wire, from: at(from), to: at(to), ends })
   }
   if (map.proposal) drawProposal(system, map, holder, at)
   return system

@@ -57,11 +57,11 @@ describe('reading a set-up repo', () => {
     expect(wire(map, 'nightly-tidy', 'write-note')).toMatchObject({ kind: 'starts', words: 'clears out empty notes' })
   })
 
-  it('wires the module that keeps a store to the container it is kept in', () => {
+  it('wires the module that keeps a store to the store, in the container it is kept in', () => {
     expect(map.containers.find((c) => c.name === 'db')?.stores).toEqual(['notes'])
     expect(map.wires).toContainEqual({
       from: 'web:module:notes',
-      to: 'container:db',
+      to: 'store:db:notes',
       kind: 'keeps',
       words: 'keeps notes',
     })

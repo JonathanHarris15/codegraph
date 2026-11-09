@@ -80,6 +80,9 @@ export const proposalFrom = (system: DrawnCard, map: SystemMap, how: FromDrawing
     const drawn = new Set<string>()
     for (const inner of card.children) {
       if (!inner.name.trim()) continue
+      // A store is read from its schema, not drawn as a component. Proposing
+      // stores comes with CG-8.4; until then a drawing's stores change nothing.
+      if (inner.kind === 'store' || inner.kind === 'inner store') continue
       // A type a person made up goes into the tag as it is. What rules it keeps
       // to is not something a drawing says, so it starts as a module, which
       // promises least, for the agent building it to settle (ADR 0013).

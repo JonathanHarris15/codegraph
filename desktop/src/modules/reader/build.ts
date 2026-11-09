@@ -190,7 +190,6 @@ export const readFacts = (point: Point, files: Map<string, string>): Facts => {
         continue
       }
       keeper.stores.push(store.name)
-      map.wires.push({ from: id, to: keeper.id, kind: 'keeps', words: `keeps ${store.name}` })
       kept.push({ path, component, said: store })
     }
   }
@@ -285,6 +284,7 @@ const readStores = (kept: { path: string; component: Component; said: FileTags['
   for (const { path, component, said } of kept) {
     const where = said.inside ? `${said.inside}/${said.name}` : said.name
     const key = `${said.in}:${where}`
+    map.wires.push({ from: component.id, to: storeId(said.in, where), kind: 'keeps', words: `keeps ${said.name}` })
     const first = keeperOf.get(key)
     if (first) {
       problems.push({ file: path, line: 1, says: `${where} is kept by both ${first.kind} ${first.name} and ${component.kind} ${component.name}` })

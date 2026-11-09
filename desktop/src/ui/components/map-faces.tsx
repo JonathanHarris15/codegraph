@@ -2,8 +2,8 @@
 import type { PointerEvent, ReactNode } from 'react'
 import type { Said } from '../../modules/wording/index.js'
 import { CARD_SHAPES, drawnShape, lookOf } from './card-looks.js'
-import { Glyph, KindGlyph, LookGlyph, keeps, kindClass, lookClass } from './kind-glyph.js'
-import { isFrame, type DrawnCard, type Placed, type Side, type Spot } from './map-layout.js'
+import { Glyph, KindGlyph, LookGlyph, isStore, keeps, kindClass, lookClass } from './kind-glyph.js'
+import { FIELDS_SHOWN, isFrame, type DrawnCard, type Placed, type Side, type Spot } from './map-layout.js'
 import { seamOf, textAreaOf } from './shape-outline.js'
 
 /** How the faces on the board are drawn: a card, and a wire's sentence. They
@@ -13,7 +13,54 @@ import { seamOf, textAreaOf } from './shape-outline.js'
 /** The word a card's type is shown in. */
 export const kindWords = (card: DrawnCard): string => card.kind || card.level
 
+/** A store's fields, a line each: its name, what it holds, and the store it
+ *  points at. A field every record has is in bold. An open store ends with
+ *  what any other field may hold. */
+const Fields = ({ card }: { card: DrawnCard }) => {
+  const fields = card.fields ?? []
+  const more = fields.length - FIELDS_SHOWN
+  return (
+    <ul className="map-fields" aria-label={`Fields of ${card.name}`}>
+      {fields.slice(0, FIELDS_SHOWN).map((field) => (
+        <li key={field.name} className="map-field">
+          <span className={`map-field-name${field.needed ? ' map-field-name--needed' : ''}`}>{field.name}</span>
+          {field.pointsAt ? (
+            <span className="map-field-holds map-field-points">→ {field.pointsAt}</span>
+          ) : (
+            <span className="map-field-holds">{field.holds}</span>
+          )}
+        </li>
+      ))}
+      {more > 0 ? <li className="map-more">and {more} more</li> : null}
+      {card.others ? (
+        <li className="map-field">
+          <span className="map-field-name map-more">any other</span>
+          <span className="map-field-holds">{card.others}</span>
+        </li>
+      ) : null}
+    </ul>
+  )
+}
+
+const Chips = ({ card }: { card: DrawnCard }) => (
+  <div className="map-chips">
+    {card.children.slice(0, 6).map((child) => (
+      <span key={child.id} className={`map-chip${isStore(child.kind) ? ' map-chip--store' : ''}`}>
+        {child.name}
+      </span>
+    ))}
+    {card.children.length > 6 ? <span className="map-chip map-more">+{card.children.length - 6}</span> : null}
+  </div>
+)
+
 const Inside = ({ card }: { card: DrawnCard }) => {
+  if (isStore(card.kind))
+    return (
+      <>
+        {card.fields ? <Fields card={card} /> : null}
+        {card.children.length ? <Chips card={card} /> : null}
+      </>
+    )
   if (card.level === 'code')
     return (
       <ul className="map-names">
@@ -24,16 +71,7 @@ const Inside = ({ card }: { card: DrawnCard }) => {
       </ul>
     )
   if (card.children.length === 0) return null
-  return (
-    <div className="map-chips">
-      {card.children.slice(0, 6).map((child) => (
-        <span key={child.id} className="map-chip">
-          {child.name}
-        </span>
-      ))}
-      {card.children.length > 6 ? <span className="map-chip map-more">+{card.children.length - 6}</span> : null}
-    </div>
-  )
+  return <Chips card={card} />
 }
 
 const SIDES: Side[] = ['n', 'e', 's', 'w']
@@ -105,7 +143,7 @@ export const CardFace = ({
   if (shape) classes.push('map-card--shaped', `map-card--shape-${shape}`)
   if (linked) classes.push(`map-card--${linked === 'self' ? 'hovered' : 'wired'}`)
   if (passing) classes.push(`map-${passing}`)
-  if (keeps(card.kind)) classes.push('map-card--keeps')
+  if (keeps(card.kind) || isStore(card.kind)) classes.push('map-card--keeps')
   if (!card.setUp || card.kind === 'shallow software system') classes.push('map-card--bare')
   if (card.kind === 'person') classes.push('map-card--person')
   if (isFrame(card)) classes.push('map-frame')

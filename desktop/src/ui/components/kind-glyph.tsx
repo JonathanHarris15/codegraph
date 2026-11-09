@@ -1,6 +1,8 @@
 // codegraph: component kind-glyph
 import {
   AlarmClock,
+  Rows3,
+  Table2,
   Bell,
   ChartColumn,
   Cpu,
@@ -82,6 +84,8 @@ const GLYPHS: Record<string, LucideIcon> = {
   'mobile app': Smartphone,
   database: Database,
   'files on disk': HardDrive,
+  store: Table2,
+  'inner store': Rows3,
   function: SquareFunction,
   'command-line tool': SquareTerminal,
   page: LayoutPanelTop,
@@ -134,6 +138,9 @@ export type ToolGlyph = keyof typeof TOOL_GLYPHS
 /** What a card of this kind is drawn in. The colour itself lives in the
  *  `kind-of--…` classes; this only says which cards are shaped like a store. */
 export const keeps = (kind: string): boolean => kind === 'database'
+
+/** A store, or one that lives inside another: its card lists its fields. */
+export const isStore = (kind: string): boolean => kind === 'store' || kind === 'inner store'
 
 export const kindClass = (kind: string): string => `kind-of--${(kind || 'container').replace(/\s+/g, '-')}`
 

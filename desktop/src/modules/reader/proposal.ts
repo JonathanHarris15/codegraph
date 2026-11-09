@@ -163,12 +163,12 @@ export const idOfName = (name: string): string => {
 const wireName = (w: { from: string; kind: string; to: string }): string => `${w.from} ${w.kind} ${w.to}`
 
 /** Whether one end of a wire in the map is what a proposal names: the same
- *  card, or something inside the container it names. */
+ *  card, or something inside the container it names, a store included. */
 const endIs = (map: SystemMap, name: string, end: string): boolean => {
   const id = idOfName(name)
   if (end === id) return true
   if (name.includes('/')) return false
-  return map.components.some((c) => c.id === end && c.container === name)
+  return end.startsWith(`store:${name}:`) || map.components.some((c) => c.id === end && c.container === name)
 }
 
 const isContainer = (map: SystemMap, proposal: Proposal, name: string): boolean =>

@@ -112,7 +112,7 @@ describe('annotating a map', () => {
 
   it('draws an arrow from the note to a card, holding both ends', async () => {
     await page.getByRole('button', { name: 'Add arrow', exact: true }).click()
-    await drag(await middle(page.locator('.map-anno--sticky')), await middle(page.getByLabel('db', { exact: true })))
+    await drag(await middle(page.locator('.map-anno--sticky')), await middle(page.getByLabel('Open db', { exact: true })))
     await expect
       .poll(() => kept()[0]?.items.find((a) => a.kind === 'arrow'), { timeout: PATIENCE })
       .toMatchObject({ from: { annotation: kept()[0]?.items[0]?.id }, to: { card: 'notes/container:db' } })
@@ -135,7 +135,7 @@ describe('annotating a map', () => {
     const lines = kept()[0]?.items.length
     const sticky = page.locator('.map-anno--sticky')
     await sticky.click()
-    const db = await middle(page.getByLabel('db', { exact: true }))
+    const db = await middle(page.getByLabel('Open db', { exact: true }))
     await drag(await middle(dot('bottom')), db)
     await expect.poll(() => note()?.pointers?.length, { timeout: PATIENCE }).toBe(1)
     // It is a part of the note: no new annotation, and nothing it holds.

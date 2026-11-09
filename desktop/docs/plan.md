@@ -263,9 +263,12 @@ hold the code to it. Decided in ADR 0023. Proven on Mosaic, which keeps about
   open, what an open part holds, and `pointsAt` as `points at` wires between
   stores. A store with no schema to read has its shape unknown. Nothing draws
   them yet: the canvas skips wires between stores until CG-8.2.
-- **CG-8.2** Stores on the map: a database opens to its store cards, fields on
-  their faces, inner stores inside their stores, `points at` wires between
-  them, and `keeps` wires reaching the store. The MCP's `map` says the same.
+- **CG-8.2** (done) Stores on the map: a database opens to its store cards,
+  fields on their faces, inner stores inside their stores, `points at` wires
+  between them, and `keeps` wires reaching the store. The MCP's `map` says the
+  same, a field to a line. A store card lists eight fields and says how many
+  more; a field every record has is in bold, and one that points at a store
+  shows that store instead of what it holds.
 - **CG-8.3** Stores on a sketch: add a store in a database, edit its fields on
   the card, set it fixed or open, draw one inside another, wire one to point
   at another. A snapshot carries stores as they stand; the MCP's `sketch`
@@ -285,3 +288,7 @@ and hand it to the agent as a proposal with its migration.
 
 Later: the shape writes the field checks in Firestore's own rules, so a write
 that skips the code is caught too.
+
+Still rough, until CG-8.4: a proposal knows nothing of stores, so a branch
+whose schema gains a `pointsAt` is told it changed a wire the proposal does
+not draw.

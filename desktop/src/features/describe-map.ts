@@ -1,10 +1,11 @@
 // codegraph: feature describe-map in agent
-// codegraph: uses reader, wording, projects, annotations, machine
+// codegraph: uses reader, wording, projects, annotations, machine, cards
 // codegraph: command map
 import { annotationWords, readAnnotations } from '../modules/annotations/index.js'
 import { sameFolder } from '../modules/machine/index.js'
 import { listProjects } from '../modules/projects/index.js'
-import { live, readMap, type Point, type SystemMap } from '../modules/reader/index.js'
+import { holdsWords } from '../modules/cards/index.js'
+import { live, readMap, type Point, type Store, type SystemMap } from '../modules/reader/index.js'
 import { sentenceOf } from '../modules/wording/index.js'
 
 const pointWords = (point: Point): string =>
@@ -20,6 +21,7 @@ export const describeMap = async (repo: string, point: Point = live): Promise<st
   const nameOf = new Map<string, string>([
     ...map.components.map((c) => [c.id, `${c.kind} ${c.name}`] as const),
     ...map.containers.map((c) => [c.id, `container ${c.name}`] as const),
+    ...(map.stores ?? []).map((s) => [s.id, `store ${s.path}`] as const),
   ])
   const out: string[] = [
     `Serves ${map.projects.join(', ') || 'no project yet'}. Read at ${pointWords(point)}.`,
@@ -27,7 +29,7 @@ export const describeMap = async (repo: string, point: Point = live): Promise<st
   ]
   for (const container of map.containers) {
     out.push(`Container ${container.name} (${container.kind})${container.says ? `: ${container.says}` : ''}`)
-    if (container.stores.length) out.push(`  keeps ${container.stores.join(', ')}`)
+    for (const store of (map.stores ?? []).filter((s) => s.container === container.name)) out.push(...storeWords(store))
     for (const c of map.components.filter((c) => c.container === container.name)) {
       const extra = [
         c.at ? `at ${c.at}` : '',
@@ -44,7 +46,9 @@ export const describeMap = async (repo: string, point: Point = live): Promise<st
     out.push('Wires:')
     for (const w of map.wires)
       out.push(
-        `  ${sentenceOf(nameOf.get(w.from) ?? w.from, w.kind, nameOf.get(w.to) ?? w.to, w.words)
+        w.kind === 'keeps' && w.to.startsWith('store:')
+          ? `  ${nameOf.get(w.from) ?? w.from} keeps ${nameOf.get(w.to) ?? w.to} in ${w.to.split(':')[1]}`
+          : `  ${sentenceOf(nameOf.get(w.from) ?? w.from, w.kind, nameOf.get(w.to) ?? w.to, w.words)
           .map((part) => part.text)
           .join('')}${w.words || w.kind === 'leads to' || w.kind === 'keeps' ? '' : ' (NO WORDS yet)'}`,
       )
@@ -67,6 +71,20 @@ export const describeMap = async (repo: string, point: Point = live): Promise<st
   }
   out.push(...annotationsOver(repo, map))
   return out.join('\n').trimEnd()
+}
+
+/** A store and its shape, a field to a line (ADR 0023). */
+const storeWords = (store: Store): string[] => {
+  const inside = store.inside ? `, inside ${store.inside}` : ''
+  if (!store.shape) return [`  store ${store.path}${inside}: shape unknown, no schema says it`]
+  const how = store.shape.fixed ? 'fixed' : `open to ${holdsWords(store.shape.others)}`
+  return [
+    `  store ${store.path}${store.says ? `: ${store.says}` : ''}${inside} (${how})`,
+    ...store.shape.fields.map(
+      (f) =>
+        `    ${f.name}: ${holdsWords(f.holds)}${f.needed ? ', needed' : ''}${f.pointsAt ? `, points at ${f.pointsAt}` : ''}${f.says ? ` — ${f.says}` : ''}`,
+    ),
+  ]
 }
 
 /** What people drew over this repo's part of the map of each project it

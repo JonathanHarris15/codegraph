@@ -323,3 +323,77 @@ export const aComputer = (yard: Yard, name: string, github = '') => {
     },
   }
 }
+
+const aSchema = (body: Record<string, unknown>): string => JSON.stringify({ type: 'object', ...body }, null, 2)
+
+/** A small church app kept in a document database: people, each with their
+ *  own involvement and prayer requests inside them, and rosters that point at
+ *  people. */
+export const aChurchRepo = (yard: Yard): string => {
+  const path = `${yard.path}/church`
+  git(yard.path, 'init', '--initial-branch=main', 'church')
+  git(path, 'config', 'user.email', 'test@example.com')
+  git(path, 'config', 'user.name', 'Test')
+  put(path, {
+    'codegraph.config.json': JSON.stringify({
+      projects: ['church'],
+      containers: {
+        web: { kind: 'browser app', says: 'Where the church is run', folders: ['app'] },
+        firestore: { kind: 'database', says: 'Keeps everything' },
+      },
+    }),
+    'app/modules/people/people.js': [
+      '// codegraph: module people',
+      '// codegraph: front door savePerson',
+      '// codegraph: store people in firestore from people.schema.json',
+      '// codegraph: store involvement in firestore inside people from involvement.schema.json',
+      '// codegraph: store prayer_requests in firestore inside people',
+      'export const savePerson = () => null',
+      '',
+    ].join('\n'),
+    'app/modules/people/people.schema.json': aSchema({
+      description: 'Everyone the church knows',
+      required: ['name'],
+      additionalProperties: false,
+      properties: {
+        name: { type: 'string', description: 'What they are called' },
+        birthday: { type: 'string', format: 'date' },
+        sex: { enum: ['male', 'female'] },
+        householdId: { type: 'string', pointsAt: 'households', description: 'the home they live in' },
+        customFields: { type: 'object', additionalProperties: { type: 'string' } },
+        photo: { type: 'object', properties: { url: { type: 'string' } } },
+      },
+    }),
+    'app/modules/people/involvement.schema.json': aSchema({
+      additionalProperties: false,
+      properties: { roleId: { type: 'string', pointsAt: 'roles' }, since: { type: 'string', format: 'date-time' } },
+    }),
+    'app/modules/households.js': [
+      '// codegraph: module households',
+      '// codegraph: store households in firestore from ./households.schema.json',
+      'export const x = 1',
+      '',
+    ].join('\n'),
+    'app/modules/households.schema.json': aSchema({
+      properties: { memberIds: { type: 'array', items: { type: 'string', pointsAt: 'people' } } },
+    }),
+    'app/modules/rosters.js': [
+      '// codegraph: module rosters',
+      '// codegraph: store rosters in firestore from rosters.schema.json',
+      '// codegraph: store roles in firestore',
+      'export const x = 1',
+      '',
+    ].join('\n'),
+    'app/modules/rosters.schema.json': aSchema({
+      additionalProperties: false,
+      properties: {
+        personId: { type: 'string', pointsAt: 'people', description: 'who is serving' },
+        count: { type: 'integer' },
+        done: { type: 'boolean' },
+      },
+    }),
+  })
+  git(path, 'add', '-A')
+  git(path, 'commit', '-m', 'church')
+  return path
+}
