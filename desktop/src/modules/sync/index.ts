@@ -1,14 +1,15 @@
 // codegraph: module sync
-// codegraph: front door useFolder, useHeard, startFollowing, stopFollowing, pull, sendUp, sendSketch, sendFolder, sendMap, sendProject, sendEverything, sendRemoval, catchUp, follow, listRevisions, restoreRevision, pendingCount, removeEverything, projectPath, sketchPath, folderPath, Revision
+// codegraph: front door useFolder, useHeard, startFollowing, stopFollowing, pull, sendUp, sendSketch, sendFolder, sendMap, settleMaps, sendProject, sendEverything, sendRemoval, catchUp, follow, listRevisions, restoreRevision, pendingCount, removeEverything, projectPath, sketchPath, folderPath, Revision
 import { randomUUID } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { annotationKeys, readAnnotations, removeAnnotations, writeAnnotations, type Layer } from '../annotations/index.js'
 import { arrangementKeys, readArrangementFile, removeArrangements, writeArrangementFile, type Arrangement } from '../arrangements/index.js'
 import { CloudOffline, theCloud, type Doc, type Member } from '../cloud/index.js'
-import { whoIsIn } from '../members/index.js'
-import { keyIsShared, PROJECT_KEY } from '../places/index.js'
-import { keepProject, listProjects, removeProject, type Project } from '../projects/index.js'
+import { iMay, whoIsIn } from '../members/index.js'
+import { keyIsShared, mapsNow, PROJECT_KEY, takeUpMerges, type MapAt } from '../places/index.js'
+import type { Point } from '../reader/index.js'
+import { findProject, keepProject, listProjects, removeProject, type Project } from '../projects/index.js'
 import { keepMockupBytes, listFolders, listSketches, LOOSE, mockupFile, readFolder, readSketch, removeFolder, removeSketch, SHARED_WITH_ME, writeFolder, writeSketch, type Sketch, type SketchCard, type SketchFolder } from '../sketches/index.js'
 import { mergeDoc, sameDoc, tally, wordsFor } from '../together/index.js'
 import { keepWhole } from '../machine/index.js'
@@ -76,7 +77,7 @@ export const sketchPath = (sketch: Pick<Sketch, 'id' | 'projectId' | 'memberIds'
     const me = whoIsIn()
     return me ? `members/${me.id}/sketches/${sketch.id}` : ''
   }
-  return listProjects().find((p) => p.id === sketch.projectId)?.online ? `projects/${sketch.projectId}/sketches/${sketch.id}` : ''
+  return findProject(sketch.projectId)?.online ? `projects/${sketch.projectId}/sketches/${sketch.id}` : ''
 }
 
 /** Where a folder of sketches lives online: with its project, or privately under
@@ -86,7 +87,7 @@ export const folderPath = (library: string, id: string): string => {
     const me = whoIsIn()
     return me ? `members/${me.id}/folders/${id}` : ''
   }
-  return listProjects().find((p) => p.id === library)?.online ? `projects/${library}/folders/${id}` : ''
+  return findProject(library)?.online ? `projects/${library}/folders/${id}` : ''
 }
 
 // ---- This computer's copy of each kind of document ----
@@ -108,7 +109,7 @@ const projectDoc = (project: Project): Doc => ({
 })
 
 const projectFromDoc = (doc: Doc): Project => {
-  const here = listProjects().find((p) => p.id === doc['id'])
+  const here = findProject(String(doc['id']))
   const systems = doc['systems'] as { id: string; name: string; remote: string }[]
   return {
     id: String(doc['id']),
@@ -158,7 +159,7 @@ const localOf = (path: string): Local | null => {
   if (top === 'projects' && a && !kind)
     return {
       read: () => {
-        const project = listProjects().find((p) => p.id === a)
+        const project = findProject(a)
         return project?.online ? projectDoc(project) : null
       },
       write: (doc) => {
@@ -275,7 +276,7 @@ const nameOfTarget = (target: string, doc: Doc | null): string => {
   const key = decodeURIComponent(b ?? '')
   if (key === PROJECT_KEY) return "the project's top level"
   const [systemId = '', map = ''] = key.split('@')
-  const system = listProjects().find((p) => p.id === projectId)?.systems.find((s) => s.id === systemId)
+  const system = findProject(projectId ?? '')?.systems.find((s) => s.id === systemId)
   return `the map of ${system?.name ?? 'a software system'} on ${map.replace(/^(github|commit):/, '')}`
 }
 
@@ -399,7 +400,9 @@ const sendNow = async (path: string, says?: string): Promise<void> => {
   }
 }
 
-export const sendProject = (projectId: string): Promise<void> => sendUp(projectPath(projectId))
+export const sendProject = async (projectId: string): Promise<void> => {
+  if (findProject(projectId)?.online) await sendUp(projectPath(projectId))
+}
 
 /** Sends up a sketch that has just been kept. */
 export const sendSketch = async (sketch: Sketch): Promise<void> => {
@@ -415,8 +418,18 @@ export const sendFolder = async (library: string, id: string): Promise<void> => 
 
 /** Sends up the maps just written. A local map stays on this computer. */
 export const sendMap = async (projectId: string, keys: string[]): Promise<void> => {
-  if (!listProjects().find((p) => p.id === projectId)?.online) return
+  if (!findProject(projectId)?.online) return
   for (const key of keys) if (keyIsShared(key)) await sendUp(`${mapsPath(projectId)}/${encodeURIComponent(key)}`)
+}
+
+/** A project's maps as they are being looked at, once each has taken up the
+ *  arrangement and annotations of any branch merged into it, and sent that up.
+ *  Someone who cannot change a shared map leaves it to someone who can. */
+export const settleMaps = async (project: Project, points: Record<string, Point>): Promise<MapAt[]> => {
+  const maps = await mapsNow(project.systems, points)
+  const allowed = iMay(project, 'draw')
+  for (const at of maps) if (allowed || !keyIsShared(at.key)) await sendMap(project.id, await takeUpMerges(project.id, at.folder, at, at.mainRef))
+  return maps
 }
 
 /** Sends everything that could not go up before. */

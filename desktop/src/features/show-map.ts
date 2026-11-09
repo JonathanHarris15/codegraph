@@ -6,7 +6,7 @@ import { card, join, systemCard, withLooks, type Card } from '../modules/cards/i
 import { savedToken } from '../modules/github/index.js'
 import { roleOf, whoIsIn, type Role } from '../modules/members/index.js'
 import { mapKey, readingFolder } from '../modules/places/index.js'
-import { chooseBranch, listProjects, type Project, type ProjectMember, type SoftwareSystem } from '../modules/projects/index.js'
+import { chooseBranch, findProject, type Project, type ProjectMember, type SoftwareSystem } from '../modules/projects/index.js'
 import { idOfName, pointFor, PROPOSAL, proposalProgress, readMap, type Point, type Progress, type SystemMap } from '../modules/reader/index.js'
 import { fetchMirror, mainLineRef, proposalsOnBranches, type Reach } from '../modules/repo/index.js'
 import { listSketches } from '../modules/sketches/index.js'
@@ -95,7 +95,7 @@ const readOne = async (project: Project, system: SoftwareSystem, asked?: Point) 
  *  chosen branch that has gone falls back to the main line, which is then
  *  remembered instead. */
 export const showMap = async (projectId: string, points: Record<string, Point> = {}): Promise<MapShown> => {
-  const project = listProjects().find((p) => p.id === projectId)
+  const project = findProject(projectId)
   if (!project) throw new Error('no project with that id')
 
   const read = await Promise.all(project.systems.map((system) => readOne(project, system, points[system.id])))

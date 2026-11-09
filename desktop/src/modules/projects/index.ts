@@ -1,13 +1,16 @@
 // codegraph: module projects
-// codegraph: front door useFolder, listProjects, addProject, renameProject, keepProject, removeProject, addSoftwareSystem, removeSoftwareSystem, chooseBranch, knownRemotes, addShallowSystem, Project, SoftwareSystem, ShallowSystem, ProjectMember, Workspace
+// codegraph: front door useFolder, listProjects, findProject, addProject, putOnline, renameProject, keepProject, removeProject, addSoftwareSystem, removeSoftwareSystem, chooseBranch, knownRemotes, addShallowSystem, Project, SoftwareSystem, ShallowSystem, ProjectMember, Workspace
 import { sameFolder } from '../machine/index.js'
-import { shortNameOf, type Project, type ShallowSystem, type SoftwareSystem } from './schema.js'
+import { shortNameOf, type Project, type ProjectMember, type ShallowSystem, type SoftwareSystem } from './schema.js'
 import { newId, read, useFolder, write } from './store.js'
 
 export { useFolder }
 export type { Project, ProjectMember, ShallowSystem, SoftwareSystem, Workspace } from './schema.js'
 
 export const listProjects = (): Project[] => read().projects
+
+/** The project with this id, if this computer has it. */
+export const findProject = (id: string): Project | undefined => listProjects().find((p) => p.id === id)
 
 /** Makes a project, with the short name it is given or one from its name,
  *  never one another project already has. */
@@ -33,6 +36,14 @@ export const addProject = (name: string, shortName = ''): Project => {
 
 /** Puts a project on this computer exactly as given: new, or replacing the one
  *  with its id. */
+/** Makes a project one that lives online too, with this member as its owner and
+ *  only member. A project already online stays as it is. */
+export const putOnline = (projectId: string, owner: Omit<ProjectMember, 'role'>): void => {
+  const project = findProject(projectId)
+  if (!project || project.online) return
+  keepProject({ ...project, online: true, ownerId: owner.id, members: [{ ...owner, role: 'owner' }] })
+}
+
 export const keepProject = (project: Project): void => {
   const workspace = read()
   const at = workspace.projects.findIndex((p) => p.id === project.id)

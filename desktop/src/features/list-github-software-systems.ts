@@ -1,12 +1,6 @@
 // codegraph: feature list-github-software-systems in workspace
 // codegraph: uses github, projects
-import {
-  GithubRefused,
-  codegraphRepos,
-  savedToken,
-  tokenIsSafe,
-  whoAmI,
-} from '../modules/github/index.js'
+import { codegraphRepos, problemWithGithub, savedToken, tokenIsSafe, whoAmI } from '../modules/github/index.js'
 import { knownRemotes, listProjects } from '../modules/projects/index.js'
 
 export type CloudSoftwareSystem = {
@@ -72,8 +66,7 @@ export const listGithubSoftwareSystems = async (): Promise<CloudView> => {
     return {
       ...quiet,
       signedIn: true,
-      problem:
-        refusal instanceof GithubRefused ? refusal.message : 'Could not reach GitHub just now.',
+      problem: problemWithGithub(refusal),
     }
   }
 }

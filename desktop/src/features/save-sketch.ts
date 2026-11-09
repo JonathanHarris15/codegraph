@@ -1,7 +1,7 @@
 // codegraph: feature save-sketch in workspace
 // codegraph: uses projects, sketches, members, sync, together
-import { may, roleOf, whoIsIn } from '../modules/members/index.js'
-import { listProjects } from '../modules/projects/index.js'
+import { iMay, whoIsIn } from '../modules/members/index.js'
+import { findProject } from '../modules/projects/index.js'
 import { LOOSE, readSketch, SHARED_WITH_ME, writeSketch, type Sketch } from '../modules/sketches/index.js'
 import { sendSketch } from '../modules/sync/index.js'
 import { mergeDoc } from '../modules/together/index.js'
@@ -15,9 +15,9 @@ const mayDraw = (sketch: Sketch): boolean => {
     const role = readSketch(SHARED_WITH_ME, sketch.id)?.members?.find((m) => m.id === me?.id)?.role
     return role === 'owner' || role === 'collaborator'
   }
-  const project = listProjects().find((p) => p.id === sketch.projectId)
+  const project = findProject(sketch.projectId)
   if (!project) throw new Error('no project with that id')
-  return may(roleOf(project, me?.id ?? ''), 'draw')
+  return iMay(project, 'draw')
 }
 
 /** Keeps what a person has drawn, as they draw it. `seen` is the sketch as it

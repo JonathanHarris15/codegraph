@@ -1,4 +1,4 @@
-// codegraph: test ui gallery
+// codegraph: test ui projects
 import { execFileSync } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'

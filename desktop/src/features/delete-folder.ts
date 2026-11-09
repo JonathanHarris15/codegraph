@@ -1,8 +1,7 @@
 // codegraph: feature delete-folder in workspace
 // codegraph: uses sketches, sync
-import { listFolders, listSketches, readFolder, readSketch, removeFolder, tidyFolders, writeFolder, writeSketch } from '../modules/sketches/index.js'
+import { listFolders, listSketches, mayFileIn, readFolder, readSketch, removeFolder, tidyFolders, writeFolder, writeSketch, type FolderDone } from '../modules/sketches/index.js'
 import { sendFolder, sendSketch } from '../modules/sync/index.js'
-import { mayFileIn, type FolderDone } from './make-folder.js'
 
 /** Takes a folder away. What was in it, sketches and folders alike, moves up
  *  to where the folder was, so no sketch goes with it. */

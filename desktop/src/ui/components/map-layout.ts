@@ -39,6 +39,9 @@ export type DrawnCard = Omit<Card, 'children' | 'wires'> & {
 }
 
 export type Box = { x: number; y: number; w: number; h: number }
+export type Spot = { x: number; y: number }
+/** A side of a box. */
+export type Side = 'n' | 'e' | 's' | 'w'
 export type Placed = { card: DrawnCard; box: Box }
 
 const GAP_X = 120
@@ -891,4 +894,85 @@ export const spread = (
     placed.push(boxAt(at, chip.w, chip.h))
     return at
   })
+}
+
+// How the board moves between cards, and finds its way down the tree of
+// them: plain sums the canvas and the pages share.
+
+/** How far along a settling card is, given how much of the time has gone: it
+ *  moves off fast, goes a little past where it is going, and comes back. */
+export const springy = (t: number): number => 1 - Math.exp(-6 * t) * Math.cos(6 * t)
+
+export const between = (a: Box, b: Box, by: number): Box => ({
+  x: a.x + (b.x - a.x) * by,
+  y: a.y + (b.y - a.y) * by,
+  w: a.w + (b.w - a.w) * by,
+  h: a.h + (b.h - a.h) * by,
+})
+
+/** The card a path of ids leads to, and every card on the way. */
+export const walk = <C extends { id: string; children: C[] }>(root: C, path: string[]): C[] => {
+  const trail = [root]
+  for (const id of path.slice(1)) {
+    const next = trail[trail.length - 1]!.children.find((c) => c.id === id)
+    if (!next) break
+    trail.push(next)
+  }
+  return trail
+}
+
+/** Whether a card is the one with an id, or has it somewhere inside. */
+export const holds = (card: DrawnCard, id: string): boolean => card.id === id || card.children.some((c) => holds(c, id))
+
+/** Opening a card carries on through any level with only one card in it,
+ *  since there is nothing to choose there (ADR 0002). On a sketch it stops at
+ *  the card asked for: an empty card is somewhere to draw. */
+export const deeper = (trail: DrawnCard[], drawing: boolean): string[] => {
+  const path = trail.map((c) => c.id)
+  if (drawing) return path
+  let last = trail[trail.length - 1]!
+  while (last.children.length === 1 && last.children[0]!.children.length > 0) {
+    last = last.children[0]!
+    path.push(last.id)
+  }
+  return path
+}
+
+/** Backing out skips back over those same levels. */
+export const shallower = (trail: DrawnCard[], drawing: boolean): string[] => {
+  const path = trail.map((c) => c.id)
+  path.pop()
+  if (drawing) return path
+  while (path.length > 1 && walk(trail[0]!, path).at(-1)!.children.length === 1) path.pop()
+  return path
+}
+
+/** What a wire is known by: its own id on a sketch, else the two cards it
+ *  joins and how. It is how an arrangement finds the wire's sentence. */
+export const keyOf = (wire: DrawnWire): string => wire.id ?? `${wire.from}>${wire.to}>${wire.kind}`
+
+export const inBox = (at: Spot, box: Box): boolean => at.x >= box.x && at.x <= box.x + box.w && at.y >= box.y && at.y <= box.y + box.h
+export const overlaps = (a: Box, b: Box): boolean => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
+
+/** The middle of one side of a box, where a wire drawn from it leaves. */
+export const sideOf = (box: Box, side: Side): Spot =>
+  side === 'n'
+    ? { x: box.x + box.w / 2, y: box.y }
+    : side === 's'
+      ? { x: box.x + box.w / 2, y: box.y + box.h }
+      : side === 'e'
+        ? { x: box.x + box.w, y: box.y + box.h / 2 }
+        : { x: box.x, y: box.y + box.h / 2 }
+
+/** The side of a box that faces a spot. */
+export const facing = (box: Box, at: Spot): Side => {
+  const dx = at.x - (box.x + box.w / 2)
+  const dy = at.y - (box.y + box.h / 2)
+  return Math.abs(dx) / box.w > Math.abs(dy) / box.h ? (dx > 0 ? 'e' : 'w') : dy > 0 ? 's' : 'n'
+}
+
+/** A gentle curve from one spot to another, leaving and arriving level. */
+export const curve = (a: Spot, b: Spot): string => {
+  const bend = Math.max(30, Math.abs(b.x - a.x) / 2) * (b.x >= a.x ? 1 : -1)
+  return `M ${a.x} ${a.y} C ${a.x + bend} ${a.y}, ${b.x - bend} ${b.y}, ${b.x} ${b.y}`
 }

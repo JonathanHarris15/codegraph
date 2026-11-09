@@ -1,11 +1,14 @@
 // codegraph: module members
-// codegraph: front door useFolder, whoIsIn, rememberMember, forgetMember, may, roleOf, Role, Action
+// codegraph: front door useFolder, whoIsIn, rememberMember, forgetMember, may, roleOf, iMay, Role, Action, Changed
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Member } from '../cloud/index.js'
 
 /** What a member may do on a project. */
 export type Role = 'owner' | 'co-owner' | 'collaborator' | 'viewer'
+
+/** What came of a change a member asked for: done, or why it was refused. */
+export type Changed = { ok: boolean; problem?: string }
 
 export type Action = 'draw' | 'add-repo' | 'rename' | 'invite' | 'hand-over' | 'delete'
 
@@ -57,3 +60,9 @@ export const forgetMember = (): void => {
   if (!folder) return
   rmSync(file(), { force: true })
 }
+
+/** Whether whoever is signed in on this computer may do this on the project. On
+ *  a project only on this computer they always may; online, no one signed in
+ *  may do nothing. */
+export const iMay = (project: Parameters<typeof roleOf>[0], action: Action): boolean =>
+  may(roleOf(project, whoIsIn()?.id ?? ''), action)

@@ -1,5 +1,5 @@
 // codegraph: module rooms
-// codegraph: front door enterRoom, sayInRoom, holdThing, letGoOfThing, leaveRoom, RoomNow
+// codegraph: front door enterRoom, sayInRoom, holdAll, letGoOf, leaveRoom, RoomNow
 import { theCloud, type Doc, type Room, type RoomNow } from '../cloud/index.js'
 import { whoIsIn } from '../members/index.js'
 
@@ -33,8 +33,24 @@ export const sayInRoom = (state: Doc): void => here?.room.say(state)
 
 /** Takes hold of something, so no one else can touch it until let go. With nobody
  *  else there it is always free. */
-export const holdThing = async (item: string): Promise<boolean> => (here ? here.room.hold(item) : true)
+const holdOne = async (item: string): Promise<boolean> => (here ? here.room.hold(item) : true)
 
-export const letGoOfThing = async (item?: string): Promise<void> => {
-  await here?.room.letGo(item)
+/** Takes hold of things all or nothing: if anyone else has one, none are kept,
+ *  and it says which one that was. Null when all are held. */
+export const holdAll = async (items: string[]): Promise<string | null> => {
+  const held: string[] = []
+  for (const item of items) {
+    if (await holdOne(item)) held.push(item)
+    else {
+      await letGoOf(held)
+      return item
+    }
+  }
+  return null
+}
+
+/** Lets go of these things, or of everything this member holds. */
+export const letGoOf = async (items?: string[]): Promise<void> => {
+  if (!items) return void (await here?.room.letGo())
+  for (const item of items) await here?.room.letGo(item)
 }

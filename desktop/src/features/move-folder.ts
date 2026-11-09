@@ -1,8 +1,7 @@
 // codegraph: feature move-folder in workspace
 // codegraph: uses sketches, sync
-import { listFolders, readFolder, tidyFolders, writeFolder } from '../modules/sketches/index.js'
+import { listFolders, mayFileIn, readFolder, tidyFolders, writeFolder, type FolderDone } from '../modules/sketches/index.js'
 import { sendFolder } from '../modules/sync/index.js'
-import { mayFileIn, type FolderDone } from './make-folder.js'
 
 /** Puts a folder inside another, or at the top with ''. Never inside itself, or
  *  inside a folder of its own. */
