@@ -16,6 +16,7 @@ import {
   type WireKind,
 } from './schema.js'
 import { readUiBlock } from './blocks.js'
+import { isRecipe, readRecipe } from './recipes.js'
 import { DESIGN, readDesign } from './design.js'
 import { PROPOSAL, readProposal } from './proposal.js'
 import { readPrismaShape } from './prisma.js'
@@ -120,6 +121,7 @@ export const readFacts = (point: Point, files: Map<string, string>): Facts => {
     proposal: null,
     design: null,
     uiBlocks: [],
+    recipes: [],
     mockups: {},
   }
   const facts: Facts = { map, tagsOf: new Map(), componentOf: new Map(), links: [], calls: [], problems }
@@ -147,7 +149,7 @@ export const readFacts = (point: Point, files: Map<string, string>): Facts => {
   const kept: { path: string; component: Component; said: FileTags['stores'][number] }[] = []
 
   for (const [path, text] of files) {
-    if (path === CONFIG || path === PROPOSAL || path === DESIGN || path === 'tsconfig.json' || path === 'jsconfig.json') continue
+    if (path === CONFIG || path === PROPOSAL || path === DESIGN || isRecipe(path) || path === 'tsconfig.json' || path === 'jsconfig.json') continue
     const tags = readTags(path, text)
     tagsOf.set(path, tags)
     problems.push(...tags.problems.map((says) => ({ file: path, line: 1, says })))
@@ -178,6 +180,7 @@ export const readFacts = (point: Point, files: Map<string, string>): Facts => {
         container,
         files: [],
         at: '',
+        follows: '',
         start: false,
         trigger: '',
         frontDoor: [],
@@ -190,6 +193,7 @@ export const readFacts = (point: Point, files: Map<string, string>): Facts => {
       problems.push({ file: path, line: 1, says: `${role.name} is called both ${component.type} and ${role.type}` })
     component.type ||= role.type
     component.at ||= role.at
+    component.follows ||= role.follows
     component.start ||= role.start
     component.trigger ||= role.trigger
     component.frontDoor.push(...tags.frontDoor)
@@ -233,6 +237,19 @@ export const readFacts = (point: Point, files: Map<string, string>): Facts => {
     for (const name of readCode(path, files.get(path)!).names) owner.states.push({ name, file: path, shot: '' })
   }
   map.uiBlocks.sort((a, b) => a.folder.localeCompare(b.folder) || a.name.localeCompare(b.name))
+
+  // Recipes, each with the pages that say they follow it and its reference.
+  for (const [path, text] of files) {
+    if (!isRecipe(path)) continue
+    const recipe = readRecipe(path, text)
+    const reference = componentOf.get(recipe.reference)
+    map.recipes.push({
+      ...recipe,
+      referencePage: reference?.kind === 'page' ? reference.id : '',
+      pages: map.components.filter((c) => c.kind === 'page' && c.follows === recipe.name).map((c) => c.id),
+    })
+  }
+  map.recipes.sort((a, b) => a.name.localeCompare(b.name))
 
   // Wires from imports, and calls out of the repo.
   const paths = new Set(files.keys())

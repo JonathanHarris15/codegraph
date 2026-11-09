@@ -329,7 +329,7 @@ recipes. Decided in ADR 0024.
 - **CG-9.5** (done, in the design view; not yet as cards on the canvas) UI blocks: the reader reads `ui block` tags, their folders, their
   options and what each means, and their states files. The design system
   module opens to its UI blocks by folder, each with its screenshot.
-- **CG-9.6** Recipes: the reader reads `recipes/`, and pages that say
+- **CG-9.6** (done) Recipes: the reader reads `recipes/`, and pages that say
   `follows`. The page map marks each page with its recipe; a recipe opens to its
   words beside its reference page. The check holds a page to its recipe's
   UI blocks, and the reference page to its recipe.

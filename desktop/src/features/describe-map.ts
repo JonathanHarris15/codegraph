@@ -4,7 +4,7 @@
 import { annotationWords, readAnnotations } from '../modules/annotations/index.js'
 import { sameFolder } from '../modules/machine/index.js'
 import { listProjects } from '../modules/projects/index.js'
-import { DESIGN, holdsWords, live, readMap, type DesignSystem, type Point, type Store, type SystemMap } from '../modules/reader/index.js'
+import { DESIGN, holdsWords, live, readMap, RECIPES, type DesignSystem, type Point, type Store, type SystemMap } from '../modules/reader/index.js'
 import { sentenceOf } from '../modules/wording/index.js'
 
 const pointWords = (point: Point): string =>
@@ -49,6 +49,22 @@ const uiBlockWords = (map: SystemMap, nameOf: Map<string, string>): string[] => 
   return [...out, '']
 }
 
+/** The recipes in words: what each is for and not for, its reference page,
+ *  the UI blocks its skeleton names, and the pages that follow it. Its rules
+ *  stay in its file, which the agent is sent to read. */
+const recipeWords = (map: SystemMap, nameOf: Map<string, string>): string[] => {
+  if (!map.recipes.length) return []
+  const out = [`Recipes, in ${RECIPES}/. Read the file for its rules before building a page that follows one:`]
+  for (const r of map.recipes) {
+    out.push(`  ${r.name}, ${r.file}${r.useWhen ? `: ${r.useWhen}` : ''}`)
+    if (r.notFor) out.push(`    Not for: ${r.notFor}`)
+    if (r.reference) out.push(`    Reference: ${r.referencePage ? `${nameOf.get(r.referencePage)}, ` : ''}${r.reference}`)
+    if (r.blocks.length) out.push(`    Built from: ${r.blocks.join(', ')}`)
+    out.push(`    Followed by: ${r.pages.map((id) => nameOf.get(id) ?? id).join(', ') || 'no page yet'}`)
+  }
+  return [...out, '']
+}
+
 /** A repo's map in words an agent reads: containers, components and their
  *  files, every wire with what it is for, its design system and UI blocks. */
 export const describeMap = async (repo: string, point: Point = live): Promise<string> => {
@@ -78,6 +94,7 @@ export const describeMap = async (repo: string, point: Point = live): Promise<st
         c.at ? `at ${c.at}` : '',
         c.start ? 'start page' : '',
         c.trigger ? `on a ${c.trigger}` : '',
+        c.follows ? `follows ${c.follows}` : '',
         c.frontDoor.length ? `front door ${c.frontDoor.join(', ')}` : '',
       ].filter(Boolean)
       out.push(`  ${c.kind} ${c.name}${c.type ? ` as ${c.type}` : ''}${extra.length ? ` (${extra.join('; ')})` : ''}`)
@@ -114,6 +131,7 @@ export const describeMap = async (repo: string, point: Point = live): Promise<st
   }
   out.push(...designWords(map.design))
   out.push(...uiBlockWords(map, nameOf))
+  out.push(...recipeWords(map, nameOf))
   out.push(...annotationsOver(repo, map))
   return out.join('\n').trimEnd()
 }

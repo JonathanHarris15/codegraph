@@ -357,6 +357,11 @@ export const CardFace = ({
               </span>
             ) : null}
             <span className="map-name">{card.name || <span className="map-more">Unnamed</span>}</span>
+            {card.recipe ? (
+              <span className="map-recipe" title={`Follows the recipe ${card.recipe}`}>
+                {card.recipe}
+              </span>
+            ) : null}
           </div>
         </>
       ) : area ? (

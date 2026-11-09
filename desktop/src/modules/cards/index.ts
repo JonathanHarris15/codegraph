@@ -44,6 +44,8 @@ export type Card = {
   says: string
   /** A page's address. */
   at: string
+  /** The recipe a page says it follows (ADR 0024). */
+  recipe?: string
   start: boolean
   /** A software system that has a codegraph config to read. */
   setUp: boolean
@@ -143,6 +145,7 @@ export const systemCard = (id: string, name: string, map: SystemMap): Card => {
               ...(component.type ? { role: component.kind } : {}),
               says: component.kind === 'trigger' ? `On a ${component.trigger}` : '',
               at: component.at,
+              ...(component.follows ? { recipe: component.follows } : {}),
               start: component.start,
               shot: component.shot,
               children: component.files.map((file) =>

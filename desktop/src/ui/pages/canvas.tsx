@@ -487,7 +487,8 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
   const closeDesign = useCallback(() => setShowDesign(false), [])
   const design = sketch ? null : (systemShown?.design ?? null)
   const uiBlocks = sketch ? [] : (systemShown?.uiBlocks ?? [])
-  const hasDesign = design !== null || uiBlocks.length > 0
+  const recipes = sketch ? [] : (systemShown?.recipes ?? [])
+  const hasDesign = design !== null || uiBlocks.length > 0 || recipes.length > 0
 
   const sketchTrail = sketch ? walk(sketch.root, sketchPath) : []
   const showing = sketch ? sketchTrail : trail
@@ -736,6 +737,7 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
           <DesignView
             design={design}
             uiBlocks={uiBlocks}
+            recipes={recipes}
             onClose={closeDesign}
             onChange={
               systemShown.path && systemShown.point.kind === 'live'

@@ -101,6 +101,33 @@ describe('UI blocks in words', () => {
   })
 })
 
+describe('recipes in words', () => {
+  it('names each recipe, what it is for, its reference, what it is built from, and who follows it', async () => {
+    const repo = aMappedRepo(yard, 'recipes')
+    mkdirSync(join(repo, 'recipes'))
+    writeFileSync(
+      join(repo, 'recipes', 'list-page.md'),
+      '---\nrecipe: list-page\nuse-when: A page of many records.\nnot-for: One record.\nreference: app/pages/notes.tsx\n---\n\n## Skeleton\n```\n<NoteList />\n```\n',
+    )
+    writeFileSync(
+      join(repo, 'app', 'pages', 'notes.tsx'),
+      "// codegraph: start page notes at / follows list-page\nimport { listNotes } from '../modules/notes.js' // codegraph: wire lists the notes\nexport const N = () => listNotes()\n",
+    )
+    const said = await describeMap(repo)
+    expect(said).toContain('  page notes (at /; start page; follows list-page)')
+    expect(said).toContain(
+      [
+        'Recipes, in recipes/. Read the file for its rules before building a page that follows one:',
+        '  list-page, recipes/list-page.md: A page of many records.',
+        '    Not for: One record.',
+        '    Reference: page notes, app/pages/notes.tsx',
+        '    Built from: NoteList',
+        '    Followed by: page notes',
+      ].join('\n'),
+    )
+  })
+})
+
 describe('an agent reading the map', () => {
   it('lists the tools an agent can call', async () => {
     const { tools } = await agent.client.listTools()

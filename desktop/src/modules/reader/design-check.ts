@@ -1,7 +1,8 @@
 // codegraph: module reader
 import type { Mismatch } from './build.js'
 import { DESIGN, type DesignSystem, type Token } from './design.js'
-import type { Component } from './schema.js'
+import { RECIPES } from './recipes.js'
+import type { Component, SystemMap } from './schema.js'
 import type { FileTags } from './tags.js'
 
 /** The groups whose tokens are one value each, and so one variable in the
@@ -35,6 +36,41 @@ const withoutComments = (line: string): string => line.replace(/\/\*.*?\*\//g, '
 const tokenWith = (design: DesignSystem, group: string, value: string): Token | undefined => {
   const same = design.tokens.filter((t) => t.group === group && t.value && plain(t.value) === plain(value))
   return same.find((t) => t.tier === 'purpose') ?? same[0]
+}
+
+/** Every place a page does not keep to the recipe it follows, or a recipe to
+ *  its reference page and the UI blocks there are (ADR 0024). A recipe's
+ *  rules are words for people and agents, and are not checked. */
+export const checkRecipes = (map: SystemMap, files: Map<string, string>, componentOf: Map<string, Component>): Mismatch[] => {
+  const found: Mismatch[] = []
+  const blocks = new Set(map.uiBlocks.map((b) => b.name))
+  const recipes = new Map(map.recipes.map((r) => [r.name, r]))
+
+  for (const page of map.components.filter((c) => c.kind === 'page' && c.follows)) {
+    const at = { file: page.files[0]!.path, line: 1 }
+    const recipe = recipes.get(page.follows)
+    if (!recipe) {
+      found.push({ ...at, says: `Page ${page.name} follows the recipe ${page.follows}, which is not in ${RECIPES}/.` })
+      continue
+    }
+    const code = page.files.map((f) => files.get(f.path) ?? '').join('\n')
+    for (const name of recipe.blocks)
+      if (blocks.has(name) && !new RegExp(`\\b${name.replace(/[.$]/g, '\\$&')}\\b`).test(code))
+        found.push({ ...at, says: `Page ${page.name} follows ${recipe.name}, but does not use ${name}, which its skeleton names.` })
+  }
+
+  for (const recipe of map.recipes) {
+    const at = { file: recipe.file, line: 1 }
+    if (recipe.reference) {
+      const page = componentOf.get(recipe.reference)
+      if (page?.kind !== 'page') found.push({ ...at, says: `Its reference, ${recipe.reference}, is not a page.` })
+      else if (page.follows !== recipe.name)
+        found.push({ ...at, says: `Its reference, ${recipe.reference}, is page ${page.name}, which does not say it follows ${recipe.name}.` })
+    }
+    for (const name of recipe.blocks)
+      if (!blocks.has(name)) found.push({ ...at, says: `Its skeleton names ${name}, which is not a UI block.` })
+  }
+  return found
 }
 
 /** Every place a set-up repo's code does not keep to its DESIGN.md: a theme

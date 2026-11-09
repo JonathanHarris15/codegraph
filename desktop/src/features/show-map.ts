@@ -7,7 +7,7 @@ import { savedToken } from '../modules/github/index.js'
 import { roleOf, whoIsIn, type Role } from '../modules/members/index.js'
 import { mapKey, readingFolder } from '../modules/places/index.js'
 import { chooseBranch, findProject, type Project, type ProjectMember, type SoftwareSystem } from '../modules/projects/index.js'
-import { idOfName, pointFor, PROPOSAL, proposalProgress, readMap, type DesignSystem, type Point, type Progress, type SystemMap, type UiBlock } from '../modules/reader/index.js'
+import { idOfName, pointFor, PROPOSAL, proposalProgress, readMap, type DesignSystem, type Point, type Progress, type Recipe, type SystemMap, type UiBlock } from '../modules/reader/index.js'
 import { fetchMirror, mainLineRef, proposalsOnBranches, type Reach } from '../modules/repo/index.js'
 import { listSketches } from '../modules/sketches/index.js'
 
@@ -48,6 +48,22 @@ export type SystemShown = {
   design: DesignSystem | null
   /** The named pieces of screen its pages are built from, by folder. */
   uiBlocks: UiBlock[]
+  /** How each kind of its pages lays itself out. */
+  recipes: RecipeShown[]
+}
+
+/** A recipe, with what the page beside it needs: its reference page's name
+ *  and screenshot, and the names of the pages that follow it. */
+export type RecipeShown = Recipe & { referenceName: string; referenceShot: string; pageNames: string[] }
+
+const recipesShown = (map: SystemMap): RecipeShown[] => {
+  const byId = new Map(map.components.map((c) => [c.id, c]))
+  return map.recipes.map((r) => ({
+    ...r,
+    referenceName: byId.get(r.referencePage)?.name ?? '',
+    referenceShot: byId.get(r.referencePage)?.shot ?? '',
+    pageNames: r.pages.map((id) => byId.get(id)?.name ?? id),
+  }))
 }
 
 export type MapShown = {
@@ -65,7 +81,7 @@ export type MapShown = {
   suggestions: string[]
 }
 
-const blankMap = (point: Point): SystemMap => ({ point, setUp: false, projects: [], containers: [], components: [], stores: [], wires: [], outside: [], problems: [], proposal: null, design: null, uiBlocks: [], mockups: {} }) as unknown as SystemMap
+const blankMap = (point: Point): SystemMap => ({ point, setUp: false, projects: [], containers: [], components: [], stores: [], wires: [], outside: [], problems: [], proposal: null, design: null, uiBlocks: [], recipes: [], mockups: {} }) as unknown as SystemMap
 
 /** Reads one software system, if this member can reach it. With no working copy
  *  its history is fetched from GitHub with their own access, and GitHub's answer
@@ -130,6 +146,7 @@ export const showMap = async (projectId: string, points: Record<string, Point> =
       agent: said ? { card: `${system.id}/${idOfName(said.card)}`, name: said.card, words: said.words, at: said.at } : null,
       design: map.design,
       uiBlocks: map.uiBlocks,
+      recipes: recipesShown(map),
     })
     answersTo.set(system.name.toLowerCase(), system.id)
     if (system.remote) answersTo.set(system.remote.split('/').pop()!.toLowerCase(), system.id)

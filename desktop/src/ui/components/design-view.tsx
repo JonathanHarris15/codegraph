@@ -1,7 +1,8 @@
 // codegraph: component design-view
 import { useEffect, useState, type CSSProperties } from 'react'
-import type { DesignSystem, Token, TokenGroup, UiBlock } from '../../features/show-map.js'
+import type { DesignSystem, RecipeShown, Token, TokenGroup, UiBlock } from '../../features/show-map.js'
 import { Badge, Button } from '../design-system/kit.js'
+import { RecipesView } from './recipes-view.js'
 import { UiBlocksView } from './ui-blocks-view.js'
 
 /** The groups in the order a person reads a design system, each with what
@@ -363,18 +364,20 @@ const TokensBody = ({ design, onChange, why }: { design: DesignSystem; onChange?
 export const DesignView = ({
   design,
   uiBlocks,
+  recipes,
   onClose,
   onChange,
   why = '',
 }: {
   design: DesignSystem | null
   uiBlocks: UiBlock[]
+  recipes: RecipeShown[]
   onClose: () => void
   onChange?: Changing | undefined
   /** Why tokens cannot be changed here, when they cannot. */
   why?: string
 }) => {
-  const [tab, setTab] = useState<'tokens' | 'blocks'>(design ? 'tokens' : 'blocks')
+  const [tab, setTab] = useState<'tokens' | 'blocks' | 'recipes'>(design ? 'tokens' : uiBlocks.length ? 'blocks' : 'recipes')
 
   useEffect(() => {
     const keys = (event: KeyboardEvent): void => {
@@ -398,6 +401,9 @@ export const DesignView = ({
           <button type="button" role="tab" aria-selected={tab === 'blocks'} onClick={() => setTab('blocks')}>
             UI blocks ({uiBlocks.length})
           </button>
+          <button type="button" role="tab" aria-selected={tab === 'recipes'} onClick={() => setTab('recipes')}>
+            Recipes ({recipes.length})
+          </button>
         </div>
         <Button look="bare" onClick={onClose}>
           Close
@@ -405,6 +411,8 @@ export const DesignView = ({
       </header>
       {tab === 'blocks' ? (
         <UiBlocksView blocks={uiBlocks} />
+      ) : tab === 'recipes' ? (
+        <RecipesView recipes={recipes} />
       ) : design ? (
         <TokensBody design={design} onChange={onChange} why={why} />
       ) : (

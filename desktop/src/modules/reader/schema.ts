@@ -2,6 +2,7 @@
 import type { UiBlock } from './blocks.js'
 import type { DesignSystem } from './design.js'
 import type { Proposal } from './proposal.js'
+import type { Recipe } from './recipes.js'
 
 /** Where in a repo's history to read it: the folder as it is now, with
  *  whatever is not committed, or a branch or commit read straight from git. */
@@ -52,6 +53,8 @@ export type Component = {
   files: CodeFile[]
   /** A page's address, where it has one. */
   at: string
+  /** The recipe a page says it follows; '' for none (ADR 0024). */
+  follows: string
   start: boolean
   /** schedule, event or command, for a trigger. */
   trigger: string
@@ -146,6 +149,8 @@ export type SystemMap = {
   design: DesignSystem | null
   /** The named pieces of screen its pages are built from, by folder (ADR 0024). */
   uiBlocks: UiBlock[]
+  /** How each kind of its pages lays itself out, from recipes/. */
+  recipes: Recipe[]
   /** The proposal's mockups, by the id of the page each is for, as data URLs. */
   mockups: Record<string, string>
 }

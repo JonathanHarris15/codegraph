@@ -1,6 +1,6 @@
 // codegraph: module reader
 import { CONFIG, readFacts, type Mismatch } from './build.js'
-import { checkDesign } from './design-check.js'
+import { checkDesign, checkRecipes } from './design-check.js'
 import type { Component, Point } from './schema.js'
 
 const CODE = /\.(ts|tsx|js|jsx|mjs|cjs|mts|cts|py|rb|go|rs|java|kt|swift|cs|php|vue|svelte)$/i
@@ -118,6 +118,7 @@ export const checkFiles = (files: Map<string, string>, point: Point): Mismatch[]
 
   // Each line is its own place to fix, so these are kept even when two say the same.
   if (map.design) found.push(...checkDesign(map.design, files, tagsOf, componentOf))
+  found.push(...checkRecipes(map, files, componentOf))
 
   return found.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line)
 }

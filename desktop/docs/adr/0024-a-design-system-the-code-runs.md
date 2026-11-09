@@ -191,9 +191,16 @@ tied to the code:
 - The check holds each such page to its recipe: the recipe exists, the page
   uses every UI block the skeleton names, and the reference page follows it.
 
+A recipe's name is its front matter's `recipe`, or its file's name without
+one. Its skeleton is the first fenced block under its `## Skeleton` heading,
+and the names it builds the page from are the ones written as tags there,
+`<SettingsRow …>`. A page uses a UI block when its own files name it; the
+check does not follow it into the UI blocks the page uses in turn. A name in
+a skeleton that is not a UI block is reported on the recipe, once.
+
 **On the page map**, each page is marked with its recipe, so "which pages use
 the back arrow" is answered by looking. A recipe opens to its words beside its
-reference page's screenshot.
+reference page's screenshot, in the design view's Recipes tab.
 
 ### The live view
 

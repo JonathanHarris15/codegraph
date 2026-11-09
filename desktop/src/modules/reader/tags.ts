@@ -4,7 +4,7 @@ import type { ComponentKind } from './schema.js'
 /** What a file's own tags say about it (ADR 0008). */
 export type FileTags = {
   role:
-    | { kind: ComponentKind; name: string; type: string; uses: string[]; at: string; start: boolean; trigger: string }
+    | { kind: ComponentKind; name: string; type: string; uses: string[]; at: string; start: boolean; trigger: string; follows: string }
     | { kind: 'test' }
     | { kind: 'tooling' }
     /** Renders each named state of one UI block, for the live view and its
@@ -62,8 +62,11 @@ export const readTags = (path: string, text: string): FileTags => {
     if (tags.role) tags.problems.push(`${path} says what it belongs to more than once`)
     else tags.role = role
   }
-  const component = (kind: ComponentKind, name: string, more: Partial<{ type: string; uses: string[]; at: string; start: boolean; trigger: string }> = {}) =>
-    setRole({ kind, name, type: '', uses: [], at: '', start: false, trigger: '', ...more })
+  const component = (
+    kind: ComponentKind,
+    name: string,
+    more: Partial<{ type: string; uses: string[]; at: string; start: boolean; trigger: string; follows: string }> = {},
+  ) => setRole({ kind, name, type: '', uses: [], at: '', start: false, trigger: '', follows: '', ...more })
 
   let waiting: { to: string; words: string } | null = null
   let excepting: string | null = null
@@ -98,8 +101,8 @@ export const readTags = (path: string, text: string): FileTags => {
       tags.stores.push({ name: match[1]!, in: match[2]!, inside: match[3] ?? '', from: match[4] ?? '', line: index + 1 })
     else if ((match = said.match(/^feature\s+(\S+)(?:\s+as\s+(.+?))?(?:\s+uses\s+(.+))?$/)))
       component('feature', match[1]!, { type: match[2] ?? '', uses: list(match[3] ?? '') })
-    else if ((match = said.match(/^(start\s+)?page\s+(\S+)(?:\s+as\s+(.+?))?(?:\s+at\s+(\S+))?$/)))
-      component('page', match[2]!, { type: match[3] ?? '', at: match[4] ?? '', start: Boolean(match[1]) })
+    else if ((match = said.match(/^(start\s+)?page\s+(\S+)(?:\s+as\s+(.+?))?(?:\s+at\s+(\S+))?(?:\s+follows\s+(\S+))?$/)))
+      component('page', match[2]!, { type: match[3] ?? '', at: match[4] ?? '', start: Boolean(match[1]), follows: match[5] ?? '' })
     else if ((match = said.match(/^trigger\s+(\S+)\s+(schedule|event|command)(?:\s+as\s+(.+))?$/)))
       component('trigger', match[1]!, { trigger: match[2]!, type: match[3] ?? '' })
     else if (/^test\s+/.test(said)) setRole({ kind: 'test' })

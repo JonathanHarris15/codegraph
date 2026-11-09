@@ -83,6 +83,30 @@ beforeAll(async () => {
   )
   mkdirSync(join(repo, 'codegraph-screenshots', 'ui-blocks'), { recursive: true })
   writeFileSync(join(repo, 'codegraph-screenshots', 'ui-blocks', 'SettingsRow.loading.png'), aPicture())
+  writeFileSync(join(repo, 'codegraph-screenshots', 'notes.png'), aPicture())
+  mkdirSync(join(repo, 'recipes'), { recursive: true })
+  writeFileSync(
+    join(repo, 'recipes', 'list-page.md'),
+    [
+      '---',
+      'recipe: list-page',
+      'use-when: A page of many records.',
+      'not-for: One record on its own.',
+      'reference: app/pages/notes.tsx',
+      '---',
+      '',
+      '## Skeleton',
+      '```',
+      '<SettingsRow label />',
+      '```',
+      '',
+      '## Rules',
+      'Newest first.',
+      '',
+    ].join('\n'),
+  )
+  const notes = join(repo, 'app', 'pages', 'notes.tsx')
+  writeFileSync(notes, readFileSync(notes, 'utf8').replace('start page notes at /', 'start page notes at / follows list-page'))
   writeFileSync(
     join(yard.home, 'projects.json'),
     JSON.stringify({
@@ -217,11 +241,35 @@ describe('looking at a design system', () => {
     expect(await panel.locator('[data-state="loading"]').getByRole('img').count()).toBe(1)
     expect(await panel.locator('[data-state="noPermission"]').textContent()).toContain('No picture yet')
     await picture('d9-5-ui-blocks')
+  })
+
+  it('opens a recipe to its words, beside its reference page as it looks', async () => {
+    await view().getByRole('tab', { name: /Recipes/ }).click()
+    const recipe = view().getByRole('region', { name: 'Recipe list-page' })
+    await recipe.waitFor({ timeout: PATIENCE })
+    expect(await recipe.textContent()).toContain('A page of many records.')
+    expect(await recipe.textContent()).toContain('Newest first.')
+    expect(await recipe.locator('.recipe-skeleton').textContent()).toContain('<SettingsRow label />')
+    const reference = recipe.getByRole('complementary', { name: 'Reference page for list-page' })
+    expect(await reference.textContent()).toContain('Reference page: notes')
+    expect(await reference.getByRole('img').getAttribute('src')).toMatch(/^data:image\/png;base64,/)
+    expect(await reference.textContent()).toContain('Followed by')
+    await picture('d9-6-recipe')
     await view().getByRole('tab', { name: /Tokens/ }).click()
   })
 
   it('closes back to the map', async () => {
     await view().getByRole('button', { name: 'Close' }).click()
     expect(await view().count()).toBe(0)
+  })
+
+  it('marks each page on the map with the recipe it follows', async () => {
+    await page.getByRole('button', { name: 'Open web' }).dblclick()
+    const chip = page.locator('.map-world [data-card$="/web:page:notes"] .map-recipe')
+    await chip.waitFor({ timeout: PATIENCE })
+    expect(await chip.textContent()).toBe('list-page')
+    expect(await page.locator('.map-world [data-card$="/web:page:new-note"] .map-recipe').count()).toBe(0)
+    await chip.scrollIntoViewIfNeeded()
+    await picture('d9-6-page-map')
   })
 })

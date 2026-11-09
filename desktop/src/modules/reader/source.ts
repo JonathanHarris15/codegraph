@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { DESIGN } from './design.js'
 import { PROPOSAL } from './proposal.js'
+import { isRecipe } from './recipes.js'
 import type { Point } from './schema.js'
 
 const started = promisify(execFile)
@@ -18,7 +19,7 @@ const TOO_BIG = 1024 * 1024
 /** The files the reader cares about: source it can tag, the schemas stores
  *  are shaped by, and the few config files it reads whole. */
 export const wanted = (path: string): boolean =>
-  ((SOURCE.test(path) || SCHEMA.test(path)) && !path.includes('node_modules/')) || ALSO.has(path)
+  ((SOURCE.test(path) || SCHEMA.test(path)) && !path.includes('node_modules/')) || ALSO.has(path) || isRecipe(path)
 
 const git = async (cwd: string, args: string[]): Promise<string> => {
   try {

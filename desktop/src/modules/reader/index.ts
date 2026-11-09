@@ -1,5 +1,5 @@
 // codegraph: module reader
-// codegraph: front door DESIGN, changeToken, readDesign, DesignSystem, UiBlock, UiOption, UiState, Token, TokenGroup, TokenPart, TokenTier, readMap, listPoints, pointFor, checkRepo, proposalProgress, measure, proposalFrom, changesAnything, blankProposal, idOfName, componentName, live, outsideId, storeId, holdsWords, PROPOSAL, PROPOSAL_FOLDER, storeName, shapeGaps, ProposedStore, ProposedField, Point, SystemMap, Component, Container, CodeFile, Store, Shape, Field, Holds, Wire, WireKind, ComponentKind, Mismatch, Proposal, ProposedContainer, ProposedComponent, ProposedWire, Progress, ProposalItem, ItemState, DrawnCard, FromDrawing
+// codegraph: front door DESIGN, changeToken, readDesign, DesignSystem, UiBlock, UiOption, UiState, RECIPES, Recipe, Token, TokenGroup, TokenPart, TokenTier, readMap, listPoints, pointFor, checkRepo, proposalProgress, measure, proposalFrom, changesAnything, blankProposal, idOfName, componentName, live, outsideId, storeId, holdsWords, PROPOSAL, PROPOSAL_FOLDER, storeName, shapeGaps, ProposedStore, ProposedField, Point, SystemMap, Component, Container, CodeFile, Store, Shape, Field, Holds, Wire, WireKind, ComponentKind, Mismatch, Proposal, ProposedContainer, ProposedComponent, ProposedWire, Progress, ProposalItem, ItemState, DrawnCard, FromDrawing
 import { existsSync, readFileSync } from 'node:fs'
 import { extname, join } from 'node:path'
 import { buildMap, type Mismatch } from './build.js'
@@ -18,6 +18,8 @@ export type { DrawnCard, FromDrawing } from './drawn.js'
 export type { Mismatch } from './build.js'
 export { changeToken, DESIGN, readDesign } from './design.js'
 export type { UiBlock, UiOption, UiState } from './blocks.js'
+export { RECIPES } from './recipes.js'
+export type { Recipe } from './recipes.js'
 export type { DesignSystem, Token, TokenGroup, TokenPart, TokenTier } from './design.js'
 export type {
   CodeFile,

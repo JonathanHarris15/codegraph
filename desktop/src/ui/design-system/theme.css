@@ -1361,6 +1361,22 @@ h3 {
   margin: 0;
 }
 
+/* The recipe a page follows, at the end of its name (ADR 0024). */
+.map-recipe {
+  margin-left: auto;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--kind-page-wash);
+  color: var(--kind-page);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
 /* ---- wires ------------------------------------------------------------ */
 
 .map-wires {
@@ -5888,6 +5904,114 @@ button.map-restyle:hover {
 
 .ui-block-state {
   margin: 0;
+}
+
+/* ---- recipes ------------------------------------------------------------ */
+
+.recipe-list {
+  width: 220px;
+  flex: none;
+  overflow: auto;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  border-right: var(--stroke-edge) solid var(--line-hair);
+  background: var(--surface-000);
+}
+
+.recipe-pick {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.recipe-pick:hover {
+  background: var(--surface-sunken);
+}
+
+.recipe-pick[aria-current='true'] {
+  background: var(--kind-page-wash);
+}
+
+.recipe-pick .design-token-name {
+  margin-top: 0;
+}
+
+.recipe-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+
+.recipe-words {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: var(--space-5) var(--space-6) var(--space-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.recipe-when {
+  margin: 0;
+  max-width: 640px;
+}
+
+.recipe-blocks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.recipe-skeleton {
+  margin: var(--space-1) 0 0;
+  padding: var(--space-3);
+  overflow: auto;
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.recipe-reference {
+  width: 420px;
+  flex: none;
+  overflow: auto;
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border-left: var(--stroke-edge) solid var(--line-hair);
+  background: var(--surface-000);
+}
+
+.recipe-shot {
+  display: block;
+  width: 100%;
+  min-height: 160px;
+  max-height: 480px;
+  object-fit: contain;
+  object-position: top;
+  border-radius: var(--radius-md);
+  border: var(--stroke-edge) solid var(--line-hair);
+  background: var(--shot-mat);
+}
+
+.recipe-pages {
+  font-size: 13px;
 }
 
 .ui-block-state figcaption {
