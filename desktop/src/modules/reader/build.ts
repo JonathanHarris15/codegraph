@@ -15,6 +15,7 @@ import {
   type Wire,
   type WireKind,
 } from './schema.js'
+import { readUiBlock } from './blocks.js'
 import { DESIGN, readDesign } from './design.js'
 import { PROPOSAL, readProposal } from './proposal.js'
 import { readPrismaShape } from './prisma.js'
@@ -118,6 +119,7 @@ export const readFacts = (point: Point, files: Map<string, string>): Facts => {
     problems: [],
     proposal: null,
     design: null,
+    uiBlocks: [],
     mockups: {},
   }
   const facts: Facts = { map, tagsOf: new Map(), componentOf: new Map(), links: [], calls: [], problems }
@@ -150,7 +152,7 @@ export const readFacts = (point: Point, files: Map<string, string>): Facts => {
     tagsOf.set(path, tags)
     problems.push(...tags.problems.map((says) => ({ file: path, line: 1, says })))
     const role = tags.role
-    if (!role || role.kind === 'test' || role.kind === 'tooling') continue
+    if (!role || role.kind === 'test' || role.kind === 'tooling' || role.kind === 'states') continue
 
     const homes = config.containers.filter((c) => c.folders.some((folder) => inFolder(path, folder)))
     if (homes.length !== 1) {
@@ -208,6 +210,29 @@ export const readFacts = (point: Point, files: Map<string, string>): Facts => {
   }
 
   readStores(kept, files, facts)
+
+  // UI blocks, each inside the component its file belongs to, and the states
+  // the files beside them render (ADR 0024).
+  for (const [path, tags] of tagsOf)
+    for (const named of tags.uiBlocks) {
+      const component = componentOf.get(path)
+      const read = readUiBlock(path, files.get(path)!, named.name)
+      if (!component)
+        problems.push({ file: path, line: 1, says: `${path} names the UI block ${named.name}, but says no component it belongs to` })
+      else if (!read) problems.push({ file: path, line: 1, says: `${path} names the UI block ${named.name}, but has no ${named.name} in it` })
+      else map.uiBlocks.push({ ...named, file: path, component: component.id, ...read, states: [], shot: '' })
+    }
+  for (const [path, tags] of tagsOf) {
+    if (tags.role?.kind !== 'states') continue
+    const of = tags.role.of
+    const owner = map.uiBlocks.find((b) => b.name === of)
+    if (!owner) {
+      problems.push({ file: path, line: 1, says: `${path} gives states of ${of}, which is not a UI block` })
+      continue
+    }
+    for (const name of readCode(path, files.get(path)!).names) owner.states.push({ name, file: path, shot: '' })
+  }
+  map.uiBlocks.sort((a, b) => a.folder.localeCompare(b.folder) || a.name.localeCompare(b.name))
 
   // Wires from imports, and calls out of the repo.
   const paths = new Set(files.keys())

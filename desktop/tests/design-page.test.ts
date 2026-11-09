@@ -1,9 +1,9 @@
 // codegraph: test ui canvas
-import { readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { type ElectronApplication, type Locator, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { aMappedRepo, closeYard, git, openTheApp, openYard, type Yard } from './yard.js'
+import { aMappedRepo, aPicture, closeYard, git, openTheApp, openYard, type Yard } from './yard.js'
 
 /** The built app showing a software system's DESIGN.md as what each token
  *  is, never as text: a swatch, a space, a corner, a line of type, and what
@@ -58,6 +58,31 @@ beforeAll(async () => {
   yard = openYard('design-page')
   repo = aMappedRepo(yard)
   writeFileSync(join(repo, 'DESIGN.md'), DESIGN)
+  mkdirSync(join(repo, 'app', 'ui'), { recursive: true })
+  writeFileSync(
+    join(repo, 'app', 'ui', 'settings-row.tsx'),
+    [
+      '// codegraph: module ui',
+      '// codegraph: ui block settings/SettingsRow',
+      '/** One setting: its label on the left, its control on the right. */',
+      'export const SettingsRow = (props: {',
+      '  /** What the setting is called. */',
+      '  label: string',
+      '  /**',
+      '   * How loud the row is.',
+      '   * danger: only inside the danger zone',
+      '   */',
+      "  tone?: 'plain' | 'danger'",
+      '}) => null',
+      '',
+    ].join('\n'),
+  )
+  writeFileSync(
+    join(repo, 'app', 'ui', 'settings-row.states.tsx'),
+    '// codegraph: states SettingsRow\nexport const loading = () => null\nexport const noPermission = () => null\n',
+  )
+  mkdirSync(join(repo, 'codegraph-screenshots', 'ui-blocks'), { recursive: true })
+  writeFileSync(join(repo, 'codegraph-screenshots', 'ui-blocks', 'SettingsRow.loading.png'), aPicture())
   writeFileSync(
     join(yard.home, 'projects.json'),
     JSON.stringify({
@@ -172,6 +197,27 @@ describe('looking at a design system', () => {
     expect(readFileSync(join(repo, 'DESIGN.md'), 'utf8')).toBe(before)
     await panel.getByRole('button', { name: 'Put back' }).click()
     expect(await panel.getByLabel('Value of rounded.md').inputValue()).toBe('8px')
+  })
+
+  it('shows the UI blocks in their folders, each with its picture', async () => {
+    await view().getByRole('tab', { name: /UI blocks/ }).click()
+    await view().getByLabel('Folder settings').waitFor({ timeout: PATIENCE })
+    const tile = view().locator('[data-ui-block="settings/SettingsRow"]')
+    expect(await tile.textContent()).toContain('One setting: its label on the left')
+    expect(await tile.textContent()).toContain('2 options · 2 states')
+    expect(await tile.getByRole('img').getAttribute('src')).toMatch(/^data:image\/png;base64,/)
+  })
+
+  it('shows a picked UI block\'s options, what its choices mean, and its states', async () => {
+    await view().locator('[data-ui-block="settings/SettingsRow"]').click()
+    const panel = page.getByRole('complementary', { name: 'UI block settings/SettingsRow' })
+    const tone = panel.locator('[data-option="tone"]')
+    expect(await tone.textContent()).toContain("'plain' | 'danger'")
+    expect(await tone.textContent()).toContain('only inside the danger zone')
+    expect(await panel.locator('[data-state="loading"]').getByRole('img').count()).toBe(1)
+    expect(await panel.locator('[data-state="noPermission"]').textContent()).toContain('No picture yet')
+    await picture('d9-5-ui-blocks')
+    await view().getByRole('tab', { name: /Tokens/ }).click()
   })
 
   it('closes back to the map', async () => {

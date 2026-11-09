@@ -1,7 +1,8 @@
 // codegraph: component design-view
 import { useEffect, useState, type CSSProperties } from 'react'
-import type { DesignSystem, Token, TokenGroup } from '../../features/show-map.js'
+import type { DesignSystem, Token, TokenGroup, UiBlock } from '../../features/show-map.js'
 import { Badge, Button } from '../design-system/kit.js'
+import { UiBlocksView } from './ui-blocks-view.js'
 
 /** The groups in the order a person reads a design system, each with what
  *  it is called on screen. */
@@ -10,7 +11,7 @@ const GROUPS: { group: TokenGroup; title: string }[] = [
   { group: 'typography', title: 'Type' },
   { group: 'spacing', title: 'Spacing' },
   { group: 'rounded', title: 'Corners' },
-  { group: 'components', title: 'UI blocks' },
+  { group: 'components', title: 'UI block tokens' },
 ]
 
 const TIER: Record<Token['tier'], string> = { raw: 'Raw', purpose: 'Purpose', block: 'UI block' }
@@ -292,44 +293,12 @@ const Picked = ({
   )
 }
 
-/** A software system's DESIGN.md, drawn: every token as what it is, never as
- *  text, and one picked token up close (ADR 0024). Given a way to change
- *  tokens, the picked one can be changed; without, the view only looks. */
-export const DesignView = ({
-  design,
-  onClose,
-  onChange,
-  why = '',
-}: {
-  design: DesignSystem
-  onClose: () => void
-  onChange?: Changing | undefined
-  /** Why tokens cannot be changed here, when they cannot. */
-  why?: string
-}) => {
+/** Every token in DESIGN.md as what it is, by group, and the one picked. */
+const TokensBody = ({ design, onChange, why }: { design: DesignSystem; onChange?: Changing | undefined; why: string }) => {
   const [pickedId, setPickedId] = useState('')
   const byId = new Map(design.tokens.map((t) => [t.id, t]))
   const picked = byId.get(pickedId)
-
-  useEffect(() => {
-    const keys = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', keys)
-    return () => window.removeEventListener('keydown', keys)
-  }, [onClose])
-
   return (
-    <section className="design-view" aria-label={`Design system ${design.name || 'with no name'}`}>
-      <header className="design-head">
-        <div>
-          <h2 className="design-title">{design.name || 'Design system'}</h2>
-          {design.description ? <p className="design-says">{design.description}</p> : null}
-        </div>
-        <Button look="bare" onClick={onClose}>
-          Close
-        </Button>
-      </header>
       <div className="design-body">
         <div className="design-groups">
           {design.problems.length ? (
@@ -384,6 +353,67 @@ export const DesignView = ({
         </div>
         {picked ? <Picked token={picked} byId={byId} onPick={setPickedId} onChange={onChange} why={why} /> : null}
       </div>
+  )
+}
+
+/** A software system's design system, drawn: its DESIGN.md with every token
+ *  as what it is, never as text, and its UI blocks in their folders (ADR
+ *  0024). Given a way to change tokens, the picked one can be changed;
+ *  without, the view only looks. */
+export const DesignView = ({
+  design,
+  uiBlocks,
+  onClose,
+  onChange,
+  why = '',
+}: {
+  design: DesignSystem | null
+  uiBlocks: UiBlock[]
+  onClose: () => void
+  onChange?: Changing | undefined
+  /** Why tokens cannot be changed here, when they cannot. */
+  why?: string
+}) => {
+  const [tab, setTab] = useState<'tokens' | 'blocks'>(design ? 'tokens' : 'blocks')
+
+  useEffect(() => {
+    const keys = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', keys)
+    return () => window.removeEventListener('keydown', keys)
+  }, [onClose])
+
+  return (
+    <section className="design-view" aria-label={`Design system ${design?.name || 'with no name'}`}>
+      <header className="design-head">
+        <div>
+          <h2 className="design-title">{design?.name || 'Design system'}</h2>
+          {design?.description ? <p className="design-says">{design.description}</p> : null}
+        </div>
+        <div className="design-tabs" role="tablist" aria-label="What to look at">
+          <button type="button" role="tab" aria-selected={tab === 'tokens'} onClick={() => setTab('tokens')}>
+            Tokens{design ? ` (${design.tokens.length})` : ''}
+          </button>
+          <button type="button" role="tab" aria-selected={tab === 'blocks'} onClick={() => setTab('blocks')}>
+            UI blocks ({uiBlocks.length})
+          </button>
+        </div>
+        <Button look="bare" onClick={onClose}>
+          Close
+        </Button>
+      </header>
+      {tab === 'blocks' ? (
+        <UiBlocksView blocks={uiBlocks} />
+      ) : design ? (
+        <TokensBody design={design} onChange={onChange} why={why} />
+      ) : (
+        <div className="design-body">
+          <div className="design-groups">
+            <div className="ds-empty">This repo has no DESIGN.md yet, so it has no tokens to show.</div>
+          </div>
+        </div>
+      )}
     </section>
   )
 }

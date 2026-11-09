@@ -326,7 +326,7 @@ recipes. Decided in ADR 0024.
 - **CG-9.4** (done, for colours, spacing and corners) The check: the theme matches DESIGN.md; no raw value where a token
   belongs; nothing skips a purpose token for a raw one; an exception says why
   and is listed apart.
-- **CG-9.5** UI blocks: the reader reads `ui block` tags, their folders, their
+- **CG-9.5** (done, in the design view; not yet as cards on the canvas) UI blocks: the reader reads `ui block` tags, their folders, their
   options and what each means, and their states files. The design system
   module opens to its UI blocks by folder, each with its screenshot.
 - **CG-9.6** Recipes: the reader reads `recipes/`, and pages that say

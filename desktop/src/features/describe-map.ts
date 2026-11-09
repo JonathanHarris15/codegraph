@@ -31,8 +31,26 @@ const designWords = (design: DesignSystem | null): string[] => {
   return [...out, '']
 }
 
+/** The UI blocks in words, by folder: the name a person points at, where it
+ *  lives, each option and what its choices mean, and its states (ADR 0024). */
+const uiBlockWords = (map: SystemMap, nameOf: Map<string, string>): string[] => {
+  if (!map.uiBlocks.length) return []
+  const out = ['UI blocks, by folder:']
+  for (const b of map.uiBlocks) {
+    const where = nameOf.get(b.component) ?? b.component
+    out.push(`  ${b.folder ? `${b.folder}/` : ''}${b.name}, in ${where}, ${b.file}${b.says ? `: ${b.says}` : ''}`)
+    for (const o of b.options) {
+      out.push(`    ${o.name}${o.optional ? ' (optional)' : ''}: ${o.type}${o.says ? `. ${o.says}` : ''}`)
+      for (const [value, says] of Object.entries(o.valueSays)) out.push(`      ${value}: ${says}`)
+    }
+    const files = [...new Set(b.states.map((s) => s.file))]
+    if (b.states.length) out.push(`    States, in ${files.join(', ')}: ${b.states.map((s) => s.name).join(', ')}`)
+  }
+  return [...out, '']
+}
+
 /** A repo's map in words an agent reads: containers, components and their
- *  files, every wire with what it is for, and its design system. */
+ *  files, every wire with what it is for, its design system and UI blocks. */
 export const describeMap = async (repo: string, point: Point = live): Promise<string> => {
   const map: SystemMap = await readMap(repo, point)
   if (!map.setUp)
@@ -95,6 +113,7 @@ export const describeMap = async (repo: string, point: Point = live): Promise<st
     out.push('')
   }
   out.push(...designWords(map.design))
+  out.push(...uiBlockWords(map, nameOf))
   out.push(...annotationsOver(repo, map))
   return out.join('\n').trimEnd()
 }

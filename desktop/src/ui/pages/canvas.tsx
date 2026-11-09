@@ -486,6 +486,8 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
   const [showDesign, setShowDesign] = useState(false)
   const closeDesign = useCallback(() => setShowDesign(false), [])
   const design = sketch ? null : (systemShown?.design ?? null)
+  const uiBlocks = sketch ? [] : (systemShown?.uiBlocks ?? [])
+  const hasDesign = design !== null || uiBlocks.length > 0
 
   const sketchTrail = sketch ? walk(sketch.root, sketchPath) : []
   const showing = sketch ? sketchTrail : trail
@@ -587,7 +589,7 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
               Follow the agent
             </label>
           ) : null}
-          {design ? (
+          {hasDesign ? (
             <Button look="bare" onClick={() => setShowDesign(!showDesign)}>
               Design system
             </Button>
@@ -730,9 +732,10 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
 
         {showMembers && shown ? <MembersSheet projectId={projectId} onClose={() => setShowMembers(false)} /> : null}
 
-        {showDesign && design && systemShown ? (
+        {showDesign && hasDesign && systemShown ? (
           <DesignView
             design={design}
+            uiBlocks={uiBlocks}
             onClose={closeDesign}
             onChange={
               systemShown.path && systemShown.point.kind === 'live'

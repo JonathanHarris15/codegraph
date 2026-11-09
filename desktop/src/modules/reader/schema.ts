@@ -1,4 +1,5 @@
 // codegraph: module reader
+import type { UiBlock } from './blocks.js'
 import type { DesignSystem } from './design.js'
 import type { Proposal } from './proposal.js'
 
@@ -143,6 +144,8 @@ export type SystemMap = {
   proposal: Proposal | null
   /** Its DESIGN.md, read whether or not the repo is set up; null when it has none. */
   design: DesignSystem | null
+  /** The named pieces of screen its pages are built from, by folder (ADR 0024). */
+  uiBlocks: UiBlock[]
   /** The proposal's mockups, by the id of the page each is for, as data URLs. */
   mockups: Record<string, string>
 }

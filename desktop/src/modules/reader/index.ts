@@ -1,5 +1,5 @@
 // codegraph: module reader
-// codegraph: front door DESIGN, changeToken, readDesign, DesignSystem, Token, TokenGroup, TokenPart, TokenTier, readMap, listPoints, pointFor, checkRepo, proposalProgress, measure, proposalFrom, changesAnything, blankProposal, idOfName, componentName, live, outsideId, storeId, holdsWords, PROPOSAL, PROPOSAL_FOLDER, storeName, shapeGaps, ProposedStore, ProposedField, Point, SystemMap, Component, Container, CodeFile, Store, Shape, Field, Holds, Wire, WireKind, ComponentKind, Mismatch, Proposal, ProposedContainer, ProposedComponent, ProposedWire, Progress, ProposalItem, ItemState, DrawnCard, FromDrawing
+// codegraph: front door DESIGN, changeToken, readDesign, DesignSystem, UiBlock, UiOption, UiState, Token, TokenGroup, TokenPart, TokenTier, readMap, listPoints, pointFor, checkRepo, proposalProgress, measure, proposalFrom, changesAnything, blankProposal, idOfName, componentName, live, outsideId, storeId, holdsWords, PROPOSAL, PROPOSAL_FOLDER, storeName, shapeGaps, ProposedStore, ProposedField, Point, SystemMap, Component, Container, CodeFile, Store, Shape, Field, Holds, Wire, WireKind, ComponentKind, Mismatch, Proposal, ProposedContainer, ProposedComponent, ProposedWire, Progress, ProposalItem, ItemState, DrawnCard, FromDrawing
 import { existsSync, readFileSync } from 'node:fs'
 import { extname, join } from 'node:path'
 import { buildMap, type Mismatch } from './build.js'
@@ -17,6 +17,7 @@ export { holdsWords } from './shape.js'
 export type { DrawnCard, FromDrawing } from './drawn.js'
 export type { Mismatch } from './build.js'
 export { changeToken, DESIGN, readDesign } from './design.js'
+export type { UiBlock, UiOption, UiState } from './blocks.js'
 export type { DesignSystem, Token, TokenGroup, TokenPart, TokenTier } from './design.js'
 export type {
   CodeFile,
@@ -61,11 +62,18 @@ export const readMap = async (repo: string, point: Point): Promise<SystemMap> =>
   if (kept) return { ...kept, point }
 
   const map = buildMap(point, await filesAt(repo, point))
-  if (point.kind === 'live')
-    for (const page of map.components.filter((c) => c.kind === 'page')) {
-      const file = join(repo, SHOTS, `${page.name}.png`)
-      if (existsSync(file)) page.shot = `data:image/png;base64,${readFileSync(file).toString('base64')}`
+  if (point.kind === 'live') {
+    const shotOf = (...name: string[]): string => {
+      const file = join(repo, SHOTS, ...name)
+      return existsSync(file) ? `data:image/png;base64,${readFileSync(file).toString('base64')}` : ''
     }
+    for (const page of map.components.filter((c) => c.kind === 'page')) page.shot = shotOf(`${page.name}.png`)
+    // A UI block's own picture, and one for each of its states (ADR 0024).
+    for (const block of map.uiBlocks) {
+      block.shot = shotOf('ui-blocks', `${block.name}.png`)
+      for (const state of block.states) state.shot = shotOf('ui-blocks', `${block.name}.${state.name}.png`)
+    }
+  }
   for (const c of map.proposal?.components ?? []) {
     if (!c.mockup || c.gone) continue
     const bytes = await pictureAt(repo, point, `${PROPOSAL_FOLDER}/${c.mockup}`)

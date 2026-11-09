@@ -162,9 +162,20 @@ export const noPermission = () => <SettingsRow label="Plan" disabled owner="Ada"
 ```
 
 The same file feeds the live view and the screenshots the tests already take.
+A states file belongs to no component, as a test does not. Its pictures sit
+beside the pages' in `codegraph-screenshots/ui-blocks/`: `SettingsRow.png`
+for the block, `SettingsRow.loading.png` for a state.
+
+A UI block's options are read from the props of the function, arrow
+function, or `memo` or `forwardRef` around one, that the file declares by
+its name: written in place, or as an interface or type of the file's own.
+An option's doc comment says what it is for; a line in it like `danger: only
+inside the danger zone`, naming one of its choices, says what that choice
+means. Props of a type from another file are not followed yet.
 
 **On the map**, opening the design system module shows its UI blocks as cards,
-in their folders, each with its screenshot.
+in their folders, each with its screenshot. Until that is drawn, they are
+shown in the design view, beside the tokens.
 
 ### Recipes
 

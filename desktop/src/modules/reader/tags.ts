@@ -7,7 +7,13 @@ export type FileTags = {
     | { kind: ComponentKind; name: string; type: string; uses: string[]; at: string; start: boolean; trigger: string }
     | { kind: 'test' }
     | { kind: 'tooling' }
+    /** Renders each named state of one UI block, for the live view and its
+     *  screenshots; not part of any component, like a test. */
+    | { kind: 'states'; of: string }
     | null
+  /** The UI blocks the file holds, each by its name in the code and the
+   *  folder it is kept in: `ui block forms/inputs/DatePicker`. */
+  uiBlocks: { name: string; folder: string }[]
   frontDoor: string[]
   /** `store X in Y`, then `inside Z` for an inner store and `from P` for
    *  the schema its shape is read from, beside this file. */
@@ -41,7 +47,16 @@ const wire = (said: string): { to: string; words: string } => {
 }
 
 export const readTags = (path: string, text: string): FileTags => {
-  const tags: FileTags = { role: null, frontDoor: [], stores: [], wires: new Map(), theme: false, exceptions: new Map(), problems: [] }
+  const tags: FileTags = {
+    role: null,
+    uiBlocks: [],
+    frontDoor: [],
+    stores: [],
+    wires: new Map(),
+    theme: false,
+    exceptions: new Map(),
+    problems: [],
+  }
   const lines = text.split(/\r?\n/)
   const setRole = (role: NonNullable<FileTags['role']>): void => {
     if (tags.role) tags.problems.push(`${path} says what it belongs to more than once`)
@@ -71,6 +86,11 @@ export const readTags = (path: string, text: string): FileTags => {
     let match: RegExpMatchArray | null
     if ((match = said.match(/^exception\b\s*(.*)$/))) excepting = match[1]!.trim()
     else if (said === 'theme') tags.theme = true
+    else if ((match = said.match(/^ui block\s+(\S+)$/))) {
+      const path = match[1]!.replace(/^\/+|\/+$/g, '')
+      const cut = path.lastIndexOf('/')
+      tags.uiBlocks.push({ name: path.slice(cut + 1), folder: cut < 0 ? '' : path.slice(0, cut) })
+    } else if ((match = said.match(/^states\s+(\S+)$/))) setRole({ kind: 'states', of: match[1]! })
     else if ((match = said.match(/^wire\s+(.+)$/))) waiting = wire(match[1]!)
     else if ((match = said.match(/^module\s+(\S+)(?:\s+as\s+(.+))?$/))) component('module', match[1]!, { type: match[2] ?? '' })
     else if ((match = said.match(/^front door\s+(.+)$/))) tags.frontDoor.push(...list(match[1]!))

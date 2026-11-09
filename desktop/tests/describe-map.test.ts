@@ -1,5 +1,5 @@
 // codegraph: test feature describe-map
-import { writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { describeMap } from '../src/features/describe-map.js'
@@ -60,6 +60,42 @@ describe('the map in words, called straight', () => {
         '    textColor {colors.nope}, which is not known',
         '  Does not hold together:',
         '    components.broken names {colors.nope}, which is not a token',
+      ].join('\n'),
+    )
+  })
+})
+
+describe('UI blocks in words', () => {
+  it('names each UI block by folder, with its options, what they mean, and its states', async () => {
+    const repo = aMappedRepo(yard, 'blocks')
+    mkdirSync(join(repo, 'app', 'ui'), { recursive: true })
+    writeFileSync(
+      join(repo, 'app', 'ui', 'row.tsx'),
+      [
+        '// codegraph: module ui',
+        '// codegraph: ui block settings/SettingsRow',
+        '/** One setting, label left, control right. */',
+        'export const SettingsRow = (props: {',
+        '  /** What it is called. */',
+        '  label: string',
+        '  /**',
+        '   * How loud it is.',
+        '   * danger: only in the danger zone',
+        '   */',
+        "  tone?: 'plain' | 'danger'",
+        '}) => null',
+        '',
+      ].join('\n'),
+    )
+    writeFileSync(join(repo, 'app', 'ui', 'row.states.tsx'), '// codegraph: states SettingsRow\nexport const loading = () => null\n')
+    expect(await describeMap(repo)).toContain(
+      [
+        'UI blocks, by folder:',
+        '  settings/SettingsRow, in module ui, app/ui/row.tsx: One setting, label left, control right.',
+        '    label: string. What it is called.',
+        "    tone (optional): 'plain' | 'danger'. How loud it is.",
+        '      danger: only in the danger zone',
+        '    States, in app/ui/row.states.tsx: loading',
       ].join('\n'),
     )
   })
