@@ -15,7 +15,8 @@ import {
   type Wire,
   type WireKind,
 } from './schema.js'
-import { readUiBlock } from './blocks.js'
+import { isOnThisComputer } from '../dev-server/index.js'
+import { LIVE_UI_BLOCK, readUiBlock } from './blocks.js'
 import { isRecipe, readRecipe } from './recipes.js'
 import { DESIGN, readDesign } from './design.js'
 import { PROPOSAL, readProposal } from './proposal.js'
@@ -27,7 +28,7 @@ export const CONFIG = 'codegraph.config.json'
 
 type Config = {
   projects: string[]
-  containers: { name: string; kind: string; says: string; folders: string[] }[]
+  containers: { name: string; kind: string; says: string; folders: string[]; dev: string }[]
 }
 
 /** Something in a repo that does not fit its tags, where it is, in plain words. */
@@ -62,7 +63,7 @@ const readConfig = (text: string | undefined, problems: Mismatch[]): Config | nu
   try {
     const raw = JSON.parse(text) as {
       projects?: unknown
-      containers?: Record<string, { kind?: unknown; says?: unknown; folders?: unknown }>
+      containers?: Record<string, { kind?: unknown; says?: unknown; folders?: unknown; dev?: unknown }>
     }
     const words = (value: unknown): string => (typeof value === 'string' ? value : '')
     return {
@@ -71,6 +72,7 @@ const readConfig = (text: string | undefined, problems: Mismatch[]): Config | nu
         name,
         kind: words(c.kind),
         says: words(c.says),
+        dev: words(c.dev).trim().replace(/\/+$/, ''),
         folders: Array.isArray(c.folders)
           ? c.folders.filter((f): f is string => typeof f === 'string').map((f) => f.replace(/^\.\/|\/+$/g, ''))
           : [],
@@ -137,7 +139,17 @@ export const readFacts = (point: Point, files: Map<string, string>): Facts => {
   if (!config) return done()
 
   map.containers = config.containers.map(
-    (c): Container => ({ id: `container:${c.name}`, name: c.name, kind: c.kind, says: c.says, stores: [] }),
+    (c): Container => {
+      // A dev server is only ever looked for on this computer (ADR 0024).
+      const local = c.dev === '' || isOnThisComputer(c.dev)
+      if (!local)
+        problems.push({
+          file: CONFIG,
+          line: 1,
+          says: `The dev server of container ${c.name} must be on this computer, like http://localhost:5173, not ${c.dev}`,
+        })
+      return { id: `container:${c.name}`, name: c.name, kind: c.kind, says: c.says, stores: [], dev: local ? c.dev : '' }
+    },
   )
   const containerNamed = new Map(map.containers.map((c) => [c.name, c]))
   const aliases = readAliases(files.get('tsconfig.json') ?? files.get('jsconfig.json'))
@@ -224,7 +236,12 @@ export const readFacts = (point: Point, files: Map<string, string>): Facts => {
       if (!component)
         problems.push({ file: path, line: 1, says: `${path} names the UI block ${named.name}, but says no component it belongs to` })
       else if (!read) problems.push({ file: path, line: 1, says: `${path} names the UI block ${named.name}, but has no ${named.name} in it` })
-      else map.uiBlocks.push({ ...named, file: path, component: component.id, ...read, states: [], shot: '' })
+      else {
+        const dev = containerNamed.get(component.container)?.dev ?? ''
+        const path_ = named.folder ? `${named.folder}/${named.name}` : named.name
+        const live = dev ? `${dev}${LIVE_UI_BLOCK}?name=${encodeURIComponent(path_)}` : ''
+        map.uiBlocks.push({ ...named, file: path, component: component.id, ...read, states: [], shot: '', live })
+      }
     }
   for (const [path, tags] of tagsOf) {
     if (tags.role?.kind !== 'states') continue
@@ -243,9 +260,13 @@ export const readFacts = (point: Point, files: Map<string, string>): Facts => {
     if (!isRecipe(path)) continue
     const recipe = readRecipe(path, text)
     const reference = componentOf.get(recipe.reference)
+    const page = reference?.kind === 'page' ? reference : undefined
+    const dev = page ? (containerNamed.get(page.container)?.dev ?? '') : ''
     map.recipes.push({
       ...recipe,
-      referencePage: reference?.kind === 'page' ? reference.id : '',
+      referencePage: page?.id ?? '',
+      // An address with a :part in it needs a record to fill it, so it cannot be opened as it is.
+      live: dev && page?.at && !page.at.includes(':') ? `${dev}${page.at.startsWith('/') ? '' : '/'}${page.at}` : '',
       pages: map.components.filter((c) => c.kind === 'page' && c.follows === recipe.name).map((c) => c.id),
     })
   }

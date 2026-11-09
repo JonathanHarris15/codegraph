@@ -333,7 +333,7 @@ recipes. Decided in ADR 0024.
   `follows`. The page map marks each page with its recipe; a recipe opens to its
   words beside its reference page. The check holds a page to its recipe's
   UI blocks, and the reference page to its recipe.
-- **CG-9.7** The live view: a pane running a UI block's states, or a
+- **CG-9.7** (done; the dev server's page for it comes with setup, CG-9.9) The live view: a pane running a UI block's states, or a
   recipe's reference page, from the repo's own dev server, with a control for
   each option. Web apps only to start, React on Vite first; native apps get
   screenshots of their states.

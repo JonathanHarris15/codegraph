@@ -33,6 +33,7 @@ const NAMES: Record<keyof Features, true> = {
   switchBranch: true,
   chooseBranch: true,
   changeToken: true,
+  reachDevServer: true,
   showAnnotations: true,
   saveAnnotations: true,
   showInstructions: true,

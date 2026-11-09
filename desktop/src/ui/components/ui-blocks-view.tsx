@@ -1,7 +1,8 @@
 // codegraph: component ui-blocks-view
 import { useState } from 'react'
-import type { UiBlock } from '../../features/show-map.js'
+import type { UiBlock, UiOption } from '../../features/show-map.js'
 import { Badge, Button } from '../design-system/kit.js'
+import { LiveFrame } from './live-view.js'
 
 /** Folders of UI blocks, nested as their paths say: forms/inputs sits
  *  inside forms. */
@@ -66,9 +67,62 @@ const FolderView = ({ folder, pickedPath, onPick }: { folder: Folder; pickedPath
   </>
 )
 
+/** What a person has set an option to in the live view, as it is sent to
+ *  the page: a boolean or number where the code's type is one. */
+type Given = Record<string, string | number | boolean>
+
+const asSent = (option: UiOption, raw: string): string | number | boolean =>
+  option.type === 'boolean' ? raw === 'true' : option.type === 'number' || (option.values.length && !/['"]/.test(option.type)) ? Number(raw) : raw
+
+/** The control for one option while the block is live: a list for one with
+ *  choices, a box for text or a number, and nothing for one only code can
+ *  give, like a child element or a function. */
+const OptionControl = ({ option, set, onSet }: { option: UiOption; set: Given; onSet: (name: string, value: string) => void }) => {
+  const now = option.name in set ? String(set[option.name]) : ''
+  const label = `Option ${option.name}`
+  if (option.values.length)
+    return (
+      <select className="ds-input" aria-label={label} value={now} onChange={(e) => onSet(option.name, e.target.value)}>
+        <option value="">As the code sets it</option>
+        {option.values.map((v) => (
+          <option key={v} value={v}>
+            {v}
+          </option>
+        ))}
+      </select>
+    )
+  if (option.type === 'string' || option.type === 'number')
+    return (
+      <input
+        className="ds-input"
+        aria-label={label}
+        type={option.type === 'number' ? 'number' : 'text'}
+        value={now}
+        placeholder="As the code sets it"
+        onChange={(e) => onSet(option.name, e.target.value)}
+      />
+    )
+  return <span className="ds-hint">Only code can give this one.</span>
+}
+
 /** One UI block up close: its name to point an agent at, what it is for,
- *  each option and what its choices mean, and its states. */
-const PickedBlock = ({ block }: { block: UiBlock }) => {
+ *  each option and what its choices mean, and its states. While it is live,
+ *  each option it can be given has a control. */
+const PickedBlock = ({
+  block,
+  live,
+  onLive,
+  set,
+  onSet,
+  stateShown,
+}: {
+  block: UiBlock
+  live: boolean
+  onLive: (on: boolean) => void
+  set: Given
+  onSet: (name: string, value: string) => void
+  stateShown: string
+}) => {
   const [copied, setCopied] = useState(false)
   const copy = async (): Promise<void> => {
     try {
@@ -89,6 +143,15 @@ const PickedBlock = ({ block }: { block: UiBlock }) => {
         <Button onClick={() => void copy()}>{copied ? 'Copied' : 'Copy its name'}</Button>
         <span className="ds-hint">to tell your agent which one</span>
       </div>
+      {block.live ? (
+        <Button look={live ? 'bare' : 'normal'} onClick={() => onLive(!live)}>
+          {live ? 'Back to the pictures' : 'See it live'}
+        </Button>
+      ) : (
+        <span className="ds-hint">
+          To see it live, name its container's dev server in codegraph.config.json, as <code>"dev": "http://localhost:5173"</code>.
+        </span>
+      )}
       <dl className="design-parts">
         <div>
           <dt>File</dt>
@@ -108,6 +171,13 @@ const PickedBlock = ({ block }: { block: UiBlock }) => {
               <code className="ui-block-option-type">{o.type}</code>
             </div>
             {o.says ? <span className="ui-block-option-says">{o.says}</span> : null}
+            {live ? (
+              stateShown ? (
+                <span className="ds-hint">The state shown sets its own options.</span>
+              ) : (
+                <OptionControl option={o} set={set} onSet={onSet} />
+              )
+            ) : null}
             {o.values.length ? (
               <ul className="ui-block-values">
                 {o.values.map((v) => (
@@ -141,25 +211,69 @@ const PickedBlock = ({ block }: { block: UiBlock }) => {
   )
 }
 
+/** Where the live view finds a UI block: in a state, or with the options a
+ *  person has set (ADR 0024). */
+const liveAddress = (block: UiBlock, state: string, set: Given): string =>
+  state
+    ? `${block.live}&state=${encodeURIComponent(state)}`
+    : Object.keys(set).length
+      ? `${block.live}&options=${encodeURIComponent(JSON.stringify(set))}`
+      : block.live
+
 /** A software system's UI blocks, in their folders, each with its picture,
- *  and one picked up close (ADR 0024). */
+ *  and one picked up close (ADR 0024). A picked block with a dev server can
+ *  be seen live: running from the repo's own code, in any of its states, or
+ *  with its options set by hand. */
 export const UiBlocksView = ({ blocks }: { blocks: UiBlock[] }) => {
   const [pickedPath, setPickedPath] = useState('')
+  const [live, setLive] = useState(false)
+  const [stateShown, setStateShown] = useState('')
+  const [set, setSet] = useState<Given>({})
   const picked = blocks.find((b) => pathOf(b) === pickedPath)
+  const pick = (path: string): void => {
+    setPickedPath(path)
+    setStateShown('')
+    setSet({})
+  }
+  const setOne = (name: string, raw: string): void => {
+    const option = picked?.options.find((o) => o.name === name)
+    if (!option) return
+    const next = { ...set }
+    if (raw === '') delete next[name]
+    else next[name] = asSent(option, raw)
+    setSet(next)
+  }
+  const showingLive = live && picked && picked.live
   return (
     <div className="design-body">
       <div className="design-groups">
-        {blocks.length === 0 ? (
+        {showingLive ? (
+          <section className="live-stage" aria-label={`${picked.name}, live`}>
+            <div className="live-states" role="group" aria-label="Show it">
+              <button type="button" aria-pressed={stateShown === ''} onClick={() => setStateShown('')}>
+                With the options set
+              </button>
+              {picked.states.map((s) => (
+                <button key={s.name} type="button" aria-pressed={stateShown === s.name} onClick={() => setStateShown(s.name)}>
+                  {s.name}
+                </button>
+              ))}
+            </div>
+            <LiveFrame address={liveAddress(picked, stateShown, set)} title={`${picked.name}, running`} />
+          </section>
+        ) : blocks.length === 0 ? (
           <div className="ds-empty">
             No UI blocks yet. A file names one with a tag like <code>codegraph: ui block forms/DatePicker</code>.
           </div>
         ) : (
           <section className="design-group" aria-label="UI blocks by folder">
-            <FolderView folder={treeOf(blocks)} pickedPath={pickedPath} onPick={setPickedPath} />
+            <FolderView folder={treeOf(blocks)} pickedPath={pickedPath} onPick={pick} />
           </section>
         )}
       </div>
-      {picked ? <PickedBlock block={picked} /> : null}
+      {picked ? (
+        <PickedBlock block={picked} live={Boolean(showingLive)} onLive={setLive} set={set} onSet={setOne} stateShown={stateShown} />
+      ) : null}
     </div>
   )
 }

@@ -4,6 +4,7 @@ import { addMockup } from '../features/add-mockup.js'
 import { agreeShallowSystem } from '../features/agree-shallow-system.js'
 import { changeRole } from '../features/change-role.js'
 import { changeToken } from '../features/change-token.js'
+import { reachDevServer } from '../features/reach-dev-server.js'
 import { chooseBranch } from '../features/choose-branch.js'
 import { connectAgent } from '../features/connect-agent.js'
 import { connectGithub } from '../features/connect-github.js'
@@ -73,6 +74,7 @@ export const FEATURES = {
   switchBranch,
   chooseBranch,
   changeToken,
+  reachDevServer,
   showAnnotations,
   saveAnnotations,
   showInstructions,

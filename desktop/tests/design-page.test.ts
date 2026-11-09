@@ -1,5 +1,7 @@
 // codegraph: test ui canvas
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { createServer, type Server } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { join } from 'node:path'
 import { type ElectronApplication, type Locator, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -44,6 +46,7 @@ let yard: Yard
 let app: ElectronApplication
 let page: Page
 let repo = ''
+let devServer: Server
 
 const view = (): Locator => page.getByRole('region', { name: 'Design system Daylight' })
 const token = (id: string): Locator => view().locator(`[data-token="${id}"]`)
@@ -107,6 +110,21 @@ beforeAll(async () => {
   )
   const notes = join(repo, 'app', 'pages', 'notes.tsx')
   writeFileSync(notes, readFileSync(notes, 'utf8').replace('start page notes at /', 'start page notes at / follows list-page'))
+
+  // codegraph: fakes the repo's dev server because the test repo has no app to run; it echoes what it is asked for
+  devServer = createServer((req, res) => {
+    const url = new URL(req.url ?? '/', 'http://here')
+    const said = url.pathname === '/__codegraph/ui-block'
+      ? [url.searchParams.get('name'), url.searchParams.get('state') ?? '', url.searchParams.get('options') ?? ''].join('|')
+      : `page ${url.pathname}`
+    res.setHeader('content-type', 'text/html')
+    res.end(`<p id="echo">${said.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</p>`)
+  })
+  await new Promise<void>((done) => devServer.listen(0, '127.0.0.1', done))
+  const dev = `http://127.0.0.1:${(devServer.address() as AddressInfo).port}`
+  const config = JSON.parse(readFileSync(join(repo, 'codegraph.config.json'), 'utf8')) as { containers: Record<string, Record<string, unknown>> }
+  config.containers.web!.dev = dev
+  writeFileSync(join(repo, 'codegraph.config.json'), JSON.stringify(config))
   writeFileSync(
     join(yard.home, 'projects.json'),
     JSON.stringify({
@@ -122,6 +140,7 @@ beforeAll(async () => {
 }, 60_000)
 
 afterAll(async () => {
+  devServer?.close()
   await app?.close()
   closeYard(yard)
 })
@@ -243,6 +262,24 @@ describe('looking at a design system', () => {
     await picture('d9-5-ui-blocks')
   })
 
+  it('runs a picked UI block live from the repo\'s own dev server, with its options set by hand or in a state', async () => {
+    const panel = page.getByRole('complementary', { name: 'UI block settings/SettingsRow' })
+    const echo = (): Promise<string | null> => page.frameLocator('iframe.live-page').locator('#echo').textContent({ timeout: PATIENCE })
+    await panel.getByRole('button', { name: 'See it live' }).click()
+    await expect.poll(echo, { timeout: PATIENCE }).toBe('settings/SettingsRow||')
+
+    await panel.getByLabel('Option tone').selectOption('danger')
+    await expect.poll(echo, { timeout: PATIENCE }).toBe('settings/SettingsRow||{"tone":"danger"}')
+    await panel.getByLabel('Option label').fill('Plan')
+    await expect.poll(echo, { timeout: PATIENCE }).toBe('settings/SettingsRow||{"tone":"danger","label":"Plan"}')
+
+    await view().getByRole('group', { name: 'Show it' }).getByRole('button', { name: 'loading' }).click()
+    await expect.poll(echo, { timeout: PATIENCE }).toBe('settings/SettingsRow|loading|')
+    expect(await panel.locator('[data-option="tone"]').textContent()).toContain('The state shown sets its own options.')
+    await picture('d9-7-live')
+    await panel.getByRole('button', { name: 'Back to the pictures' }).click()
+  })
+
   it('opens a recipe to its words, beside its reference page as it looks', async () => {
     await view().getByRole('tab', { name: /Recipes/ }).click()
     const recipe = view().getByRole('region', { name: 'Recipe list-page' })
@@ -255,6 +292,21 @@ describe('looking at a design system', () => {
     expect(await reference.getByRole('img').getAttribute('src')).toMatch(/^data:image\/png;base64,/)
     expect(await reference.textContent()).toContain('Followed by')
     await picture('d9-6-recipe')
+  })
+
+  it('runs a recipe\'s reference page live, and says to start the dev server once it stops', async () => {
+    const reference = view().getByRole('complementary', { name: 'Reference page for list-page' })
+    await reference.getByRole('button', { name: 'See it live' }).click()
+    await expect
+      .poll(() => page.frameLocator('iframe.live-page').locator('#echo').textContent({ timeout: PATIENCE }), { timeout: PATIENCE })
+      .toBe('page /')
+
+    const closed = new Promise<void>((done) => devServer.close(() => done()))
+    devServer.closeAllConnections()
+    await closed
+    await reference.getByRole('button', { name: 'Reload' }).click()
+    expect(await reference.getByRole('status').textContent({ timeout: PATIENCE })).toMatch(/Nothing is answering at http:\/\/127\.0\.0\.1:\d+/)
+    await reference.getByRole('button', { name: 'Back to the screenshot' }).click()
     await view().getByRole('tab', { name: /Tokens/ }).click()
   })
 

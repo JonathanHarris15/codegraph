@@ -1,11 +1,14 @@
 // codegraph: component recipes-view
 import { useState } from 'react'
 import type { RecipeShown } from '../../features/show-map.js'
-import { Badge } from '../design-system/kit.js'
+import { Badge, Button } from '../design-system/kit.js'
+import { LiveFrame } from './live-view.js'
 
 /** One recipe up close: its words beside its reference page as it really
  *  looks, the UI blocks it is built from, and the pages that follow it. */
-const PickedRecipe = ({ recipe }: { recipe: RecipeShown }) => (
+const PickedRecipe = ({ recipe }: { recipe: RecipeShown }) => {
+  const [live, setLive] = useState(false)
+  return (
   <section className="recipe-open" aria-label={`Recipe ${recipe.name}`}>
     <div className="recipe-words">
       <div className="ds-row" style={{ justifyContent: 'space-between' }}>
@@ -38,8 +41,17 @@ const PickedRecipe = ({ recipe }: { recipe: RecipeShown }) => (
       ))}
     </div>
     <aside className="recipe-reference" aria-label={`Reference page for ${recipe.name}`}>
-      <span className="ds-label">Reference page{recipe.referenceName ? `: ${recipe.referenceName}` : ''}</span>
-      {recipe.referenceShot ? (
+      <div className="ds-row" style={{ justifyContent: 'space-between' }}>
+        <span className="ds-label">Reference page{recipe.referenceName ? `: ${recipe.referenceName}` : ''}</span>
+        {recipe.live ? (
+          <Button look="bare" onClick={() => setLive(!live)}>
+            {live ? 'Back to the screenshot' : 'See it live'}
+          </Button>
+        ) : null}
+      </div>
+      {live && recipe.live ? (
+        <LiveFrame address={recipe.live} title={`${recipe.referenceName}, running`} />
+      ) : recipe.referenceShot ? (
         <img className="recipe-shot" src={recipe.referenceShot} alt={`${recipe.referenceName} as it looks`} />
       ) : (
         <div className="ui-block-shot ui-block-shot--none recipe-shot">{recipe.reference ? 'No screenshot yet' : 'No reference page named'}</div>
@@ -49,7 +61,8 @@ const PickedRecipe = ({ recipe }: { recipe: RecipeShown }) => (
       <span className="recipe-pages">{recipe.pageNames.length ? recipe.pageNames.join(', ') : 'No page yet'}</span>
     </aside>
   </section>
-)
+  )
+}
 
 /** A software system's recipes: how each kind of its pages lays itself out
  *  (ADR 0024). */
@@ -84,7 +97,7 @@ export const RecipesView = ({ recipes }: { recipes: RecipeShown[] }) => {
           </button>
         ))}
       </nav>
-      <PickedRecipe recipe={picked} />
+      <PickedRecipe key={picked.name} recipe={picked} />
     </div>
   )
 }

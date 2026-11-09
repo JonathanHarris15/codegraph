@@ -124,6 +124,35 @@ describe('reading UI blocks', () => {
   })
 })
 
+describe('where a UI block can be seen running', () => {
+  const withDev = (dev: string): string =>
+    JSON.stringify({
+      projects: ['notes-app'],
+      containers: {
+        web: { kind: 'browser app', says: 'Where people keep their notes', folders: ['app'], dev },
+        db: { kind: 'database', says: 'Keeps every note' },
+      },
+    })
+
+  it('has a live address on the dev server its container names', async () => {
+    put({ 'codegraph.config.json': withDev('http://localhost:5173/') })
+    const now = await readMap(repo, live)
+    expect(now.containers.find((c) => c.name === 'web')?.dev).toBe('http://localhost:5173')
+    expect(now.uiBlocks.find((b) => b.name === 'SettingsRow')?.live).toBe(
+      'http://localhost:5173/__codegraph/ui-block?name=settings%2FSettingsRow',
+    )
+  })
+
+  it('has none, and says why, when the dev server is not on this computer', async () => {
+    put({ 'codegraph.config.json': withDev('https://staging.example.com') })
+    const now = await readMap(repo, live)
+    expect(now.uiBlocks.find((b) => b.name === 'SettingsRow')?.live).toBe('')
+    expect(now.problems).toContain(
+      'The dev server of container web must be on this computer, like http://localhost:5173, not https://staging.example.com',
+    )
+  })
+})
+
 describe('UI blocks that do not hold together', () => {
   it('says when a UI block is not a name its file has, or lives in no component', async () => {
     put({
@@ -132,7 +161,7 @@ describe('UI blocks that do not hold together', () => {
       'app/modules/design-system/nobody.states.tsx': '// codegraph: states Nobody\nexport const empty = () => null\n',
     })
     const now = await readMap(repo, live)
-    expect(now.problems).toEqual([
+    expect(now.problems.filter((p) => !p.startsWith('The dev server'))).toEqual([
       'app/loose.tsx names the UI block Loose, but says no component it belongs to',
       'app/modules/design-system/ghost.tsx names the UI block Ghost, but has no Ghost in it',
       'app/modules/design-system/nobody.states.tsx gives states of Nobody, which is not a UI block',

@@ -1,5 +1,5 @@
 // codegraph: test module reader
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { checkRepo, live, readMap, type Mismatch, type SystemMap } from '../src/modules/reader/index.js'
@@ -102,6 +102,19 @@ describe('reading recipes', () => {
     expect(map.components.find((c) => c.name === 'account')?.follows).toBe('settings-page')
     expect(map.recipes[0]!.pages).toEqual(['web:page:account'])
     expect(map.recipes[0]!.referencePage).toBe('web:page:account')
+  })
+
+  it('can be seen running at its reference page\'s address on the dev server', async () => {
+    const config = JSON.stringify({
+      projects: ['notes-app'],
+      containers: { web: { kind: 'browser app', says: '', folders: ['app'], dev: 'http://127.0.0.1:3000' }, db: { kind: 'database', says: '' } },
+    })
+    const before = readFileSync(join(repo, 'codegraph.config.json'), 'utf8')
+    put({ 'codegraph.config.json': config })
+    const now = await readMap(repo, live)
+    put({ 'codegraph.config.json': before })
+    expect(map.recipes[0]!.live).toBe('')
+    expect(now.recipes[0]!.live).toBe('http://127.0.0.1:3000/account')
   })
 
   it('takes the recipe name from the file when the front matter has none', async () => {

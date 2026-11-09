@@ -25,6 +25,9 @@ export type Recipe = {
   sections: { heading: string; words: string }[]
   /** The ids of the pages that say they follow it. */
   pages: string[]
+  /** Where its reference page can be seen running, on its container's dev
+   *  server; '' when there is none, or its address needs a record filled in. */
+  live: string
 }
 
 export const isRecipe = (path: string): boolean => new RegExp(`^${RECIPES}/[^/]+\\.md$`, 'i').test(path)
@@ -33,7 +36,7 @@ const words = (value: unknown): string => (typeof value === 'string' ? value.tri
 
 /** One recipe file, as far as it can be read. Which pages follow it is the
  *  map's to say. */
-export const readRecipe = (path: string, text: string): Omit<Recipe, 'pages' | 'referencePage'> => {
+export const readRecipe = (path: string, text: string): Omit<Recipe, 'pages' | 'referencePage' | 'live'> => {
   let body = text.replace(/^﻿/, '').replace(/\r\n/g, '\n')
   let front: Record<string, unknown> = {}
   const top = body.match(/^---\n([\s\S]*?)\n---[ \t]*(\n|$)/)

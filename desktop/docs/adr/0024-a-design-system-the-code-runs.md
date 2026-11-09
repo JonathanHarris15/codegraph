@@ -208,9 +208,26 @@ The **live view** is a pane beside the canvas showing a UI block, or a recipe's
 reference page, running from the repo's own code as it stands now. It is how a
 person tries a UI block rather than looks at a picture of it.
 
-It runs on the repo's own dev server. Setup gives each UI block's states an
-address there, and codegraph opens that address in the pane. Each option gets
-a control, and changing it redraws the block. The dev server reloads as files
+It runs on the repo's own dev server. The container that has one names where
+it answers in the codegraph config, beside its folders (ADR 0008):
+`"dev": "http://localhost:5173"`. Only an address on this computer is taken;
+any other is reported and ignored. Codegraph never starts or stops the
+server: when nothing answers, the pane says to start it.
+
+The server serves one page for codegraph, which setup writes:
+`/__codegraph/ui-block?name=settings/SettingsRow` renders that UI block,
+`&state=loading` in that state, and `&options={"tone":"danger"}` with those
+options. A recipe's reference page needs nothing new: it opens at its own
+address, unless that address has a part, like `:id`, that needs a record.
+
+The pane is a frame of the dev server's own origin, so the page in it cannot
+reach codegraph's window or its bridge, and the window's rules let frames
+come from this computer only. An address that would share the window's own
+origin, which only codegraph's own dev mode could give, is refused.
+
+Each option the code can be given by hand has a control: a list for one with
+choices, a box for text or a number. Changing one reloads the block with it.
+A state sets its own options, so while one is shown the controls rest. The dev server reloads as files
 change, so while an agent works on a UI block the pane changes with it. The
 agent already reports which card it is on (`working-on`); naming a UI block
 there moves the pane to it.

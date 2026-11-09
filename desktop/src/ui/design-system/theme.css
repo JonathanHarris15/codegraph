@@ -5906,6 +5906,110 @@ button.map-restyle:hover {
   margin: 0;
 }
 
+/* ---- the live view: the repo's own code, running (ADR 0024) -------------- */
+
+.live-stage {
+  flex: 1;
+  min-height: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.live-states {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.live-states button {
+  font: inherit;
+  font-size: 12.5px;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  border: var(--stroke-edge) solid var(--line-hair);
+  background: var(--surface-000);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.live-states button[aria-pressed='true'] {
+  border-color: var(--kind-page);
+  background: var(--kind-page-wash);
+  color: var(--kind-page);
+}
+
+.live-frame {
+  flex: 1;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-lg);
+  border: var(--stroke-edge) solid var(--line-edge);
+  overflow: hidden;
+  background: var(--shot-mat);
+}
+
+.live-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+  border-bottom: var(--stroke-edge) solid var(--line-hair);
+  background: var(--surface-000);
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: var(--radius-pill);
+  background: var(--state-waiting);
+}
+
+.live-dot[data-state='up'] {
+  background: var(--state-good);
+}
+
+.live-dot[data-state='down'] {
+  background: var(--state-problem);
+}
+
+.live-address {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live-page {
+  flex: 1;
+  width: 100%;
+  border: none;
+  background: var(--shot-mat);
+}
+
+.live-frame--off {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  text-align: center;
+  color: var(--ink-soft);
+  background: var(--surface-sunken);
+}
+
+.recipe-reference .live-frame {
+  min-height: 420px;
+}
+
 /* ---- recipes ------------------------------------------------------------ */
 
 .recipe-list {

@@ -42,7 +42,15 @@ export type UiBlock = {
   states: UiState[]
   /** Its own screenshot, as for a state. */
   shot: string
+  /** Where it can be seen running, on its container's dev server; '' when
+   *  the container names none. The live view adds `state` and `options`. */
+  live: string
 }
+
+/** The page a set-up repo's dev server serves for codegraph's live view:
+ *  `?name=<folder>/<Name>`, and `&state=<state>` or `&options=<JSON>`,
+ *  renders that UI block so (ADR 0024). Setup writes it. */
+export const LIVE_UI_BLOCK = '/__codegraph/ui-block'
 
 const SCRIPT = /\.(ts|tsx|js|jsx|mjs|cjs|mts|cts)$/i
 

@@ -71,6 +71,9 @@ export type Container = {
   kind: string
   says: string
   stores: string[]
+  /** Where its dev server answers on this computer, when it has one and the
+   *  config names it: http://localhost:5173. '' for none (ADR 0024). */
+  dev: string
 }
 
 /** What a field holds (ADR 0023). Anything is loose: the schema does not say. */
