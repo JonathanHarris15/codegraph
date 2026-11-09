@@ -31,12 +31,22 @@ export const signIn = async (token: string): Promise<SignedIn> => {
 
 /** Firebase forgets a sign-in when the app closes; the token GitHub gave is
  *  kept, so whoever was signed in is signed in again. Offline, it tries again
- *  when next needed, and this computer follows what it already has. */
+ *  when next needed, and this computer follows what it already has. With no
+ *  token this computer can read (gone, or locked by another keystore) there is
+ *  nothing to try again with, so when the online side will not let them in
+ *  they are signed out and asked again, rather than left half in. */
 export const signInAgain = async (): Promise<void> => {
   const me = whoIsIn()
   if (!me) return
-  await (theCloud()?.signIn(savedToken(), me) ?? Promise.resolve()).catch(() => undefined)
-  await startFollowing(me)
+  const token = savedToken()
+  try {
+    await theCloud()?.signIn(token, me)
+  } catch {
+    if (!token) return signOut()
+  }
+  // Nothing on screen waits for this, so a failure would go unheard; following
+  // starts again on the next sign-in.
+  await startFollowing(me).catch(() => undefined)
 }
 
 /** Forgets who is signed in. What is on this computer stays, for the same member
