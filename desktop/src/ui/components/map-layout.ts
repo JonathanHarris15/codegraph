@@ -1,6 +1,6 @@
 // codegraph: component map-canvas
 import type { Card } from '../../features/show-map.js'
-import { hubOf, type CardLook } from '../../modules/sketches/schema.js'
+import { hubOf, isStore, type CardLook } from '../../modules/sketches/schema.js'
 import { CARD_SHAPES, drawnShape } from './card-looks.js'
 
 /** A wire as the canvas draws it, from the map or from a sketch. */
@@ -95,7 +95,7 @@ const storeHeight = (card: DrawnCard): number => {
 export const sizeOf = (card: DrawnCard): { w: number; h: number } => {
   const shape = drawnShape(card)
   if (shape) return { w: CARD_SHAPES[shape].w, h: CARD_SHAPES[shape].h }
-  if (card.fields !== undefined) return { w: 260, h: storeHeight(card) }
+  if (isStore(card.kind)) return { w: 260, h: storeHeight(card) }
   return isFrame(card)
     ? { w: 260, h: 200 }
     : card.level === 'code'

@@ -40,6 +40,13 @@ export const isHub = (id: string): boolean => id.startsWith(HUB)
 /** The wire a hub belongs to; '' for anything that is not a hub. */
 export const wireOfHub = (id: string): string => (isHub(id) ? id.slice(HUB.length) : '')
 
+/** One field of a store drawn on a sketch: what it holds, in words, whether
+ *  every record has it, and the store its id belongs to, if any (ADR 0023). */
+export type SketchField = { name: string; holds: string; needed: boolean; pointsAt: string }
+
+/** A store, or one that lives inside each record of another. */
+export const isStore = (kind: string): boolean => kind === 'store' || kind === 'inner store'
+
 /** One card in a sketch, with what is drawn inside it. It has the same shape
  *  as a card on the map, so the canvas draws both, and a snapshot of the map
  *  is a sketch as it stands. */
@@ -69,6 +76,12 @@ export type SketchCard = {
   /** How much room it has when open, in the space its insides are laid out
    *  in; left out, it gets most of the screen. */
   room?: { x: number; y: number; w: number; h: number }
+  /** A store's fields; null when its shape is unknown. Left out for anything
+   *  that is not a store. */
+  fields?: SketchField[] | null
+  /** What any field a store does not list may hold, for an open one; '' for
+   *  a fixed one. */
+  others?: string
   children: SketchCard[]
   wires: SketchWire[]
   notes: Note[]

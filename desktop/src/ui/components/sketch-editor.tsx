@@ -5,11 +5,12 @@ import { undoStep } from '../../modules/together/index.js'
 import { sentenceOf } from '../../modules/wording/index.js'
 import { Button, Field, Select } from '../design-system/kit.js'
 import type { CardType } from '../../modules/card-types/schema.js'
-import { wireOfHub, type CardLook } from '../../modules/sketches/schema.js'
+import { isStore, wireOfHub, type CardLook } from '../../modules/sketches/schema.js'
 import { CardLookEditor } from './card-look-editor.js'
 import { BLANK_LOOK, TEMPLATES, lookOf } from './card-looks.js'
 import { Glyph } from './kind-glyph.js'
 import { MapCanvas, remember, remembered, type Together } from './map-canvas.js'
+import { StoreFields } from './store-fields.js'
 import { walk } from './map-layout.js'
 import {
   addWire,
@@ -32,9 +33,15 @@ import {
   remove,
   retext,
   rewire,
+  setFields,
   wireKinds,
   type Clip,
 } from './sketch-edits.js'
+
+/** The names of every store drawn in a sketch, for a field to point at. */
+const storesIn = (card: SketchCard): string[] => [
+  ...new Set([...(isStore(card.kind) && card.name.trim() ? [card.name.trim()] : []), ...card.children.flatMap(storesIn)]),
+]
 
 /** What Copy last held, for as long as the window is open, so a person can
  *  copy from one sketch, or one level, and paste into another. */
@@ -439,7 +446,24 @@ export const SketchEditor = ({
                 value={picked.card.name}
                 onChange={(name) => change((f) => changeCard(f, picked.card.id, { name }), `name:${picked.card.id}`)}
               />
-              {ownTypesAt(picked.card.level) ? (
+              {isStore(picked.card.kind) ? (
+                <>
+                  <div className="ds-hint">A store is its own kind of card: its fields say what it keeps.</div>
+                  <StoreFields
+                    card={picked.card}
+                    stores={storesIn(sketch.root).filter((name) => name !== picked.card.name)}
+                    onChange={({ fields, others }) =>
+                      change(
+                        (f) =>
+                          others !== undefined
+                            ? changeCard(f, picked.card.id, fields !== undefined ? { fields, others } : { others })
+                            : setFields(f, picked.card.id, fields ?? null),
+                        `fields:${picked.card.id}`,
+                      )
+                    }
+                  />
+                </>
+              ) : ownTypesAt(picked.card.level) ? (
                 picked.card.kind === 'database' || picked.card.kind === 'page' ? (
                   <div className="ds-hint">
                     {picked.card.kind === 'database' ? 'A database is its own kind of card, not a look.' : 'A page holds a mockup, so it is its own kind of card.'}

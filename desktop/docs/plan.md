@@ -269,10 +269,13 @@ hold the code to it. Decided in ADR 0023. Proven on Mosaic, which keeps about
   same, a field to a line. A store card lists eight fields and says how many
   more; a field every record has is in bold, and one that points at a store
   shows that store instead of what it holds.
-- **CG-8.3** Stores on a sketch: add a store in a database, edit its fields on
-  the card, set it fixed or open, draw one inside another, wire one to point
-  at another. A snapshot carries stores as they stand; the MCP's `sketch`
-  says them.
+- **CG-8.3** (done) Stores on a sketch: inside a database the card library
+  offers only a store, and inside a store only an inner store. A picked store's
+  fields are written in the panel beside the board, not on the card: a row
+  each, with what it holds, what it points at, and whether every record has it.
+  A new store is fixed with no fields; switching it to open asks what any other
+  field holds. Pointing a field at a store drawn beside it wires the two. A
+  snapshot carries stores as they stand; the MCP's `sketch` says them.
 - **CG-8.4** Stores in a proposal: the file lists each store it adds, changes
   or crosses out with its whole shape, and the built rule holds the schema to
   it. A proposal that changes what is stored carries its migration.

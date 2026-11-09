@@ -1187,6 +1187,56 @@ h3 {
   color: var(--kind-keep);
 }
 
+.store-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.store-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-2);
+  border: var(--stroke-edge) solid var(--line-hair);
+  border-radius: var(--radius-card, 8px);
+}
+
+.store-field-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.store-field-name {
+  flex: 1;
+  font-family: var(--font-mono);
+}
+
+.store-field-drop {
+  border: 0;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  padding: var(--space-1);
+}
+
+.store-field-needed,
+.store-fields-rest label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.store-fields-rest {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
 .map-names {
   margin: var(--space-2) 0 0;
   padding: 0;

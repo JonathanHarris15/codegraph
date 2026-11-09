@@ -31,7 +31,7 @@ import { CardPalette } from './card-palette.js'
 import { hotkeyFor } from './hotkeys.js'
 import { KeyList } from './key-list.js'
 import { ContextBar, type Picking } from './context-bar.js'
-import { KindGlyph, LookGlyph, kindClass, lookClass } from './kind-glyph.js'
+import { isStore, KindGlyph, LookGlyph, kindClass, lookClass } from './kind-glyph.js'
 import {
   between,
   boundsOf,
@@ -73,7 +73,7 @@ import {
 import { CardFace, Sentence, kindWords } from './map-faces.js'
 import { Overview } from './overview.js'
 import { QuickAdd } from './quick-add.js'
-import { choicesAt, endsAtHub, hubOfWire, levelInside, ownTypesAt, type Alignment, type Arrangement, type CardChoice } from './sketch-edits.js'
+import { choicesIn, endsAtHub, hubOfWire, levelIn, levelInside, ownTypesAt, type Alignment, type Arrangement, type CardChoice } from './sketch-edits.js'
 import { TogetherLayer, type Other } from './together-layer.js'
 import { ToolRail } from './tool-rail.js'
 import { ZoomBar } from './zoom-bar.js'
@@ -303,11 +303,20 @@ type Hub = {
   wire: string
 }
 
-/** Whether a card's icon, type and colour are a person's to change. A database
- *  and a page are their own kinds, and a card on the context level is one of
- *  three. */
+/** Whether a card's icon, type and colour are a person's to change. A database,
+ *  a store and a page are their own kinds, and a card on the context level is
+ *  one of three. */
 const restyles = (card: DrawnCard): boolean =>
-  ownTypesAt(card.level) && card.kind !== 'database' && (card.role ?? card.kind) !== 'page'
+  ownTypesAt(card.level) && card.kind !== 'database' && !isStore(card.kind) && (card.role ?? card.kind) !== 'page'
+
+/** A database or a store holds stores, which are not a look a person makes up. */
+const holdsStores = (card: { level: DrawnCard['level']; kind: string }): boolean =>
+  isStore(card.kind) || (card.level === 'container' && (card.kind === 'database' || card.kind === 'files on disk'))
+
+/** Whether anything can be drawn inside a card: anything but code, and a
+ *  store, whose inner stores sit at its own level. */
+const holdsCards = (card: { level: DrawnCard['level']; kind: string }): boolean =>
+  levelInside[card.level] !== card.level || isStore(card.kind)
 
 /** How wide a hub is on the board. */
 const HUB_SIZE = 16
@@ -315,9 +324,9 @@ const HUB_SIZE = 16
 /** How far a level is from the one in hand: how faded it is. */
 const upClass = (up: number): string => (up > 0 ? ` map-up map-up--${Math.min(up, 3)}` : '')
 
-/** Everything the library offers on a level, in one list. */
-const pickChoice = (level: Parameters<typeof choicesAt>[0], types: CardType[]): CardChoice[] =>
-  choicesAt(level, types).flatMap((group) => group.choices)
+/** Everything the library offers inside a card, in one list. */
+const pickChoice = (card: Parameters<typeof choicesIn>[0], types: CardType[]): CardChoice[] =>
+  choicesIn(card, types).flatMap((group) => group.choices)
 
 export const MapCanvas = ({
   root,
@@ -499,8 +508,8 @@ export const MapCanvas = ({
   const typesHere = drawing?.cardTypes
   /** What the library and the quick menu offer on this level. */
   const choices = useMemo(
-    () => (drawing ? pickChoice(levelInside[focus.level], typesHere ?? []) : []),
-    [Boolean(drawing), focus.level, typesHere],
+    () => (drawing ? pickChoice(focus, typesHere ?? []) : []),
+    [Boolean(drawing), focus.level, focus.kind, typesHere],
   )
 
   // Where a person has moved a map's cards and sentences. It is laid over the
@@ -1355,7 +1364,7 @@ export const MapCanvas = ({
       else if (hotkey.do === 'shape') armShape(hotkey.kind)
       else if (hotkey.do === 'card') {
         // The numbers count down the card library, so they follow the level.
-        const key = levelInside[focus.level] === focus.level ? undefined : choices[hotkey.index]?.key
+        const key = holdsCards(focus) ? choices[hotkey.index]?.key : undefined
         if (key) armCard(key)
       } else if (hotkey.do === 'palette') openPalette(!palette)
       else if (hotkey.do === 'keys') setKeysOpen((open) => !open)
@@ -2207,7 +2216,7 @@ export const MapCanvas = ({
   const editingNote = editing ? noteBoxes.find((n) => n.note.id === editing.id) : undefined
   const editingWire = editing ? shapes.inner.find((one) => one.wire.id === editing.id) : undefined
   const pickedWire = drawing && selected.length === 1 ? shapes.inner.find((one) => one.wire.id === selected[0]) : undefined
-  const childLevel = levelInside[focus.level]
+  const childLevel = levelIn(focus)
   const liftedChoice = lifting ? choices.find((one) => one.key === lifting.kind) : undefined
   const armedChoice = armed ? choices.find((one) => one.key === armed) : undefined
 
@@ -2252,11 +2261,11 @@ export const MapCanvas = ({
           }}
         />
         </SidePanel>
-      ) : drawing && palette && childLevel !== focus.level ? (
+      ) : drawing && palette && holdsCards(focus) ? (
         <SidePanel key="cards" name="cards" start={216}>
         <CardPalette
-          groups={choicesAt(childLevel, drawing.cardTypes)}
-          canMakeTypes={ownTypesAt(childLevel)}
+          groups={choicesIn(focus, drawing.cardTypes)}
+          canMakeTypes={ownTypesAt(childLevel) && !holdsStores(focus)}
           types={drawing.cardTypes}
           armed={armed}
           onArm={(kind) => {

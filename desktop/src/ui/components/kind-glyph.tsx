@@ -139,8 +139,7 @@ export type ToolGlyph = keyof typeof TOOL_GLYPHS
  *  `kind-of--…` classes; this only says which cards are shaped like a store. */
 export const keeps = (kind: string): boolean => kind === 'database'
 
-/** A store, or one that lives inside another: its card lists its fields. */
-export const isStore = (kind: string): boolean => kind === 'store' || kind === 'inner store'
+export { isStore } from '../../modules/sketches/schema.js'
 
 export const kindClass = (kind: string): string => `kind-of--${(kind || 'container').replace(/\s+/g, '-')}`
 
