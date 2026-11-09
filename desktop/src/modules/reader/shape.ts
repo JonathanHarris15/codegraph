@@ -95,3 +95,22 @@ export const readShape = (text: string): { shape: Shape; says: string } | null =
 
   return { shape: shapeOf(follow(root), 0), says: root.description ?? '' }
 }
+
+/** What a field holds, said the way a person would. */
+export const holdsWords = (holds: Holds): string => {
+  switch (holds.kind) {
+    case 'one of':
+      return holds.choices.length > 1
+        ? `${holds.choices.slice(0, -1).join(', ')} or ${holds.choices[holds.choices.length - 1]}`
+        : (holds.choices[0] ?? 'nothing')
+    case 'list':
+      return `a list of ${holdsWords(holds.of)}`
+    case 'record': {
+      const named = holds.shape.fields.map((f) => f.name)
+      const of = named.length ? ` of ${named.join(', ')}` : ''
+      return holds.shape.fixed ? `a record${of}` : `a record${of}, open to ${holdsWords(holds.shape.others)}`
+    }
+    default:
+      return holds.kind
+  }
+}

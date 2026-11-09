@@ -1,7 +1,9 @@
 // codegraph: module cards
 // codegraph: front door card, join, systemCard, withLooks, holdsWords, Card, CardField, CardWire, CardState, Level, WireEnds
 import type { CardType } from '../card-types/index.js'
-import { idOfName, type Holds, type Shape, type Store, type SystemMap } from '../reader/index.js'
+import { holdsWords, idOfName, shapeGaps, storeId, type Shape, type Store, type SystemMap } from '../reader/index.js'
+
+export { holdsWords }
 
 export type Level = 'project' | 'system' | 'container' | 'component' | 'code'
 
@@ -105,25 +107,6 @@ export const join = (wires: CardWire[], wire: CardWire): void => {
     same.words = same.words ? `${same.words}; ${wire.words}` : wire.words
   for (const end of wire.ends)
     if (!same.ends.some((e) => e.from === end.from && e.to === end.to)) same.ends.push(end)
-}
-
-/** What a field holds, said the way a person would. */
-export const holdsWords = (holds: Holds): string => {
-  switch (holds.kind) {
-    case 'one of':
-      return holds.choices.length > 1
-        ? `${holds.choices.slice(0, -1).join(', ')} or ${holds.choices[holds.choices.length - 1]}`
-        : (holds.choices[0] ?? 'nothing')
-    case 'list':
-      return `a list of ${holdsWords(holds.of)}`
-    case 'record': {
-      const named = holds.shape.fields.map((f) => f.name)
-      const of = named.length ? ` of ${named.join(', ')}` : ''
-      return holds.shape.fixed ? `a record${of}` : `a record${of}, open to ${holdsWords(holds.shape.others)}`
-    }
-    default:
-      return holds.kind
-  }
 }
 
 const fieldsOf = (shape: Shape | null): CardField[] | null =>
@@ -251,6 +234,33 @@ const drawProposal = (system: Card, map: SystemMap, holder: Map<string, Card>, a
       containerCard(c.container).children.push(
         card(id, c.name, 'component', { kind: c.type || c.kind, ...(c.type ? { role: c.kind } : {}), says: c.says, at: c.at, start: c.start ?? false, state: 'proposed', ...(mockup ? { mockup } : {}) }),
       )
+  }
+  // Stores: one changed is marked to build until its schema says the same,
+  // one crossed out is marked, and one new is drawn faint with its fields,
+  // inside its database or the store it lives in (ADR 0023).
+  const findIn = (holder: Card, id: string): Card | undefined =>
+    holder.children.find((c) => c.id === id) ?? holder.children.map((c) => findIn(c, id)).find(Boolean)
+  for (const s of proposal.stores) {
+    const id = at(storeId(s.container, s.path))
+    const inside = holder.get(at(`container:${s.container}`))
+    const there = inside && findIn(inside, id)
+    if (there) {
+      const store = map.stores.find((x) => x.container === s.container && x.path === s.path)
+      there.state = s.gone ? 'gone' : shapeGaps(store?.shape ?? null, s).length ? 'proposed' : 'built'
+      continue
+    }
+    if (s.gone) continue
+    const parts = s.path.split('/')
+    const parent = parts.length > 1 ? inside && findIn(inside, at(storeId(s.container, parts.slice(0, -1).join('/')))) : containerCard(s.container)
+    parent?.children.push(
+      card(id, parts[parts.length - 1]!, 'component', {
+        kind: parts.length > 1 ? 'inner store' : 'store',
+        says: s.says,
+        fields: s.fields,
+        others: s.others,
+        state: 'proposed',
+      }),
+    )
   }
   const holderOf = (name: string): string => name.split('/')[0]!
   for (const w of proposal.wires) {

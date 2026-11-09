@@ -1,11 +1,10 @@
 // codegraph: feature describe-map in agent
-// codegraph: uses reader, wording, projects, annotations, machine, cards
+// codegraph: uses reader, wording, projects, annotations, machine
 // codegraph: command map
 import { annotationWords, readAnnotations } from '../modules/annotations/index.js'
 import { sameFolder } from '../modules/machine/index.js'
 import { listProjects } from '../modules/projects/index.js'
-import { holdsWords } from '../modules/cards/index.js'
-import { live, readMap, type Point, type Store, type SystemMap } from '../modules/reader/index.js'
+import { holdsWords, live, readMap, type Point, type Store, type SystemMap } from '../modules/reader/index.js'
 import { sentenceOf } from '../modules/wording/index.js'
 
 const pointWords = (point: Point): string =>

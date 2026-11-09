@@ -3,9 +3,12 @@ import {
   blankProposal,
   componentName,
   hasWire,
+  shapeGaps,
   type Proposal,
   type ProposedComponent,
   type ProposedContainer,
+  type ProposedField,
+  type ProposedStore,
   type ProposedWire,
 } from './proposal.js'
 import type { ComponentKind, SystemMap, WireKind } from './schema.js'
@@ -28,6 +31,10 @@ export type DrawnCard = {
   start: boolean
   mockup?: string
   state?: string
+  /** A store's fields; null when its shape is unknown. */
+  fields?: ProposedField[] | null
+  /** What any other field of an open store holds; '' for a fixed one. */
+  others?: string
   x?: number
   y?: number
   children: DrawnCard[]
@@ -64,6 +71,33 @@ export const proposalFrom = (system: DrawnCard, map: SystemMap, how: FromDrawing
     if (card.x !== undefined && card.y !== undefined) proposal.layout[name] = [Math.round(card.x), Math.round(card.y)]
   }
 
+  /** Stores drawn, by container and path, and the ones crossed out. */
+  const drawnStores = new Set<string>()
+  const goneStore = (container: string, path: string): boolean =>
+    proposal.stores.some((s) => s.gone && s.container === container && s.path === path)
+  /** A store drawn in a database, and the stores drawn inside it: each one
+   *  new, changed or crossed out goes in, with its whole shape (ADR 0023). */
+  const drawStore = (card: DrawnCard, container: string, inside: string): void => {
+    const path = inside ? `${inside}/${card.name.trim()}` : card.name.trim()
+    if (!card.name.trim()) return
+    drawnStores.add(`${container}:${path}`)
+    const found = (map.stores ?? []).find((s) => s.container === container && s.path === path)
+    const before = earlier?.stores.find((s) => s.container === container && s.path === path)
+    const fields = card.fields ? card.fields.map((f) => ({ name: f.name, holds: f.holds, needed: f.needed, pointsAt: f.pointsAt })) : null
+    const entry: ProposedStore = {
+      container,
+      path,
+      says: fields ? card.says : '',
+      fields,
+      others: card.others ?? '',
+      migration: before?.migration ?? '',
+    }
+    if (card.state === 'gone') {
+      if (found) proposal.stores.push({ ...entry, fields: null, others: '', says: '', gone: true })
+    } else if (!found || shapeGaps(found.shape, entry).length || (before && !before.gone)) proposal.stores.push(entry)
+    for (const inner of card.children) if (inner.kind === 'store' || inner.kind === 'inner store') drawStore(inner, container, path)
+  }
+
   for (const card of containers) {
     const name = card.name.trim()
     nameOf.set(card.id, name)
@@ -80,9 +114,11 @@ export const proposalFrom = (system: DrawnCard, map: SystemMap, how: FromDrawing
     const drawn = new Set<string>()
     for (const inner of card.children) {
       if (!inner.name.trim()) continue
-      // A store is read from its schema, not drawn as a component. Proposing
-      // stores comes with CG-8.4; until then a drawing's stores change nothing.
-      if (inner.kind === 'store' || inner.kind === 'inner store') continue
+      // A store is read from its schema, not drawn as a component.
+      if (inner.kind === 'store' || inner.kind === 'inner store') {
+        drawStore(inner, name, '')
+        continue
+      }
       // A type a person made up goes into the tag as it is. What rules it keeps
       // to is not something a drawing says, so it starts as a module, which
       // promises least, for the agent building it to settle (ADR 0013).
@@ -109,6 +145,10 @@ export const proposalFrom = (system: DrawnCard, map: SystemMap, how: FromDrawing
         if (found) proposal.components.push({ ...entry, mockup: '', gone: true })
       } else if (!is || listedBefore(full)) proposal.components.push(entry)
     }
+    if (how.absentIsGone)
+      for (const s of map.stores ?? [])
+        if (s.container === name && !drawnStores.has(`${name}:${s.path}`) && !goneStore(s.container, s.path))
+          proposal.stores.push({ container: name, path: s.path, says: '', fields: null, others: '', migration: '', gone: true })
     if (how.absentIsGone)
       for (const c of map.components)
         if (c.container === name && !drawn.has(componentName(c))) {
@@ -199,4 +239,4 @@ export const proposalFrom = (system: DrawnCard, map: SystemMap, how: FromDrawing
 
 /** Whether a proposal changes anything at all. */
 export const changesAnything = (proposal: Proposal): boolean =>
-  proposal.containers.length + proposal.components.length + proposal.wires.length > 0
+  proposal.containers.length + proposal.components.length + proposal.wires.length + proposal.stores.length > 0

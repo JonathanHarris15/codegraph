@@ -276,9 +276,14 @@ hold the code to it. Decided in ADR 0023. Proven on Mosaic, which keeps about
   A new store is fixed with no fields; switching it to open asks what any other
   field holds. Pointing a field at a store drawn beside it wires the two. A
   snapshot carries stores as they stand; the MCP's `sketch` says them.
-- **CG-8.4** Stores in a proposal: the file lists each store it adds, changes
-  or crosses out with its whole shape, and the built rule holds the schema to
-  it. A proposal that changes what is stored carries its migration.
+- **CG-8.4** (done) Stores in a proposal: the file lists each store it adds,
+  changes or crosses out with its whole shape, and the built rule holds the
+  schema to it, saying what each store still lacks. A change that touches the
+  records already kept names its migration, and is not built until the script
+  is there; crossing a store out needs none, since its records are left alone.
+  A new module that keeps only stores the proposal draws counts as part of
+  them. Over the map, a new store is drawn faint with its fields, and a
+  changed one is marked to build until its schema matches.
 - **CG-8.5** Setup and the check: the setup instructions write one schema per
   store in its owning module, check every write against it, and take store
   names from that module. The check reports a store with its shape unknown.
@@ -292,6 +297,5 @@ and hand it to the agent as a proposal with its migration.
 Later: the shape writes the field checks in Firestore's own rules, so a write
 that skips the code is caught too.
 
-Still rough, until CG-8.4: a proposal knows nothing of stores, so a branch
-whose schema gains a `pointsAt` is told it changed a wire the proposal does
-not draw.
+Still rough: a `points at` line drawn by hand on a sketch, or one left behind
+when a field stops pointing, is not tidied up; only the field counts.
