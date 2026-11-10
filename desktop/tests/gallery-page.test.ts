@@ -12,7 +12,7 @@ import { startSketch } from '../src/features/start-sketch.js'
 import { openFolderCloud, useCloud, type Member } from '../src/modules/cloud/index.js'
 import { keepProject, listProjects } from '../src/modules/projects/index.js'
 import { blankCard } from '../src/modules/sketches/index.js'
-import { pull, sendProject } from '../src/modules/sync/index.js'
+import { pull, sendProject, sent } from '../src/modules/sync/index.js'
 import { aComputer, aMappedRepo, closeYard, git, githubAnswers, openTheApp, openYard, type Yard } from './yard.js'
 
 /** The gallery and a project as a viewer sees them, with a repo they can reach and
@@ -48,6 +48,8 @@ beforeAll(async () => {
   await inviteMember(id, 'ben', 'viewer')
   const plan = await startSketch(id, 'Plan')
   await saveSketch({ ...plan, root: { ...plan.root, children: [{ ...blankCard('thing', 'thing', 'system', 'software system'), x: 200, y: 200 }] } })
+  // What Ana's computer had on its way up has landed before Ben's looks.
+  await sent()
   bens.be(ben)
   await pull(ben)
   useCloud(null)
