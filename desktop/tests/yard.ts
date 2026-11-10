@@ -65,7 +65,8 @@ export const openTheApp = async (home: string, env: Record<string, string> = {})
   return electron.launch({
     args: ['-r', join(tests, 'hands-off-window.cjs'), '.', `--user-data-dir=${home}`],
     cwd: resolve(tests, '..'),
-    env: { ...process.env, ...env } as Record<string, string>,
+    // No page test asks the real GitHub whether a newer codegraph is out.
+    env: { ...process.env, CODEGRAPH_RELEASES: '', ...env } as Record<string, string>,
   })
 }
 

@@ -56,6 +56,7 @@ const NAMES: Record<keyof Features, true> = {
   deleteSketch: true,
   addMockup: true,
   showSession: true,
+  checkForUpdate: true,
   startSignIn: true,
   finishSignIn: true,
   putProjectOnline: true,

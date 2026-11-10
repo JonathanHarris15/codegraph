@@ -12,6 +12,7 @@ import { MembersSheet } from '../components/members-sheet.js'
 import { DeleteProjectSheet, RenameProjectSheet } from '../components/project-sheets.js'
 import { MySketches } from '../components/my-sketches.js'
 import { ProjectCard } from '../components/project-card.js'
+import { UpdateNotice } from '../components/update-notice.js'
 
 export const ProjectsPage = ({ onOpen, onOpenSketch }: { onOpen: (projectId: string) => void; onOpenSketch: (library: string, sketchId: string) => void }) => {
   const [session, setSession] = useState<Session | null>(null)
@@ -357,6 +358,7 @@ export const ProjectsPage = ({ onOpen, onOpenSketch }: { onOpen: (projectId: str
           </div>
         </Sheet>
       ) : null}
+      <UpdateNotice />
     </div>
   )
 }

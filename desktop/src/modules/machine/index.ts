@@ -1,12 +1,12 @@
 // codegraph: module machine
-// codegraph: front door keepWhole, appFolder, devRendererUrl, keystore, askForFolder, useChooser, askForPicture, usePicturePicker, mcpServerFile, appFolderAnywhere, watchFolders, realFolder, sameFolder, githubClientId, githubHost, cloudFolder, firebaseSettings, Keystore
+// codegraph: front door keepWhole, appFolder, devRendererUrl, keystore, askForFolder, useChooser, askForPicture, usePicturePicker, mcpServerFile, appFolderAnywhere, watchFolders, realFolder, sameFolder, githubClientId, githubHost, cloudFolder, firebaseSettings, appVersion, releasesUrl, thisComputer, Keystore
 
 /** This computer and the window around the app: where files are kept, the
  *  operating system's keystore, the folder picker, and what the build says.
  *  Everything here comes from outside the program, so it is asked for
  *  lazily: away from the app — in a test, say — each answer is a plain one. */
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, realpathSync, renameSync, rmSync, watch, writeFileSync, type FSWatcher } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, watch, writeFileSync, type FSWatcher } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import type { FirebaseSettings } from '../cloud/index.js'
@@ -54,6 +54,27 @@ export const devRendererUrl = (): string => process.env['ELECTRON_RENDERER_URL']
 /** The GitHub app that sign-in goes through. An empty one makes the app take a
  *  pasted token instead. Not a secret: the secret stays in Firebase. */
 export const githubClientId = (): string => process.env['CODEGRAPH_GITHUB_CLIENT_ID'] ?? 'Ov23lirLHKBZBwXJ44vf'
+
+/** The version of codegraph running: the built app's own, or away from the
+ *  app, the one in the package.json it runs from. '' if neither says. */
+export const appVersion = async (): Promise<string> => {
+  const desk = await electron()
+  const built = desk?.app?.getVersion?.()
+  if (built) return built
+  try {
+    return (JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')) as { version?: string }).version ?? ''
+  } catch {
+    return ''
+  }
+}
+
+/** Where codegraph's newest release is asked for. An empty one, as in page
+ *  tests, turns the check off. */
+export const releasesUrl = (): string =>
+  process.env['CODEGRAPH_RELEASES'] ?? 'https://api.github.com/repos/JonathanHarris15/codegraph/releases/latest'
+
+/** What kind of computer this is, for picking its installer. */
+export const thisComputer = (): { platform: string; arch: string } => ({ platform: process.platform, arch: process.arch })
 
 /** A folder standing in for the online side, for trying the app with no Firebase
  *  project. Two copies of the app pointed at one folder see each other. */
