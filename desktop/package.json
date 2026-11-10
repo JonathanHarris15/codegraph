@@ -1,6 +1,6 @@
 {
   "name": "codegraph-desktop",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "The codegraph app: your projects, their software systems, and a map of each read from its code.",
   "author": "Jonathan Harris",
   "main": "./out/main/index.js",
