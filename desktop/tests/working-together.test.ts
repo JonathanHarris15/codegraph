@@ -38,7 +38,7 @@ import { openFolderCloud, useCloud, type Member } from '../src/modules/cloud/ind
 import { forgetMember } from '../src/modules/members/index.js'
 import { addProject, listProjects as storedProjects } from '../src/modules/projects/index.js'
 import { blankCard, LOOSE, SHARED_WITH_ME, writeSketch } from '../src/modules/sketches/index.js'
-import { catchUp, pendingCount, pull } from '../src/modules/sync/index.js'
+import { catchUp, pendingCount, pull, sent } from '../src/modules/sync/index.js'
 import { aComputer, aMappedRepo, closeYard, git, githubAnswers, openYard, type Yard } from './yard.js'
 
 const ana: Member = { id: '1', login: 'ana', name: 'Ana', avatar: '' }
@@ -52,6 +52,8 @@ let bens: ReturnType<typeof aComputer>
 
 const beAna = (): void => anas.be(ana)
 const beBen = async (): Promise<void> => {
+  // What Ana's computer had on its way up has landed by the time Ben looks.
+  await sent()
   bens.be(ben)
   await pull(ben)
 }
@@ -383,6 +385,26 @@ describe('offline', () => {
     expect(pendingCount()).toBe(0)
     await beBen()
     expect((await listSketches(id))[0]?.name).toBe('Done on a train')
+  })
+
+  it('opens a new sketch at once when the online side is slow, and sends it after', async () => {
+    const id = await invited()
+    const folder = openFolderCloud(join(yard.path, 'online'), () => up)
+    let answer = (): void => undefined
+    const slow = new Promise<void>((go) => (answer = go))
+    // codegraph: fakes a slow connection because a test cannot slow the real network
+    useCloud({ ...folder, change: async (path, how) => (await slow, folder.change(path, how)) })
+    const waited = new Promise<'waited'>((go) => setTimeout(() => go('waited'), 1000))
+    const started = await Promise.race([startSketch(id, 'Plan'), waited])
+    if (started === 'waited') throw new Error('starting a sketch waited on the online side')
+    expect((await openSketch(id, started.id))?.sketch.name).toBe('Plan')
+    // Closed now, the app would still owe it.
+    expect(pendingCount()).toBe(1)
+    answer()
+    await sent()
+    expect(pendingCount()).toBe(0)
+    await beBen()
+    expect((await listSketches(id)).map((s) => s.name)).toEqual(['Plan'])
   })
 
   it('makes a new project when there is no connection', async () => {

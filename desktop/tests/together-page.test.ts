@@ -10,7 +10,7 @@ import { linkSoftwareSystem } from '../src/features/link-software-system.js'
 import { startSketch } from '../src/features/start-sketch.js'
 import { openFolderCloud, useCloud, type Member } from '../src/modules/cloud/index.js'
 import { listProjects } from '../src/modules/projects/index.js'
-import { pull } from '../src/modules/sync/index.js'
+import { pull, sent } from '../src/modules/sync/index.js'
 import { aComputer, aMappedRepo, closeYard, git, githubAnswers, openTheApp, openYard, type Yard } from './yard.js'
 
 /** Two real copies of the app, on two people's "computers", with a folder standing
@@ -77,6 +77,8 @@ beforeAll(async () => {
   const { blankCard } = await import('../src/modules/sketches/index.js')
   const plan = await startSketch(id, 'Plan')
   await saveSketch({ ...plan, root: { ...plan.root, children: [{ ...blankCard('thing', 'thing', 'system', 'software system'), x: 200, y: 200 }] } })
+  // What Ana's computer had on its way up has landed before Ben's looks.
+  await sent()
   bens.be(ben)
   await pull(ben)
   useCloud(null)

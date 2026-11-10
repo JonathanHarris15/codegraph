@@ -3,7 +3,7 @@
 import { randomUUID } from 'node:crypto'
 import { findProject } from '../modules/projects/index.js'
 import { iMay } from '../modules/members/index.js'
-import { sendSketch } from '../modules/sync/index.js'
+import { sendSketchSoon } from '../modules/sync/index.js'
 import { blankCard, LOOSE, newSketch, writeSketch, type Level, type Sketch, type SketchCard, type SketchField } from '../modules/sketches/index.js'
 
 /** A card of the map, as the page hands it over to snapshot. */
@@ -44,7 +44,8 @@ const fromMap = (card: MapCard): SketchCard => ({
 })
 
 /** Starts a sketch in a project's library: blank, or a snapshot of the map
- *  the person is looking at, to draw a change over. */
+ *  the person is looking at, to draw a change over. It is ready to open at
+ *  once; going online follows, as a slow connection would hold it up. */
 export const startSketch = async (projectId: string, name: string, snapshot?: MapCard): Promise<Sketch> => {
   const project = findProject(projectId)
   if (!project && projectId !== LOOSE) throw new Error('no project with that id')
@@ -53,6 +54,6 @@ export const startSketch = async (projectId: string, name: string, snapshot?: Ma
     ? newSketch(projectId, name, fromMap(snapshot), `A snapshot of the map, ${new Date().toISOString().slice(0, 10)}`)
     : newSketch(projectId, name, blankCard(project?.id ?? randomUUID(), project?.name ?? name, 'project', 'project'))
   writeSketch(sketch)
-  await sendSketch(sketch)
+  sendSketchSoon(sketch)
   return sketch
 }

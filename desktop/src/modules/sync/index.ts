@@ -1,5 +1,5 @@
 // codegraph: module sync
-// codegraph: front door useFolder, useHeard, startFollowing, stopFollowing, pull, sendUp, sendSketch, sendFolder, sendMap, settleMaps, sendProject, sendEverything, sendRemoval, catchUp, follow, listRevisions, restoreRevision, pendingCount, removeEverything, projectPath, sketchPath, folderPath, Revision
+// codegraph: front door useFolder, useHeard, startFollowing, stopFollowing, pull, sendUp, sent, sendSketch, sendSketchSoon, sendFolder, sendMap, settleMaps, sendProject, sendEverything, sendRemoval, catchUp, follow, listRevisions, restoreRevision, pendingCount, removeEverything, projectPath, sketchPath, folderPath, Revision
 import { randomUUID } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -408,6 +408,21 @@ export const sendProject = async (projectId: string): Promise<void> => {
 export const sendSketch = async (sketch: Sketch): Promise<void> => {
   const path = sketchPath(sketch)
   if (path) await sendUp(path)
+}
+
+/** Sends up a sketch just started, without making anyone wait on the online
+ *  side. It is owed until it is up, so an app closed on the way sends it on
+ *  catching up. */
+export const sendSketchSoon = (sketch: Sketch): void => {
+  const path = sketchPath(sketch)
+  if (!path || !theCloud() || !whoIsIn()) return
+  markPending(path, true)
+  void sendUp(path).catch(() => undefined)
+}
+
+/** Waits for everything on its way up to land, or to be kept for later. */
+export const sent = async (): Promise<void> => {
+  await Promise.allSettled([...queues.values()])
 }
 
 /** Sends up a folder just made, renamed, moved or deleted. */

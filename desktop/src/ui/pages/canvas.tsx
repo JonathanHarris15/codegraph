@@ -404,15 +404,23 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
     return `${two(d.getDate())}/${two(d.getMonth() + 1)}/${two(d.getFullYear() % 100)}`
   }
 
+  // One click starts one sketch: clicks while it is on its way start no more.
+  const starting = useRef(false)
   const startOne = async (fromMap: boolean, folderId = ''): Promise<void> => {
-    const name = fromMap ? `${snapshotOf()} (sketch ${today()})` : 'New sketch'
-    const started = await window.codegraph.startSketch(projectId, name, fromMap && shown ? shown.card : undefined)
-    // Started inside a folder, it is kept there.
-    if (folderId) await window.codegraph.fileSketch(projectId, started.id, folderId)
-    await loadSketches()
-    await openOne(started.id)
-    // A sketch from the map opens at the level the person was looking at.
-    if (fromMap) setSketchPath(walk(started.root, path).map((c) => c.id))
+    if (starting.current) return
+    starting.current = true
+    try {
+      const name = fromMap ? `${snapshotOf()} (sketch ${today()})` : 'New sketch'
+      const started = await window.codegraph.startSketch(projectId, name, fromMap && shown ? shown.card : undefined)
+      // Started inside a folder, it is kept there.
+      if (folderId) await window.codegraph.fileSketch(projectId, started.id, folderId)
+      await loadSketches()
+      await openOne(started.id)
+      // A sketch from the map opens at the level the person was looking at.
+      if (fromMap) setSketchPath(walk(started.root, path).map((c) => c.id))
+    } finally {
+      starting.current = false
+    }
   }
 
   const deleteOne = async (id: string): Promise<void> => {
