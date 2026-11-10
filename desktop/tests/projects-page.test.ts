@@ -83,6 +83,16 @@ describe('the projects screen in the real app', () => {
     expect(await shown(page.getByText('Mosaic Manager'))).toContain('Mosaic Manager')
   }, 60_000)
 
+  it('answers one click on a project, and says what the next one does', async () => {
+    const card = page.getByRole('button', { name: 'Open Mosaic Manager', exact: true })
+    expect(await shown(card.getByText('Double-click to open'))).toBe('Double-click to open')
+    // One click only. A second would open the project and strand the tests below.
+    await card.click({ position: { x: 10, y: 60 } })
+    expect(await shown(card.getByText('Click again to open'))).toBe('Click again to open')
+    await page.getByRole('heading', { name: 'Projects' }).click()
+    expect(await shown(card.getByText('Double-click to open'))).toBe('Double-click to open')
+  }, 30_000)
+
   it('renames a project from its ..., and keeps the name repos call it', async () => {
     await page.getByRole('button', { name: 'More for Mosaic Manager' }).click()
     await page.getByRole('menuitem', { name: 'Rename' }).click()

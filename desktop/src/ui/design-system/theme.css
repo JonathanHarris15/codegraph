@@ -6202,3 +6202,140 @@ button.map-restyle:hover {
   font-family: var(--font-mono);
   font-size: 12px;
 }
+
+/* ---- waiting on something slow ---------------------------------------- */
+
+/* Nothing has come back yet. The bar keeps moving so the screen never reads
+   as stalled, and the seconds show once a person has started to wonder. */
+.ds-waiting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  border: var(--stroke-edge) dashed var(--line-edge);
+  border-radius: var(--radius-lg);
+  padding: 40px var(--space-6);
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+.ds-waiting-what {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.ds-waiting-count {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+}
+
+.ds-waiting-bar {
+  position: relative;
+  overflow: hidden;
+  width: 180px;
+  max-width: 100%;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+}
+
+.ds-waiting-bar > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  border-radius: inherit;
+  background: var(--ink-faint);
+  animation: ds-waiting-sweep 1.1s ease-in-out infinite;
+}
+
+@keyframes ds-waiting-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+.ds-waiting-slow {
+  max-width: 40ch;
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+/* With motion turned down the seconds carry it on their own. */
+@media (prefers-reduced-motion: reduce) {
+  .ds-waiting-bar > span {
+    width: 100%;
+    opacity: 0.4;
+    animation: none;
+  }
+}
+
+/* ---- a click that shows it landed ------------------------------------- */
+
+/* Everything clickable pushes in while it is held, so no click is silent. */
+.ds-button:active:not(:disabled),
+.ds-tool:active:not(:disabled),
+.map-notice:active,
+.project-repos-link:active:not(:disabled),
+.project-card-more:active {
+  transform: translateY(1px);
+}
+
+/* Darker than hover, so holding a button never looks like only pointing at it. */
+.ds-button:active:not(:disabled) {
+  background: color-mix(in srgb, var(--ink-000) 14%, var(--surface-100));
+  border-color: color-mix(in srgb, var(--ink-000) 30%, var(--line-edge));
+}
+
+.ds-button--bare:active:not(:disabled) {
+  background: color-mix(in srgb, var(--ink-000) 14%, transparent);
+  border-color: transparent;
+}
+
+.ds-button--loud:active:not(:disabled) {
+  background: var(--ink-soft);
+  border-color: var(--ink-soft);
+}
+
+.ds-button--danger:active:not(:disabled) {
+  background: color-mix(in srgb, var(--state-problem) 75%, #000);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-button:active:not(:disabled),
+  .ds-tool:active:not(:disabled),
+  .map-notice:active,
+  .project-repos-link:active:not(:disabled),
+  .project-card-more:active {
+    transform: none;
+  }
+}
+
+/* A project card takes two clicks to open, so the first one has to show. It
+   darkens while held, then holds a ring and says what the next click does. */
+.project-card--picked {
+  border-color: var(--focus-ring);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--focus-ring) 35%, transparent),
+    var(--shadow-float);
+}
+
+.project-card--picked .project-card-top {
+  background: color-mix(in srgb, var(--focus-ring) 8%, transparent);
+}
+
+.project-card--picked .project-card-open {
+  opacity: 1;
+  color: var(--focus-ring);
+  font-weight: 500;
+}
+
+/* Held, armed or not: after the tint above, so it wins. */
+.project-card .project-card-top:active {
+  background: color-mix(in srgb, var(--ink-000) 12%, transparent);
+}

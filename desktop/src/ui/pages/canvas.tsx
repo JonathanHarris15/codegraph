@@ -8,7 +8,7 @@ import { forgetting, movedTo, type Arrangement } from '../../modules/arrangement
 import { mergeItems, sameDoc, undoStep } from '../../modules/together/index.js'
 import type { Point } from '../../modules/reader/index.js'
 import type { Sketch } from '../../modules/sketches/index.js'
-import { Button, ThemeSwitch } from '../design-system/kit.js'
+import { Button, ThemeSwitch, Waiting } from '../design-system/kit.js'
 import { MapCanvas, type Together } from '../components/map-canvas.js'
 import { walk } from '../components/map-layout.js'
 import { BranchPicker } from '../components/branch-picker.js'
@@ -658,7 +658,7 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
             />
           )
         ) : !shown ? (
-          <div className="ds-empty">Reading the code…</div>
+          <Waiting what="Reading the code…" slow="Still reading. A big repo takes a while the first time." />
         ) : (
           <MapCanvas
             root={shown.card}

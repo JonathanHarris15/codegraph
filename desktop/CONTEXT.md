@@ -419,6 +419,19 @@ _Avoid_: version, save, commit, snapshot
 **Gallery**:
 The page listing the projects a member is on.
 _Avoid_: dashboard, grid, home
+
+**Picked**:
+The project a member clicked last on the gallery. It carries a ring and says
+that one more click opens it, so a single click is never silent. Clicking
+anywhere else lets it go. Only one project is picked at a time.
+_Avoid_: selected, active, armed, focused
+
+**Waiting**:
+What a person is shown while something slow is still going and nothing has
+come back: what it is waiting on, a bar that keeps moving, the seconds once
+they are worth showing, and a line saying so once it is really slow. A screen
+that says nothing reads as stalled.
+_Avoid_: spinner, loader, progress, busy
 ## Instructions
 
 **Instructions**:

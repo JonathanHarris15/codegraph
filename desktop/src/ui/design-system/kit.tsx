@@ -1,6 +1,7 @@
 // codegraph: design system
 import { Moon, Sun, X } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
+import { whileWaiting } from './waiting.js'
 import './theme.css'
 
 /** A state a badge can carry. Every one of them shows a word too, so none of
@@ -224,6 +225,41 @@ export const Sheet = ({
         ) : null}
         {children}
       </div>
+    </div>
+  )
+}
+
+/** Something slow is going on and nothing has come back yet. It says what it
+ *  is waiting on, keeps a bar moving so it never reads as stalled, counts the
+ *  seconds once a person has started to wonder, and says plainly when it is
+ *  taking a while. */
+export const Waiting = ({ what, slow }: { what: string; slow?: string }) => {
+  const [seconds, setSeconds] = useState(0)
+  useEffect(() => {
+    const every = setInterval(() => setSeconds((so) => so + 1), 1000)
+    return () => clearInterval(every)
+  }, [])
+  const said = whileWaiting(what, seconds, slow)
+  return (
+    <div className="ds-waiting">
+      {/* The count is kept out of the live region, so a reader hears the words
+          once instead of once a second. */}
+      <div className="ds-waiting-what" role="status">
+        <span>{said.what}</span>
+        {said.count ? (
+          <span className="ds-waiting-count" aria-hidden="true">
+            {said.count}
+          </span>
+        ) : null}
+      </div>
+      <div className="ds-waiting-bar" aria-hidden="true">
+        <span />
+      </div>
+      {said.slow ? (
+        <div className="ds-waiting-slow" role="status">
+          {said.slow}
+        </div>
+      ) : null}
     </div>
   )
 }

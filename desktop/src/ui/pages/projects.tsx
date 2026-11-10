@@ -5,7 +5,7 @@ import type { CloudView } from '../../features/list-github-software-systems.js'
 import type { ProjectView } from '../../features/list-projects.js'
 import type { Session } from '../../features/show-session.js'
 import type { DeviceSignIn } from '../../modules/github/index.js'
-import { Button, Card, Field, Sheet, ThemeSwitch } from '../design-system/kit.js'
+import { Button, Card, Field, Sheet, ThemeSwitch, Waiting } from '../design-system/kit.js'
 import { AgentWindow } from '../components/agent-window.js'
 import { GithubWindow } from '../components/github-window.js'
 import { MembersSheet } from '../components/members-sheet.js'
@@ -33,6 +33,8 @@ export const ProjectsPage = ({ onOpen, onOpenSketch }: { onOpen: (projectId: str
   const [agent, setAgent] = useState<AgentConnection | null>(null)
   /** Which small window is open over the page, if any. */
   const [open, setOpen] = useState<'' | 'github' | 'agent'>('')
+  /** The project clicked last: the one a second click opens. */
+  const [picked, setPicked] = useState('')
 
   const load = useCallback(async (fetchFirst = false): Promise<void> => {
     setProjects(await window.codegraph.listProjects(fetchFirst))
@@ -137,7 +139,7 @@ export const ProjectsPage = ({ onOpen, onOpenSketch }: { onOpen: (projectId: str
   const onlyHere = session?.online && session.member ? (projects ?? []).filter((p) => !p.online) : []
 
   return (
-    <div className="ds-page">
+    <div className="ds-page" onMouseDown={() => setPicked('')}>
       <div className="ds-head">
         <div>
           <h1 className="ds-title">Projects</h1>
@@ -229,7 +231,7 @@ export const ProjectsPage = ({ onOpen, onOpenSketch }: { onOpen: (projectId: str
           </div>
         </div>
       ) : projects === null ? (
-        <div className="ds-empty">Reading your projects…</div>
+        <Waiting what="Reading your projects…" slow="Still going. Nothing is stuck; the files are just slow to read." />
       ) : projects.length === 0 ? (
         <div className="ds-empty">
           <div style={{ fontSize: 16, color: 'var(--ink)', marginBottom: 6 }}>
@@ -255,6 +257,8 @@ export const ProjectsPage = ({ onOpen, onOpenSketch }: { onOpen: (projectId: str
                 if (named) void window.codegraph.chooseBranch(project.id, systemId, named).then(() => load())
               }}
               linking={linking === project.id}
+              picked={picked === project.id}
+              onPick={() => setPicked(project.id)}
               {...(session?.online && session.member && !project.online ? { onPutOnline: () => void window.codegraph.putProjectOnline(project.id).then(() => load()) } : {})}
               {...(project.online ? { onMembers: () => setMembersOf(project.id) } : {})}
               {...(!project.online || (project.role && project.role !== 'viewer') ? { onRename: () => setRenaming(project.id) } : {})}
