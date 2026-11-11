@@ -1,5 +1,5 @@
 // codegraph: module card-types
-// codegraph: front door useFolder, readCardTypes, writeCardTypes, rememberLooks, CardType
+// codegraph: front door useFolder, readCardTypes, writeCardTypes, rememberLooks, kindsAt, kindsInCode, keepsThings, levelInside, CardType
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -7,6 +7,7 @@ import type { CardType } from './schema.js'
 import { keepWhole } from '../machine/index.js'
 
 export type { CardType } from './schema.js'
+export { keepsThings, kindsAt, kindsInCode, levelInside } from './kinds.js'
 
 let folder = ''
 

@@ -20,7 +20,7 @@ afterAll(() => closeYard(yard))
 describe('the instructions a person can make their own', () => {
   it('offers every topic, as codegraph ships it, until someone changes one', async () => {
     const all = await showInstructions()
-    expect(all.map((one) => one.topic)).toEqual(['setup', 'tags', 'design-system', 'proposals', 'working-here'])
+    expect(all.map((one) => one.topic)).toEqual(['setup', 'tags', 'design-system', 'proposals', 'sketches', 'working-here'])
     expect(all.every((one) => !one.edited && one.edits.length === 0)).toBe(true)
     expect((await topic('tags')).text).toMatch(/^# Codegraph/)
   })

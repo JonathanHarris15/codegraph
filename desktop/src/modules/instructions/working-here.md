@@ -38,4 +38,7 @@ How to work here:
    branch, the person drew a change for you to build, and the check fails
    until it is built. Call the `instructions` tool with topic `proposals`
    for how to build one, and how to make one from a sketch.
+7. **Draw what you mean.** To show the person a design before building it,
+   draw it as a sketch with the `draw` tool, written as a Mermaid flowchart.
+   Call the `instructions` tool with topic `sketches` for how.
 <!-- codegraph:end -->

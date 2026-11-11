@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import designSystem from './design-system.md?raw'
 import proposals from './proposals.md?raw'
 import setup from './setup.md?raw'
+import sketches from './sketches.md?raw'
 import tags from './tags.md?raw'
 import workingHere from './working-here.md?raw'
 import type { Edit, Instructions } from './schema.js'
@@ -26,6 +27,10 @@ const texts = {
   proposals: {
     about: 'What a proposal is, how to make one from a sketch, and how to build one until the check passes',
     text: proposals,
+  },
+  sketches: {
+    about: 'How to draw a sketch with the `draw` tool: a Mermaid flowchart with codegraph tags for kinds, insides, wires and notes',
+    text: sketches,
   },
   'working-here': {
     about: "The block for a set-up repo's CLAUDE.md or AGENTS.md: how to work in it",

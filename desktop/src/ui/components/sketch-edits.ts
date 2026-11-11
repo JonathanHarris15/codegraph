@@ -1,6 +1,8 @@
 // codegraph: component sketch-editor
 import type { Level, Note, SketchCard, SketchField, SketchWire, WireSides } from '../../modules/sketches/index.js'
 import type { CardType } from '../../modules/card-types/schema.js'
+import { keepsThings, kindsAt, kindsInCode, levelInside } from '../../modules/card-types/kinds.js'
+import { WIRE_KINDS } from '../../modules/wording/index.js'
 import { blankCard, isHub, isStore, wireOfHub, hubOf, type CardLook } from '../../modules/sketches/schema.js'
 import type { Arrangement } from '../../modules/arrangements/schema.js'
 import { BLANK_LOOK, TEMPLATES } from './card-looks.js'
@@ -8,30 +10,7 @@ import { sizeOf, wordsWidth } from './map-layout.js'
 
 export type { Arrangement }
 
-/** The level drawn inside a card of each level. */
-export const levelInside: Record<Level, Level> = {
-  project: 'system',
-  system: 'container',
-  container: 'component',
-  component: 'code',
-  code: 'code',
-}
-
-/** The kinds a card can be at each level, the usual first. A person is drawn
- *  beside the software systems and never read from code, so it is only ever
- *  on a sketch. Inside a software system these are the blank card, and the
- *  kinds that do more than look a certain way, a database and a page. The rest
- *  are templates (ADR 0013). */
-export const kindsAt: Record<Level, string[]> = {
-  project: ['project'],
-  system: ['software system', 'shallow software system', 'person'],
-  container: ['card', 'database'],
-  component: ['card', 'page'],
-  code: ['file'],
-}
-
-/** What is drawn inside a database, or files on disk: its stores. */
-const keepsThings = (kind: string): boolean => kind === 'database' || kind === 'files on disk'
+export { levelInside }
 
 /** The level drawn inside a card. A store's inner stores are drawn inside it
  *  at its own level, since they are stores too, not code (ADR 0023). */
@@ -48,12 +27,6 @@ export const choicesIn = (card: { level: Level; kind: string }, types: CardType[
       : choicesAt(levelIn(card), types)
 
 const storeChoice = (kind: string): CardChoice => ({ key: kind, kind, hint: kindHints[kind] ?? '' })
-
-/** The kinds code already has words for, each a template. */
-const kindsInCode: Partial<Record<Level, string[]>> = {
-  container: ['web app', 'browser app', 'server', 'desktop app', 'mobile app', 'database', 'files on disk', 'function', 'command-line tool'],
-  component: ['page', 'feature', 'module', 'trigger'],
-}
 
 /** Whether a wire's end is a hub on the border of the card it is drawn in. */
 export const endsAtHub = (end: string): boolean => isHub(end)
@@ -141,7 +114,7 @@ export const kindGroups = (level: Level): { name: string; kinds: string[] }[] =>
       ]
     : [{ name: '', kinds: kindsAt[level] }]
 
-export const wireKinds = ['uses', 'asks', 'reads', 'starts', 'keeps', 'leads to', 'calls', 'points at']
+export const wireKinds = WIRE_KINDS
 
 /** The kind a wire drawn between two cards most likely is, which the person
  *  can change. */

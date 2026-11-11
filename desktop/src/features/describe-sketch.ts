@@ -68,6 +68,12 @@ export const describeSketch = async (repo: string, name: string, shortName = '')
       for (const note of card.notes) out.push(`${pad}  note: ${note.text}`)
     }
     for (const child of sketch.root.children) walk(child, 0, sketch.root)
+    const top = new Map(sketch.root.children.map((c) => [c.id, c]))
+    for (const wire of sketch.root.wires) {
+      const from = top.get(wire.from)
+      const to = top.get(wire.to)
+      if (from && to) out.push(sentenceOf(named(from), wire.kind, named(to), wire.words).map((part) => part.text).join(''))
+    }
     for (const note of sketch.root.notes) out.push(`note: ${note.text}`)
 
     // Annotations, level by level, each level named by the card it is in.
