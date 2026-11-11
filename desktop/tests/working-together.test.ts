@@ -323,6 +323,37 @@ describe('sketches on a project', () => {
   })
 })
 
+describe('when the online side turns something down', () => {
+  // codegraph: fakes the online file store refusing writes because a folder cannot be made to refuse them
+  const filesRefused = (): void => {
+    const cloud = openFolderCloud(join(yard.path, 'online'), () => up)
+    useCloud({ ...cloud, putFile: async () => Promise.reject(new Error('storage/unauthorized')) })
+  }
+
+  it('still sends up a renamed sketch when its history snapshot cannot be kept', async () => {
+    const id = await invited()
+    filesRefused()
+    const sketch = await startSketch(id, 'New sketch')
+    await sent()
+    await saveSketch({ ...sketch, name: 'Init Sketch' })
+    await beBen()
+    expect((await listSketches(id)).map((s) => s.name)).toEqual(['Init Sketch'])
+  })
+
+  it('tries again on the next save after one did not go up', async () => {
+    const id = await invited()
+    const sketch = await startSketch(id, 'Plan')
+    await sent()
+    const cloud = openFolderCloud(join(yard.path, 'online'), () => up)
+    useCloud({ ...cloud, change: async () => Promise.reject(new Error('permission-denied')) })
+    await saveSketch({ ...sketch, name: 'Plan 2' }).catch(() => undefined)
+    useCloud(cloud)
+    await saveSketch({ ...sketch, name: 'Plan 3' })
+    await beBen()
+    expect((await listSketches(id)).map((s) => s.name)).toEqual(['Plan 3'])
+  })
+})
+
 describe('when things happen at once', () => {
   it('keeps what is saved here while a send is on its way', async () => {
     const id = await invited()

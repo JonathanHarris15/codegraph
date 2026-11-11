@@ -347,16 +347,16 @@ export const SketchEditor = ({
             return id
           },
           onMove: (moves, join) => change((f) => moveThings(f, moves), join ? 'join' : ''),
-          onWire: (from, to, kind) => {
+          onWire: (from, to, kind, sides) => {
             let id = ''
             change((f) => {
-              const [next, made] = addWire(f, from, to, kind)
+              const [next, made] = addWire(f, from, to, kind, sides)
               id = made
               return next
             })
             return id
           },
-          onRewire: (id, end, card) => change((f) => rewire(f, id, end, card)),
+          onRewire: (id, end, card, side) => change((f) => rewire(f, id, end, card, side)),
           onText: (id, text, first, field) =>
             change(
               (f) => (field === 'says' ? changeCard(f, id, { says: text }) : retext(f, id, text)),

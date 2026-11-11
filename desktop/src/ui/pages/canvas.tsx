@@ -351,14 +351,19 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
     if (saving.current) clearTimeout(saving.current)
     saving.current = setTimeout(() => {
       saving.current = null
-      void saveNow().then(() => loadSketches())
+      // The list shows what this computer kept, even if the online side
+      // turned it down this time.
+      void saveNow().finally(() => loadSketches())
     }, SAVE_AFTER_MS)
   }
   const flush = async (): Promise<void> => {
     if (!saving.current) return
     clearTimeout(saving.current)
     saving.current = null
-    await saveNow()
+    // Kept on this computer either way; what the online side turned down goes
+    // up later. Leaving the sketch does not wait on it.
+    await saveNow().catch(() => undefined)
+    void loadSketches()
   }
   sketchNow.current = sketch
   refreshSketch.current = (id) => {

@@ -18,6 +18,8 @@ export type DrawnWire = {
    *  space. Left out, the level lays the sentence out itself. */
   x?: number
   y?: number
+  /** The side of a card each end was plugged into, if a person chose one. */
+  sides?: { from?: Side; to?: Side }
 }
 
 /** A note a person left on a level of a sketch. */
@@ -799,6 +801,10 @@ export const wirePath = (
   fit: { from?: (at: { x: number; y: number }) => { x: number; y: number }; to?: (at: { x: number; y: number }) => { x: number; y: number } } = {},
   /** How it loops round, if the two are stacked and it has to. */
   loop?: Loop,
+  /** The side each end was plugged into. An end plugged in meets the middle
+   *  of that side and leaves it straight out; the other end takes whichever
+   *  of its sides faces it. */
+  held: { from?: Side; to?: Side } = {},
 ): WireShape => {
   const finish = (
     rawA: { x: number; y: number },
@@ -821,6 +827,16 @@ export const wirePath = (
   }
   const fromMid = { x: from.x + from.w / 2, y: from.y + from.h / 2 }
   const toMid = { x: to.x + to.w / 2, y: to.y + to.h / 2 }
+  if (held.from || held.to) {
+    const leaves = held.from ?? facing(from, held.to ? sideOf(to, held.to) : toMid)
+    const arrives = held.to ?? facing(to, held.from ? sideOf(from, held.from) : fromMid)
+    const a = sideOf(from, leaves)
+    const b = sideOf(to, arrives)
+    const reach = Math.max(40, Math.hypot(b.x - a.x, b.y - a.y) / 2.5)
+    const out = OUTWARD[leaves]
+    const back = OUTWARD[arrives]
+    return finish(a, { x: a.x + out.x * reach, y: a.y + out.y * reach }, { x: b.x + back.x * reach, y: b.y + back.y * reach }, b)
+  }
   // The open air between the two cards, across and down. Whichever there is
   // more of is the way the wire runs.
   const across = Math.abs(toMid.x - fromMid.x) - (from.w + to.w) / 2
@@ -859,6 +875,9 @@ export const wirePath = (
   const out = east ? Math.max(a.x, b.x) + reach : Math.min(a.x, b.x) - reach
   return finish(a, { x: out, y: a.y }, { x: out, y: b.y }, b)
 }
+
+/** Straight out of each side of a card. */
+const OUTWARD: Record<Side, Spot> = { n: { x: 0, y: -1 }, e: { x: 1, y: 0 }, s: { x: 0, y: 1 }, w: { x: -1, y: 0 } }
 
 /** A point on a cubic curve, `t` of the way along it. */
 const pointOn = (

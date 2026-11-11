@@ -17,7 +17,12 @@ export type SketchWire = {
    *  lays it out itself. */
   x?: number
   y?: number
+  /** The side of a card each end was plugged into: north, east, south or
+   *  west. Left out, that end meets whichever side faces the other card. */
+  sides?: WireSides
 }
+
+export type WireSides = { from?: 'n' | 'e' | 's' | 'w'; to?: 'n' | 'e' | 's' | 'w' }
 
 /** How a card or wire drawn over the map stands: drawn new and not built
  *  yet, drawn and built, or crossed out to be taken away. */

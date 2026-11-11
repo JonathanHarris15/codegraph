@@ -107,8 +107,9 @@ export type Drawing = {
   /** Puts things down where they were dragged. Joining makes the move one
    *  step with the one before, as when Alt and drag copied what it carries. */
   onMove: (moves: Arrangement, join?: boolean) => void
-  onWire: (from: string, to: string, kind?: string) => string
-  onRewire: (id: string, end: 'from' | 'to', card: string) => void
+  /** A wire between two cards, plugged into the sides given, if any. */
+  onWire: (from: string, to: string, kind?: string, sides?: { from?: Side; to?: Side }) => string
+  onRewire: (id: string, end: 'from' | 'to', card: string, side?: Side) => void
   /** A card's name, a wire's words, or a note's words; or, for a card,
    *  what it is for. Writing the first words of something just made joins
    *  the step that made it, so one undo takes the whole thing away. */
@@ -755,7 +756,7 @@ export const MapCanvas = ({
             wire,
             key,
             depth,
-            shape: wirePath(from, to, slots(wire.from, wire.to), cardBoxes, { from: fitTo(wire.from, from), to: fitTo(wire.to, to) }, loops.get(wire)),
+            shape: wirePath(from, to, slots(wire.from, wire.to), cardBoxes, { from: fitTo(wire.from, from), to: fitTo(wire.to, to) }, loops.get(wire), wire.sides),
             small: (ins.get(wire.to) ?? []).length > BUSY,
             said: sentenceOf(names.get(wire.from) ?? '', wire.kind, names.get(wire.to) ?? '', wire.words),
           },
@@ -1604,6 +1605,18 @@ export const MapCanvas = ({
     return cardUnder(at, from)
   }
 
+  /** The side of a card a wire is plugged into: the one it is let go near.
+   *  Let go further in, or on a hub, it holds no side, and meets whichever
+   *  side faces the other end. */
+  const pluggedInto = (target: string, at: Spot): Side | undefined => {
+    const box = shapes.boxes.get(target)
+    if (!box || endsAtHub(target) || shapes.hubs.some((hub) => hub.id === target)) return undefined
+    const side = facing(box, at)
+    const edge = sideOf(box, side)
+    const off = side === 'n' || side === 's' ? Math.abs(at.y - edge.y) : Math.abs(at.x - edge.x)
+    return off < 28 / seen.current.k ? side : undefined
+  }
+
   /** Pressing one end of a picked wire, to point it at another card. */
   const pressEnd = (wireId: string, end: 'from' | 'to', other: string) => (event: PointerEvent<SVGCircleElement>): void => {
     if (!drawing) return
@@ -1873,7 +1886,8 @@ export const MapCanvas = ({
       const target = landing(at, now.from, now.rewire?.end)
       const targetBox = target ? shapes.boxes.get(target) : undefined
       const from = now.side ? sideOf(source, now.side) : sideOf(source, facing(source, at))
-      const to = targetBox ? sideOf(targetBox, facing(targetBox, sideOf(source, 'e'))) : at
+      const plugged = target ? pluggedInto(target, at) : undefined
+      const to = targetBox ? sideOf(targetBox, plugged ?? facing(targetBox, sideOf(source, 'e'))) : at
       setLive({ line: { from, to, target } })
     }
   }
@@ -2020,8 +2034,9 @@ export const MapCanvas = ({
         return
       }
       const target = landing(at, now.from, now.rewire?.end)
+      const plugged = target ? pluggedInto(target, at) : undefined
       if (now.rewire) {
-        if (target) drawing.onRewire(now.rewire.id, now.rewire.end, target)
+        if (target) drawing.onRewire(now.rewire.id, now.rewire.end, target, plugged)
         return
       }
       if (target) {
@@ -2029,7 +2044,13 @@ export const MapCanvas = ({
         const hub = shapes.hubs.find((one) => one.id === target || one.id === now.from)
         const other = hub?.id === target ? now.from : target
         const [from, to] = hub ? (hub.into ? [hub.id, other] : [other, hub.id]) : [now.from, target]
-        const id = drawing.onWire(from, to, hub?.kind)
+        // Each end keeps the side it was plugged into: the dot it was drawn
+        // from, and the side it was let go on.
+        const sideAt = new Map<string, Side | undefined>([
+          [now.from, now.side ?? undefined],
+          [target, plugged],
+        ])
+        const id = drawing.onWire(from, to, hub?.kind, { from: sideAt.get(from), to: sideAt.get(to) })
         drawing.onSelect([id])
         return
       }

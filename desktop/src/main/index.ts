@@ -84,7 +84,19 @@ const quietMenu = (): void => {
 // named on the command line, as in tests, wins.
 if (!app.commandLine.hasSwitch('user-data-dir')) app.setPath('userData', join(app.getPath('appData'), 'codegraph-desktop'))
 
-void app.whenReady().then(async () => {
+// One copy to a folder of files. A second, opened again or left running from
+// an older build, would keep its own sketch in hand and write it over the
+// first's, so it brings the open one forward and goes.
+const first = app.requestSingleInstanceLock()
+if (!first) app.quit()
+app.on('second-instance', () => {
+  const window = BrowserWindow.getAllWindows()[0]
+  if (!window) return openWindow()
+  if (window.isMinimized()) window.restore()
+  window.focus()
+})
+
+if (first) void app.whenReady().then(async () => {
   quietMenu()
   await wireModules()
   openBridge()

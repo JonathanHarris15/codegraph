@@ -335,7 +335,9 @@ const queues = new Map<string, Promise<void>>()
 
 /** One document at a time up the line, so its changes land in the order made. */
 export const sendUp = (path: string, says?: string): Promise<void> => {
-  const after = queues.get(path) ?? Promise.resolve()
+  // One send that failed does not stop the ones after it: each tries afresh.
+  const before = queues.get(path)
+  const after = before ? before.catch(() => undefined) : Promise.resolve()
   const next = after.then(() => sendNow(path, says))
   queues.set(path, next)
   return next
@@ -365,6 +367,18 @@ export const sendRemoval = async (path: string): Promise<void> => {
   see(path, null)
 }
 
+/** What goes up beside a document once it is up: its mockups, and the history
+ *  entry. The document is up whatever becomes of these, so a failure here is
+ *  told and not passed on as the save failing. */
+const alongside = async (path: string, work: () => Promise<void>): Promise<void> => {
+  try {
+    await work()
+  } catch (problem) {
+    if (problem instanceof CloudOffline) return
+    console.error(`sync: ${path} went up, but its mockups or history did not:`, problem)
+  }
+}
+
 const sendNow = async (path: string, says?: string): Promise<void> => {
   const cloud = theCloud()
   const me = whoIsIn()
@@ -392,11 +406,14 @@ const sendNow = async (path: string, says?: string): Promise<void> => {
       }
       void sendUp(path)
     } else if (merged && !sameDoc(merged, mine)) local.write(merged)
-    if (merged && path.includes('sketches')) await sendMockups(path, merged)
-    await noteRevision(path, me, latest, merged, says)
+    await alongside(path, async () => {
+      if (merged && path.includes('sketches')) await sendMockups(path, merged)
+      await noteRevision(path, me, latest, merged, says)
+    })
   } catch (problem) {
-    if (!(problem instanceof CloudOffline)) throw problem
+    // Turned down, it is still owed, and goes up when this computer next catches up.
     markPending(path, true)
+    if (!(problem instanceof CloudOffline)) throw problem
   }
 }
 
