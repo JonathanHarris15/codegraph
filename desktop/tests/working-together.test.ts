@@ -1,6 +1,6 @@
 // codegraph: test feature invite-member
 import { execFileSync } from 'node:child_process'
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { changeRole } from '../src/features/change-role.js'
@@ -351,6 +351,41 @@ describe('when the online side turns something down', () => {
     await saveSketch({ ...sketch, name: 'Plan 3' })
     await beBen()
     expect((await listSketches(id)).map((s) => s.name)).toEqual(['Plan 3'])
+  })
+
+  it('sends up, on starting, a sketch an older build saved here but never sent nor marked owed', async () => {
+    const id = await invited()
+    const sketch = await startSketch(id, 'New sketch')
+    await sent()
+    const cloud = openFolderCloud(join(yard.path, 'online'), () => up)
+    useCloud({ ...cloud, change: async () => Promise.reject(new Error('permission-denied')) })
+    await saveSketch({ ...sketch, name: 'Init Sketch' }).catch(() => undefined)
+    // codegraph: fakes an older build's record of what is owed because only an older build forgot to write it
+    writeFileSync(join(anas.home, 'sync', 'pending.json'), '[]')
+    useCloud(cloud)
+    await pull(ana)
+    await beBen()
+    expect((await listSketches(id)).map((s) => s.name)).toEqual(['Init Sketch'])
+  })
+
+  it('still sends the rest up, and keeps following, when one thing owed is turned down on starting', async () => {
+    const id = await invited()
+    const cloud = openFolderCloud(join(yard.path, 'online'), () => up)
+    useCloud({ ...cloud, change: async () => Promise.reject(new Error('permission-denied')) })
+    const refused = await startSketch(id, 'Refused')
+    await startSketch(id, 'Fine')
+    await sent()
+    expect(pendingCount()).toBe(2)
+    useCloud({ ...cloud, change: (path, how) => (path.includes(refused.id) ? Promise.reject(new Error('permission-denied')) : cloud.change(path, how)) })
+    const { startFollowing, stopFollowing } = await import('../src/modules/sync/index.js')
+    try {
+      await expect(startFollowing(ana)).resolves.toBeUndefined()
+    } finally {
+      stopFollowing()
+    }
+    expect(pendingCount()).toBe(1)
+    await beBen()
+    expect((await listSketches(id)).map((s) => s.name)).toEqual(['Fine'])
   })
 })
 

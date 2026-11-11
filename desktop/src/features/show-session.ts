@@ -1,8 +1,9 @@
 // codegraph: feature show-session in workspace
-// codegraph: uses cloud, members, machine, sync
+// codegraph: uses cloud, members, machine, session, sync
 import { isConnected, type Member } from '../modules/cloud/index.js'
 import { githubClientId } from '../modules/machine/index.js'
 import { whoIsIn } from '../modules/members/index.js'
+import { whySignedOut } from '../modules/session/index.js'
 import { pendingCount } from '../modules/sync/index.js'
 
 export type Session = {
@@ -13,6 +14,8 @@ export type Session = {
   canTypeCode: boolean
   /** Changes on this computer waiting to go up. */
   waiting: number
+  /** Why the app signed its person out by itself, or '' if it did not. */
+  signedOutBecause: string
 }
 
 /** Who is signed in, and how things stand with the online side. */
@@ -21,4 +24,5 @@ export const showSession = async (): Promise<Session> => ({
   member: whoIsIn(),
   canTypeCode: githubClientId() !== '',
   waiting: pendingCount(),
+  signedOutBecause: whySignedOut(),
 })

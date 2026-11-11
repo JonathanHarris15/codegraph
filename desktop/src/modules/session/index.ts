@@ -1,22 +1,28 @@
 // codegraph: module session
-// codegraph: front door signIn, signInAgain, signOut, SignedIn
+// codegraph: front door signIn, signInAgain, signOut, whySignedOut, SignedIn
 
 /** Who is signed in on this computer, from the moment GitHub says who they are
  *  until they sign out: the token kept, the member remembered, the online side
  *  told, and this computer following what changes online. Signing in by token
  *  and by typing a code both end here. */
-import { theCloud } from '../cloud/index.js'
+import { CloudOffline, theCloud } from '../cloud/index.js'
 import { forgetToken, problemWithGithub, savedToken, saveToken, whoFully } from '../github/index.js'
 import { forgetMember, rememberMember, whoIsIn } from '../members/index.js'
 import { startFollowing, stopFollowing } from '../sync/index.js'
 
 export type SignedIn = { ok: boolean; account?: string; problem?: string }
 
+let signedOutBecause = ''
+
+/** Why this computer signed its person out by itself, or '' if it did not. */
+export const whySignedOut = (): string => signedOutBecause
+
 /** Signs a person in with a GitHub token, and from then on that is who they
  *  are here. A token GitHub will not take is thrown away rather than kept. */
 export const signIn = async (token: string): Promise<SignedIn> => {
   if (!token.trim()) return { ok: false, problem: 'Paste a token first.' }
   saveToken(token)
+  signedOutBecause = ''
   try {
     const found = await whoFully(token)
     const member = (await theCloud()?.signIn(token, found)) ?? found
@@ -41,12 +47,21 @@ export const signInAgain = async (): Promise<void> => {
   const token = savedToken()
   try {
     await theCloud()?.signIn(token, me)
-  } catch {
+  } catch (problem) {
     if (!token) return signOut()
+    // Out of reach, they stay in and it is tried again. Turned down, as when GitHub
+    // no longer knows the token, nothing would go up or come down, so they are
+    // asked to sign in again rather than left looking signed in.
+    if (!(problem instanceof CloudOffline)) {
+      console.error('session: the online side turned the sign-in down', problem)
+      await signOut()
+      signedOutBecause = 'The online side no longer takes this sign-in. Sign in again; nothing here is lost.'
+      return
+    }
   }
   // Nothing on screen waits for this, so a failure would go unheard; following
   // starts again on the next sign-in.
-  await startFollowing(me).catch(() => undefined)
+  await startFollowing(me).catch((problem) => console.error('session: could not start following', problem))
 }
 
 /** Forgets who is signed in. What is on this computer stays, for the same member

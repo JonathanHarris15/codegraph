@@ -33,13 +33,16 @@ const startAgain = (home: string): Promise<number | string> =>
       env: { ...process.env, CODEGRAPH_RELEASES: '' },
       stdio: 'ignore',
     })
+    let running = false
+    // Still up after a while: it opened. It is put out for certain, and only
+    // once it has gone does the test go on, so no copy is left behind.
     const late = setTimeout(() => {
-      again.kill()
-      done('still running')
+      running = true
+      again.kill('SIGKILL')
     }, 15_000)
     again.on('exit', (code) => {
       clearTimeout(late)
-      done(code ?? 'killed')
+      done(running ? 'still running' : (code ?? 'killed'))
     })
   })
 
