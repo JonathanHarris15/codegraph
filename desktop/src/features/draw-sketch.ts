@@ -49,13 +49,18 @@ const notesLayer = (notes: FlowchartNote[], root: SketchCard): NonNullable<Sketc
     const at = note.at || root.id
     const level = notes.filter((one) => (one.at || root.id) === at)
     const k = level.indexOf(note)
-    const rows = Math.min(cards.get(at)?.children.length ?? 1, 4)
+    // The canvas spreads a wired level along its wires, a few cards to a row,
+    // and wraps one with no wires four to a row; a row is a card and its air.
+    const here = cards.get(at)
+    const count = here?.children.length ?? 1
+    const rows = Math.max(1, Math.ceil(count / (here?.wires.length ? 3 : 4)))
+    const tall = rows * 206 - 56
     return {
       id: `note-${i + 1}`,
       at,
       kind: 'sticky',
       x: Math.round((k - (level.length - 1) / 2) * 200 - 90),
-      y: -(rows * 110 + 200),
+      y: -Math.round(tall / 2 + 40 + 110),
       w: 180,
       h: 110,
       text: note.text,
