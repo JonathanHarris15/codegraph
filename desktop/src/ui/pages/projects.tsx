@@ -224,6 +224,7 @@ export const ProjectsPage = ({ onOpen, onOpenSketch }: { onOpen: (projectId: str
       ) : needsSignIn ? (
         <div className="ds-empty">
           <div style={{ fontSize: 16, color: 'var(--ink)', marginBottom: 6 }}>Sign in to see your projects</div>
+          {session?.signedOutBecause ? <div style={{ marginBottom: 6 }}>{session.signedOutBecause}</div> : null}
           <div>Your own sketches still open from the Sketches tab.</div>
           <div style={{ marginTop: 16 }}>
             <Button look="loud" onClick={() => void signIn()}>

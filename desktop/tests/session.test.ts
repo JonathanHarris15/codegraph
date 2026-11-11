@@ -1,9 +1,9 @@
 // codegraph: test module session
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { openFirebaseCloud, openFolderCloud, useCloud } from '../src/modules/cloud/index.js'
+import { CloudOffline, openFirebaseCloud, openFolderCloud, useCloud } from '../src/modules/cloud/index.js'
 import { forgetToken } from '../src/modules/github/index.js'
 import { whoIsIn } from '../src/modules/members/index.js'
-import { signIn, signInAgain, signOut } from '../src/modules/session/index.js'
+import { signIn, signInAgain, signOut, whySignedOut } from '../src/modules/session/index.js'
 import { aComputer, closeYard, githubAnswers, openYard, type Yard } from './yard.js'
 
 let yard: Yard
@@ -55,5 +55,34 @@ describe('signing back in when the app opens', () => {
     forgetToken()
     await expect(signInAgain()).resolves.toBeUndefined()
     expect(whoIsIn()).toBeNull()
+  })
+
+  // codegraph: fakes Firebase turning a sign-in down because a folder standing in for it takes anyone
+  const signInRefused = (problem: Error): void => {
+    const cloud = openFolderCloud(`${yard.path}/online`)
+    useCloud({ ...cloud, signIn: async () => Promise.reject(problem) })
+  }
+
+  it('asks them to sign in again, and says why, when the online side turns their token down', async () => {
+    // As when GitHub no longer knows the token Firebase checks it with.
+    signInRefused(Object.assign(new Error('Firebase: Unsuccessful check authorization response from Github'), { code: 'auth/invalid-credential' }))
+    await signInAgain()
+    expect(whoIsIn()).toBeNull()
+    expect(whySignedOut()).toMatch(/sign in again/i)
+  })
+
+  it('keeps them in when the online side cannot be reached', async () => {
+    signInRefused(new CloudOffline('the online side took too long'))
+    await signInAgain()
+    expect(whoIsIn()?.login).toBe('ana')
+    expect(whySignedOut()).toBe('')
+  })
+
+  it('forgets why once they are signed in again', async () => {
+    signInRefused(Object.assign(new Error('no'), { code: 'auth/invalid-credential' }))
+    await signInAgain()
+    useCloud(openFolderCloud(`${yard.path}/online`))
+    expect((await signIn('ghp_good')).ok).toBe(true)
+    expect(whySignedOut()).toBe('')
   })
 })

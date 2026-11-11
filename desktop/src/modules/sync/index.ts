@@ -464,9 +464,10 @@ export const settleMaps = async (project: Project, points: Record<string, Point>
   return maps
 }
 
-/** Sends everything that could not go up before. */
+/** Sends everything that could not go up before. One the online side turns
+ *  down stays owed, is told, and holds back none of the rest. */
 export const catchUp = async (): Promise<void> => {
-  for (const path of pending()) await sendUp(path)
+  for (const path of pending()) await sendUp(path).catch((problem) => console.error(`sync: ${path} was turned down`, problem))
 }
 
 /** Takes in what the online copy now says. Anything changed here and not yet up
@@ -653,7 +654,8 @@ export const startFollowing = async (me: Member): Promise<void> => {
       if (path && !lastSeen(path)) await sendUp(path)
     }
   } catch (problem) {
-    if (!(problem instanceof CloudOffline)) throw problem
+    // Whatever went wrong catching up, this computer still follows and tries again.
+    if (!(problem instanceof CloudOffline)) console.error('sync: could not catch up on starting', problem)
   }
   stopNow = follow(me, (what) => heard(what))
   // What could not go up is tried again, so coming back online sends it.
