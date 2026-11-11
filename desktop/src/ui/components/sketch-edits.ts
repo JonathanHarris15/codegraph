@@ -1,5 +1,5 @@
 // codegraph: component sketch-editor
-import type { Level, Note, SketchCard, SketchField, SketchWire } from '../../modules/sketches/index.js'
+import type { Level, Note, SketchCard, SketchField, SketchWire, WireSides } from '../../modules/sketches/index.js'
 import type { CardType } from '../../modules/card-types/schema.js'
 import { blankCard, isHub, isStore, wireOfHub, hubOf, type CardLook } from '../../modules/sketches/schema.js'
 import type { Arrangement } from '../../modules/arrangements/schema.js'
@@ -259,16 +259,22 @@ export const nudge = (focus: SketchCard, ids: string[], dx: number, dy: number):
       .map((thing) => ({ id: thing.id, x: thing.x! + dx, y: thing.y! + dy })),
   )
 
-export const addWire = (focus: SketchCard, from: string, to: string, kind?: string): [SketchCard, string] => {
-  // One wire between the same two cards is enough; drawing it again picks it.
+export const addWire = (focus: SketchCard, from: string, to: string, kind?: string, sides?: WireSides): [SketchCard, string] => {
+  const plugged = sides && (sides.from || sides.to) ? { sides: { ...(sides.from ? { from: sides.from } : {}), ...(sides.to ? { to: sides.to } : {}) } } : {}
+  // One wire between the same two cards is enough; drawing it again picks it,
+  // and plugs it in where it was drawn this time.
   const already = focus.wires.find((w) => w.from === from && w.to === to)
-  if (already) return [focus, already.id]
+  if (already) {
+    if (!plugged.sides) return [focus, already.id]
+    return [{ ...focus, wires: focus.wires.map((w) => (w.id === already.id ? { ...w, ...plugged } : w)) }, already.id]
+  }
   const wire: SketchWire = {
     id: newId(),
     from,
     to,
     kind: kind ?? kindBetween(focus.children.find((c) => c.id === from), focus.children.find((c) => c.id === to)),
     words: '',
+    ...plugged,
   }
   return [{ ...focus, wires: [...focus.wires, wire] }, wire.id]
 }
@@ -282,16 +288,22 @@ const withoutHubs = (card: SketchCard, gone: Set<string>): SketchCard => {
   return { ...card, wires: card.wires.filter((w) => !lost.has(w.id)), children: card.children.map((c) => withoutHubs(c, lost)) }
 }
 
-/** Points one end of a wire at another card. The card it let go of loses the
- *  hub the wire had on its border, and what was wired to it. */
-export const rewire = (focus: SketchCard, id: string, end: 'from' | 'to', card: string): SketchCard => {
+/** Points one end of a wire at another card, plugged into a side of it if
+ *  given. The card it let go of loses the hub the wire had on its border, and
+ *  what was wired to it. */
+export const rewire = (focus: SketchCard, id: string, end: 'from' | 'to', card: string, side?: 'n' | 'e' | 's' | 'w'): SketchCard => {
   const wire = focus.wires.find((w) => w.id === id)
-  if (!wire || wire[end] === card || (end === 'from' ? wire.to : wire.from) === card) return focus
+  if (!wire || (end === 'from' ? wire.to : wire.from) === card) return focus
+  if (wire[end] === card && wire.sides?.[end] === side) return focus
   const was = wire[end]
+  const { [end]: _old, ...kept } = wire.sides ?? {}
+  const sides = side ? { ...kept, [end]: side } : kept
+  const { sides: _sides, ...bare } = wire
+  const moved = { ...bare, [end]: card, ...(Object.keys(sides).length > 0 ? { sides } : {}) }
   return {
     ...focus,
-    wires: focus.wires.map((w) => (w.id === id ? { ...w, [end]: card } : w)),
-    children: focus.children.map((c) => (c.id === was ? withoutHubs(c, new Set([id])) : c)),
+    wires: focus.wires.map((w) => (w.id === id ? moved : w)),
+    children: was === card ? focus.children : focus.children.map((c) => (c.id === was ? withoutHubs(c, new Set([id])) : c)),
   }
 }
 

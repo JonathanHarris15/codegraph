@@ -194,6 +194,48 @@ describe('a wire runs through its sentence', () => {
   })
 })
 
+describe('a wire plugged into a side of a card', () => {
+  it('arrives on the side it was plugged into, not the side facing', () => {
+    const shape = wirePath(a, b, { from: 0.5, to: 0.5 }, [], {}, undefined, { to: 'n' })
+    expect(shape.head).toEqual({ x: 700, y: 0 })
+    expect(shape.c2.y).toBeLessThan(0)
+  })
+
+  it('leaves from the side it was drawn from', () => {
+    const shape = wirePath(a, b, { from: 0.5, to: 0.5 }, [], {}, undefined, { from: 's' })
+    expect(shape.tail).toEqual({ x: 100, y: 100 })
+    expect(shape.c1.y).toBeGreaterThan(100)
+  })
+
+  it('takes the side facing the plugged end at the end left loose', () => {
+    const shape = wirePath(a, b, { from: 0.5, to: 0.5 }, [], {}, undefined, { to: 'w' })
+    expect(shape.tail).toEqual({ x: 200, y: 50 })
+    expect(shape.head).toEqual({ x: 600, y: 50 })
+  })
+
+  it('keeps the sides it was drawn with', () => {
+    const root = { ...blankCard('root', 'Root', 'system'), children: [blankCard('x', 'X', 'container'), blankCard('y', 'Y', 'container')] }
+    const [wired, id] = addWire(root, 'x', 'y', undefined, { from: 'e', to: 'n' })
+    expect(wired.wires.find((w) => w.id === id)!.sides).toEqual({ from: 'e', to: 'n' })
+  })
+
+  it('moves to another side when drawn again', () => {
+    const root = { ...blankCard('root', 'Root', 'system'), children: [blankCard('x', 'X', 'container'), blankCard('y', 'Y', 'container')] }
+    const [once, id] = addWire(root, 'x', 'y', undefined, { to: 'n' })
+    const [twice, again] = addWire(once, 'x', 'y', undefined, { to: 'w' })
+    expect(again).toBe(id)
+    expect(twice.wires).toHaveLength(1)
+    expect(twice.wires[0]!.sides).toEqual({ to: 'w' })
+  })
+
+  it('takes the side it is let go on when one end moves, and lets go of the old one', () => {
+    const root = { ...blankCard('root', 'Root', 'system'), children: ['x', 'y', 'z'].map((id) => blankCard(id, id, 'container')) }
+    const [wired, id] = addWire(root, 'x', 'y', undefined, { from: 'e', to: 'n' })
+    expect(rewire(wired, id, 'to', 'z', 's').wires[0]!.sides).toEqual({ from: 'e', to: 's' })
+    expect(rewire(wired, id, 'to', 'z').wires[0]!.sides).toEqual({ from: 'e' })
+  })
+})
+
 describe('annotations keep clear of a card opening', () => {
   const closed: Box = { x: 0, y: 0, w: 280, h: 150 }
   const big: Box = { x: -300, y: -200, w: 880, h: 550 }
