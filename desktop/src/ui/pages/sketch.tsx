@@ -75,7 +75,8 @@ export const SketchPage = ({ library, sketchId, onLeave }: { library: string; sk
     if (saving.current) {
       clearTimeout(saving.current)
       saving.current = null
-      await saveNow()
+      // Kept on this computer either way, so leaving does not wait on the online side.
+      await saveNow().catch(() => undefined)
     }
     onLeave()
   }
