@@ -237,6 +237,13 @@ A sketch in a member's own library, on no project. It is theirs alone until they
 share it.
 _Avoid_: personal sketch, draft, local sketch
 
+**Flowchart**:
+A sketch written as text, the way an agent draws one: a Mermaid flowchart whose
+classes name each card's kind, whose subgraphs are the insides of cards, and
+whose wires' words start with their kind. Drawing it again replaces the sketch
+of that name.
+_Avoid_: diagram, import, mermaid (for the sketch itself)
+
 **Snapshot**:
 A copy of the map as it stood at one moment, used to start a sketch.
 _Avoid_: export, copy, baseline

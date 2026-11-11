@@ -98,6 +98,10 @@ keeps. Each lists the whole shape the store should have, not just what changes:
 
 ## Making one from a sketch
 
+The sketch is usually one people drew. When the person asks you to draw it
+yourself, use the `draw` tool (topic `sketches`), and let them look it over in
+the app before you make a proposal from it.
+
 1. Read the sketch: the `sketch` tool, by name. Open each mockup it names.
 2. Be on any branch but the main line: one already in progress, or a new one
    named after the change. A proposal can never start on the main line.

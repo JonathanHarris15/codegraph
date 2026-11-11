@@ -1,5 +1,5 @@
 // codegraph: module sync
-// codegraph: front door useFolder, useHeard, startFollowing, stopFollowing, pull, sendUp, sent, sendSketch, sendSketchSoon, sendFolder, sendMap, settleMaps, sendProject, sendEverything, sendRemoval, catchUp, follow, listRevisions, restoreRevision, pendingCount, removeEverything, projectPath, sketchPath, folderPath, Revision
+// codegraph: front door useFolder, useHeard, startFollowing, stopFollowing, pull, sendUp, sent, sendSketch, sendSketchSoon, oweSketch, sendFolder, sendMap, settleMaps, sendProject, sendEverything, sendRemoval, catchUp, follow, listRevisions, restoreRevision, pendingCount, removeEverything, projectPath, sketchPath, folderPath, Revision
 import { randomUUID } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -437,6 +437,14 @@ export const sendSketchSoon = (sketch: Sketch): void => {
   void sendUp(path).catch(() => undefined)
 }
 
+/** Marks a sketch written from outside the app, as by an agent through the MCP,
+ *  as owed: the MCP has no online side of its own, so the app sends it when it
+ *  next catches up, on opening or on its next try while open. */
+export const oweSketch = (sketch: Sketch): void => {
+  const path = sketchPath(sketch)
+  if (path) markPending(path, true)
+}
+
 /** Waits for everything on its way up to land, or to be kept for later. */
 export const sent = async (): Promise<void> => {
   await Promise.allSettled([...queues.values()])
@@ -467,7 +475,22 @@ export const settleMaps = async (project: Project, points: Record<string, Point>
 /** Sends everything that could not go up before. One the online side turns
  *  down stays owed, is told, and holds back none of the rest. */
 export const catchUp = async (): Promise<void> => {
-  for (const path of pending()) await sendUp(path).catch((problem) => console.error(`sync: ${path} was turned down`, problem))
+  for (const path of pending()) {
+    try {
+      await sendUp(path)
+    } catch (problem) {
+      console.error(`sync: ${path} was turned down`, problem)
+      continue
+    }
+    // Gone up, it may be news to the window too, if it was written from outside.
+    if (!pending().includes(path)) heard({ projectId: libraryOf(path), path })
+  }
+}
+
+/** The library a document online belongs to, as the window names it. */
+const libraryOf = (path: string): string => {
+  const [top, a = ''] = path.split('/')
+  return top === 'projects' ? a : top === 'members' ? LOOSE : SHARED_WITH_ME
 }
 
 /** Takes in what the online copy now says. Anything changed here and not yet up

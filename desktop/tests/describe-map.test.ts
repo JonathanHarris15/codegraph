@@ -131,7 +131,7 @@ describe('recipes in words', () => {
 describe('an agent reading the map', () => {
   it('lists the tools an agent can call', async () => {
     const { tools } = await agent.client.listTools()
-    expect(tools.map((t) => t.name).sort()).toEqual(['check', 'instructions', 'map', 'propose', 'sketch', 'sketches', 'working-on'])
+    expect(tools.map((t) => t.name).sort()).toEqual(['check', 'draw', 'instructions', 'map', 'propose', 'sketch', 'sketches', 'working-on'])
   })
 
   it('reads containers, components, files and wires in words', async () => {

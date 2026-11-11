@@ -1,5 +1,5 @@
 // codegraph: module wording
-// codegraph: front door sentenceOf, spoken, verbOf, Said, SaidPart
+// codegraph: front door sentenceOf, spoken, verbOf, WIRE_KINDS, Said, SaidPart
 
 /** One stretch of a sentence, and what it is doing there, so a screen can
  *  set the names apart from the rest. */
@@ -19,6 +19,9 @@ const VERBS: Record<string, string> = {
   calls: 'calls',
   'leads to': 'leads to',
 }
+
+/** The kinds a wire can be, the usual first. */
+export const WIRE_KINDS = ['uses', 'asks', 'reads', 'starts', 'keeps', 'leads to', 'calls', 'points at']
 
 export const verbOf = (kind: string): string => VERBS[kind] ?? kind
 

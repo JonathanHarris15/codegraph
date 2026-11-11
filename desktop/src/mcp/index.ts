@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { checkCode } from '../features/check-code.js'
 import { describeMap } from '../features/describe-map.js'
 import { describeSketch } from '../features/describe-sketch.js'
+import { drawSketch } from '../features/draw-sketch.js'
 import { findSketches } from '../features/find-sketches.js'
 import { giveInstructions } from '../features/give-instructions.js'
 import { makeProposal } from '../features/make-proposal.js'
@@ -15,8 +16,10 @@ import { useFolder as useAnnotationsFolder } from '../modules/annotations/index.
 import { useFolder as useCardTypesFolder } from '../modules/card-types/index.js'
 import { useFolder as useInstructionsFolder } from '../modules/instructions/index.js'
 import { appFolderAnywhere } from '../modules/machine/index.js'
+import { useFolder as useMembersFolder } from '../modules/members/index.js'
 import { useFolder as useProjectsFolder } from '../modules/projects/index.js'
 import { useFolder as useSketchesFolder } from '../modules/sketches/index.js'
+import { useFolder as useSyncFolder } from '../modules/sync/index.js'
 
 /** The codegraph MCP: how a person's own agent reaches codegraph (ADR 0004).
  *  Each tool hands straight to one feature. Run with `check [folder]` it is
@@ -31,6 +34,10 @@ useAgentsFolder(appFolderAnywhere())
 useAnnotationsFolder(appFolderAnywhere())
 useCardTypesFolder(appFolderAnywhere())
 useInstructionsFolder(appFolderAnywhere())
+// Who is signed in decides who may draw; a sketch drawn is owed to the online
+// copy, which the app sends when it is next open.
+useMembersFolder(appFolderAnywhere())
+useSyncFolder(appFolderAnywhere())
 const text = (words: string) => ({ content: [{ type: 'text' as const, text: words }] })
 
 const serve = async (): Promise<void> => {
@@ -52,8 +59,8 @@ const serve = async (): Promise<void> => {
 
   server.tool(
     'instructions',
-    'What codegraph asks of an agent, by topic: setup (how to set a repo up), tags (the rules), proposals (making and building a proposal), working-here (the block for CLAUDE.md or AGENTS.md).',
-    { topic: z.string().describe('setup, tags, proposals or working-here') },
+    'What codegraph asks of an agent, by topic: setup (how to set a repo up), tags (the rules), design-system, proposals (making and building a proposal), sketches (drawing one with `draw`), working-here (the block for CLAUDE.md or AGENTS.md).',
+    { topic: z.string().describe('setup, tags, design-system, proposals, sketches or working-here') },
     async ({ topic }) => text(giveInstructions(topic)),
   )
 
@@ -76,6 +83,18 @@ const serve = async (): Promise<void> => {
       repo: z.string().optional().describe('The repo folder; the folder the agent works in if left out.'),
     },
     async ({ name, project, repo }) => text(await describeSketch(here(repo), name, project ?? '')),
+  )
+
+  server.tool(
+    'draw',
+    "Makes a sketch in the project, or replaces the one of that name, from a Mermaid flowchart: a node is a card and its class its kind (`api[\"Wardrobe API\"]:::server`), a subgraph is the inside of the card of that id, and a wire's words start with its kind (`app -->|calls: to fetch suggestions| api`). Read the `sketches` instructions first. Says every line that is wrong.",
+    {
+      name: z.string().describe("The sketch's name. One already of that name is replaced."),
+      flowchart: z.string().describe('The Mermaid flowchart, with codegraph tags.'),
+      project: z.string().optional().describe("A project's short name; the project this repo serves if left out."),
+      repo: z.string().optional().describe('The repo folder; the folder the agent works in if left out.'),
+    },
+    async ({ name, flowchart, project, repo }) => text(await drawSketch(here(repo), name, flowchart, project ?? '')),
   )
 
   server.tool(
