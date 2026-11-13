@@ -126,4 +126,39 @@ describe('an agent drawing on the sketch a person has open', () => {
     await until(() => /pointer is on person "Reader"/.test(showLooking()), 'the pointer to be told')
     expect(showLooking()).toContain('software system "Notes app" [notes-app-card]')
   })
+
+  it('makes a store card tall enough for what it says and the stores inside it', async () => {
+    const said = await editSketch(
+      '',
+      '',
+      [
+        { do: 'card', name: 'users', kind: 'store', in: 'db', says: 'One record per person: their closet lives in the stores inside it' },
+        ...['garments', 'garment_index', 'closet_stats', 'outfits', 'style_guide_settings'].map((name) => ({ do: 'card' as const, name, kind: 'inner store', in: 'users' })),
+        { do: 'point', at: 'users' },
+      ],
+      '',
+      'Claude',
+    )
+    expect(said).toContain('The person watched it drawn.')
+    const users = card('users').first()
+    await users.locator('.map-chips').waitFor({ state: 'visible', timeout: PATIENCE })
+    await page.waitForTimeout(800)
+    await picture('agent-3-store')
+    const fit = await users.evaluate((element) => {
+      const inner = element.getBoundingClientRect().bottom - parseFloat(getComputedStyle(element).paddingBottom)
+      const says = element.querySelector('.map-says')!
+      return {
+        // Nothing on the card is squeezed, and nothing runs off its foot.
+        squeezed: [...element.children].filter((child) => child.scrollHeight > child.clientHeight + 1).map((child) => child.className),
+        over: [...element.children].filter((child) => child.getBoundingClientRect().bottom > inner + 1).map((child) => child.className),
+        saysLines: Math.round(says.clientHeight / parseFloat(getComputedStyle(says).lineHeight)),
+      }
+    })
+    expect(fit).toEqual({ squeezed: [], over: [], saysLines: 2 })
+  })
+
+  it("takes the agent's cursor away soon after it stops drawing", async () => {
+    await page.locator('.together-cursor--agent').first().waitFor({ state: 'visible', timeout: PATIENCE })
+    await page.locator('.together-cursor--agent').first().waitFor({ state: 'hidden', timeout: 20_000 })
+  }, 30_000)
 })
