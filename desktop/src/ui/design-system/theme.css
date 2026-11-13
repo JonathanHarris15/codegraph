@@ -1118,7 +1118,9 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+/* Never squeezed by what is below it on a card: that runs off the foot instead. */
 .map-says {
+  flex-shrink: 0;
   color: var(--ink-soft);
   font-size: 12.5px;
   line-height: 17px;
