@@ -39,6 +39,8 @@ How to work here:
    until it is built. Call the `instructions` tool with topic `proposals`
    for how to build one, and how to make one from a sketch.
 7. **Draw what you mean.** To show the person a design before building it,
-   draw it as a sketch with the `draw` tool, written as a Mermaid flowchart.
-   Call the `instructions` tool with topic `sketches` for how.
+   draw it as a sketch: whole with `draw`, or step by step with `edit` while
+   they watch your cursor. When they say "this" or "here", the `looking` tool
+   says which sketch they have open and what they are pointing at. Call the
+   `instructions` tool with topic `sketches` for how.
 <!-- codegraph:end -->

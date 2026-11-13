@@ -1,5 +1,5 @@
 // codegraph: module annotations
-// codegraph: front door useFolder, readAnnotations, writeAnnotations, hasAnnotations, annotationMarks, annotationKeys, removeAnnotations, annotationWords, firstLayer, Annotation, AnnotationEnd, Layer, Pointer
+// codegraph: front door useFolder, readAnnotations, writeAnnotations, hasAnnotations, annotationMarks, annotationKeys, removeAnnotations, annotationWords, firstLayer, annotationKinds, annotationKind, Annotation, AnnotationEnd, AnnotationKind, Layer, Pointer
 import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Layer } from './schema.js'
@@ -7,6 +7,8 @@ import { keepWhole } from '../machine/index.js'
 
 export { firstLayer } from './schema.js'
 export { annotationWords } from './words.js'
+export { annotationKind, annotationKinds } from './kinds.js'
+export type { AnnotationKind } from './kinds.js'
 export type { Annotation, AnnotationEnd, Layer, Pointer } from './schema.js'
 
 let folder = ''

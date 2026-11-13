@@ -21,6 +21,7 @@ import { Trail } from '../components/trail.js'
 import { MembersSheet } from '../components/members-sheet.js'
 import { RevisionsPanel } from '../components/revisions-panel.js'
 import { togetherOn, useRoom } from '../components/together.js'
+import { AGENT_COLOR, agentsAsOthers, useAgents, useFollowAgent, useLooking } from '../components/agents.js'
 
 const SAVE_AFTER_MS = 500
 
@@ -370,6 +371,8 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
     if (saving.current) return
     void window.codegraph.openSketch(projectId, id).then((opened) => {
       if (!opened || saving.current || sketchNow.current?.id !== id) return
+      const now = sketchNow.current
+      if (sameDoc(opened.sketch.root, now.root) && sameDoc(opened.sketch.layers, now.layers) && opened.sketch.name === now.name) return
       seenSketch.current = opened.sketch
       setSketch(opened.sketch)
       setMockups(opened.mockups)
@@ -472,15 +475,25 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
     return p.where.maps?.[in_.id] !== undefined && p.where.maps[in_.id] === sharedMaps[in_.id]
   })
   const others = thereWith.map((p) => ({ id: p.id, name: p.name, color: p.color, inside: p.where.inside ?? '', ...(p.where.x !== undefined ? { x: p.where.x } : {}), ...(p.where.y !== undefined ? { y: p.where.y } : {}), dragging: p.where.dragging ?? [] }))
+  // An agent drawing on this project's sketches from outside the app: what it
+  // drew, its cursor on the sketch open here, and where else it is drawing.
+  const agents = useAgents(projectId, () => {
+    void loadSketches()
+    if (sketchNow.current) refreshSketch.current(sketchNow.current.id)
+  })
+  const agentHere = sketch ? agents.find((a) => a.sketchId === sketch.id) : undefined
+  const agentElsewhere = agents.find((a) => a.sketchId !== sketch?.id)
+  useFollowAgent(agentHere, sketch?.root ?? null, setSketchPath)
+  const onLooking = useLooking(sketch ? { library: projectId, id: sketch.id, name: sketch.name, trail: walk(sketch.root, sketchPath).map((c) => c.name) } : null)
   const focusId = (sketch ? walk(sketch.root, sketchPath) : trail).at(-1)?.id ?? ''
   const focusSystem = sketch ? undefined : inSystem(focusId)
   const board = !online ? '' : sketch ? `sketch:${sketch.id}` : focusSystem ? (sharedMaps[focusSystem.id] ? `${focusSystem.id}@${sharedMaps[focusSystem.id]}` : '') : 'project'
-  const together: Together | undefined = online
+  const together: Together | undefined = online || sketch
     ? togetherOn({
         board,
         room,
         me,
-        others,
+        others: sketch ? [...others, ...agentsAsOthers(agents, sketch.id)] : others,
         onGo: (inside) => {
           if (sketch) {
             const to = pathTo(sketch.root, inside)
@@ -492,6 +505,7 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
         },
       })
     : undefined
+  if (together && sketch) together.onLooking = onLooking
   /** Moving things on a local map is always this member's own to do. */
   const canMoveHere = canDraw || (focusSystem !== undefined && !sharedMaps[focusSystem.id])
   const [showRevisions, setShowRevisions] = useState(false)
@@ -625,6 +639,22 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
                 ? '1 thing in this repo the map could not place'
                 : `${problems.length} things in this repo the map could not place`}
             </button>
+          ) : null}
+          {agentElsewhere ? (
+            <button
+              type="button"
+              className="map-notice map-notice--agent"
+              title={`Open the sketch to watch ${agentElsewhere.who} draw it`}
+              onClick={() => void openOne(agentElsewhere.sketchId)}
+            >
+              <span className="map-agent-dot" style={{ color: AGENT_COLOR }} aria-hidden="true" />
+              {agentElsewhere.who} is drawing in “{agentElsewhere.sketchName}” · Watch
+            </button>
+          ) : null}
+          {agentHere ? (
+            <span className="together-face" style={{ background: AGENT_COLOR }} title={`${agentHere.who} is drawing here`}>
+              {agentHere.who} is drawing
+            </span>
           ) : null}
           {sketch ? (
               <button

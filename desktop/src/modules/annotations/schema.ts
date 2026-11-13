@@ -39,6 +39,10 @@ export type Annotation = {
   to?: AnnotationEnd
   /** The arrows a sticky note points with. */
   pointers?: Pointer[]
+  /** The cards a frame was drawn round, by an agent that could not see where
+   *  they sit. The canvas fits the frame to them the first time it shows them,
+   *  and from then on it is an ordinary frame. */
+  around?: string[]
 }
 
 /** A set of annotations shown or hidden together. Whether its annotations

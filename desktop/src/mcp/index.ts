@@ -7,10 +7,12 @@ import { checkCode } from '../features/check-code.js'
 import { describeMap } from '../features/describe-map.js'
 import { describeSketch } from '../features/describe-sketch.js'
 import { drawSketch } from '../features/draw-sketch.js'
+import { editSketch, type Step } from '../features/edit-sketch.js'
 import { findSketches } from '../features/find-sketches.js'
 import { giveInstructions } from '../features/give-instructions.js'
 import { makeProposal } from '../features/make-proposal.js'
 import { reportWork } from '../features/report-work.js'
+import { showLooking } from '../features/show-looking.js'
 import { useFolder as useAgentsFolder } from '../modules/agents/index.js'
 import { useFolder as useAnnotationsFolder } from '../modules/annotations/index.js'
 import { useFolder as useCardTypesFolder } from '../modules/card-types/index.js'
@@ -95,6 +97,111 @@ const serve = async (): Promise<void> => {
       repo: z.string().optional().describe('The repo folder; the folder the agent works in if left out.'),
     },
     async ({ name, flowchart, project, repo }) => text(await drawSketch(here(repo), name, flowchart, project ?? '')),
+  )
+
+  // Who the agent is, as its own program says: the name its cursor carries.
+  const who = (): string => {
+    const name = server.server.getClientVersion()?.name ?? ''
+    return /claude/i.test(name) ? 'Claude' : name ? name.replace(/[-_]+/g, ' ').replace(/^\w/, (c) => c.toUpperCase()) : 'Agent'
+  }
+  const spot = z.object({ x: z.number(), y: z.number() })
+  const end = z.union([z.string(), spot])
+  const where = {
+    in: z.string().optional().describe("The card whose insides this goes on, by id or name; the top level if left out."),
+  }
+  const step = z.discriminatedUnion('do', [
+    z.object({
+      do: z.literal('card'),
+      name: z.string(),
+      kind: z.string().optional().describe('Its kind, as the `sketches` instructions list by level: server, database, store, page, person...'),
+      ...where,
+      id: z.string().optional().describe('An id to name it by later; made from its name if left out.'),
+      says: z.string().optional().describe('What it is for.'),
+      at: z.string().optional().describe("A page's address."),
+      x: z.number().optional(),
+      y: z.number().optional(),
+    }),
+    z.object({
+      do: z.literal('change'),
+      what: z.string().describe('A card by id or name, or an annotation by id.'),
+      name: z.string().optional(),
+      kind: z.string().optional(),
+      says: z.string().optional(),
+      at: z.string().optional(),
+      text: z.string().optional(),
+      color: z.string().optional(),
+      x: z.number().optional(),
+      y: z.number().optional(),
+      w: z.number().optional(),
+      h: z.number().optional(),
+    }),
+    z.object({ do: z.literal('remove'), what: z.string().describe('A card by id or name, an annotation by id, or a wire by id or as `from -> to`.') }),
+    z.object({
+      do: z.literal('wire'),
+      from: z.string(),
+      to: z.string(),
+      kind: z.string().optional().describe('uses, asks, reads, starts, keeps, leads to, calls or points at.'),
+      words: z.string().optional().describe('What it is for: "to fetch suggestions".'),
+    }),
+    z.object({
+      do: z.literal('fields'),
+      store: z.string(),
+      fields: z.array(z.string()).optional().describe('Each like `owner: text, needed, points at people`.'),
+      open: z.string().optional().describe('For an open store: what any field it does not list may hold.'),
+      unknown: z.boolean().optional().describe('Its shape is not known.'),
+    }),
+    z.object({
+      do: z.literal('note'),
+      text: z.string(),
+      kind: z.string().optional().describe('sticky (the default), text, callout, list, code, or a shape: rect, diamond, circle, cloud, database...'),
+      ...where,
+      near: z.string().optional().describe('A card it keeps beside, by id or name.'),
+      x: z.number().optional(),
+      y: z.number().optional(),
+      w: z.number().optional(),
+      h: z.number().optional(),
+      color: z.string().optional().describe('yellow, orange, pink, purple, blue, green or gray.'),
+    }),
+    z.object({
+      do: z.literal('line'),
+      from: end.describe('A card or annotation, or a spot {x, y}.'),
+      to: end,
+      kind: z.string().optional().describe('arrow (the default), line, dashed, curve or wire.'),
+      text: z.string().optional(),
+      ...where,
+    }),
+    z.object({
+      do: z.literal('frame'),
+      text: z.string().describe('Its name.'),
+      around: z.array(z.string()).optional().describe('The cards it goes round, all on one level.'),
+      kind: z.string().optional().describe('frame (the default), rounded, oval, lane, column, bracket or braces.'),
+      ...where,
+      color: z.string().optional(),
+      x: z.number().optional(),
+      y: z.number().optional(),
+      w: z.number().optional(),
+      h: z.number().optional(),
+    }),
+    z.object({ do: z.literal('point'), at: end.describe('A card or annotation, or a spot {x, y} on the level `in` names.'), ...where, words: z.string().optional() }),
+  ])
+
+  server.tool(
+    'edit',
+    "Draws on a sketch one step at a time, the way a person would, while they watch your cursor do it: cards (any kind, stores and inner stores too), wires, a store's fields, notes, lines, frames and shapes; changing, moving and taking things away; and pointing at things. Leave `sketch` out to draw on the one the person has open; a name no sketch has makes a new one. Read the `sketches` instructions first. If any step is wrong, nothing is drawn.",
+    {
+      sketch: z.string().optional().describe("The sketch's name; the one open in the app if left out. A new name makes a new sketch."),
+      steps: z.array(step).describe('What to do, in order.'),
+      project: z.string().optional().describe("A project's short name; the project this repo serves if left out."),
+      repo: z.string().optional().describe('The repo folder; the folder the agent works in if left out.'),
+    },
+    async ({ sketch, steps, project, repo }) => text(await editSketch(here(repo), sketch ?? '', steps as Step[], project ?? '', who())),
+  )
+
+  server.tool(
+    'looking',
+    "What the person has open in the app right now: the sketch and the level of it they are on, what their pointer is on, what they have picked, and where everything on that level sits. Ask it when they say \"this\" or \"here\", and before drawing beside something.",
+    {},
+    async () => text(showLooking()),
   )
 
   server.tool(

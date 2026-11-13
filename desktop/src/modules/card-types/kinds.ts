@@ -1,5 +1,5 @@
 // codegraph: module card-types
-import type { Level } from '../sketches/schema.js'
+import { isStore, type Level } from '../sketches/schema.js'
 
 /** The level drawn inside a card of each level. */
 export const levelInside: Record<Level, Level> = {
@@ -31,3 +31,17 @@ export const kindsInCode: Partial<Record<Level, string[]>> = {
 
 /** What is drawn inside a database, or files on disk: its stores. */
 export const keepsThings = (kind: string): boolean => kind === 'database' || kind === 'files on disk'
+
+/** What can be drawn inside a card: the level its insides are on, and the kinds
+ *  that go there, the usual first. A database holds stores, a store holds inner
+ *  stores, and a person or a file holds nothing. At the container and component
+ *  levels a person's own card types, by name, go too. */
+export const kindsInside = (card: { level: Level; kind: string }, saved: string[] = []): { level: Level; kinds: string[] } => {
+  if (card.kind === 'person' || card.level === 'code') return { level: card.level, kinds: [] }
+  if (isStore(card.kind)) return { level: card.level, kinds: ['inner store'] }
+  if (keepsThings(card.kind) && card.level === 'container') return { level: card.level, kinds: ['store'] }
+  const level = levelInside[card.level]
+  const kinds =
+    level === 'container' || level === 'component' ? [...new Set([...kindsAt[level], ...(kindsInCode[level] ?? []), ...saved])] : kindsAt[level]
+  return { level, kinds }
+}

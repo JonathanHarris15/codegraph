@@ -62,7 +62,7 @@ export const annotationWords = (layers: Layer[], levels: string[], nameOf: (card
     for (const { a, layer } of here) {
       const what = a.from
         ? `${called(a.kind)} from ${end(a.from)} to ${end(a.to)}${a.text ? `, saying "${a.text}"` : ''}`
-        : `${about(a)}${a.near ? `, beside ${nameOf(a.near.card)}` : ''}${pointing(a)}`
+        : `${about(a)}${a.near ? `, beside ${nameOf(a.near.card)}` : ''}${a.around?.length ? `, round ${a.around.map(nameOf).join(', ')}` : ''}${pointing(a)}`
       out.push(`  ${what} (layer ${layer.name}${layer.shown ? '' : ', hidden'})`)
     }
   }

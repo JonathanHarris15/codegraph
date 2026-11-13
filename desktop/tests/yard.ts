@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { ElectronApplication } from 'playwright'
 import { vi } from 'vitest'
+import { useFolder as useAgentsFolder } from '../src/modules/agents/index.js'
 import { useFolder as useAnnotationsFolder } from '../src/modules/annotations/index.js'
 import { useFolder as useArrangementsFolder } from '../src/modules/arrangements/index.js'
 import { useFolder as useCardTypesFolder } from '../src/modules/card-types/index.js'
@@ -317,6 +318,7 @@ export const aComputer = (yard: Yard, name: string, github = '') => {
     be: (who?: Member): void => {
       useProjectsFolder(home)
       useSketchesFolder(home)
+      useAgentsFolder(home)
       useAnnotationsFolder(home)
       useArrangementsFolder(home)
       useCardTypesFolder(home)

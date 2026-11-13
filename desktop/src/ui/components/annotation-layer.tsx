@@ -56,6 +56,21 @@ export const caughtBy = (box: Box, drawn: Drawn[]): string[] =>
     })
     .map((d) => d.a.id)
 
+/** Room a frame leaves round the cards it goes round, and above them for its
+ *  name. */
+export const AROUND_PAD = 36
+const AROUND_TAB = 28
+
+/** Where a frame drawn round some cards sits, on the board: round them all,
+ *  once every one of them is drawn. */
+export const aroundBox = (boxes: (Box | undefined)[]): Box | null => {
+  if (!boxes.length || boxes.some((b) => !b)) return null
+  const all = boxes as Box[]
+  const x = Math.min(...all.map((b) => b.x)) - AROUND_PAD
+  const y = Math.min(...all.map((b) => b.y)) - AROUND_PAD - AROUND_TAB
+  return { x, y, w: Math.max(...all.map((b) => b.x + b.w)) + AROUND_PAD - x, h: Math.max(...all.map((b) => b.y + b.h)) + AROUND_PAD - y }
+}
+
 const inBox = (p: Spot, b: Box): boolean => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h
 
 /** Every annotation of the shown layers on one level, where it sits on the
@@ -69,9 +84,10 @@ export const drawnOn = (layers: Layer[], level: string, shift: Spot, cards: Card
     for (const a of layer.items) {
       if (a.at !== level || a.from) continue
       const near = a.near ? cardBox.get(a.near.card)?.box : undefined
+      const round = a.around?.length ? aroundBox(a.around.map((id) => cardBox.get(id)?.box)) : null
       const box = moved?.get(a.id) ?? (near
         ? { x: near.x + a.near!.dx, y: near.y + a.near!.dy, w: a.w, h: a.h }
-        : { x: a.x + shift.x, y: a.y + shift.y, w: a.w, h: a.h })
+        : round ?? { x: a.x + shift.x, y: a.y + shift.y, w: a.w, h: a.h })
       boxes.push({ a, layer, box })
     }
   }
