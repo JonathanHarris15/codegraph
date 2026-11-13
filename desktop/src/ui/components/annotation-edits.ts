@@ -63,7 +63,9 @@ export const placeAt = (
   everywhere(layers, (a) => {
     const to = moves.get(a.id)
     if (!to) return a
-    const { near: _, ...rest } = a
+    // Moved by hand, it keeps beside what it is dropped by, and no longer
+    // follows the cards it was drawn round.
+    const { near: _, around: __, ...rest } = a
     return {
       ...rest,
       x: Math.round(to.box.x),

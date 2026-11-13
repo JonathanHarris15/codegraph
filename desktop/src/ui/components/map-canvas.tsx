@@ -19,7 +19,8 @@ import type { Layer } from '../../modules/annotations/index.js'
 import type { CardType } from '../../modules/card-types/schema.js'
 import type { CardLook } from '../../modules/sketches/schema.js'
 import { addLayer, changeAnnotation, changeLayer, duplicateAnnotations, layerOf, placeAnnotation, removeAnnotations, removeLayer } from './annotation-edits.js'
-import { AnnotationLayer, AnnotationPlacer, caughtBy, drawnAmong, drawnOn } from './annotation-layer.js'
+import { AnnotationLayer, AnnotationPlacer, aroundBox, caughtBy, drawnAmong, drawnOn } from './annotation-layer.js'
+import type { Seen } from '../../features/say-looking.js'
 import { AnnotationLibrary, LayersPanel } from './annotation-library.js'
 import { COLOR_NAMES, COLORS, shapeOf } from './annotation-shapes.js'
 import { IconPick } from './card-look-editor.js'
@@ -198,6 +199,10 @@ export type Together = {
   onLetGo: (ids: string[]) => void
   /** Goes where a member is. */
   onGo: (inside: string) => void
+  /** Tells this member's agent what they are looking at: the card they are
+   *  inside, their pointer in its space, what is under it, what they have
+   *  picked, and what the level shows. */
+  onLooking?: (looking: { inside: string; x?: number; y?: number; over: string; picked: string[]; seen: Seen[] }) => void
 }
 
 /** Whether a wheel event comes from a trackpad rather than a mouse wheel.
@@ -1694,6 +1699,75 @@ export const MapCanvas = ({
     return caughtBy(box, drawnAmong(annotating.layers, level.card.id, level.shift, annoCardsOf(level), level.annoBoxes, notDrawn))
   }
 
+  /** The annotations drawn on the level in hand, where they sit on the board. */
+  const drawnHere = useMemo(
+    () => (annotating ? drawnAmong(annotating.layers, focus.id, shift, annoCardsOf(working), working.annoBoxes, notDrawn) : []),
+    [annotating?.layers, focus.id, shift.x, shift.y, working, notDrawn],
+  )
+
+  // A frame an agent drew round some cards is fitted to them the first time
+  // the level is shown, and is an ordinary frame from then on.
+  useEffect(() => {
+    if (!annotating || annotating.frozen) return
+    const level = levels[workAt]
+    if (!level) return
+    const fits = new Map<string, Box>()
+    for (const layer of annotating.layers)
+      for (const a of layer.items) {
+        if (a.at !== focus.id || !a.around?.length) continue
+        const box = aroundBox(a.around.map((id) => level.natural.find((p) => p.card.id === id)?.box))
+        if (box) fits.set(a.id, box)
+      }
+    if (!fits.size) return
+    const fitted = annotating.layers.map((layer) => ({
+      ...layer,
+      items: layer.items.map((a) => {
+        const box = fits.get(a.id)
+        if (!box) return a
+        const { around: _, ...rest } = a
+        return { ...rest, x: Math.round(box.x), y: Math.round(box.y), w: Math.round(box.w), h: Math.round(box.h) }
+      }),
+    }))
+    annotating.onChange(fitted, 'pin')
+  }, [annotating?.layers, levels, workAt, focus.id])
+
+  /** What the level in hand shows, in its own space, for an agent to be told. */
+  const seenHere = useMemo(
+    (): Seen[] => [
+      ...placed.map((p) => ({ id: p.card.id, what: p.card.kind || p.card.level, name: p.card.name, x: p.box.x - shift.x, y: p.box.y - shift.y, w: p.box.w, h: p.box.h })),
+      ...drawnHere.map((d) => {
+        const [a, b] = d.ends ?? [null, null]
+        const box = a && b ? { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x), h: Math.abs(a.y - b.y) } : d.box
+        return { id: d.a.id, what: shapeOf(d.a.kind).name.toLowerCase(), name: d.a.text.replace(/\s+/g, ' ').trim(), x: box.x - shift.x, y: box.y - shift.y, w: box.w, h: box.h }
+      }),
+    ],
+    [placed, drawnHere, shift.x, shift.y],
+  )
+  /** What is under a spot on the board: a note or a shape first, then a card,
+   *  then a frame it is drawn in. */
+  const overAt = (spot: { x: number; y: number }): string => {
+    const inside = (b: Box): boolean => spot.x >= b.x && spot.x <= b.x + b.w && spot.y >= b.y && spot.y <= b.y + b.h
+    const notes = drawnHere.filter((d) => !d.ends && inside(d.box))
+    const loose = notes.find((d) => !shapeOf(d.a.kind).behind)
+    if (loose) return loose.a.id
+    const card = [...placed].reverse().find((p) => inside(p.box))
+    if (card) return card.card.id
+    return notes[0]?.a.id ?? ''
+  }
+  const pointerAt = useRef<{ x: number; y: number } | null>(null)
+  const pickedNow = [...selected, ...annoPicked]
+  const tellLooking = (): void => {
+    const at = pointerAt.current
+    together?.onLooking?.({
+      inside: focus.id,
+      ...(at ? { x: Math.round(at.x - shift.x), y: Math.round(at.y - shift.y) } : {}),
+      over: at ? overAt(at) : '',
+      picked: pickedNow,
+      seen: seenHere,
+    })
+  }
+  useEffect(tellLooking, [focus.id, pickedNow.join(','), seenHere])
+
   const down = (event: PointerEvent<HTMLDivElement>): void => {
     // Holding Shift draws a box to pick with, on a drawing or over a map, and
     // it works out around the open card too, where annotations can be picked
@@ -1764,6 +1838,8 @@ export const MapCanvas = ({
     if (together) {
       const here = worldOf(event)
       together.onCursor(focus.id, here.x - shift.x, here.y - shift.y)
+      pointerAt.current = here
+      if (together.onLooking) tellLooking()
     }
     const now = gesture.current
     if (!now) return
@@ -2901,6 +2977,7 @@ export const MapCanvas = ({
                 const card = placed.find((p) => p.card.id === cardId)?.card
                 return card ? holds(card) : false
               }}
+              boxOf={(id) => where.get(id) ?? drawnHere.find((d) => d.a.id === id)?.box}
               onGo={together.onGo}
             />
           ) : null}

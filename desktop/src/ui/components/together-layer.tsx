@@ -15,6 +15,9 @@ export type Other = {
   y?: number
   /** Where things they are dragging have got to, in that same space. */
   dragging: { id: string; x: number; y: number }[]
+  /** An agent's cursor goes to a thing by id, wherever the canvas drew it,
+   *  and says what it is doing there. */
+  agent?: { target: string; words: string }
 }
 
 /** Others on the board: the cursor of anyone inside the same card; a badge on
@@ -28,6 +31,7 @@ export const TogetherLayer = ({
   k,
   placed,
   contains,
+  boxOf,
   onGo,
 }: {
   others: Other[]
@@ -39,6 +43,8 @@ export const TogetherLayer = ({
   placed: { card: DrawnCard; box: Box }[]
   /** Whether a card holds another, however deep. */
   contains: (cardId: string, inside: string) => boolean
+  /** Where a card or an annotation on this level is drawn, on the board. */
+  boxOf: (id: string) => Box | undefined
   onGo: (inside: string) => void
 }) => {
   const atScreenSize = { transform: `scale(${1 / k})`, transformOrigin: 'top left' }
@@ -80,7 +86,25 @@ export const TogetherLayer = ({
         )
       })}
       {others
-        .filter((o) => o.inside === focusId && o.x !== undefined && o.y !== undefined)
+        .filter((o) => o.agent && o.inside === focusId)
+        .map((o) => {
+          const box = o.agent!.target ? boxOf(o.agent!.target) : undefined
+          const at = box ? { x: box.x + box.w * 0.55, y: box.y + box.h * 0.6 } : o.x !== undefined && o.y !== undefined ? { x: o.x + shift.x, y: o.y + shift.y } : null
+          if (!at) return null
+          return (
+            <div key={o.id} className="together-cursor together-cursor--agent" role="status" aria-label={`${o.name}'s cursor${o.agent!.words ? `: ${o.agent!.words}` : ''}`} style={{ left: at.x, top: at.y, ...atScreenSize }}>
+              <svg width="18" height="22" viewBox="0 0 16 20" aria-hidden="true">
+                <path d="M1 1 L1 16 L5 12.5 L8 19 L11 17.5 L8 11.5 L14 11 Z" fill={o.color} stroke="white" strokeWidth="1" />
+              </svg>
+              <span style={{ background: o.color }}>
+                <b>{o.name}</b>
+                {o.agent!.words ? <em>{o.agent!.words}</em> : null}
+              </span>
+            </div>
+          )
+        })}
+      {others
+        .filter((o) => !o.agent && o.inside === focusId && o.x !== undefined && o.y !== undefined)
         .map((o) => (
           <div key={o.id} className="together-cursor" role="status" aria-label={`${o.name}'s cursor`} style={{ left: (o.x ?? 0) + shift.x, top: (o.y ?? 0) + shift.y, ...atScreenSize }}>
             <svg width="16" height="20" viewBox="0 0 16 20" aria-hidden="true">

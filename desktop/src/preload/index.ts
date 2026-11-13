@@ -11,6 +11,9 @@ export type Api = Asked & {
   /** Calls back whenever the project's map may have changed; hands back how
    *  to stop. One project is watched at a time. */
   watchProject: (projectId: string, onChange: () => void) => () => void
+  /** Calls back whenever a library's sketches change on this computer, or an
+   *  agent drawing there moves; hands back how to stop. One library at a time. */
+  watchSketches: (library: string, onChange: () => void) => () => void
   /** Goes where others can be seen, hearing them until left; '' leaves. */
   joinRoom: (id: string, heard: (now: RoomNow) => void) => Promise<boolean>
   /** Calls back when something changed online; hands back how to stop. */
@@ -76,6 +79,8 @@ const NAMES: Record<keyof Features, true> = {
   sayWhere: true,
   holdThings: true,
   letGoOfThings: true,
+  sayLooking: true,
+  showAgents: true,
 }
 
 const asked = Object.fromEntries(
@@ -91,6 +96,15 @@ const api: Api = {
     return () => {
       ipcRenderer.off('project:changed', heard)
       void ipcRenderer.invoke('watchProject', '')
+    }
+  },
+  watchSketches: (library, onChange) => {
+    const heard = (): void => onChange()
+    ipcRenderer.on('sketches:changed', heard)
+    void ipcRenderer.invoke('watchSketches', library)
+    return () => {
+      ipcRenderer.off('sketches:changed', heard)
+      void ipcRenderer.invoke('watchSketches', '')
     }
   },
   joinRoom: (id, heard) => {

@@ -244,6 +244,27 @@ whose wires' words start with their kind. Drawing it again replaces the sketch
 of that name.
 _Avoid_: diagram, import, mermaid (for the sketch itself)
 
+**Step**:
+One thing an agent does to a sketch, the way a person would with the mouse: add
+or change a card, wire two together, give a store its fields, put down a note, a
+line, a frame or a shape, take something away, or point at something. Steps are
+drawn one at a time, so a person watching sees each land.
+_Avoid_: operation, command, action, edit (that is a saved state of instructions)
+
+**Agent's cursor**:
+Where an agent drawing on a sketch is at work, drawn like a member's cursor, in
+its own colour and with a few words on what it is doing. It goes to each step as
+it is drawn, and the canvas follows it from level to level. It is only on this
+computer, for the person whose agent it is.
+_Avoid_: bot, ghost, avatar, pointer (that is a sticky note's arrow)
+
+**Looking at**:
+What a person has open in the app and where they point: the sketch, the level
+of it they are on, what is under their pointer, what they have picked, and
+where each thing on that level sits. Their agent can ask, so "this" and "here"
+mean something to it.
+_Avoid_: focus, context, selection, viewport
+
 **Snapshot**:
 A copy of the map as it stood at one moment, used to start a sketch.
 _Avoid_: export, copy, baseline

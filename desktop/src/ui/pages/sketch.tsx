@@ -9,6 +9,7 @@ import { MapCanvas } from '../components/map-canvas.js'
 import { walk } from '../components/map-layout.js'
 import { SketchEditor } from '../components/sketch-editor.js'
 import { togetherOn, useRoom } from '../components/together.js'
+import { AGENT_COLOR, agentsAsOthers, pathTo, useAgents, useFollowAgent, useLooking } from '../components/agents.js'
 import { Trail } from '../components/trail.js'
 
 const SAVE_AFTER_MS = 500
@@ -49,6 +50,20 @@ export const SketchPage = ({ library, sketchId, onLeave }: { library: string; sk
       }),
     [sketchId, read],
   )
+  // An agent drawing here from outside the app: what it drew, and its cursor.
+  const agents = useAgents(library, () => {
+    if (saving.current) return
+    void window.codegraph.openSketch(library, sketchId).then((opened) => {
+      const now = latest.current
+      if (!opened || saving.current || (now && sameDoc(opened.sketch.root, now.root) && sameDoc(opened.sketch.layers, now.layers) && opened.sketch.name === now.name)) return
+      seen.current = opened.sketch
+      latest.current = opened.sketch
+      setSketch(opened.sketch)
+      setMockups(opened.mockups)
+    })
+  })
+  const agentHere = agents.find((a) => a.sketchId === sketchId)
+  useFollowAgent(agentHere, sketch?.root ?? null, setPath)
 
   const saveNow = async (): Promise<void> => {
     const sent = latest.current
@@ -99,17 +114,25 @@ export const SketchPage = ({ library, sketchId, onLeave }: { library: string; sk
   }, [shared, sketchId])
   const myRole = sketch?.members?.find((m) => m.id === me)?.role
   const canDraw = library === LOOSE || myRole === 'owner' || myRole === 'collaborator'
-  const together = shared
-    ? togetherOn({
-        board: `sketch:${sketchId}`,
-        room,
-        me,
-        others: room.people.map((p) => ({ id: p.id, name: p.name, color: p.color, inside: p.where.inside ?? '', ...(p.where.x !== undefined ? { x: p.where.x } : {}), ...(p.where.y !== undefined ? { y: p.where.y } : {}), dragging: p.where.dragging ?? [] })),
-        onGo: () => undefined,
-      })
-    : undefined
-
   const trail = sketch ? walk(sketch.root, path) : []
+  const onLooking = useLooking(sketch ? { library, id: sketch.id, name: sketch.name, trail: trail.map((c) => c.name) } : null)
+  const together = {
+    ...togetherOn({
+      board: shared ? `sketch:${sketchId}` : '',
+      room,
+      me,
+      others: [
+        ...room.people.map((p) => ({ id: p.id, name: p.name, color: p.color, inside: p.where.inside ?? '', ...(p.where.x !== undefined ? { x: p.where.x } : {}), ...(p.where.y !== undefined ? { y: p.where.y } : {}), dragging: p.where.dragging ?? [] })),
+        ...agentsAsOthers(agents, sketchId),
+      ],
+      onGo: (inside) => {
+        if (!sketch) return
+        const to = pathTo(sketch.root, inside)
+        if (to.length) setPath(to)
+      },
+    }),
+    onLooking,
+  }
 
   return (
     <div className="map-page">
@@ -134,6 +157,11 @@ export const SketchPage = ({ library, sketchId, onLeave }: { library: string; sk
               {p.name}
             </span>
           ))}
+          {agentHere ? (
+            <span className="together-face" style={{ background: AGENT_COLOR }} title={`${agentHere.who} is drawing here`}>
+              {agentHere.who} is drawing
+            </span>
+          ) : null}
           <ThemeSwitch />
         </div>
       </div>
@@ -143,9 +171,9 @@ export const SketchPage = ({ library, sketchId, onLeave }: { library: string; sk
         ) : !sketch ? (
           <div className="ds-empty">Opening the sketch…</div>
         ) : canDraw ? (
-          <SketchEditor key={sketch.id} sketch={sketch} mockups={mockups} path={path} onPath={setPath} onChange={changed} onAddMockup={(id) => void addMockup(id)} {...(together ? { together } : {})} />
+          <SketchEditor key={sketch.id} sketch={sketch} mockups={mockups} path={path} onPath={setPath} onChange={changed} onAddMockup={(id) => void addMockup(id)} together={together} />
         ) : (
-          <MapCanvas key={sketch.id} root={sketch.root as never} path={path} onPath={setPath} annotating={{ layers: sketch.layers ?? [], onChange: () => undefined, frozen: true }} {...(together ? { together } : {})} />
+          <MapCanvas key={sketch.id} root={sketch.root as never} path={path} onPath={setPath} annotating={{ layers: sketch.layers ?? [], onChange: () => undefined, frozen: true }} together={together} />
         )}
       </div>
     </div>

@@ -1,8 +1,8 @@
 // codegraph: module flowchart
-// codegraph: front door readFlowchart, Flowchart, FlowchartNote
+// codegraph: front door readFlowchart, readField, Flowchart, FlowchartNote
 import { randomUUID } from 'node:crypto'
-import { keepsThings, kindsAt, kindsInCode, levelInside, type CardType } from '../card-types/index.js'
-import { blankCard, hubOf, isStore, type Level, type SketchCard, type SketchWire } from '../sketches/index.js'
+import { kindsAt, kindsInCode, kindsInside, type CardType } from '../card-types/index.js'
+import { blankCard, hubOf, isStore, type SketchCard, type SketchField, type SketchWire } from '../sketches/index.js'
 import { WIRE_KINDS } from '../wording/index.js'
 
 /** Words written on one level of a flowchart: `at` is the card they are inside,
@@ -26,6 +26,9 @@ type Node = {
   kind: { cls: string; line: number } | null
   says: string
   at: string
+  /** A store's fields, and what any it does not list may hold. */
+  fields: (SketchField & { line: number })[]
+  others: string
 }
 
 type Edge = { from: string; to: string; label: string; line: number }
@@ -51,7 +54,7 @@ export const readFlowchart = (text: string, types: CardType[] = []): Flowchart =
   const touch = (id: string, line: number, declared: boolean): Node => {
     let node = nodes.get(id)
     if (!node) {
-      node = { id, name: '', line, declaredIn: null, seenIn: here(), opened: 0, kind: null, says: '', at: '' }
+      node = { id, name: '', line, declaredIn: null, seenIn: here(), opened: 0, kind: null, says: '', at: '', fields: [], others: '' }
       nodes.set(id, node)
     }
     if (declared && node.declaredIn === null) {
@@ -70,7 +73,16 @@ export const readFlowchart = (text: string, types: CardType[] = []): Flowchart =
     if (line.startsWith('%%')) {
       const note = /^%%\s*note\s*:\s*(.+)$/i.exec(line)
       const says = /^%%\s*(says|at)\s+([\w-]+)\s*:\s*(.+)$/i.exec(line)
-      if (note) notes.push({ in: here(), text: note[1]!.trim() })
+      const field = /^%%\s*(field|open)\s+([\w-]+)\s*:\s*(.+)$/i.exec(line)
+      if (field) {
+        const node = touch(field[2]!, n, false)
+        if (field[1]!.toLowerCase() === 'open') node.others = field[3]!.trim()
+        else {
+          const read = fieldOf(field[3]!)
+          if (typeof read === 'string') problems.push(`Line ${n}: ${read}`)
+          else node.fields.push({ ...read, line: n })
+        }
+      } else if (note) notes.push({ in: here(), text: note[1]!.trim() })
       else if (says) {
         const node = touch(says[2]!, n, false)
         if (says[1]!.toLowerCase() === 'says') node.says = says[3]!.trim()
@@ -149,16 +161,7 @@ export const readFlowchart = (text: string, types: CardType[] = []): Flowchart =
 
   const build = (at: SketchCard | null): SketchCard[] => {
     const id = at?.id ?? ''
-    const level: Level = !at ? 'system' : isStore(at.kind) || (keepsThings(at.kind) && at.level === 'container') ? at.level : levelInside[at.level]
-    const allowed = !at
-      ? kindsAt.system
-      : isStore(at.kind)
-        ? ['inner store']
-        : keepsThings(at.kind) && at.level === 'container'
-          ? ['store']
-          : level === 'container' || level === 'component'
-            ? [...new Set([...kindsAt[level], ...(kindsInCode[level] ?? []), ...saved.map((type) => type.name.trim())])]
-            : kindsAt[level]
+    const { level, kinds: allowed } = kindsInside(at ?? { level: 'project', kind: 'project' }, saved.map((type) => type.name.trim()))
     const where = at ? `inside ${at.name}` : 'on the top level'
     const out: SketchCard[] = []
     for (const node of inside.get(id) ?? []) {
@@ -179,8 +182,10 @@ export const readFlowchart = (text: string, types: CardType[] = []): Flowchart =
         says: node.says,
         at: node.at,
         ...(type ? { look: { icon: type.icon, shape: type.shape, color: type.color } } : {}),
-        ...(isStore(kind) ? { fields: [], others: '' } : {}),
+        ...(isStore(kind) ? { fields: node.fields.map(({ line: _, ...field }) => field), others: node.others } : {}),
       }
+      if (!isStore(kind) && (node.fields.length || node.others))
+        problems.push(`Line ${node.fields[0]?.line ?? node.line}: ${node.id} is a ${kind}, and only a store or an inner store has fields.`)
       cards.set(node.id, card)
       parent.set(node.id, id)
       card.children = build(card)
@@ -378,3 +383,21 @@ const readStatement = (statement: string): { groups: Named[][]; links: (string |
     groups.push(next)
   }
 }
+
+/** One field of a store, as an agent writes it: its name, a colon, what it
+ *  holds, then `needed` if every record has it and `points at <store>` if it
+ *  holds another record's id: `owner: text, needed, points at people`. */
+export const readField = (said: string): SketchField | string => {
+  const split = /^([^:]+?)\s*:\s*(.*)$/.exec(said.trim())
+  if (!split || !split[1]!.trim()) return `could not read the field "${said.trim()}". Write it like \`owner: text, needed, points at people\`.`
+  const [holds = '', ...more] = split[2]!.split(',').map((part) => part.trim())
+  const field: SketchField = { name: split[1]!.trim(), holds: holds || 'text', needed: false, pointsAt: '' }
+  for (const part of more) {
+    const points = /^points\s+at\s+(.+)$/i.exec(part)
+    if (/^needed$/i.test(part)) field.needed = true
+    else if (points) field.pointsAt = points[1]!.trim()
+    else if (part) return `"${part}" in the field ${field.name} is not \`needed\` or \`points at <store>\`.`
+  }
+  return field
+}
+const fieldOf = readField

@@ -314,7 +314,7 @@ export const SketchEditor = ({
         root={sketch.root}
         path={path}
         onPath={onPath}
-        annotating={{ layers: sketch.layers ?? [], onChange: (layers, step) => keep({ ...now.current, layers }, step ?? '') }}
+        annotating={{ layers: sketch.layers ?? [], onChange: (layers, step) => keep({ ...now.current, layers }, step === 'pin' ? '' : (step ?? ''), step === 'pin') }}
         {...(together ? { together } : {})}
         drawing={{
           selected,

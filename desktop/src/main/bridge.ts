@@ -57,6 +57,9 @@ import { startSignIn } from '../features/start-sign-in.js'
 import { startSketch } from '../features/start-sketch.js'
 import { switchBranch } from '../features/switch-branch.js'
 import { watchProject } from '../features/watch-project.js'
+import { watchSketches } from '../features/watch-sketches.js'
+import { sayLooking } from '../features/say-looking.js'
+import { showAgents } from '../features/show-agents.js'
 
 /** Every feature the window may ask for, by the name it asks with. Each is
  *  its own channel, and nothing is done on the way but handing the call over;
@@ -118,6 +121,8 @@ export const FEATURES = {
   sayWhere,
   holdThings,
   letGoOfThings,
+  sayLooking,
+  showAgents,
 }
 
 export type Features = typeof FEATURES
@@ -133,6 +138,15 @@ export const openBridge = (): void => {
     watching.get(sender.id)?.()
     watching.set(sender.id, projectId ? watchProject(projectId, () => !sender.isDestroyed() && sender.send('project:changed')) : () => undefined)
     sender.once('destroyed', () => watching.get(sender.id)?.())
+  })
+  // One library of sketches a window at a time: what an agent draws there, and
+  // where its cursor is.
+  const watchingSketches = new Map<number, () => void>()
+  ipcMain.handle('watchSketches', (event, library: string) => {
+    const sender = event.sender
+    watchingSketches.get(sender.id)?.()
+    watchingSketches.set(sender.id, library ? watchSketches(library, () => !sender.isDestroyed() && sender.send('sketches:changed')) : () => undefined)
+    sender.once('destroyed', () => watchingSketches.get(sender.id)?.())
   })
   // One room a window at a time: what it hears goes back to that window.
   ipcMain.handle('joinRoom', (event, id: string) => {
