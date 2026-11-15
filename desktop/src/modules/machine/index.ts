@@ -1,12 +1,12 @@
 // codegraph: module machine
-// codegraph: front door keepWhole, appFolder, devRendererUrl, keystore, askForFolder, useChooser, askForPicture, usePicturePicker, mcpServerFile, appFolderAnywhere, watchFolders, realFolder, sameFolder, githubClientId, githubHost, cloudFolder, firebaseSettings, appVersion, releasesUrl, thisComputer, Keystore
+// codegraph: front door keepWhole, appFolder, devRendererUrl, keystore, askForFolder, useChooser, askForPicture, usePicturePicker, mcpServerFile, dataFolder, windowFolder, bringOldFiles, watchFolders, realFolder, sameFolder, githubClientId, githubHost, cloudFolder, firebaseSettings, appVersion, releasesUrl, thisComputer, Keystore
 
 /** This computer and the window around the app: where files are kept, the
  *  operating system's keystore, the folder picker, and what the build says.
  *  Everything here comes from outside the program, so it is asked for
  *  lazily: away from the app — in a test, say — each answer is a plain one. */
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, watch, writeFileSync, type FSWatcher } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, watch, writeFileSync, type FSWatcher } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import type { FirebaseSettings } from '../cloud/index.js'
@@ -34,10 +34,53 @@ export type Keystore = {
   safe: boolean
 }
 
-/** Where this computer keeps codegraph's own files. */
+/** Where this computer keeps codegraph's own files, for the app and the MCP
+ *  alike: CODEGRAPH_HOME when it names a folder, as in tests, and otherwise
+ *  .codegraph in the home folder. Not under AppData: Windows gives a packaged
+ *  app, as the Claude app is, its own private copy of AppData, so an agent it
+ *  runs would read and write files the app never sees (ADR 0026). */
+export const dataFolder = (): string => process.env['CODEGRAPH_HOME'] || join(homedir(), '.codegraph')
+
+/** Where the app keeps codegraph's own files. A folder named on the command
+ *  line, as in tests, keeps them there with the window's. */
 export const appFolder = async (): Promise<string> => {
   const desk = await electron()
+  return desk?.app.commandLine.hasSwitch('user-data-dir') ? desk.app.getPath('userData') : dataFolder()
+}
+
+/** Where the window keeps its own files, and where codegraph before 0.4.1 kept
+ *  everything. */
+export const windowFolder = async (): Promise<string> => {
+  const desk = await electron()
   return desk ? desk.app.getPath('userData') : ''
+}
+
+/** What is codegraph's own in its folder; the rest is the window's. What a
+ *  window is looking at is left out, as it is only true while it is open. */
+const OWN = [
+  'projects.json',
+  'member.json',
+  'github.token',
+  'card-types.json',
+  'instructions.json',
+  'sketches',
+  'sketch-folders',
+  'annotations',
+  'arrangements',
+  'agents',
+  'sync',
+  'mirrors',
+]
+
+/** Copies codegraph's own files from where an older codegraph kept them, the
+ *  first time the new place is used. The old ones stay where they were. It
+ *  says what it brought. */
+export const bringOldFiles = (from: string, to: string): string[] => {
+  if (!from || !existsSync(from) || sameFolder(from, to)) return []
+  if (OWN.some((name) => existsSync(join(to, name)))) return []
+  const brought = OWN.filter((name) => existsSync(join(from, name)))
+  for (const name of brought) cpSync(join(from, name), join(to, name), { recursive: true })
+  return brought
 }
 
 /** Where the built codegraph MCP sits on this computer: beside the app's
@@ -163,18 +206,6 @@ export const usePicturePicker = (which: Chooser): void => {
 
 /** The picture the person picked, or '' if they backed out. */
 export const askForPicture = (): Promise<string> => picturePicker()
-
-/** Where the app keeps codegraph's files, worked out without the app, for
- *  the MCP, which runs on its own. CODEGRAPH_HOME stands in for it, as in
- *  tests. It matches Electron's own place for an app named codegraph-desktop. */
-export const appFolderAnywhere = (): string => {
-  const told = process.env['CODEGRAPH_HOME']
-  if (told) return told
-  const home = homedir()
-  if (process.platform === 'win32') return join(process.env['APPDATA'] ?? join(home, 'AppData', 'Roaming'), 'codegraph-desktop')
-  if (process.platform === 'darwin') return join(home, 'Library', 'Application Support', 'codegraph-desktop')
-  return join(process.env['XDG_CONFIG_HOME'] ?? join(home, '.config'), 'codegraph-desktop')
-}
 
 /** What Windows says, for a moment, when a file is open in another program. */
 const BUSY = new Set(['EPERM', 'EACCES', 'EBUSY'])

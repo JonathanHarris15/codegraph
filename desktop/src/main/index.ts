@@ -8,7 +8,7 @@ import { useFolder as useCardTypesFolder } from '../modules/card-types/index.js'
 import { useFolder as useGithubFolder, useKeystore } from '../modules/github/index.js'
 import { useFolder as useInstructionsFolder } from '../modules/instructions/index.js'
 import { openFirebaseCloud, openFolderCloud, useCloud } from '../modules/cloud/index.js'
-import { appFolder, cloudFolder, devRendererUrl, firebaseSettings, githubHost, keystore } from '../modules/machine/index.js'
+import { appFolder, bringOldFiles, cloudFolder, devRendererUrl, firebaseSettings, githubHost, keystore, windowFolder } from '../modules/machine/index.js'
 import { useFolder as useMembersFolder } from '../modules/members/index.js'
 import { useMirrors } from '../modules/repo/index.js'
 import { signInAgain } from '../modules/session/index.js'
@@ -21,6 +21,7 @@ import { openBridge } from './bridge.js'
  *  keeps its files, and the keystore to lock the GitHub token away in. */
 const wireModules = async (): Promise<void> => {
   const home = await appFolder()
+  bringOldFiles(await windowFolder(), home)
   useProjectsFolder(home)
   useSketchesFolder(home)
   useAgentsFolder(home)
@@ -79,9 +80,10 @@ const quietMenu = (): void => {
   )
 }
 
-// The installed app is called Codegraph, but its files stay where they have
-// always been, under codegraph-desktop, which the MCP looks in too. A folder
-// named on the command line, as in tests, wins.
+// The installed app is called Codegraph, but the window's own files stay where
+// they have always been, under codegraph-desktop. Codegraph's files are kept
+// apart, where the MCP looks too (ADR 0026). A folder named on the command
+// line, as in tests, wins.
 if (!app.commandLine.hasSwitch('user-data-dir')) app.setPath('userData', join(app.getPath('appData'), 'codegraph-desktop'))
 
 // One copy to a folder of files. A second, opened again or left running from

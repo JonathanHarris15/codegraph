@@ -86,13 +86,51 @@ export const isFrame = (card: DrawnCard): boolean => card.level === 'component' 
 /** How many of a store's fields its card lists before it says how many more. */
 export const FIELDS_SHOWN = 8
 
-/** A store's card is as tall as the fields it lists, a line for any more, a
- *  line for what an open one takes, its inner stores, and on a sketch the row
- *  where a field is added; on the map that row is a little air. */
+/** The room inside a store's card, across, between its padding. */
+const STORE_INSIDE = 226
+
+/** How many lines words take in a width, wrapped at spaces, given how wide a
+ *  letter is on average. Reckoned a little wide, so a card is never short. */
+const linesFor = (text: string, width: number, letter: number): number => {
+  let lines = 1
+  let used = 0
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    const wide = word.length * letter
+    const next = used ? used + letter + wide : wide
+    if (next > width && used) {
+      lines += Math.ceil(wide / width)
+      used = wide % width
+    } else used = next
+  }
+  return lines
+}
+
+/** How many rows a card's chips take: up to six names and a count of the rest,
+ *  each in a pill, wrapped across the card. */
+const chipRows = (names: string[]): number => {
+  const chips = [...names.slice(0, 6), ...(names.length > 6 ? [`+${names.length - 6}`] : [])]
+  let rows = 1
+  let used = 0
+  for (const chip of chips) {
+    const wide = Math.min(chip.length * 6.4 + 16, STORE_INSIDE)
+    if (used && used + 4 + wide > STORE_INSIDE) {
+      rows += 1
+      used = wide
+    } else used = used ? used + 4 + wide : wide
+  }
+  return rows
+}
+
+/** A store's card is as tall as what it says (two lines at most), the fields
+ *  it lists, a line for any more, a line for what an open one takes, the rows
+ *  of its inner stores, and on a sketch the row where a field is added; on the
+ *  map that row is a little air. */
 const storeHeight = (card: DrawnCard): number => {
   const fields = card.fields ?? []
   const lines = Math.min(fields.length, FIELDS_SHOWN) + (fields.length > FIELDS_SHOWN ? 1 : 0) + (card.others ? 1 : 0)
-  return 96 + (card.says ? 22 : 0) + lines * 18 + (card.children.length ? 28 : 0) + ADD_FIELD_ROW
+  const says = card.says ? 5 + Math.min(2, linesFor(card.says, STORE_INSIDE, 6.6)) * 17 : 0
+  const chips = card.children.length ? 8 + chipRows(card.children.map((c) => c.name)) * 20 : 0
+  return 96 + says + lines * 18 + chips + ADD_FIELD_ROW
 }
 
 /** The row on a store's card where a field is added. */

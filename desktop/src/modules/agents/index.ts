@@ -96,8 +96,10 @@ export type Looking = {
   at: string
 }
 
-/** An agent that has said nothing for this long has gone quiet. */
-const AGENT_QUIET_MS = 2 * 60 * 1000
+/** An agent that has said nothing for this long has stopped drawing. Each step
+ *  it takes says where it is, a second or less apart while the person watches,
+ *  so a few seconds of quiet means it is done, and its cursor goes. */
+const AGENT_QUIET_MS = 8_000
 /** A window says what it is looking at every minute it is open; one silent
  *  for longer than this is shut. */
 const LOOKING_QUIET_MS = 3 * 60 * 1000

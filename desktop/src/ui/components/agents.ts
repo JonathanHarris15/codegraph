@@ -8,8 +8,8 @@ import type { Other } from './together-layer.js'
 /** The colour an agent's cursor is drawn in: one no member is given. */
 export const AGENT_COLOR = '#d97757'
 
-/** A cursor that has not moved for this long has stopped drawing. */
-const STILL_MS = 2 * 60 * 1000
+/** While a cursor shows, how often the window asks whether it has gone. */
+const ASK_AGAIN_MS = 1_000
 
 /** The ids from the top of a card down to one inside it, or [] if it is not there. */
 export const pathTo = (card: { id: string; children: { id: string; children: unknown[] }[] }, id: string): string[] => {
@@ -32,11 +32,17 @@ export const useAgents = (library: string, onChange: () => void): AgentInSketch[
     if (!library) return
     let live = true
     let said = ''
+    let again: ReturnType<typeof setTimeout> | undefined
     const read = (): void => {
       void window.codegraph.showAgents(library).then((found) => {
+        if (!live) return
+        // A cursor that stops moving goes, though nothing else changes: while
+        // one shows, ask again soon. The folder is watched for a new one.
+        clearTimeout(again)
+        if (found.length) again = setTimeout(read, ASK_AGAIN_MS)
         // Nothing redraws when no agent has moved.
         const now = JSON.stringify(found)
-        if (!live || now === said) return
+        if (now === said) return
         said = now
         setAgents(found)
       })
@@ -46,16 +52,14 @@ export const useAgents = (library: string, onChange: () => void): AgentInSketch[
       read()
       told.current()
     })
-    // A cursor that stops moving goes, even if nothing else changes.
-    const every = setInterval(read, 30_000)
     return () => {
       live = false
       stop()
-      clearInterval(every)
+      clearTimeout(again)
       setAgents([])
     }
   }, [library])
-  return agents.filter((a) => Date.now() - Date.parse(a.at) < STILL_MS)
+  return agents
 }
 
 /** An agent on one sketch, as the canvas draws others. */

@@ -17,7 +17,7 @@ import { useFolder as useAgentsFolder } from '../modules/agents/index.js'
 import { useFolder as useAnnotationsFolder } from '../modules/annotations/index.js'
 import { useFolder as useCardTypesFolder } from '../modules/card-types/index.js'
 import { useFolder as useInstructionsFolder } from '../modules/instructions/index.js'
-import { appFolderAnywhere } from '../modules/machine/index.js'
+import { dataFolder } from '../modules/machine/index.js'
 import { useFolder as useMembersFolder } from '../modules/members/index.js'
 import { useFolder as useProjectsFolder } from '../modules/projects/index.js'
 import { useFolder as useSketchesFolder } from '../modules/sketches/index.js'
@@ -30,16 +30,16 @@ import { useFolder as useSyncFolder } from '../modules/sync/index.js'
 const here = (repo?: string): string => resolve(repo || process.cwd())
 
 // Projects and their sketches live where the app keeps them.
-useProjectsFolder(appFolderAnywhere())
-useSketchesFolder(appFolderAnywhere())
-useAgentsFolder(appFolderAnywhere())
-useAnnotationsFolder(appFolderAnywhere())
-useCardTypesFolder(appFolderAnywhere())
-useInstructionsFolder(appFolderAnywhere())
+useProjectsFolder(dataFolder())
+useSketchesFolder(dataFolder())
+useAgentsFolder(dataFolder())
+useAnnotationsFolder(dataFolder())
+useCardTypesFolder(dataFolder())
+useInstructionsFolder(dataFolder())
 // Who is signed in decides who may draw; a sketch drawn is owed to the online
 // copy, which the app sends when it is next open.
-useMembersFolder(appFolderAnywhere())
-useSyncFolder(appFolderAnywhere())
+useMembersFolder(dataFolder())
+useSyncFolder(dataFolder())
 const text = (words: string) => ({ content: [{ type: 'text' as const, text: words }] })
 
 const serve = async (): Promise<void> => {
