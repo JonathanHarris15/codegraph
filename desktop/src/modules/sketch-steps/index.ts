@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { annotationKind, type Annotation, type AnnotationEnd, type Layer } from '../annotations/index.js'
 import { kindsInside } from '../card-types/index.js'
 import { readField } from '../flowchart/index.js'
-import { blankCard, hubOf, isStore, wireOfHub, type Sketch, type SketchCard, type SketchWire } from '../sketches/index.js'
+import { blankCard, hubOf, isStore, wireOfHub, wireStores, type Sketch, type SketchCard, type SketchWire } from '../sketches/index.js'
 import { WIRE_KINDS } from '../wording/index.js'
 
 /** One end of a line: a card or an annotation, by id or name, or a spot on the
@@ -144,7 +144,15 @@ const freeSpot = (sketch: Sketch, level: SketchCard, w: number, h: number): { x:
 const cursorAt = (found: Found, words: string): Cursor => ({ inside: found.parent?.id ?? found.card.id, target: found.card.id, words })
 const cursorOn = (a: Annotation, words: string): Cursor => ({ inside: a.at, target: a.id, words })
 
-const ok = (sketch: Sketch, did: string, before: Cursor | null, after: Cursor): StepDone => ({ ok: true, sketch, did, before, after })
+/** A step done. Whatever it changed, a field that points at a store is wired
+ *  to it, as it is when a person draws. */
+const ok = (sketch: Sketch, did: string, before: Cursor | null, after: Cursor): StepDone => ({
+  ok: true,
+  sketch: { ...sketch, root: wireStores(sketch.root) },
+  did,
+  before,
+  after,
+})
 const no = (problem: string): StepDone => ({ ok: false, problem })
 
 /** Reads a wire's kind: one of the eight, any case. */

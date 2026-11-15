@@ -1567,6 +1567,12 @@ h3 {
   cursor: default;
 }
 
+/* the way wires are drawn now, curved or square */
+.map-zoom-button--on {
+  background: var(--surface-sunken);
+  color: var(--ink-000);
+}
+
 .map-zoom-scale {
   min-width: 56px;
   height: var(--space-8);
@@ -1994,6 +2000,22 @@ h3 {
   stroke-width: 2px;
   pointer-events: all;
   cursor: crosshair;
+}
+
+/* the middle of each piece of a picked right-angle wire, to drag it across */
+.map-wire-piece {
+  fill: var(--pick-handle);
+  stroke: var(--focus-ring);
+  stroke-width: 1.5px;
+  pointer-events: all;
+}
+
+.map-wire-piece--across {
+  cursor: ns-resize;
+}
+
+.map-wire-piece--down {
+  cursor: ew-resize;
 }
 
 /* lines that show two edges have lined up while dragging */

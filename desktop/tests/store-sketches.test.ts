@@ -3,8 +3,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { describeSketch } from '../src/features/describe-sketch.js'
 import { startSketch, type MapCard } from '../src/features/start-sketch.js'
 import { addProject, addSoftwareSystem, useFolder as useProjects } from '../src/modules/projects/index.js'
-import { blankCard, useFolder as useSketches, writeSketch, type SketchCard } from '../src/modules/sketches/index.js'
-import { addStoreInside, choicesIn, kindBetween, placeCard, setFields } from '../src/ui/components/sketch-edits.js'
+import { blankCard, useFolder as useSketches, wireStores, writeSketch, type SketchCard } from '../src/modules/sketches/index.js'
+import { addStoreInside, choicesIn, kindBetween, placeCard, remove, setFields } from '../src/ui/components/sketch-edits.js'
 import { choiceWords, typeOf } from '../src/ui/components/store-fields.js'
 import { aChurchRepo, closeYard, openYard, type Yard } from './yard.js'
 
@@ -143,5 +143,67 @@ describe('a sketch told to an agent', () => {
     expect(said).toContain('      householdId: text, points at households')
     expect(said).toContain('      inner store involvement (open to text)')
     expect(said).toContain('    store households: shape unknown')
+  })
+})
+
+describe('a field that points at a store is always wired to it', () => {
+  const store = (id: string, name: string, fields: { name: string; pointsAt: string }[] = [], children: SketchCard[] = [], kind = 'store'): SketchCard => ({
+    ...blankCard(id, name, 'component', kind),
+    fields: fields.map((f) => ({ ...f, holds: 'text', needed: false })),
+    children,
+  })
+  const pointing = (card: SketchCard) => card.wires.filter((w) => w.kind === 'points at').map((w) => [w.from, w.to, w.words])
+
+  it('wires a field to a store drawn after it', () => {
+    const db = { ...database(), children: [store('r', 'rosters', [{ name: 'personId', pointsAt: 'people' }])] }
+    expect(pointing(wireStores(db))).toEqual([])
+    const later = { ...db, children: [...db.children, store('p', 'people')] }
+    expect(pointing(wireStores(later))).toEqual([['r', 'p', 'personId']])
+  })
+
+  it('wires an inner store from the store it lives in, and to one that is inside another', () => {
+    const db = {
+      ...database(),
+      children: [
+        store('p', 'people', [], [store('a', 'away', [{ name: 'coverId', pointsAt: 'rosters' }], [], 'inner store')]),
+        store('r', 'rosters', [{ name: 'prayerId', pointsAt: 'prayer_requests' }]),
+        store('h', 'households', [], [store('q', 'prayer_requests', [], [], 'inner store')]),
+      ],
+    }
+    expect(pointing(wireStores(db))).toEqual([
+      ['p', 'r', 'coverId'],
+      ['r', 'h', 'prayerId'],
+    ])
+  })
+
+  it('finds the stores in a database however deep the sketch holds it', () => {
+    const db = { ...database(), children: [store('r', 'rosters', [{ name: 'personId', pointsAt: 'people' }]), store('p', 'people')] }
+    const system = { ...blankCard('sys', 'church', 'system', 'software system'), children: [db] }
+    const root = { ...blankCard('top', 'Church', 'project', 'project'), children: [system] }
+    expect(pointing(wireStores(root).children[0]!.children[0]!)).toEqual([['r', 'p', 'personId']])
+  })
+
+  it('draws one wire however often it is asked, and leaves one a person drew alone', () => {
+    const db = { ...database(), children: [store('r', 'rosters', [{ name: 'personId', pointsAt: 'people' }, { name: 'leaderId', pointsAt: 'people' }]), store('p', 'people')] }
+    const once = wireStores(db)
+    expect(wireStores(once)).toEqual(once)
+    expect(pointing(once)).toEqual([['r', 'p', 'personId']])
+    const drawn = { ...db, wires: [{ id: 'mine', from: 'r', to: 'p', kind: 'points at', words: 'who serves' }] }
+    expect(wireStores(drawn).wires).toEqual(drawn.wires)
+  })
+
+  it('wires nothing for a store that is not there, or for one that points at where it lives', () => {
+    const db = {
+      ...database(),
+      children: [store('p', 'people', [{ name: 'ghostId', pointsAt: 'ghosts' }], [store('a', 'away', [{ name: 'personId', pointsAt: 'people' }], [], 'inner store')])],
+    }
+    expect(wireStores(db)).toEqual(db)
+  })
+
+  it('lets a field go when its wire is taken off, so the wire does not come back', () => {
+    const db = wireStores({ ...database(), children: [store('r', 'rosters', [{ name: 'personId', pointsAt: 'people' }, { name: 'note', pointsAt: '' }]), store('p', 'people')] })
+    const gone = remove(db, [db.wires[0]!.id])
+    expect(gone.children[0]!.fields!.map((f) => f.pointsAt)).toEqual(['', ''])
+    expect(pointing(wireStores(gone))).toEqual([])
   })
 })

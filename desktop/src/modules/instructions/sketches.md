@@ -70,8 +70,10 @@ flowchart LR
 - **A store's fields**: `%% field people: owner: text, needed, points at teams`
   gives the store `people` a field, one line each: its name, what it holds,
   then `needed` if every record has it and `points at <store>` if it holds
-  another record's id. `%% open people: text` makes the store open, saying what
-  any field it does not list may hold. With no fields it is fixed and empty.
+  another record's id. A field that points at a store in the same database is
+  wired to it by itself, so draw no wire for it. `%% open people: text` makes
+  the store open, saying what any field it does not list may hold. With no
+  fields it is fixed and empty.
 - Other comments, `classDef`, `style`, `linkStyle` and `direction` lines are
   passed over, so the flowchart can be styled to show elsewhere too.
 

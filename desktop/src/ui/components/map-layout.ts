@@ -2,6 +2,7 @@
 import type { Card } from '../../features/show-map.js'
 import { hubOf, isStore, type CardLook } from '../../modules/sketches/schema.js'
 import { CARD_SHAPES, drawnShape } from './card-looks.js'
+import { spotOn } from './square-wires.js'
 
 /** A wire as the canvas draws it, from the map or from a sketch. */
 export type DrawnWire = {
@@ -20,6 +21,10 @@ export type DrawnWire = {
   y?: number
   /** The side of a card each end was plugged into, if a person chose one. */
   sides?: { from?: Side; to?: Side }
+  /** Where along that side each end meets, as a share of it. */
+  along?: { from?: number; to?: number }
+  /** Where a right-angle wire turns, if a person moved its pieces. */
+  bends?: Spot[]
 }
 
 /** A note a person left on a level of a sketch. */
@@ -843,6 +848,8 @@ export const wirePath = (
    *  of that side and leaves it straight out; the other end takes whichever
    *  of its sides faces it. */
   held: { from?: Side; to?: Side } = {},
+  /** Where along a plugged-in side each end meets, as a share of it. */
+  along: { from?: number; to?: number } = {},
 ): WireShape => {
   const finish = (
     rawA: { x: number; y: number },
@@ -868,8 +875,8 @@ export const wirePath = (
   if (held.from || held.to) {
     const leaves = held.from ?? facing(from, held.to ? sideOf(to, held.to) : toMid)
     const arrives = held.to ?? facing(to, held.from ? sideOf(from, held.from) : fromMid)
-    const a = sideOf(from, leaves)
-    const b = sideOf(to, arrives)
+    const a = held.from && along.from !== undefined ? spotOn(from, leaves, along.from) : sideOf(from, leaves)
+    const b = held.to && along.to !== undefined ? spotOn(to, arrives, along.to) : sideOf(to, arrives)
     const reach = Math.max(40, Math.hypot(b.x - a.x, b.y - a.y) / 2.5)
     const out = OUTWARD[leaves]
     const back = OUTWARD[arrives]
@@ -946,6 +953,8 @@ export const spread = (
     /** A sentence a person has moved stays exactly where they put it, and
      *  the rest keep clear of it. */
     fixed?: boolean
+    /** The spot a share of the way along a wire that is not one curve. */
+    on?: (t: number) => { x: number; y: number }
   }[],
   cards: Box[] = [],
 ): { x: number; y: number }[] => {
@@ -957,7 +966,7 @@ export const spread = (
   const SLIDES = [0.5, 0.42, 0.58, 0.34, 0.66, 0.26, 0.74, 0.18, 0.82, 0.1, 0.9]
   return chips.map((chip) => {
     if (chip.fixed) return chip.at
-    const free = SLIDES.map((t) => pointOn(chip.tail, chip.c1, chip.c2, chip.head, t)).find((at) => {
+    const free = SLIDES.map((t) => (chip.on ? chip.on(t) : pointOn(chip.tail, chip.c1, chip.c2, chip.head, t))).find((at) => {
       const box = boxAt(at, chip.w, chip.h)
       return !cards.some((card) => hits(box, card)) && !placed.some((other) => hits(box, other))
     })
