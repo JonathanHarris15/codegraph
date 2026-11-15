@@ -66,6 +66,8 @@ import {
   Star,
   UserRound,
   X,
+  Spline,
+  CornerDownRight,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -132,6 +134,8 @@ export const TOOL_GLYPHS = {
   alignBottom: AlignEndHorizontal,
   spaceAcross: AlignHorizontalSpaceAround,
   spaceDown: AlignVerticalSpaceAround,
+  curvedWires: Spline,
+  squareWires: CornerDownRight,
 } as const
 
 export type ToolGlyph = keyof typeof TOOL_GLYPHS

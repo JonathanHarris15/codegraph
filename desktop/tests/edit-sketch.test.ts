@@ -57,6 +57,49 @@ const WARDROBE: Step[] = [
   { do: 'frame', kind: 'lane', text: 'Data', in: 'wardrobe', x: -200, y: 300, w: 600, h: 180 },
 ]
 
+describe('a store an agent says points at another', () => {
+  it('is wired to it, whichever of the two the agent drew first', async () => {
+    const said = await editSketch(
+      '',
+      'Church',
+      [
+        { do: 'card', name: 'Church', kind: 'software system' },
+        { do: 'card', name: 'Data', kind: 'database', in: 'church', id: 'db' },
+        { do: 'card', name: 'rosters', kind: 'store', in: 'db' },
+        { do: 'fields', store: 'rosters', fields: ['personId: text, points at people'] },
+        { do: 'card', name: 'people', kind: 'store', in: 'db' },
+      ],
+      shortName,
+      'Claude',
+      noWait,
+    )
+    expect(said).not.toContain('Nothing')
+    const db = sketchCalled('Church').root.children[0]!.children[0]!
+    const [rosters, people] = db.children
+    expect(db.wires.map((w) => [w.from, w.to, w.kind, w.words])).toEqual([[rosters!.id, people!.id, 'points at', 'personId']])
+  })
+
+  it('is wired to it in a flowchart, with no wire written', async () => {
+    const flowchart = [
+      'flowchart LR',
+      '  church["Church"]:::software-system',
+      '  subgraph church',
+      '    db[("Data")]:::database',
+      '    subgraph db',
+      '      rosters["rosters"]:::store',
+      '      people["people"]:::store',
+      '    end',
+      '  end',
+      '  %% field rosters: personId: text, points at people',
+    ].join('\n')
+    const said = await drawSketch('', 'Flowed', flowchart, shortName)
+    expect(said).not.toContain('Nothing')
+    const db = sketchCalled('Flowed').root.children[0]!.children[0]!
+    const [rosters, people] = db.children
+    expect(db.wires.map((w) => [w.from, w.to, w.kind, w.words])).toEqual([[rosters!.id, people!.id, 'points at', 'personId']])
+  })
+})
+
 describe('an agent drawing on a sketch step by step', () => {
   it('makes a new sketch with cards on every level, stores with fields, and every sort of annotation', async () => {
     const said = await editSketch('', 'Outfits', WARDROBE, shortName, 'Claude', noWait)

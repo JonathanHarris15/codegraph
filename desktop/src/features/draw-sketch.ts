@@ -6,7 +6,7 @@ import { readFlowchart, type FlowchartNote } from '../modules/flowchart/index.js
 import { iMay } from '../modules/members/index.js'
 import { listProjects } from '../modules/projects/index.js'
 import { live, readMap } from '../modules/reader/index.js'
-import { blankCard, listSketches, newSketch, readSketch, writeSketch, type Sketch, type SketchCard } from '../modules/sketches/index.js'
+import { blankCard, listSketches, newSketch, readSketch, wireStores, writeSketch, type Sketch, type SketchCard } from '../modules/sketches/index.js'
 import { oweSketch } from '../modules/sync/index.js'
 
 /** The layer an agent's notes go on, so drawing again replaces them. */
@@ -97,7 +97,7 @@ export const drawSketch = async (repo: string, name: string, flowchart: string, 
   const listed = listSketches(project.id).find((s) => s.name.toLowerCase() === called.toLowerCase())
   const was = listed ? readSketch(project.id, listed.id) : null
   const drawn: SketchCard = { ...blankCard(was?.root.id ?? project.id, project.name, 'project', 'project'), children: read.cards, wires: read.wires }
-  const root = was ? keepPlaces(was.root, drawn) : drawn
+  const root = wireStores(was ? keepPlaces(was.root, drawn) : drawn)
   const layer = notesLayer(read.notes, root)
   const layers = [...(was?.layers ?? []).filter((l) => l.id !== NOTES_LAYER), ...(layer ? [layer] : [])]
   const sketch: Sketch = was

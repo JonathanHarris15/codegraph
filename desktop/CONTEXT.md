@@ -143,9 +143,17 @@ A one-way line between two cards. It shows the kind of relationship, read
 from the code, and a phrase saying what it is for, written in the code beside
 the call. It reads as a sentence: who acts, how, on what, and what for —
 write-note uses notes to keep the note. The wire runs through its sentence, so
-the two cannot come apart. It is a smooth line from card to card, and only moving
-the sentence itself bends it; moving a card it joins lets go of that again.
+the two cannot come apart. It is drawn curved or square, as the person looking
+chooses. Curved, it is a smooth line from card to card, and only moving the
+sentence itself bends it; moving a card it joins lets go of that again. Square,
+it runs in straight pieces that turn at right angles, at its bends.
 _Avoid_: edge, arrow, link, connection, dependency
+
+**Bend**:
+Where a square wire turns, once a person has moved one of its pieces. A wire
+with none finds its own way. Its bends stay put when one card moves, and move
+with the wire when both its cards do.
+_Avoid_: waypoint, elbow, joint, control point
 
 **Hub**:
 Where a wire meets the border of an open card on a drawing. Parts inside the card

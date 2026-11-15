@@ -102,7 +102,10 @@ A module's `keeps` wire reaches the store it owns, not just the database.
 
 A person draws stores like any card inside a database: adds and edits fields
 on the card, sets it fixed or open, draws one store inside another, and draws
-a wire between two to say one points at the other. A snapshot of the map
+a wire between two to say one points at the other. A field that points at a
+store draws that wire by itself, as on the map, whoever wrote the field, a
+person or an agent, and whichever store was drawn first; taking the wire off
+lets the field go, so it does not come back. A snapshot of the map
 carries every store as it stands. The proposal file lists the stores it adds,
 changes or crosses out, each with its whole shape, and the built rule holds
 the schema to it like everything else.

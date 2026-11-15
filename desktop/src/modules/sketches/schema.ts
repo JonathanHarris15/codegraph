@@ -20,6 +20,13 @@ export type SketchWire = {
   /** The side of a card each end was plugged into: north, east, south or
    *  west. Left out, that end meets whichever side faces the other card. */
   sides?: WireSides
+  /** Where along each side it was plugged into it meets, as a share of that
+   *  side from its top or left end; left out, the middle. */
+  along?: { from?: number; to?: number }
+  /** The spots a right-angle wire turns at, where a person moved its pieces,
+   *  in the level's own space. Left out, it finds its own way. A curved wire
+   *  keeps them, unused, for when the board is drawn square again. */
+  bends?: { x: number; y: number }[]
 }
 
 export type WireSides = { from?: 'n' | 'e' | 's' | 'w'; to?: 'n' | 'e' | 's' | 'w' }
@@ -153,3 +160,36 @@ export const blankCard = (id: string, name: string, level: Level, kind = ''): Sk
   wires: [],
   notes: [],
 })
+
+/** The id of the wire a sketch draws by itself from one store to another a
+ *  field of it points at, so drawing it again finds the same wire. */
+const pointsId = (from: string, to: string): string => `points:${from}:${to}`
+
+/** Every card in a sketch, with every field in it that points at a store,
+ *  wired to that store (ADR 0023): who wrote the field, a person or an agent,
+ *  and which store was drawn first, make no difference. The wire runs between
+ *  the stores at the top of the card that holds them, as on the map, so an
+ *  inner store's field wires from the store it lives in. A store is found by
+ *  name among all the stores in that card, inner ones too, and only where the
+ *  name is that of one store. Wires already drawn either way are left as they
+ *  are; nothing is added twice. */
+export const wireStores = (card: SketchCard): SketchCard => {
+  const children = card.children.map(wireStores)
+  const tops = isStore(card.kind) ? [] : children.filter((c) => isStore(c.kind))
+  const wires = [...card.wires]
+  if (tops.length > 1) {
+    const inside = (store: SketchCard): SketchCard[] => [store, ...store.children.filter((c) => isStore(c.kind)).flatMap(inside)]
+    const topOf = new Map<string, string[]>()
+    for (const top of tops) for (const one of inside(top)) topOf.set(one.name.trim(), [...(topOf.get(one.name.trim()) ?? []), top.id])
+    for (const top of tops)
+      for (const field of inside(top).flatMap((one) => one.fields ?? [])) {
+        const found = topOf.get(field.pointsAt.trim())
+        if (!field.pointsAt.trim() || found?.length !== 1 || found[0] === top.id) continue
+        const to = found[0]!
+        if (wires.some((w) => w.kind === 'points at' && w.from === top.id && w.to === to)) continue
+        wires.push({ id: pointsId(top.id, to), from: top.id, to, kind: 'points at', words: field.name })
+      }
+  }
+  const same = children.every((c, i) => c === card.children[i]) && wires.length === card.wires.length
+  return same ? card : { ...card, children, wires }
+}

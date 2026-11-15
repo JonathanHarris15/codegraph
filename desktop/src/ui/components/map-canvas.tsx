@@ -26,6 +26,7 @@ import { COLOR_NAMES, COLORS, shapeOf } from './annotation-shapes.js'
 import { IconPick } from './card-look-editor.js'
 import { BLANK_LOOK, CARD_SHAPES, drawnShape, lookOf } from './card-looks.js'
 import { meetOutline, textAreaOf } from './shape-outline.js'
+import { addBend, dragPiece, nearestOn, pathOf, pieceOf, pointAlong, spotOn, squareBetween, squareRoute, toOutlines, type WireStyle } from './square-wires.js'
 import { CanvasMenu, type MenuItem } from './canvas-menu.js'
 import { SidePanel } from './side-panel.js'
 import { CardPalette } from './card-palette.js'
@@ -70,6 +71,7 @@ import {
   type Side,
   type Slots,
   type Spot,
+  type WireShape,
 } from './map-layout.js'
 import { CardFace, Sentence, kindWords } from './map-faces.js'
 import { Overview } from './overview.js'
@@ -110,7 +112,12 @@ export type Drawing = {
   onMove: (moves: Arrangement, join?: boolean) => void
   /** A wire between two cards, plugged into the sides given, if any. */
   onWire: (from: string, to: string, kind?: string, sides?: { from?: Side; to?: Side }) => string
-  onRewire: (id: string, end: 'from' | 'to', card: string, side?: Side) => void
+  /** Points one end of a wire at a card, plugged into a side if given, and
+   *  where along it as a share of it. */
+  onRewire: (id: string, end: 'from' | 'to', card: string, side?: Side, share?: number) => void
+  /** Where a right-angle wire turns, in the level's own space; none, and it
+   *  finds its own way. Joining makes it one step with the one before. */
+  onBend: (id: string, bends: Spot[] | undefined, join?: boolean) => void
   /** A card's name, a wire's words, or a note's words; or, for a card,
    *  what it is for. Writing the first words of something just made joins
    *  the step that made it, so one undo takes the whole thing away. */
@@ -279,6 +286,8 @@ type Gesture =
       free?: boolean
     }
   | { type: 'connect'; from: string; side: Side | null; rewire?: { id: string; end: 'from' | 'to' }; moved: boolean; sx: number; sy: number }
+  /** Dragging one piece of a right-angle wire, square to the way it runs. */
+  | { type: 'bend'; id: string; key: string; route: Spot[]; piece: number; across: boolean; shift: Spot; moved: boolean; sx: number; sy: number }
   /** Dragging a handle on an open card. */
   | { type: 'resize'; id: string; depth: number; grip: Grip; grab: Spot; start: Box; moved: boolean }
 
@@ -291,6 +300,8 @@ type Live = {
   line?: { from: Spot; to: Spot; target: string }
   /** The room of an open card whose handle is being dragged. */
   room?: { id: string; box: Box }
+  /** A right-angle wire whose piece is being dragged, as it now runs. */
+  bend?: { key: string; route: Spot[] }
 }
 
 /** The outline of a card that is not a plain box, if it is one. */
@@ -395,6 +406,13 @@ export const MapCanvas = ({
       remember('codegraph-palette', next)
       return next
     })
+  // How this window draws wires, on every board: curved, or square.
+  const [wireStyle, setWireStyleNow] = useState<WireStyle>(() => (remembered('codegraph-square-wires', false) ? 'square' : 'curved'))
+  const setWireStyle = (style: WireStyle): void => {
+    remember('codegraph-square-wires', style === 'square')
+    setWireStyleNow(style)
+  }
+  const square = wireStyle === 'square'
   /** Something from the library waiting to be placed with a click, by its key. */
   const [armed, setArmed] = useState('')
   // Annotations: the library and the layers list, a shape waiting to be put
@@ -745,6 +763,26 @@ export const MapCanvas = ({
         return d ? (at) => meetOutline(d, box, at) : undefined
       }
       const loops = loopSides(level.wires, boxes, cardBoxes)
+      /** A right-angle wire's shape: the way it turns, as it is being dragged
+       *  or as it was left, from card to card. */
+      const squared = (wire: DrawnWire, key: string, from: Box, to: Box): WireShape & { route: Spot[] } => {
+        const outlineAt = (id: string, box: Box): { d: string; box: Box } | undefined => {
+          const d = shapedAt.get(id)
+          return d ? { d, box } : undefined
+        }
+        const route =
+          live.bend?.key === key
+            ? live.bend.route
+            : toOutlines(squareRoute({
+                from,
+                to,
+                sides: wire.sides,
+                along: wire.along,
+                slots: slots(wire.from, wire.to),
+                bends: wire.bends?.map((p) => ({ x: p.x + level.shift.x, y: p.y + level.shift.y })),
+              }), { from: outlineAt(wire.from, from), to: outlineAt(wire.to, to) })
+        return { d: pathOf(route), at: pointAlong(route, 0.5), tail: route[0]!, head: route.at(-1)!, c1: route[1] ?? route[0]!, c2: route.at(-2) ?? route[0]!, route }
+      }
       const rows = level.wires.flatMap((wire) => {
         const from = boxes.get(wire.from)
         const to = boxes.get(wire.to)
@@ -761,7 +799,9 @@ export const MapCanvas = ({
             wire,
             key,
             depth,
-            shape: wirePath(from, to, slots(wire.from, wire.to), cardBoxes, { from: fitTo(wire.from, from), to: fitTo(wire.to, to) }, loops.get(wire), wire.sides),
+            shape: (square
+              ? squared(wire, key, from, to)
+              : wirePath(from, to, slots(wire.from, wire.to), cardBoxes, { from: fitTo(wire.from, from), to: fitTo(wire.to, to) }, loops.get(wire), wire.sides, wire.along)) as WireShape & { route?: Spot[] },
             small: (ins.get(wire.to) ?? []).length > BUSY,
             said: sentenceOf(names.get(wire.from) ?? '', wire.kind, names.get(wire.to) ?? '', wire.words),
           },
@@ -799,11 +839,17 @@ export const MapCanvas = ({
           !level.pushed.has(one.wire.to) &&
           !moving?.has(one.wire.from) &&
           !moving?.has(one.wire.to)
+        const route = one.shape.route
+        // On a right-angle wire, a sentence that was put somewhere sits on
+        // the wire nearest there: its pieces are what a person bends.
+        const putAt = put ? { x: one.wire.x! + level.shift.x, y: one.wire.y! + level.shift.y } : null
         return {
           at: held
             ? { x: held.x + level.shift.x, y: held.y + level.shift.y }
-            : put
-              ? { x: one.wire.x! + level.shift.x, y: one.wire.y! + level.shift.y }
+            : putAt
+              ? route
+                ? nearestOn(route, putAt)
+                : putAt
               : one.shape.at,
           w: size?.w ?? (one.small ? 60 : sentenceWidth(one.wire)),
           h: size?.h ?? 24,
@@ -812,6 +858,7 @@ export const MapCanvas = ({
           c2: one.shape.c2,
           head: one.shape.head,
           fixed: Boolean(held) || put,
+          ...(route ? { on: (t: number) => pointAlong(route, t) } : {}),
         }
       })
     const spots = spread(
@@ -822,10 +869,10 @@ export const MapCanvas = ({
     const at = all.map((one, i) => ({
       ...one,
       at: spots[i]!,
-      shape: { ...one.shape, d: chipsNow[i]!.fixed ? wireThrough(one.shape, spots[i]!) : one.shape.d },
+      shape: { ...one.shape, d: chipsNow[i]!.fixed && !one.shape.route ? wireThrough(one.shape, spots[i]!) : one.shape.d },
     }))
     return { all: at, outer: at.filter((one) => one.depth !== workAt), inner: at.filter((one) => one.depth === workAt), hubs, boxes }
-  }, [shown, where, cardBoxes, shapedAt, canDraw, nameOf, sizes, everyCard, everyNote, workAt, live.moves, notDrawn, passing, reaching])
+  }, [shown, where, cardBoxes, shapedAt, canDraw, nameOf, sizes, everyCard, everyNote, workAt, live.moves, live.bend, notDrawn, passing, reaching, square])
 
   /** The hubs on the border of the card open now: the only ones in reach. */
   const hubsHere = useMemo(() => shapes.hubs.filter((hub) => hub.depth + 1 === workAt), [shapes.hubs, workAt])
@@ -1622,6 +1669,42 @@ export const MapCanvas = ({
     return off < 28 / seen.current.k ? side : undefined
   }
 
+  /** Pressing the middle of one piece of a picked right-angle wire, to drag
+   *  it square to the way it runs. */
+  const pressPiece = (wireId: string, key: string, route: Spot[], piece: number) => (event: PointerEvent<SVGRectElement>): void => {
+    if (!drawing || event.button !== 0) return
+    event.stopPropagation()
+    setQuick(null)
+    const p = route[piece]!
+    const q = route[piece + 1]!
+    gesture.current = { type: 'bend', id: wireId, key, route, piece, across: p.y === q.y, shift, moved: false, sx: event.clientX, sy: event.clientY }
+    pending.current = event.pointerId
+  }
+
+  /** Splits a piece of a right-angle wire where it is double-clicked, so
+   *  either half can then be moved on its own. */
+  const splitAt = (wireId: string, route: Spot[], at: Spot): void => {
+    if (!drawing) return
+    const snap = (v: number, by: number): number => Math.round((v - by) / GRID) * GRID + by
+    const split = addBend(route, pieceOf(route, at), { x: snap(at.x, shift.x), y: snap(at.y, shift.y) })
+    if (split !== route) drawing.onBend(wireId, split.slice(1, -1).map((p) => ({ x: p.x - shift.x, y: p.y - shift.y })))
+  }
+
+  /** Where along a side of a card a wire's end was let go, as a share of the
+   *  side, on the grid of the level when the board draws square. */
+  const shareAlong = (target: string, side: Side, at: Spot): number | undefined => {
+    const box = shapes.boxes.get(target)
+    if (!box) return undefined
+    const flat = side === 'n' || side === 's'
+    const raw = flat ? at.x : at.y
+    const by = flat ? shift.x : shift.y
+    const spot = square ? Math.round((raw - by) / GRID) * GRID + by : raw
+    const share = (spot - (flat ? box.x : box.y)) / (flat ? box.w : box.h)
+    // Near the middle is the middle, so a wire put back there runs as before.
+    if (Math.abs(share - 0.5) < 0.04) return undefined
+    return Math.round(Math.max(0.04, Math.min(0.96, share)) * 1000) / 1000
+  }
+
   /** Pressing one end of a picked wire, to point it at another card. */
   const pressEnd = (wireId: string, end: 'from' | 'to', other: string) => (event: PointerEvent<SVGCircleElement>): void => {
     if (!drawing) return
@@ -1655,7 +1738,19 @@ export const MapCanvas = ({
   const openMenu = (event: { clientX: number; clientY: number }, at: Spot): void => {
     const card = cardUnder(at)
     const note = noteBoxes.find((n) => inBox(at, n.box))?.note.id ?? ''
-    const under = card || note
+    // A wire is under the pointer by its sentence, or, square, by its line.
+    const reach = 8 / seen.current.k
+    const wire = drawing
+      ? (shapes.inner.find(({ wire, key, at: said, shape }) => {
+          if (!wire.id) return false
+          const size = sizes[key] ?? { w: sentenceWidth(wire), h: 24 }
+          if (inBox(at, { x: said.x - size.w / 2, y: said.y - size.h / 2, w: size.w, h: size.h })) return true
+          if (!shape.route) return false
+          const near = nearestOn(shape.route, at)
+          return Math.hypot(near.x - at.x, near.y - at.y) < reach
+        })?.wire.id ?? '')
+      : ''
+    const under = wire || card || note
     let ids = selected
     if (under && !selected.includes(under)) {
       ids = [under]
@@ -1941,6 +2036,15 @@ export const MapCanvas = ({
       together?.onDragging([...moves].map(([id, spot]) => ({ id, ...spot })))
       return
     }
+    if (now.type === 'bend') {
+      if (!now.moved && Math.hypot(event.clientX - now.sx, event.clientY - now.sy) < 3) return
+      now.moved = true
+      hold()
+      // The piece settles on the grid of the level it is drawn on.
+      const to = now.across ? Math.round((at.y - now.shift.y) / GRID) * GRID + now.shift.y : Math.round((at.x - now.shift.x) / GRID) * GRID + now.shift.x
+      setLive({ bend: { key: now.key, route: dragPiece(now.route, now.piece, to) } })
+      return
+    }
     if (now.type === 'resize') {
       const dx = at.x - now.grab.x
       const dy = at.y - now.grab.y
@@ -1963,7 +2067,12 @@ export const MapCanvas = ({
       const targetBox = target ? shapes.boxes.get(target) : undefined
       const from = now.side ? sideOf(source, now.side) : sideOf(source, facing(source, at))
       const plugged = target ? pluggedInto(target, at) : undefined
-      const to = targetBox ? sideOf(targetBox, plugged ?? facing(targetBox, sideOf(source, 'e'))) : at
+      const share = target && plugged && now.rewire ? shareAlong(target, plugged, at) : undefined
+      const to = targetBox
+        ? share !== undefined && plugged
+          ? spotOn(targetBox, plugged, share)
+          : sideOf(targetBox, plugged ?? facing(targetBox, sideOf(source, 'e')))
+        : at
       setLive({ line: { from, to, target } })
     }
   }
@@ -2079,6 +2188,12 @@ export const MapCanvas = ({
       if (now.moved) keepRoom(now.depth, now.id, levels[now.depth]!.room)
       return
     }
+    if (now.type === 'bend') {
+      dragged.current = now.moved
+      const route = shown.bend?.route
+      if (now.moved && route && drawing) drawing.onBend(now.id, route.slice(1, -1).map((p) => ({ x: p.x - now.shift.x, y: p.y - now.shift.y })))
+      return
+    }
     if (now.type === 'move') {
       if (now.moved) {
         together?.onDragging([])
@@ -2112,7 +2227,7 @@ export const MapCanvas = ({
       const target = landing(at, now.from, now.rewire?.end)
       const plugged = target ? pluggedInto(target, at) : undefined
       if (now.rewire) {
-        if (target) drawing.onRewire(now.rewire.id, now.rewire.end, target, plugged)
+        if (target) drawing.onRewire(now.rewire.id, now.rewire.end, target, plugged, plugged ? shareAlong(target, plugged, at) : undefined)
         return
       }
       if (target) {
@@ -2279,6 +2394,9 @@ export const MapCanvas = ({
           } }]
         : []),
       ...(card?.kind === 'page' ? [{ name: 'Add a mockup', glyph: 'mockup' as const, act: () => drawing.onMockup(one) }] : []),
+      ...(square && !card && shapes.inner.find((x) => x.wire.id === one)?.wire.bends?.length
+        ? [{ name: 'Let it find its own way', glyph: 'undo' as const, act: () => drawing.onBend(one, undefined) }]
+        : []),
       'rule',
       { name: 'Cut', keys: 'Ctrl+X', act: () => drawing.onCut(ids) },
       { name: 'Copy', glyph: 'copy', keys: 'Ctrl+C', act: () => drawing.onCopy(ids) },
@@ -2313,7 +2431,10 @@ export const MapCanvas = ({
             }}
             onDoubleClick={(event) => {
               event.stopPropagation()
-              startEditing(wire.id!)
+              // On a right-angle wire, the line itself is for bending; its
+              // sentence is still where its words are written.
+              if (shape.route) splitAt(wire.id!, shape.route, worldOf(event))
+              else startEditing(wire.id!)
             }}
           />
         ) : null}
@@ -2543,7 +2664,7 @@ export const MapCanvas = ({
             )}
             {wireGroup(shapes.inner)}
             {live.line ? (
-              <path d={curve(live.line.from, live.line.to)} className="map-wire-live" markerEnd="url(#map-head-live)" />
+              <path d={square ? squareBetween(live.line.from, live.line.to) : curve(live.line.from, live.line.to)} className="map-wire-live" markerEnd="url(#map-head-live)" />
             ) : null}
             {live.guides
               ? [
@@ -2762,9 +2883,29 @@ export const MapCanvas = ({
               ))
             : null}
 
-          {/* The two ends of a picked wire, to drag onto another card. */}
+          {/* The two ends of a picked wire, to drag onto another card, and on a
+              right-angle wire the middle of each piece, to drag it across. */}
           {pickedWire && pickedWire.wire.id ? (
             <svg className="map-wires map-wires--ends" width="1" height="1">
+              {pickedWire.shape.route?.slice(1).flatMap((q, i) => {
+                const route = pickedWire.shape.route!
+                const p = route[i]!
+                if (Math.hypot(q.x - p.x, q.y - p.y) < 20) return []
+                const across = p.y === q.y
+                return [
+                  <rect
+                    key={i}
+                    x={(p.x + q.x) / 2 - (across ? 7 : 4)}
+                    y={(p.y + q.y) / 2 - (across ? 4 : 7)}
+                    width={across ? 14 : 8}
+                    height={across ? 8 : 14}
+                    rx={2}
+                    className={`map-wire-piece map-wire-piece--${across ? 'across' : 'down'}`}
+                    aria-label="Move this piece of the wire"
+                    onPointerDown={pressPiece(pickedWire.wire.id!, pickedWire.key, route, i)}
+                  />,
+                ]
+              })}
               <circle
                 cx={pickedWire.shape.tail.x}
                 cy={pickedWire.shape.tail.y}
@@ -3235,6 +3376,8 @@ export const MapCanvas = ({
           onOut={() => zoomBy(0.8)}
           onFit={fit}
           onUp={backOut}
+          wires={wireStyle}
+          onWires={setWireStyle}
         />
         <Overview
           of={focus.name || 'This level'}

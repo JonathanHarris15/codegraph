@@ -19,6 +19,7 @@ import {
   changeCard,
   changeNote,
   changeWire,
+  bendWire,
   choicesAt,
   copyOf,
   ownTypesAt,
@@ -34,6 +35,7 @@ import {
   retext,
   rewire,
   setFields,
+  wireAllStores,
   addStoreInside,
   wireKinds,
   type Clip,
@@ -113,7 +115,8 @@ export const SketchEditor = ({
   const change = useCallback(
     (next: (focus: SketchCard) => SketchCard, step = '', quiet = false): void => {
       const was = now.current
-      const root = changeAt(was.root, here, (f) => makeRoom(next(f)))
+      // A field pointing at a store is wired to it wherever the change was.
+      const root = wireAllStores(changeAt(was.root, here, (f) => makeRoom(next(f))))
       keep({ ...was, root }, step, quiet)
     },
     [here.join('/'), onChange],
@@ -356,7 +359,8 @@ export const SketchEditor = ({
             })
             return id
           },
-          onRewire: (id, end, card, side) => change((f) => rewire(f, id, end, card, side)),
+          onRewire: (id, end, card, side, share) => change((f) => rewire(f, id, end, card, side, share)),
+          onBend: (id, bends, join) => change((f) => bendWire(f, id, bends), join ? 'join' : ''),
           onText: (id, text, first, field) =>
             change(
               (f) => (field === 'says' ? changeCard(f, id, { says: text }) : retext(f, id, text)),

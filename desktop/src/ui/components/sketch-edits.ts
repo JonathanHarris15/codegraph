@@ -3,7 +3,7 @@ import type { Level, Note, SketchCard, SketchField, SketchWire, WireSides } from
 import type { CardType } from '../../modules/card-types/schema.js'
 import { keepsThings, kindsAt, kindsInCode, levelInside } from '../../modules/card-types/kinds.js'
 import { WIRE_KINDS } from '../../modules/wording/index.js'
-import { blankCard, isHub, isStore, wireOfHub, hubOf, type CardLook } from '../../modules/sketches/schema.js'
+import { blankCard, isHub, isStore, wireOfHub, wireStores, hubOf, type CardLook } from '../../modules/sketches/schema.js'
 import type { Arrangement } from '../../modules/arrangements/schema.js'
 import { BLANK_LOOK, TEMPLATES } from './card-looks.js'
 import { sizeOf, wordsWidth } from './map-layout.js'
@@ -203,6 +203,12 @@ export const placeNote = (focus: SketchCard, at: { x: number; y: number }): [Ske
  *  the wire's own line (ADR 0016). */
 export const moveThings = (focus: SketchCard, moves: Arrangement): SketchCard => {
   const to = new Map(moves.map((m) => [m.id, m]))
+  /** How far a card that had a place was moved. */
+  const by = (id: string): { x: number; y: number } | null => {
+    const card = focus.children.find((c) => c.id === id)
+    const m = to.get(id)
+    return card && m && card.x !== undefined && card.y !== undefined ? { x: Math.round(m.x) - card.x, y: Math.round(m.y) - card.y } : null
+  }
   return {
     ...focus,
     children: focus.children.map((c) => {
@@ -218,6 +224,11 @@ export const moveThings = (focus: SketchCard, moves: Arrangement): SketchCard =>
       if (m) return { ...w, x: Math.round(m.x), y: Math.round(m.y) }
       if (!to.has(w.from) && !to.has(w.to)) return w
       const { x: _x, y: _y, ...free } = w
+      // A right-angle wire whose two cards move together keeps its bends,
+      // moved with them. Moving one card alone leaves them where they were.
+      const a = by(w.from)
+      const b = by(w.to)
+      if (w.bends && a && b && a.x === b.x && a.y === b.y) return { ...free, bends: w.bends.map((p) => ({ x: p.x + a.x, y: p.y + a.y })) }
       return free
     }),
   }
@@ -264,21 +275,50 @@ const withoutHubs = (card: SketchCard, gone: Set<string>): SketchCard => {
 /** Points one end of a wire at another card, plugged into a side of it if
  *  given. The card it let go of loses the hub the wire had on its border, and
  *  what was wired to it. */
-export const rewire = (focus: SketchCard, id: string, end: 'from' | 'to', card: string, side?: 'n' | 'e' | 's' | 'w'): SketchCard => {
+export const rewire = (
+  focus: SketchCard,
+  id: string,
+  end: 'from' | 'to',
+  card: string,
+  side?: 'n' | 'e' | 's' | 'w',
+  /** Where along that side it meets, as a share of it. */
+  share?: number,
+): SketchCard => {
   const wire = focus.wires.find((w) => w.id === id)
   if (!wire || (end === 'from' ? wire.to : wire.from) === card) return focus
-  if (wire[end] === card && wire.sides?.[end] === side) return focus
+  const at = side ? share : undefined
+  if (wire[end] === card && wire.sides?.[end] === side && wire.along?.[end] === at) return focus
   const was = wire[end]
   const { [end]: _old, ...kept } = wire.sides ?? {}
   const sides = side ? { ...kept, [end]: side } : kept
-  const { sides: _sides, ...bare } = wire
-  const moved = { ...bare, [end]: card, ...(Object.keys(sides).length > 0 ? { sides } : {}) }
+  const { [end]: _oldAt, ...keptAt } = wire.along ?? {}
+  const along = at !== undefined ? { ...keptAt, [end]: at } : keptAt
+  // Bends made for one card mean nothing once the wire reaches another.
+  const { sides: _sides, along: _along, bends, ...bare } = wire
+  const moved = {
+    ...bare,
+    [end]: card,
+    ...(Object.keys(sides).length > 0 ? { sides } : {}),
+    ...(Object.keys(along).length > 0 ? { along } : {}),
+    ...(bends && was === card ? { bends } : {}),
+  }
   return {
     ...focus,
     wires: focus.wires.map((w) => (w.id === id ? moved : w)),
     children: was === card ? focus.children : focus.children.map((c) => (c.id === was ? withoutHubs(c, new Set([id])) : c)),
   }
 }
+
+/** Where a right-angle wire turns, in the level's own space; none, and it
+ *  finds its own way again. */
+export const bendWire = (focus: SketchCard, id: string, bends: { x: number; y: number }[] | undefined): SketchCard => ({
+  ...focus,
+  wires: focus.wires.map((w) => {
+    if (w.id !== id) return w
+    const { bends: _was, ...bare } = w
+    return bends?.length ? { ...bare, bends: bends.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })) } : bare
+  }),
+})
 
 export type Picked =
   | { kind: 'card'; card: SketchCard }
@@ -300,18 +340,14 @@ export const changeCard = (focus: SketchCard, id: string, change: Partial<Sketch
   children: focus.children.map((c) => (c.id === id ? { ...c, ...change } : c)),
 })
 
+/** A whole sketch with every field that points at a store wired to it, after
+ *  any change, wherever on the sketch the change was. */
+export const wireAllStores = (root: SketchCard): SketchCard => wireStores(root)
+
 /** Sets a store's fields. A field that points at a store drawn beside it
  *  wires the two, unless they are wired that way already, worded by the field. */
-export const setFields = (focus: SketchCard, id: string, fields: SketchField[] | null): SketchCard => {
-  let next = changeCard(focus, id, { fields })
-  for (const field of fields ?? []) {
-    const target = field.pointsAt && focus.children.find((c) => c.id !== id && isStore(c.kind) && c.name === field.pointsAt)
-    if (!target || next.wires.some((w) => w.from === id && w.to === target.id && w.kind === 'points at')) continue
-    const [wired, wireId] = addWire(next, id, target.id, 'points at')
-    next = field.name ? changeWire(wired, wireId, { words: field.name }) : wired
-  }
-  return next
-}
+export const setFields = (focus: SketchCard, id: string, fields: SketchField[] | null): SketchCard =>
+  wireStores(changeCard(focus, id, { fields }))
 
 /** Adds a store, by name, inside a card on the level: a store inside a
  *  database, or an inner store inside a store. It is fixed with no fields yet,
@@ -376,9 +412,23 @@ export const remove = (focus: SketchCard, ids: string[]): SketchCard => {
   const gone = new Set(ids)
   const wires = focus.wires.filter((w) => !gone.has(w.id) && !gone.has(w.from) && !gone.has(w.to))
   const lost = new Set(focus.wires.filter((w) => !wires.includes(w)).map((w) => w.id))
+  // A store's wire to a store it points at is drawn from its fields, so
+  // taking the wire off lets those fields go, or the wire would come back.
+  const letGo = focus.wires.filter((w) => gone.has(w.id) && w.kind === 'points at')
+  const storesIn = (card: SketchCard | undefined): string[] =>
+    card && isStore(card.kind) ? [card.name.trim(), ...card.children.flatMap(storesIn)] : []
+  const unpoint = (card: SketchCard, names: Set<string>): SketchCard => ({
+    ...card,
+    ...(card.fields ? { fields: card.fields.map((f) => (names.has(f.pointsAt.trim()) ? { ...f, pointsAt: '' } : f)) } : {}),
+    children: card.children.map((c) => (isStore(c.kind) ? unpoint(c, names) : c)),
+  })
+  const children = focus.children.map((c) => {
+    const names = new Set(letGo.filter((w) => w.from === c.id).flatMap((w) => storesIn(focus.children.find((t) => t.id === w.to))))
+    return names.size && isStore(c.kind) ? unpoint(c, names) : c
+  })
   return {
     ...focus,
-    children: focus.children.filter((c) => !gone.has(c.id)).map((c) => withoutHubs(c, lost)),
+    children: children.filter((c) => !gone.has(c.id)).map((c) => withoutHubs(c, lost)),
     wires,
     notes: focus.notes.filter((n) => !gone.has(n.id)),
   }
@@ -450,7 +500,17 @@ export const paste = (focus: SketchCard, clip: Clip, by = 32): [SketchCard, stri
     if (!from || !to) return []
     const copy = newId()
     wireNames.set(w.id, copy)
-    return [{ ...w, id: copy, from, to }]
+    // Its sentence and its bends go along with the cards, by as much.
+    return [
+      {
+        ...w,
+        id: copy,
+        from,
+        to,
+        ...(w.x !== undefined && w.y !== undefined ? { x: w.x + by, y: w.y + by } : {}),
+        ...(w.bends ? { bends: w.bends.map((p) => ({ x: p.x + by, y: p.y + by })) } : {}),
+      },
+    ]
   })
   // A wire that was not copied has no hub on the copy, so nothing can end there.
   const left = new Set(cards.flatMap((c) => c.wires.flatMap((w) => [w.from, w.to])).map(wireOfHub).filter((wire) => wire && !wireNames.has(wire)))
