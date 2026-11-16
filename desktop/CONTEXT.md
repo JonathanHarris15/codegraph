@@ -156,6 +156,13 @@ with none finds its own way. Its bends stay put when one card moves, and move
 with the wire when both its cards do.
 _Avoid_: waypoint, elbow, joint, control point
 
+**Tidying**:
+Laying out one level of a sketch afresh, the way a diagram tool does: cards in
+ranks along the flow, ordered so wires cross as little as they can, and every
+wire routed at right angles on a track of its own, round the cards. The cards a
+frame goes round stay together; notes keep beside their card.
+_Avoid_: auto-layout, arrange, clean up
+
 **Hub**:
 Where a wire meets the border of an open card on a drawing. Parts inside the card
 wire to it, any number of them, to say what the wire from outside really reaches.
