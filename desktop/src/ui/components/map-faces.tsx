@@ -3,7 +3,7 @@ import { useState, type PointerEvent, type ReactNode } from 'react'
 import type { Said } from '../../modules/wording/index.js'
 import { CARD_SHAPES, drawnShape, lookOf } from './card-looks.js'
 import { Glyph, KindGlyph, LookGlyph, isStore, keeps, kindClass, lookClass } from './kind-glyph.js'
-import { FIELDS_SHOWN, isFrame, type DrawnCard, type Placed, type Side, type Spot } from './map-layout.js'
+import { FIELDS_SHOWN, isFrame, nameFit, type DrawnCard, type Placed, type Side, type Spot } from './map-layout.js'
 import { seamOf, textAreaOf } from './shape-outline.js'
 
 /** How the faces on the board are drawn: a card, and a wire's sentence. They
@@ -308,7 +308,9 @@ export const CardFace = ({
     <div
       className={classes.join(' ')}
       data-card={card.id}
-      style={{ left: box.x, top: box.y, width: box.w, height: box.h }}
+      // How big its name is drawn when the board is so far out that the card
+      // is only a block of its colour.
+      style={{ left: box.x, top: box.y, width: box.w, height: box.h, ['--name-fit' as string]: `${nameFit(card.name, box)}px` }}
       role={reachable ? 'button' : undefined}
       aria-label={drawing ? card.name || 'Unnamed card' : opens ? `Open ${card.name}` : card.name}
       aria-pressed={drawing && !locked ? selected : undefined}

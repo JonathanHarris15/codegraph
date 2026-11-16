@@ -41,6 +41,7 @@ import {
   deeper,
   endSlots,
   facing,
+  headerHeight,
   holds,
   inBox,
   isFrame,
@@ -67,6 +68,7 @@ import {
   type DrawnNote,
   type DrawnWire,
   type Grip,
+  type Keep,
   type OpenLevel,
   type Placed,
   type Side,
@@ -175,10 +177,22 @@ const MAP_AIR = 40
  *  the foot and of the tool rail on the left. */
 const FIT_PAD = { left: 24, right: 48, top: 48, bottom: 96 }
 
-/** Zoomed out past this, a card shows only its glyph and name, and wires
- *  their lines: the rest is too small to read. A sketch keeps its details
- *  much further out, since a person is still writing them. */
-const FAR = { map: 0.6, sketch: 0.3 }
+/** Zoomed out past this, a card shows only its glyph and name and a wire only
+ *  its verb, each drawn big enough to read: the rest is too small. On the map
+ *  the card shrinks to its name. Nearer than this, the small words grow as
+ *  the board shrinks, so a database fitted on screen still lists its fields. */
+const NAMES_AT = { map: 0.6, sketch: 0.5 }
+/** Further out still, a card is a block of its colour with its name across
+ *  it, and an open card a tinted area with one big name. */
+const BLOCKS_AT = 0.3
+
+/** How the board is drawn at a zoom: everything, names only, or blocks. */
+type Band = 'near' | 'names' | 'blocks'
+
+/** How near the edge of what can be seen of the board a name tab is kept. */
+const TAB_EDGE = 8
+/** How tall an open card's name tab is, unscaled. */
+const TAB_HIGH = 26
 
 const GRIPS: Grip[] = ['n', 'e', 's', 'w', 'nw', 'ne', 'sw', 'se']
 
@@ -362,13 +376,27 @@ const STORE_EDITOR_ROOM = 560
 /** How wide a hub is on the board. */
 const HUB_SIZE = 16
 
+/** How wide an open card's name tab is, near enough, unscaled. Far out, the
+ *  tab gives its type's word up to make room for the name. */
+const lipWidth = (card: DrawnCard, band: Band = 'near'): number =>
+  (band === 'blocks' ? 40 : 52 + kindWords(card).length * 7.5) + (card.name || 'Unnamed').length * 8.5
+
+/** How much an open card's name tab is scaled, so its name stays readable
+ *  however far out the board is, but never wider than the card. Far out it
+ *  grows to the size of a name a person reads at a glance; zoomed in, it
+ *  keeps its size on the screen rather than growing with the board. */
+const lipScale = (card: DrawnCard, box: Box, k: number, band: Band): number => {
+  const widest = Math.max(1, (box.w * 0.95) / lipWidth(card, band))
+  return Math.min(Math.max(Math.min(1, 1 / k), (band === 'blocks' ? 1 : 0.8) / k), band === 'blocks' ? widest : Math.min(2.5, widest))
+}
+
 /** Near enough where an open card's name tab sits, above its top left
  *  corner, for wire sentences to keep off it. */
-const lipBox = (card: DrawnCard, box: Box): Box => ({
+const lipBox = (card: DrawnCard, box: Box, scale = 1): Box => ({
   x: box.x,
-  y: box.y - 30,
-  w: 52 + kindWords(card).length * 7.5 + (card.name || 'Unnamed').length * 8.5,
-  h: 30,
+  y: box.y - 30 * scale,
+  w: lipWidth(card) * scale,
+  h: 30 * scale,
 })
 
 /** How far a level is from the one in hand: how faded it is. */
@@ -389,6 +417,7 @@ export const MapCanvas = ({
   cardExtra,
   onStartSketch,
   together,
+  cover,
 }: {
   /** What the page puts on a card, if anything, by the card. */
   cardExtra?: (card: DrawnCard) => ReactNode
@@ -406,6 +435,10 @@ export const MapCanvas = ({
   onStartSketch?: () => void
   /** Others working here, if anyone. */
   together?: Together
+  /** How much of the board a panel floating over it covers, in pixels, on
+   *  either side. Fitting keeps clear of it, and what is picked, or what is
+   *  inside the open card, is brought out from under it. */
+  cover?: { right?: number; left?: number }
 }) => {
   const frame = useRef<HTMLDivElement>(null)
   const [view, showView] = useState<View>({ x: 0, y: 0, k: 1 })
@@ -482,6 +515,8 @@ export const MapCanvas = ({
   const [lifting, setLifting] = useState<{ kind: string; x: number; y: number; moved: boolean } | null>(null)
   const [shutOverview, setShutOverview] = useState(true)
   const [hover, setHover] = useState('')
+  /** The dot under the pointer where a wire from outside crosses into the open card. */
+  const [portHover, setPortHover] = useState('')
   /** What is picked on a map that is only shown. A sketch keeps its own. */
   const [held, setHeld] = useState<string[]>([])
   const [live, setLive] = useState<Live>({})
@@ -520,6 +555,16 @@ export const MapCanvas = ({
   const dragged = useRef(false)
   const seen = useRef(view)
   seen.current = view
+  const coverLeft = cover?.left ?? 0
+  const coverRight = cover?.right ?? 0
+  const coverNow = useRef({ left: coverLeft, right: coverRight })
+  coverNow.current = { left: coverLeft, right: coverRight }
+  /** How the board is drawn at this zoom, and the zoom in steps, for working
+   *  out how tall a card is that hugs its name. */
+  const band: Band = view.k < BLOCKS_AT ? 'blocks' : view.k < (drawing ? NAMES_AT.sketch : NAMES_AT.map) ? 'names' : 'near'
+  const stepK = Math.max(BLOCKS_AT, Math.floor(view.k * 20) / 20)
+  /** On the map, zoomed out to names, a card shrinks to its glyph and name. */
+  const hugK = band === 'names' && !drawing ? stepK : 0
 
   /** Moves the board to a view in a straight line, a little at a time. A new
    *  aim while one is under way sets off from wherever the board has got to. */
@@ -621,7 +666,7 @@ export const MapCanvas = ({
         const put = asPut(card)
         const moves = depth === workAt ? live.moves : undefined
         // On the map a card is read, not drawn in, so it is only as tall as
-        // what it says. On a sketch its body is kept to double-click into.
+        // what it says. On a sketch it keeps a little body to double-click into.
         const kids = drawing ? put.children : put.children.map((child) => ({ ...child, snug: true }))
         return {
           card,
@@ -699,20 +744,28 @@ export const MapCanvas = ({
   // was to where it now belongs, and the wires go with it.
   const [settling, setSettling] = useState<{ from: Map<string, Box>; t: number } | null>(null)
   const shown = useMemo((): OpenLevel[] => {
-    if (!settling) return levels
+    // Zoomed out to names on the map, a card is only as tall as its glyph and
+    // name, about its own middle, and its wires meet it there.
+    const hug = (p: Placed): Placed => {
+      if (!hugK || isFrame(p.card) || drawnShape(p.card)) return p
+      const h = headerHeight(p.card, p.box, hugK)
+      return h >= p.box.h ? p : { card: p.card, box: { ...p.box, y: p.box.y + (p.box.h - h) / 2, h } }
+    }
+    const hugged = hugK ? levels.map((level) => ({ ...level, placed: level.placed.map(hug) })) : levels
+    if (!settling) return hugged
     const by = springy(settling.t)
     const slide = (id: string, box: Box): Box => {
       const was = settling.from.get(id)
       return was ? between(was, box, by) : box
     }
-    return levels.map((level) => ({
+    return hugged.map((level) => ({
       ...level,
       placed: level.placed.map((p) => ({ card: p.card, box: slide(p.card.id, p.box) })),
       noteBoxes: level.noteBoxes.map((n) => ({ note: n.note, box: slide(n.note.id, n.box) })),
       open: level.open ? { card: level.open.card, box: slide(level.open.card.id, level.open.box) } : null,
       annoBoxes: new Map([...level.annoBoxes].map(([id, box]) => [id, slide(id, box)])),
     }))
-  }, [levels, settling])
+  }, [levels, settling, hugK])
 
   const working = shown[workAt]!
   const children = working.children
@@ -774,6 +827,26 @@ export const MapCanvas = ({
     return all
   }, [everyCard])
 
+  /** What a wire's sentence keeps off besides the cards: the annotations
+   *  drawn on every level, each by its outline; a frame only by its name, at
+   *  its top left, since a sentence may sit anywhere inside it. Lines are left
+   *  out: a sentence may sit on a line. */
+  const annoKeeps = useMemo((): Keep[] => {
+    if (!annotating) return []
+    return shown.flatMap((level) => {
+      const cards = [
+        ...level.placed.map((p) => ({ id: p.card.id, box: p.box, d: outlineOf(p.card) })),
+        ...(level.open ? [{ id: level.open.card.id, box: level.open.box, d: '' }] : []),
+      ]
+      return drawnAmong(annotating.layers, level.card.id, level.shift, cards, level.annoBoxes, notDrawn).flatMap((one): Keep[] => {
+        if (one.ends) return []
+        const shape = shapeOf(one.a.kind)
+        if (shape.behind) return [{ x: one.box.x, y: one.box.y, w: Math.min(one.box.w, 140), h: 26 }]
+        return [{ ...one.box, ...(shape.d ? { d: shape.d } : {}) }]
+      })
+    })
+  }, [annotating?.layers, shown, notDrawn])
+
   /** Every wire on screen, with its curve, its sentence, and where that sits,
    *  and the hubs where those wires meet the border of an open card. A level's
    *  hubs are worked out before the level inside it, whose wires end there. */
@@ -833,8 +906,9 @@ export const MapCanvas = ({
               ? squared(wire, key, from, to)
               : wirePath(from, to, slotsOf(wire), cardBoxes, { from: fitTo(wire.from, from), to: fitTo(wire.to, to) }, loops.get(wire), wire.sides, wire.along)) as WireShape & { route?: Spot[] },
             // Further out than the level in hand, the verb alone, so the faded
-            // levels around do not crowd the edges with words.
-            small: (ins.get(wire.to) ?? []).length > BUSY || depth !== workAt,
+            // levels around do not crowd the edges with words; and the same
+            // when the board is zoomed out to names.
+            small: (ins.get(wire.to) ?? []).length > BUSY || depth !== workAt || band !== 'near',
             said: sentenceOf(names.get(wire.from) ?? '', wire.kind, names.get(wire.to) ?? '', wire.words),
           },
         ]
@@ -856,7 +930,7 @@ export const MapCanvas = ({
     const all = shown.flatMap(draw)
     // What every sentence keeps off besides the cards: the name tab on each
     // open card, and the dots where wires cross into one.
-    const tabs = shown.flatMap((level) => (level.open ? [lipBox(level.open.card, level.open.box)] : []))
+    const tabs = shown.flatMap((level) => (level.open ? [lipBox(level.open.card, level.open.box, lipScale(level.open.card, level.open.box, stepK, band))] : []))
     const crossings = all.flatMap((one) => {
       const open = shown[one.depth]!.open?.card.id
       if (!open || (one.wire.to !== open && one.wire.from !== open)) return []
@@ -905,10 +979,14 @@ export const MapCanvas = ({
           avoid: [...tabs, ...crossings, ...(level.open ? [level.open.box] : [])],
         }
       })
-    const spots = spread(
-      chipsNow,
-      [...everyCard.filter((p) => !notDrawn.has(p.card.id)).map((p) => p.box), ...everyNote.map((n) => n.box)],
-    )
+    const spots = spread(chipsNow, [
+      ...everyCard.filter((p) => !notDrawn.has(p.card.id)).map((p): Keep => {
+        const d = shapedAt.get(p.card.id)
+        return d ? { ...p.box, d } : p.box
+      }),
+      ...everyNote.map((n) => n.box),
+      ...annoKeeps,
+    ])
     // Only a sentence a person has moved bends its wire; the rest sit on it.
     const at = all.map((one, i) => ({
       ...one,
@@ -916,7 +994,7 @@ export const MapCanvas = ({
       shape: { ...one.shape, d: chipsNow[i]!.fixed && !one.shape.route ? wireThrough(one.shape, spots[i]!) : one.shape.d },
     }))
     return { all: at, outer: at.filter((one) => one.depth !== workAt), inner: at.filter((one) => one.depth === workAt), hubs, boxes }
-  }, [shown, where, cardBoxes, shapedAt, canDraw, nameOf, sizes, everyCard, everyNote, workAt, live.moves, live.bend, notDrawn, passing, reaching, square])
+  }, [shown, where, cardBoxes, shapedAt, canDraw, nameOf, sizes, everyCard, everyNote, workAt, live.moves, live.bend, notDrawn, passing, reaching, square, band, stepK, annoKeeps])
 
   /** The hubs on the border of the card open now: the only ones in reach. */
   const hubsHere = useMemo(() => shapes.hubs.filter((hub) => hub.depth + 1 === workAt), [shapes.hubs, workAt])
@@ -1032,14 +1110,21 @@ export const MapCanvas = ({
             .filter((p) => level.wires.some((wire) => (wire.from === open.card.id && wire.to === p.card.id) || (wire.to === open.card.id && wire.from === p.card.id)))
             .map((p) => p.box),
         ])
-      : boundsOf([...levels[0]!.placed.map((p) => p.box), ...levels[0]!.noteBoxes.map((n) => n.box)])
+      : boundsOf([
+          ...levels[0]!.placed.map((p) => p.box),
+          ...levels[0]!.noteBoxes.map((n) => n.box),
+          // and what is drawn over it, a sticky note above the cards as much as the cards
+          ...[...levels[0]!.annoBoxes.values()].filter((box) => box.w > 0 && box.h > 0),
+        ])
     if (!el || bounds.w === 0) return { x: (el?.clientWidth ?? 0) / 2, y: (el?.clientHeight ?? 0) / 2, k: 1 }
-    // Fitted into what the floating controls leave clear.
-    const across = el.clientWidth - FIT_PAD.left - FIT_PAD.right
+    // Fitted into what the floating controls, and any panel over the board,
+    // leave clear.
+    const left = FIT_PAD.left + coverNow.current.left
+    const across = el.clientWidth - left - FIT_PAD.right - coverNow.current.right
     const down = el.clientHeight - FIT_PAD.top - FIT_PAD.bottom
     const k = Math.max(0.05, Math.min(across / bounds.w, down / bounds.h, 1.3))
     return {
-      x: FIT_PAD.left + across / 2 - (bounds.x + bounds.w / 2) * k,
+      x: left + across / 2 - (bounds.x + bounds.w / 2) * k,
       y: FIT_PAD.top + down / 2 - (bounds.y + bounds.h / 2) * k,
       k,
     }
@@ -1055,6 +1140,33 @@ export const MapCanvas = ({
     setView(to)
     setTimeout(() => setMoving(false), STEP_MS)
   }, [])
+
+  // A panel coming out over the board, or going, brings what is picked, or
+  // else what is inside the open card, out from under it, by just enough.
+  // Wider than what is left clear, its left edge is kept in sight.
+  const coverKey = `${coverLeft},${coverRight}`
+  const coverWas = useRef(coverKey)
+  useEffect(() => {
+    if (coverWas.current === coverKey) return
+    coverWas.current = coverKey
+    const el = frame.current
+    if (!el) return
+    const picked = selected.flatMap((id) => {
+      const box = where.get(id)
+      return box ? [box] : []
+    })
+    const target = picked.length ? boundsOf(picked) : workAt > 0 && placed.length ? boundsOf(placed.map((p) => p.box)) : null
+    if (!target) return
+    const v = seen.current
+    const left = v.x + target.x * v.k
+    const right = left + target.w * v.k
+    const clearLeft = coverLeft + FIT_PAD.left
+    const clearRight = el.clientWidth - coverRight - FIT_PAD.left
+    let dx = 0
+    if (right > clearRight) dx = clearRight - right
+    if (left + dx < clearLeft) dx = clearLeft - left
+    if (dx) glide({ ...v, x: v.x + dx })
+  }, [coverKey])
 
   // The board opens fitted to what is there. Drawing on a level leaves the
   // view where the person has it.
@@ -1101,20 +1213,28 @@ export const MapCanvas = ({
       } else if (opened.length && around && deepest && el) {
         const pad = 36
         const lip = 40
-        const k = Math.min(now.k, (el.clientWidth - pad * 2) / deepest.box.w, (el.clientHeight - pad * 2 - lip) / deepest.box.h)
+        const k = Math.min(now.k, (el.clientWidth - pad * 2 - coverLeft - coverRight) / deepest.box.w, (el.clientHeight - pad * 2 - lip) / deepest.box.h)
         // In the middle, or as far towards the cards wired to it as it can go
         // with the whole card still on screen, so they stay in sight.
         const wired = around.placed.filter((p) =>
           around.wires.some((w) => (w.from === deepest.card.id && w.to === p.card.id) || (w.to === deepest.card.id && w.from === p.card.id)),
         )
         const middle = boundsOf([deepest.box, ...wired.map((p) => p.box)])
+        // The name tab of the card it was opened in stays in sight too, where
+        // there is room for it, so a person sees what they are inside.
+        const parent = levels.at(-3)?.open
+        const withTab = parent ? boundsOf([deepest.box, lipBox(parent.card, parent.box)]) : deepest.box
+        const must =
+          (withTab.w * k <= el.clientWidth - FIT_PAD.left - coverLeft - pad - coverRight && withTab.h * k <= el.clientHeight - pad - FIT_PAD.bottom)
+            ? withTab
+            : deepest.box
         // Kept clear of the zoom bar at the foot where there is room to.
         const onto = (size: number, at: number, length: number, centre: number, before: number, after: number): number =>
           Math.max(before - at * k, Math.min(size - after - (at + length) * k, size / 2 - centre * k))
         glide({
           k,
-          x: onto(el.clientWidth, deepest.box.x, deepest.box.w, middle.x + middle.w / 2, FIT_PAD.left, pad),
-          y: onto(el.clientHeight, deepest.box.y, deepest.box.h, middle.y + middle.h / 2, pad + lip, FIT_PAD.bottom),
+          x: onto(el.clientWidth, must.x, must.w, middle.x + middle.w / 2, FIT_PAD.left + coverLeft, pad + coverRight),
+          y: onto(el.clientHeight, must.y, must.h, middle.y + middle.h / 2, must === deepest.box ? pad + lip : pad, FIT_PAD.bottom),
         })
       } else if (closed.length) {
         const back = viewsAt.current.get(closed[0]!)
@@ -1333,12 +1453,14 @@ export const MapCanvas = ({
     const bottom = top + box.h * v.k
     let dx = 0
     let dy = 0
-    if (right > el.clientWidth - MARGIN) dx = el.clientWidth - MARGIN - right
-    if (left + dx < MARGIN) dx = MARGIN - left
+    const clearRight = el.clientWidth - MARGIN - coverRight
+    const clearLeft = MARGIN + coverLeft
+    if (right > clearRight) dx = clearRight - right
+    if (left + dx < clearLeft) dx = clearLeft - left
     if (bottom > el.clientHeight - MARGIN) dy = el.clientHeight - MARGIN - bottom
     if (top + dy < MARGIN) dy = MARGIN - top
     if (dx || dy) setView((now) => ({ ...now, x: now.x + dx, y: now.y + dy }))
-  }, [editing?.id, where, noteBoxes])
+  }, [editing?.id, where, noteBoxes, coverLeft, coverRight])
 
   const finishEditing = useCallback(
     (keep: boolean): void => {
@@ -1614,8 +1736,9 @@ export const MapCanvas = ({
     if (together) picked = picked.filter((one) => !together.heldBy.has(one))
     select(picked)
     if (!picked.includes(id)) return
+    // Where each card really sits, not shrunk to its name when zoomed out.
     const starts = new Map<string, Box>()
-    for (const p of laid) if (picked.includes(p.card.id)) starts.set(p.card.id, { ...p.box, x: p.box.x - shift.x, y: p.box.y - shift.y })
+    for (const p of levels[workAt]!.placed) if (picked.includes(p.card.id)) starts.set(p.card.id, { ...p.box, x: p.box.x - shift.x, y: p.box.y - shift.y })
     for (const n of notes) if (picked.includes(n.id)) starts.set(n.id, { x: n.x, y: n.y, w: 180, h: 60 })
     // Alt and drag leaves the originals where they are and carries copies,
     // the way a diagram tool does.
@@ -2198,7 +2321,10 @@ export const MapCanvas = ({
     const at = worldOf(event)
     if (now.type === 'pan') {
       dragged.current = now.moved
-      if (!now.moved && now.button === 2 && canMove && levelAt(at) === workAt) openMenu(event, at)
+      // A right-click on the board inside the level in hand opens its menu: on a
+      // map that is only shown, only on the board itself, where it says how
+      // to look rather than what to change.
+      if (!now.moved && now.button === 2 && levelAt(at) === workAt && (canMove || !cardUnder(at))) openMenu(event, at)
       // A click on the empty board, not a drag, lets go of what is picked.
       else if (!now.moved && now.button === 0 && canMove && tool === 'pick') select([])
       return
@@ -2390,10 +2516,32 @@ export const MapCanvas = ({
       .map((spot) => spot.id)
       .filter((id) => children.some((c) => c.id === id) || shapes.inner.some((one) => one.key === id))
 
+  /** Zooms to a scale about a spot on the board's screen, its middle if none. */
+  const zoomTo = (k: number, at?: Spot): void => {
+    const el = frame.current
+    if (!el) return
+    const cx = at?.x ?? el.clientWidth / 2
+    const cy = at?.y ?? el.clientHeight / 2
+    glide({ k, x: cx - ((cx - view.x) / view.k) * k, y: cy - ((cy - view.y) / view.k) * k })
+  }
+
+  /** How to look at the board, at the foot of the menu on the empty board:
+   *  fit, true size, out a level, and how wires are drawn, a rare choice for
+   *  the whole board. */
+  const lookItems = (at: Spot): MenuItem[] => [
+    { name: 'Fit it all on screen', glyph: 'fit', keys: '0', act: fit },
+    { name: 'Zoom to 100%', glyph: 'in', act: () => zoomTo(1, at) },
+    ...(workAt > 0 ? [{ name: 'Out a level', glyph: 'up' as const, keys: 'Esc', act: backOut }] : []),
+    'rule',
+    square
+      ? { name: 'Draw wires curved', glyph: 'curvedWires', act: () => setWireStyle('curved') }
+      : { name: 'Draw wires at right angles', glyph: 'squareWires', act: () => setWireStyle('square') },
+  ]
+
   /** What the right-click menu offers, for what was under the pointer. */
   const menuItems = (ids: string[], inside: Spot): MenuItem[] => {
     if (!drawing) {
-      if (!rearranging) return []
+      if (!rearranging || rearranging.frozen) return lookItems(menu!.screen)
       const moved = movedHere()
       const mine = ids.filter((id) => moved.includes(id))
       return [
@@ -2421,7 +2569,8 @@ export const MapCanvas = ({
               },
             ]
           : []),
-        { name: 'Fit it all on screen', glyph: 'fit' as const, keys: '0', act: fit },
+        ...(mine.length || moved.length ? (['rule'] as MenuItem[]) : []),
+        ...lookItems(menu!.screen),
       ]
     }
     const one = ids.length === 1 ? ids[0]! : ''
@@ -2435,6 +2584,8 @@ export const MapCanvas = ({
           ? [{ name: 'Paste here', glyph: 'copy' as const, keys: 'Ctrl+V', act: () => drawing.onSelect(drawing.onPaste(inside)) }]
           : []),
         { name: 'Pick everything', keys: 'Ctrl+A', act: () => drawing.onSelectAll() },
+        'rule',
+        ...lookItems(menu!.screen).filter((item) => item !== 'rule'),
       ]
     return [
       ...(one ? [{ name: card ? 'Rename' : 'Edit the words', glyph: 'edit' as const, act: () => startEditing(one) }] : []),
@@ -2502,6 +2653,46 @@ export const MapCanvas = ({
   const editingWire = editing ? shapes.inner.find((one) => one.wire.id === editing.id) : undefined
   const pickedWire = drawing && selected.length === 1 ? shapes.inner.find((one) => one.wire.id === selected[0]) : undefined
   const childLevel = levelIn(focus)
+  /** Where each open card's name tab sits: scaled so its name stays readable,
+   *  and kept inside what can be seen of the board, clear of any panel over
+   *  it, below any tab further out kept there too, so a person always sees
+   *  what they are inside and has the way back out. A card further out than
+   *  the one in hand loses its border once none of its corners is in sight,
+   *  rather than crossing the screen as a bare line. */
+  const tabsAt = new Map<string, { scale: number; dx: number; dy: number; edgeless: boolean }>()
+  {
+    const width = frame.current?.clientWidth ?? 0
+    const height = frame.current?.clientHeight ?? 0
+    const seenBox = { x: coverLeft, y: 0, w: width - coverLeft - coverRight, h: height }
+    const taken: Box[] = []
+    shown.forEach((level, depth) => {
+      if (!level.open) return
+      const { card, box } = level.open
+      const k = view.k
+      const scale = lipScale(card, box, k, band)
+      const left = view.x + box.x * k
+      const top = view.y + box.y * k
+      const tabW = lipWidth(card, band) * scale * k
+      const tabH = TAB_HIGH * scale * k
+      const room = { w: Math.max(0, box.w * k - tabW), h: Math.max(0, box.h * k - tabH) }
+      let dx = Math.max(0, Math.min(coverLeft + TAB_EDGE - left, room.w))
+      let dy = Math.max(0, Math.min(TAB_EDGE + tabH - top, room.h))
+      // A tab on a tab further out moves along its card's top beside it, or
+      // where there is no room for that, down below it.
+      for (const other of taken) {
+        if (!overlaps({ x: left + dx, y: top + dy - tabH, w: tabW, h: tabH }, other)) continue
+        const along = other.x + other.w + 4 - left
+        if (along <= room.w) dx = Math.max(dx, along)
+        else dy = Math.min(other.y + other.h + 4 + tabH - top, room.h)
+      }
+      taken.push({ x: left + dx, y: top + dy - tabH, w: tabW, h: tabH })
+      const right = left + box.w * k
+      const bottom = top + box.h * k
+      const corners = [{ x: left, y: top }, { x: right, y: top }, { x: left, y: bottom }, { x: right, y: bottom }]
+      const edgeless = workAt - depth - 1 > 0 && width > 0 && !corners.some((at) => inBox(at, seenBox))
+      tabsAt.set(card.id, { scale, dx: dx / k, dy: dy / k, edgeless })
+    })
+  }
   const liftedChoice = lifting ? choices.find((one) => one.key === lifting.kind) : undefined
   const armedChoice = armed ? choices.find((one) => one.key === armed) : undefined
 
@@ -2627,8 +2818,8 @@ export const MapCanvas = ({
         ) : null}
         <div
           className={`map-world${moving ? ' map-world--moving' : ''}${linked.size ? ' map-world--lit' : ''}${
-            view.k < (drawing ? FAR.sketch : FAR.map) ? ' map-world--far' : ''
-          }`}
+            band === 'near' ? '' : ` map-world--${band}`
+          }${hugK ? ' map-world--hugged' : ''}`}
           // The zoom, for names that keep a size a person can read however
           // far out the board is.
           style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})`, ['--zoom' as string]: view.k }}
@@ -2640,15 +2831,17 @@ export const MapCanvas = ({
             const { card, box } = level.open
             const name = card.name || 'Unnamed'
             const here = depth + 1 === workAt
+            const tab = tabsAt.get(card.id)
             return (
               <div
                 key={card.id}
-                className={`map-card map-card--open ${kindClass(card.kind)}${lookOf(card) ? ` ${lookClass(lookOf(card)!)}` : ''}${here ? ' map-card--here' : ''}${upClass(workAt - depth - 1)}${linked.has(card.id) ? ' map-card--wired' : ''}${live.room?.id === card.id ? ' map-card--resizing' : ''}`}
+                className={`map-card map-card--open ${kindClass(card.kind)}${lookOf(card) ? ` ${lookClass(lookOf(card)!)}` : ''}${here ? ' map-card--here' : ''}${upClass(workAt - depth - 1)}${linked.has(card.id) ? ' map-card--wired' : ''}${live.room?.id === card.id ? ' map-card--resizing' : ''}${tab?.edgeless ? ' map-card--edgeless' : ''}`}
                 style={{ left: box.x, top: box.y, width: box.w, height: box.h }}
                 data-open={card.id}
               >
                 <span
-                  className="map-lip"
+                  className={`map-lip${tab && (tab.dx > 0 || tab.dy > 0) ? ' map-lip--kept' : ''}`}
+                  style={tab ? { scale: String(tab.scale), translate: `${tab.dx}px ${tab.dy}px` } : undefined}
                   onClick={(event) => event.stopPropagation()}
                   onDoubleClick={(event) => event.stopPropagation()}
                 >
@@ -2679,6 +2872,8 @@ export const MapCanvas = ({
                       className="map-port"
                       title={port.verb}
                       style={{ left: port.x - box.x, top: port.y - box.y }}
+                      onPointerEnter={() => setPortHover(port.key)}
+                      onPointerLeave={() => setPortHover((was) => (was === port.key ? '' : was))}
                     />
                   ))}
                 {here
@@ -2707,15 +2902,21 @@ export const MapCanvas = ({
               </marker>
             </defs>
             {wireGroup(shapes.outer)}
+            {/* A wire from outside stops at the open card's border. Where it goes on
+                to inside shows only while the card it reaches, or the dot where it
+                crosses, is under the pointer or picked: drawn always, several
+                wires fanning from one dot only tangle. */}
             {ports.flatMap((port) =>
-              port.through.map((one) => (
-                <path
-                  key={`${port.key}>${one.id}`}
-                  d={one.d}
-                  className="map-through"
-                  markerEnd={one.into ? 'url(#map-head)' : undefined}
-                />
-              )),
+              port.through
+                .filter((one) => portHover === port.key || hover === one.id || selected.includes(one.id))
+                .map((one) => (
+                  <path
+                    key={`${port.key}>${one.id}`}
+                    d={one.d}
+                    className="map-through"
+                    markerEnd={one.into ? 'url(#map-head)' : undefined}
+                  />
+                )),
             )}
             {wireGroup(shapes.inner)}
             {live.line ? (
@@ -2945,13 +3146,29 @@ export const MapCanvas = ({
               {pickedWire.shape.route?.slice(1).flatMap((q, i) => {
                 const route = pickedWire.shape.route!
                 const p = route[i]!
-                if (Math.hypot(q.x - p.x, q.y - p.y) < 20) return []
+                const length = Math.hypot(q.x - p.x, q.y - p.y)
+                if (length < 20) return []
                 const across = p.y === q.y
+                // Each handle keeps out from under the wire's sentence: along
+                // its piece to the nearest spot clear of it, if there is one.
+                const size = sizes[pickedWire.key] ?? { w: sentenceWidth(pickedWire.wire), h: 24 }
+                const said = { x: pickedWire.at.x - size.w / 2 - 6, y: pickedWire.at.y - size.h / 2 - 6, w: size.w + 12, h: size.h + 12 }
+                const handleAt = (t: number): Spot => ({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t })
+                const clearOf = (t: number): boolean => {
+                  const at = handleAt(t)
+                  return length * Math.min(t, 1 - t) >= 10 && !overlaps({ x: at.x - 7, y: at.y - 7, w: 14, h: 14 }, said)
+                }
+                // Or just past either end of the sentence, the nearer the middle the better.
+                const pastSaid = (across
+                  ? [said.x - 8, said.x + said.w + 8].map((x) => (x - p.x) / (q.x - p.x))
+                  : [said.y - 8, said.y + said.h + 8].map((y) => (y - p.y) / (q.y - p.y))
+                ).sort((a, b) => Math.abs(a - 0.5) - Math.abs(b - 0.5))
+                const mid = handleAt([0.5, 0.35, 0.65, 0.22, 0.78, ...pastSaid].find((t) => t > 0 && t < 1 && clearOf(t)) ?? 0.5)
                 return [
                   <rect
                     key={i}
-                    x={(p.x + q.x) / 2 - (across ? 7 : 4)}
-                    y={(p.y + q.y) / 2 - (across ? 4 : 7)}
+                    x={mid.x - (across ? 7 : 4)}
+                    y={mid.y - (across ? 4 : 7)}
                     width={across ? 14 : 8}
                     height={across ? 8 : 14}
                     rx={2}
@@ -3243,6 +3460,7 @@ export const MapCanvas = ({
                   type="button"
                   className={`map-anno-swatch map-anno-fill--${color || 'none'}${one?.a.color === color ? ' map-anno-swatch--on' : ''}`}
                   aria-label={`Colour: ${COLOR_NAMES[color]}`}
+                  aria-pressed={onBar.every((d) => (d.a.color ?? '') === color)}
                   title={COLOR_NAMES[color]}
                   onClick={() => {
                     let next = annotating.layers
@@ -3356,7 +3574,7 @@ export const MapCanvas = ({
           const right = view.x + (box.x + box.w) * view.k + 12
           // Beside the card, on whichever side has room for it, and level with
           // its top unless that leaves too little of the board below to work in.
-          const left = right + STORE_EDITOR_WIDTH < width ? right : Math.max(8, view.x + box.x * view.k - STORE_EDITOR_WIDTH - 12)
+          const left = right + STORE_EDITOR_WIDTH < width - coverRight ? right : Math.max(8 + coverLeft, view.x + box.x * view.k - STORE_EDITOR_WIDTH - 12)
           const top = Math.max(8, Math.min(view.y + box.y * view.k, height - Math.min(STORE_EDITOR_ROOM, height - 16) - 8))
           return (
             <div
@@ -3399,7 +3617,7 @@ export const MapCanvas = ({
           )
         })() : null}
 
-        {menu && canMove ? (
+        {menu ? (
           <CanvasMenu
             at={menu.screen}
             onClose={() => setMenu(null)}

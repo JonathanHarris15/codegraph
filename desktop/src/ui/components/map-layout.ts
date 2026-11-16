@@ -2,6 +2,7 @@
 import type { Card } from '../../features/show-map.js'
 import { hubOf, isStore, type CardLook } from '../../modules/sketches/schema.js'
 import { CARD_SHAPES, drawnShape } from './card-looks.js'
+import { polygonsOf } from './shape-outline.js'
 import { spotOn } from './square-wires.js'
 
 /** A wire as the canvas draws it, from the map or from a sketch. */
@@ -41,7 +42,7 @@ export type DrawnCard = Omit<Card, 'children' | 'wires'> & {
    *  in. Left out, it gets most of the screen when it is opened. */
   room?: Box
   /** Only as tall as what it says: on the map, where a card is read and
-   *  never drawn in. */
+   *  never drawn in. On a sketch a card keeps a little body below. */
   snug?: boolean
   children: DrawnCard[]
   wires: DrawnWire[]
@@ -120,8 +121,9 @@ const chipRows = (names: string[], inside = STORE_INSIDE): number => {
   let rows = 1
   let used = 0
   for (const chip of chips) {
-    // Each name has its kind's glyph before it.
-    const wide = Math.min(chip.length * 6.4 + 30, inside)
+    // Each name has its kind's glyph before it. Reckoned a little wide, for
+    // names drawn bigger when the board is a little zoomed out.
+    const wide = Math.min(chip.length * 7.5 + 30, inside)
     if (used && used + 4 + wide > inside) {
       rows += 1
       used = wide
@@ -148,13 +150,23 @@ const ADD_FIELD_ROW = 28
 /** The room inside a software system's or a container's card, across. */
 const WIDE_INSIDE = 246
 
-/** A software system's or a container's card is as tall as what it says: its
- *  type and name, a line or two of what it is for, and the rows of what is
- *  inside it, so a card with little to say has no blank foot. */
-const wideHeight = (card: DrawnCard): number => {
-  const says = card.says ? 4 + Math.min(2, linesFor(card.says, WIDE_INSIDE, 7)) * 17 : 0
-  const chips = card.children.length ? 8 + chipRows(card.children.map((c) => c.name), WIDE_INSIDE) * 20 : 0
-  return Math.max(96, 72 + says + chips)
+/** The room inside any other card, across. */
+const CARD_INSIDE = 206
+
+/** The least a card is tall, on the map or on a sketch. */
+const LEAST_HEIGHT = 96
+
+/** The body a card on a sketch keeps below what it says, to double-click into
+ *  and draw inside, clear of its name. */
+const SKETCH_BODY = 32
+
+/** A card is as tall as what it says: its type and name, a line or two of what
+ *  it is for, and the rows of what is inside it, so a card with little to say
+ *  has no blank foot. On a sketch it keeps a little body below that. */
+const huggedHeight = (card: DrawnCard, inside: number): number => {
+  const says = card.says ? 4 + Math.min(2, linesFor(card.says, inside, 7)) * 17 : 0
+  const chips = card.children.length ? 8 + chipRows(card.children.map((c) => c.name), inside) * 20 : 0
+  return Math.max(LEAST_HEIGHT, 72 + says + chips + (card.snug ? 0 : SKETCH_BODY))
 }
 
 export const sizeOf = (card: DrawnCard): { w: number; h: number } => {
@@ -166,8 +178,36 @@ export const sizeOf = (card: DrawnCard): { w: number; h: number } => {
     : card.level === 'code'
       ? { w: 240, h: 104 + Math.min(card.names.length, 9) * 18 }
       : card.level === 'system' || card.level === 'container'
-        ? { w: 280, h: card.snug ? wideHeight(card) : 150 }
-        : { w: 240, h: card.says ? 124 : 104 }
+        ? { w: 280, h: huggedHeight(card, WIDE_INSIDE) }
+        : { w: 240, h: huggedHeight(card, CARD_INSIDE) }
+}
+
+/** Zoomed out to names only, a card is only its glyph and name: this is how
+ *  tall that is on the board, at a scale, so the card hugs it rather than
+ *  keeping a blank body. Each part is a size on the screen, but never more
+ *  than a share of the card's width, so a narrow card still holds its name,
+ *  which takes two lines at most. The sizes match the stylesheet's. Never
+ *  taller than the card was. */
+export const headerHeight = (card: DrawnCard, box: Box, k: number): number => {
+  const w = box.w
+  const pad = Math.min(12 / k, 0.06 * w)
+  const glyph = Math.min(20 / k, 0.14 * w)
+  const gap = Math.min(8 / k, 0.04 * w)
+  const font = Math.min(15 / k, 0.11 * w)
+  const perLine = Math.max(1, Math.floor((w - pad * 2 - glyph - gap) / (font * 0.56)))
+  const lines = (card.name || 'Unnamed').length <= perLine ? 1 : 2
+  return Math.min(box.h, Math.ceil(Math.max(glyph, lines * font * 1.25) + 2 * Math.min(10 / k, 0.05 * w)))
+}
+
+/** How big a card's name is when the board is so far out that a card is a
+ *  block of its colour with its name across it: as big as fits, on up to three
+ *  lines. */
+export const nameFit = (name: string, box: Box): number => {
+  const length = Math.max(3, (name || 'Unnamed').length)
+  let best = 0
+  for (let lines = 1; lines <= 3; lines += 1)
+    best = Math.max(best, Math.min((box.w * 0.86 * lines) / (length * 0.6), (box.h * 0.8) / (lines * 1.15)))
+  return Math.round(best)
 }
 
 /** Which column a card sits in, left to right, so most wires run one way:
@@ -1021,10 +1061,29 @@ const pointOn = (
   return { x: mix('x'), y: mix('y') }
 }
 
+/** Something a sentence keeps off: a box, and for a card or a shape that is
+ *  not a plain box, its outline, in a 100 by 100 box stretched over it. */
+export type Keep = Box & { d?: string }
+
+/** Whether a point is inside a closed run of straight lines. */
+const inPolygon = (at: Spot, poly: Spot[]): boolean => {
+  let inside = false
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i, i += 1) {
+    const a = poly[i]!
+    const b = poly[j]!
+    if (a.y > at.y !== b.y > at.y && at.x < ((b.x - a.x) * (at.y - a.y)) / (b.y - a.y) + a.x) inside = !inside
+  }
+  return inside
+}
+
 /** A sentence sits in the middle of its own wire. Where that would put it on
  *  another sentence or on a card, it slides along the wire, either way, the
- *  nearest clear spot winning. It never leaves the wire, so the wire stays a
- *  smooth curve from card to card (ADR 0016). */
+ *  nearest clear spot winning. A shaped card or shape is kept off by its
+ *  outline, not its box, so a sentence may sit in the corner a diamond leaves.
+ *  Where nowhere along the wire is clear, it sits beside the wire with the
+ *  wire still touching its edge, before it settles for covering something. It
+ *  never leaves the wire, so the wire stays a smooth curve from card to card
+ *  (ADR 0016). */
 export const spread = (
   chips: {
     at: { x: number; y: number }
@@ -1045,11 +1104,44 @@ export const spread = (
      *  from outside runs up to, its name tab, the dots where wires cross it. */
     avoid?: Box[]
   }[],
-  cards: Box[] = [],
+  cards: Keep[] = [],
 ): { x: number; y: number }[] => {
   const AIR = 6
   const hits = (one: Box, other: Box): boolean =>
     one.x < other.x + other.w + AIR && one.x + one.w + AIR > other.x && one.y < other.y + other.h + AIR && one.y + one.h + AIR > other.y
+  const outlines = new Map<Keep, Spot[][]>()
+  const outlineOf = (keep: Keep): Spot[][] => {
+    const kept = outlines.get(keep)
+    if (kept) return kept
+    const made = polygonsOf(keep.d!).map((poly) => poly.map((p) => ({ x: keep.x + (p.x / 100) * keep.w, y: keep.y + (p.y / 100) * keep.h })))
+    outlines.set(keep, made)
+    return made
+  }
+  /** A box hits something it keeps off: by box, then for a shape by its
+   *  outline, a point of it in the box or a point round the box inside it. */
+  const blocks = (box: Box, keep: Keep): boolean => {
+    if (!hits(box, keep)) return false
+    if (!keep.d) return true
+    const polys = outlineOf(keep)
+    if (!polys.length) return true
+    const grown = { x: box.x - AIR, y: box.y - AIR, w: box.w + AIR * 2, h: box.h + AIR * 2 }
+    const round: Spot[] = []
+    const steps = Math.max(2, Math.ceil(Math.max(grown.w, grown.h) / 12))
+    for (let i = 0; i <= steps; i += 1) {
+      const t = i / steps
+      round.push(
+        { x: grown.x + grown.w * t, y: grown.y },
+        { x: grown.x + grown.w * t, y: grown.y + grown.h },
+        { x: grown.x, y: grown.y + grown.h * t },
+        { x: grown.x + grown.w, y: grown.y + grown.h * t },
+      )
+    }
+    return polys.some(
+      (poly) =>
+        poly.some((p) => p.x >= grown.x && p.x <= grown.x + grown.w && p.y >= grown.y && p.y <= grown.y + grown.h) ||
+        round.some((p) => inPolygon(p, poly)),
+    )
+  }
   const overlap = (one: Box, other: Box): number =>
     Math.max(0, Math.min(one.x + one.w, other.x + other.w) - Math.max(one.x, other.x)) *
     Math.max(0, Math.min(one.y + one.h, other.y + other.h) - Math.max(one.y, other.y))
@@ -1058,31 +1150,67 @@ export const spread = (
     box.x >= room.x + AIR && box.y >= room.y + AIR && box.x + box.w <= room.x + room.w - AIR && box.y + box.h <= room.y + room.h - AIR
   const placed: Box[] = chips.filter((chip) => chip.fixed).map((chip) => boxAt(chip.at, chip.w, chip.h))
   const SLIDES = [0.5, 0.44, 0.56, 0.38, 0.62, 0.32, 0.68, 0.26, 0.74, 0.2, 0.8, 0.14, 0.86, 0.08, 0.92]
+  /** How much of a box something covers: for a shape, by how many points of a
+   *  grid over the box fall inside its outline. */
+  const covered = (box: Box, keep: Keep): number => {
+    const area = overlap(box, keep)
+    if (!area || !keep.d) return area
+    const polys = outlineOf(keep)
+    if (!polys.length) return area
+    let inside = 0
+    for (let i = 0; i < 6; i += 1)
+      for (let j = 0; j < 4; j += 1) {
+        const at = { x: box.x + (box.w * (i + 0.5)) / 6, y: box.y + (box.h * (j + 0.5)) / 4 }
+        if (polys.some((poly) => inPolygon(at, poly))) inside += 1
+      }
+    return (box.w * box.h * inside) / 24
+  }
   return chips.map((chip) => {
     if (chip.fixed) return chip.at
-    const keepOff = [...cards, ...(chip.avoid ?? []), ...placed]
-    const spots = SLIDES.map((t) => (chip.on ? chip.on(t) : pointOn(chip.tail, chip.c1, chip.c2, chip.head, t)))
-    const free = spots.find((at) => {
+    const keepOff: Keep[] = [...cards, ...(chip.avoid ?? []), ...placed]
+    // Inside an open card, it is never cut by the border: pulled in just far
+    // enough, which keeps it over its own wire near the edge. Each spot it
+    // might take is tried as it would be pulled in.
+    const room = chip.within && chip.within.w > chip.w + AIR * 2 && chip.within.h > chip.h + AIR * 2 ? chip.within : undefined
+    const pulled = (at: Spot): Spot =>
+      room
+        ? {
+            x: Math.min(Math.max(at.x, room.x + chip.w / 2 + AIR), room.x + room.w - chip.w / 2 - AIR),
+            y: Math.min(Math.max(at.y, room.y + chip.h / 2 + AIR), room.y + room.h - chip.h / 2 - AIR),
+          }
+        : at
+    const raw = SLIDES.map((t) => (chip.on ? chip.on(t) : pointOn(chip.tail, chip.c1, chip.c2, chip.head, t)))
+    const spots = raw.map(pulled)
+    const clear = (at: Spot): boolean => {
       const box = boxAt(at, chip.w, chip.h)
-      return (!chip.within || inside(box, chip.within)) && !keepOff.some((other) => hits(box, other))
-    })
+      return (!chip.within || inside(box, chip.within)) && !keepOff.some((other) => blocks(box, other))
+    }
+    // Beside the wire: above or below it, or to one side, or at a corner,
+    // with the wire running along the sentence's edge.
+    const besides = (at: Spot): Spot[] => {
+      const up = chip.h / 2 - 3
+      const across = chip.w / 2 - 8
+      return [
+        { x: at.x, y: at.y - up },
+        { x: at.x, y: at.y + up },
+        { x: at.x - across, y: at.y },
+        { x: at.x + across, y: at.y },
+        { x: at.x - across, y: at.y - up },
+        { x: at.x + across, y: at.y - up },
+        { x: at.x - across, y: at.y + up },
+        { x: at.x + across, y: at.y + up },
+      ].map(pulled)
+    }
+    const beside = raw.flatMap(besides)
+    let at = raw.find(clear) ?? spots.find(clear) ?? beside.find(clear)
     // On a level too crowded for anywhere to be clear, the spot that covers
     // least wins, the middle first among equals.
-    let at = free
     if (!at) {
       const cost = (spot: { x: number; y: number }): number => {
         const box = boxAt(spot, chip.w, chip.h)
-        return keepOff.reduce((sum, other) => sum + overlap(box, other), 0) + (chip.within && !inside(box, chip.within) ? chip.w * chip.h : 0)
+        return keepOff.reduce((sum, other) => sum + covered(box, other), 0) + (chip.within && !inside(box, chip.within) ? chip.w * chip.h : 0)
       }
-      at = spots.reduce((best, spot) => (cost(spot) < cost(best) - 1 ? spot : best), spots[0] ?? chip.at)
-    }
-    // Inside an open card, it is never cut by the border: pulled in just far
-    // enough, which keeps it over its own wire near the edge.
-    if (chip.within) {
-      const room = chip.within
-      const x = Math.min(Math.max(at.x, room.x + chip.w / 2 + AIR), room.x + room.w - chip.w / 2 - AIR)
-      const y = Math.min(Math.max(at.y, room.y + chip.h / 2 + AIR), room.y + room.h - chip.h / 2 - AIR)
-      if (room.w > chip.w + AIR * 2 && room.h > chip.h + AIR * 2) at = { x, y }
+      at = [...spots, ...beside].reduce((best, spot) => (cost(spot) < cost(best) - 1 ? spot : best), spots[0] ?? chip.at)
     }
     placed.push(boxAt(at, chip.w, chip.h))
     return at

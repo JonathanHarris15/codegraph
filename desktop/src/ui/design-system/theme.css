@@ -1244,10 +1244,16 @@ select.map-add-field-holds {
 }
 
 /* The levels further out stay faint, but their name tabs stay readable: the
-   fade is on the border and the tint, not on the whole card. */
+   fade is on the border and the tint, not on the whole card. One level out,
+   the border is a hairline; further out there is none, only the tint and the
+   name tab, so a card bigger than the window never crosses it as bare lines.
+   Nor does one level out, once none of its corners is in sight. */
 .map-card--open.map-up {
   opacity: 1;
   border-color: transparent;
+  /* Nothing in it has a colour to take away, and a filter would keep its name
+     tab under the cards when the tab is kept in sight over them. */
+  filter: none;
 }
 
 .map-card--open.map-up--1 { --up-fade: var(--opacity-up-1); }
@@ -1264,11 +1270,16 @@ select.map-add-field-holds {
   inset: calc(-1 * var(--stroke-open));
   height: auto;
   background: none;
-  border: var(--stroke-open) solid var(--k, var(--line-edge));
+  border: 1px solid var(--line-hair);
   border-radius: inherit;
   box-shadow: none;
-  opacity: var(--up-fade, 0.34);
   pointer-events: none;
+}
+
+.map-card--open.map-up--2::after,
+.map-card--open.map-up--3::after,
+.map-card--open.map-card--edgeless::after {
+  content: none;
 }
 
 .map-card--open.map-up.map-card--wired::after {
@@ -1286,7 +1297,8 @@ select.map-add-field-holds {
 
 /* Zoomed out, names keep a size a person can read, never much under 12px
    on screen: a card's name grows as the board shrinks, and an open card's
-   name tab with it, up to what still fits on the card. */
+   name tab with it, up to what still fits on the card. The canvas sets how
+   much the tab grows, and moves it to stay in sight. */
 .map-world .map-name {
   font-size: clamp(15px, calc(12.5px / var(--zoom, 1)), 34px);
   line-height: 1.3;
@@ -1298,7 +1310,14 @@ select.map-add-field-holds {
 
 .map-world .map-lip {
   transform-origin: 0 100%;
-  scale: clamp(1, calc(0.8 / var(--zoom, 1)), 2.5);
+}
+
+/* A tab kept in sight over its card's insides stands out from them. */
+.map-world .map-lip--kept {
+  border-bottom: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-chip);
+  z-index: 2;
 }
 
 /* the tab grows as a whole, so its name does not grow again inside it */
@@ -1307,21 +1326,190 @@ select.map-add-field-holds {
   line-height: 20px;
 }
 
-/* Further out still, a card is only its glyph and name and a wire only its
-   line: the rest is too small to read and only crowds the board. A wire's
-   words come back while its card is under the pointer. */
-.map-world--far .map-kind-word,
-.map-world--far .map-says,
-.map-world--far .map-chips,
-.map-world--far .map-fields,
-.map-world--far .map-names,
-.map-world--far .map-add-field,
-.map-world--far .map-recipe {
+/* A little zoomed out, the small words on a card and on a wire grow as the
+   board shrinks, so none is drawn much under 10px on screen. Each keeps its
+   line's height, so a card still holds what it says. */
+.map-world .map-kind-word {
+  font-size: max(var(--text-xs), min(calc(10px / var(--zoom, 1)), 17px));
+  line-height: 1.2;
+}
+
+.map-world .map-lip .map-kind-word {
+  font-size: var(--text-xs);
+}
+
+.map-world .map-chip {
+  font-size: max(var(--text-xs), min(calc(9.5px / var(--zoom, 1)), 15px));
+}
+
+.map-world .map-says {
+  font-size: max(var(--text-sm), min(calc(10px / var(--zoom, 1)), 16px));
+}
+
+.map-world .map-fields,
+.map-world .map-names {
+  font-size: max(12px, min(calc(10px / var(--zoom, 1)), 16px));
+}
+
+.map-world .map-sentence {
+  font-size: max(var(--text-sm), min(calc(10.5px / var(--zoom, 1)), 17.5px));
+  line-height: 1.25;
+  max-width: max(260px, min(calc(210px / var(--zoom, 1)), 360px));
+}
+
+/* Zoomed out to names, a card is only its glyph and name, drawn at a size a
+   person reads, and on the map the card hugs them; a wire is only its verb,
+   at 11px on screen. The rest is too small to read and only crowds. */
+.map-world--names .map-kind-word,
+.map-world--names .map-says,
+.map-world--names .map-chips,
+.map-world--names .map-fields,
+.map-world--names .map-names,
+.map-world--names .map-add-field,
+.map-world--names .map-add-field-row,
+.map-world--names .map-recipe,
+.map-world--names .map-frame-at,
+.map-world--names .map-card-extra {
   display: none;
 }
 
-.map-world--far .map-sentence:not(.map-sentence--lit) {
+.map-world--names .map-lip .map-kind-word {
+  display: inline;
+}
+
+/* Each part is a size on the screen, but never more than a share of the
+   card's width, so a narrow card still holds its name. The canvas reckons
+   the card's height from the same sizes. */
+.map-world--names .map-card:not(.map-card--open):not(.map-frame):not(.map-card--shaped) {
+  container-type: inline-size;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-content: center;
+  align-items: center;
+  padding: 0;
+}
+
+.map-world--names .map-card:not(.map-card--open):not(.map-frame):not(.map-card--shaped) .map-kind {
+  margin: 0 min(calc(8px / var(--zoom, 1)), 4cqw) 0 min(calc(12px / var(--zoom, 1)), 6cqw);
+}
+
+.map-world--names .map-card:not(.map-card--open):not(.map-frame):not(.map-card--shaped) .map-glyph {
+  width: min(calc(20px / var(--zoom, 1)), 14cqw);
+  height: min(calc(20px / var(--zoom, 1)), 14cqw);
+  border-radius: calc(4px / var(--zoom, 1));
+}
+
+.map-world--names .map-card:not(.map-card--open):not(.map-frame):not(.map-card--shaped) .map-glyph svg {
+  width: 70%;
+  height: 70%;
+}
+
+.map-world--names .map-card:not(.map-card--open):not(.map-frame):not(.map-card--shaped) .map-name {
+  margin: 0 min(calc(12px / var(--zoom, 1)), 6cqw) 0 0;
+  font-size: min(calc(15px / var(--zoom, 1)), 11cqw);
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* What a proposal or an agent says on a card stays readable too. */
+.map-world--names .map-state,
+.map-world--names .map-agent {
+  font-size: calc(11px / var(--zoom, 1));
+  line-height: 1.5;
+  padding: 0 0.6em;
+}
+
+.map-world--names .map-state {
+  top: calc(-9px / var(--zoom, 1));
+}
+
+.map-world--names .map-agent {
+  bottom: calc(-11px / var(--zoom, 1));
+}
+
+.map-world--names .map-sentence {
+  font-size: calc(11px / var(--zoom, 1));
+  line-height: 1.3;
+  padding: 0.15em 0.65em;
+  max-width: none;
+  border-radius: calc(6px / var(--zoom, 1));
+}
+
+/* Further out still, a card is a block of its colour with its name across it
+   as big as fits, and an open card a tinted area with one big name in its
+   tab. Wires are only lines, their words back while a card of theirs is
+   under the pointer. */
+.map-world--blocks .map-kind,
+.map-world--blocks .map-kind-word,
+.map-world--blocks .map-says,
+.map-world--blocks .map-chips,
+.map-world--blocks .map-fields,
+.map-world--blocks .map-names,
+.map-world--blocks .map-add-field,
+.map-world--blocks .map-add-field-row,
+.map-world--blocks .map-recipe,
+.map-world--blocks .map-start,
+.map-world--blocks .map-frame-bar,
+.map-world--blocks .map-shot,
+.map-world--blocks .map-shots,
+.map-world--blocks .map-card-extra,
+.map-world--blocks .map-handle {
+  display: none;
+}
+
+.map-world--blocks .map-card:not(.map-card--open) {
+  display: grid;
+  place-items: center;
+  padding: 6%;
+  box-shadow: none;
+}
+
+.map-world--blocks .map-card:not(.map-card--open):not(.map-card--shaped) {
+  background: color-mix(in srgb, var(--k, var(--ink-faint)) 24%, var(--surface-000));
+  border-color: color-mix(in srgb, var(--k, var(--line-edge)) 55%, transparent);
+}
+
+.map-world--blocks .map-card--shaped .map-card-outline path {
+  fill: color-mix(in srgb, var(--k, var(--ink-faint)) 24%, var(--surface-000));
+}
+
+.map-world--blocks .map-card-words {
+  display: grid;
+  place-items: center;
+}
+
+.map-world--blocks .map-frame-name {
+  border: 0;
+  padding: 0;
+  justify-content: center;
+}
+
+.map-world--blocks .map-card:not(.map-card--open) .map-name {
+  margin: 0;
+  font-size: var(--name-fit, 24px);
+  line-height: 1.12;
+  text-align: center;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.map-world--blocks .map-card--open::before {
+  background: color-mix(in srgb, var(--k, var(--ink-faint)) 30%, var(--surface-open));
+}
+
+.map-world--blocks .map-sentence:not(.map-sentence--lit) {
   visibility: hidden;
+}
+
+.map-world--blocks .map-sentence {
+  font-size: calc(11px / var(--zoom, 1));
+  padding: 0.15em 0.65em;
+  max-width: none;
 }
 
 /* where a wire from outside crosses its border: a small dot in the wire's own
