@@ -34,6 +34,7 @@ const NAMES: Record<keyof Features, true> = {
   showMap: true,
   listPoints: true,
   switchBranch: true,
+  dropProposal: true,
   chooseBranch: true,
   changeToken: true,
   reachDevServer: true,

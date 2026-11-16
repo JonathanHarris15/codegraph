@@ -1,5 +1,5 @@
 // codegraph: component hand-to-agent
-import { Bot, Check, Copy } from 'lucide-react'
+import { Bot, Check, Copy, X } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Button } from '../design-system/kit.js'
 
@@ -11,6 +11,37 @@ export const sketchPrompt = (sketch: string, project: string): string =>
 /** What to paste into an agent so it builds the proposal already on a branch. */
 export const proposalPrompt = (system: string, branch: string): string =>
   `Use codegraph: build the proposal on the ${branch ? `${branch} branch` : 'branch checked out'} of ${system}.`
+
+/** What to paste into an agent so it sets a repo up for a project, or puts
+ *  right the one thing setup left. The words name the MCP's `instructions`
+ *  topic, so the agent reads how before it starts. */
+export const setupPrompt = (
+  repo: string,
+  folder: string,
+  project: string,
+  left: 'setup' | 'name' | 'merge' = 'setup',
+  branch = '',
+): string => {
+  const where = folder ? `the repo ${repo} at ${folder}` : `the repo ${repo}`
+  if (left === 'name') return `Use codegraph: add project ${project} to the projects in the codegraph.config.json of ${where}.`
+  if (left === 'merge')
+    return `Use codegraph: ${where} is set up on ${branch || 'a branch'} but not on its main line. Check it with \`check\`, then merge it.`
+  return `Use codegraph: set up ${where} for project ${project} (call instructions with topic setup first).`
+}
+
+/** Words copied for an agent, and nothing come of them yet: the normal
+ *  button, with a beating dot to carry the wait. A click copies them again. */
+export const WaitingButton = ({ text, title }: { text: string; title: string }) => (
+  <button
+    type="button"
+    className="ds-button hand-agent-waiting"
+    title={title}
+    onClick={() => void navigator.clipboard.writeText(text).catch(() => undefined)}
+  >
+    <span className="map-agent-dot" aria-hidden="true" />
+    Waiting for your agent…
+  </button>
+)
 
 /** A button that puts words on the clipboard, and says so for a moment. */
 export const CopyButton = ({
@@ -139,7 +170,12 @@ export const HandToAgent = ({
       </button>
       {open ? (
         <div className="hand-agent-pop" role="dialog" aria-label="Hand to your agent">
-          <div className="hand-agent-title">Hand this sketch to your agent</div>
+          <div className="hand-agent-head">
+            <div className="hand-agent-title">Hand this sketch to your agent</div>
+            <button type="button" className="ds-sheet-close" aria-label="Close" onClick={() => setOpen(false)}>
+              <X size={16} />
+            </button>
+          </div>
           {prompt ? (
             <>
               <div className="ds-hint">

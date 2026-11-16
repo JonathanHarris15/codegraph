@@ -60,6 +60,14 @@ export const ProjectsPage = ({ onOpen, onOpenSketch }: { onOpen: (projectId: str
   // A change made by someone else reaches this page.
   useEffect(() => window.codegraph.heardChange(() => void load()), [load])
 
+  // Coming back from an agent's window, the repos are read again: setup
+  // handed to an agent shows here once it is done.
+  useEffect(() => {
+    const back = (): void => void load()
+    window.addEventListener('focus', back)
+    return () => window.removeEventListener('focus', back)
+  }, [load])
+
   const signedIn = async (): Promise<void> => {
     await loadSession()
     await load()

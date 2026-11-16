@@ -845,7 +845,7 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
             onClick={() => setLibrary(!library)}
           >
             <span>Project sketches</span>
-            <span className="map-sketching-count">{sketches.length}</span>
+            {sketches.length ? <span className="map-sketching-count">{sketches.length}</span> : null}
           </button>
           {moreItems.length ? <BarMore items={moreItems} /> : null}
           <ThemeSwitch />
@@ -941,6 +941,17 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
             prompt={proposalPrompt(systemShown?.name ?? '', branchName)}
             onGoTo={goToItem}
             {...(proposalSketch ? { onOpenSketch: () => void openOne(proposalSketch.id) } : {})}
+            {...(systemShown?.path && systemShown.point.kind === 'live'
+              ? {
+                  onDrop: async () => {
+                    const done = await window.codegraph.dropProposal(projectId, systemShown.id)
+                    if (!done.ok) return done.problem
+                    setShowProposal(false)
+                    await load(pointsNow.current)
+                    return ''
+                  },
+                }
+              : {})}
             onClose={() => setShowProposal(false)}
           />
         ) : null}

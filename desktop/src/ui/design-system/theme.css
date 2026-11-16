@@ -4396,11 +4396,27 @@ kbd {
   color: var(--ink-000);
 }
 
-/* The branch, and the button that brings it into the folder, as one. */
+/* The branch, and the button that brings it into the folder, as one split
+   control: one height, one top edge, the corners only on the outside. */
 .map-branch-slot {
   display: inline-flex;
   align-items: stretch;
   flex: none;
+  height: 32px;
+}
+
+.map-branch-slot > .sketch-menu {
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.map-branch-slot .map-branch,
+.map-branch-slot > .ds-button {
+  box-sizing: border-box;
+  height: 32px;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-radius: var(--radius-md);
 }
 
 .map-branch-slot--joined .map-branch {
@@ -4431,14 +4447,81 @@ kbd {
   color: var(--ink-faint);
 }
 
-/* Handed over: quiet, and beating, until the agent comes back with something. */
-.hand-agent-waiting {
+/* Handed over: the normal button, surface and ink, with a beating dot in the
+   accent to carry the wait until the agent comes back with something. Never
+   a grey fill, which would read as switched off: pointed at, or with its
+   window open, it takes the accent edge every open thing in the bar takes. */
+.hand-agent-waiting,
+.hand-agent-waiting:hover:not(:disabled) {
   gap: var(--space-2);
-  color: var(--ink-soft);
+  background: var(--surface-100);
+  color: var(--ink-000);
+  /* The same button was loud a moment ago: it turns at once, not through grey. */
+  transition: none;
+}
+
+.hand-agent-waiting:hover:not(:disabled),
+.hand-agent-waiting[aria-expanded='true'] {
+  border-color: var(--accent);
+}
+
+.hand-agent-waiting[aria-expanded='true'] {
+  box-shadow: 0 0 0 2px var(--accent-wash);
 }
 
 .hand-agent-waiting .map-agent-dot {
   color: var(--accent);
+}
+
+/* Its window's title, with the same X as every other. */
+.hand-agent-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.hand-agent-head .ds-sheet-close {
+  flex: none;
+  margin: -4px -6px 0 0;
+}
+
+/* A repo's setup, handed to the person's agent from its row. */
+.project-repo-handoff {
+  display: flex;
+  margin-top: 2px;
+}
+
+.project-repo-handoff .ds-button {
+  padding: 4px var(--space-3);
+  font-size: var(--text-sm);
+}
+
+/* A project with no repo: one line, and the button that links the first. */
+.project-repos-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  line-height: 18px;
+}
+
+/* The proposal's foot: throwing it away, quiet and set apart. */
+.map-proposal-foot {
+  padding-top: var(--space-2);
+  border-top: var(--stroke-edge) solid var(--line-hair);
+}
+
+.map-proposal-foot .ds-button--bare {
+  color: var(--state-problem);
+}
+
+.map-proposal-foot .ds-button--bare:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--state-problem) 10%, transparent);
+  color: var(--state-problem);
 }
 
 /* An agent here, shown like a member who is here: face, then what it does. */
@@ -4469,6 +4552,18 @@ kbd {
 
 .map-more .map-menu {
   min-width: 200px;
+}
+
+/* A menu whose items have no glyphs keeps no empty gutter for them: the
+   words start at the edge, all in line. */
+.map-more .map-menu:not(:has(.map-menu-glyph svg)) .map-menu-item,
+.project-card .map-menu:not(:has(.map-menu-glyph svg)) .map-menu-item {
+  grid-template-columns: 1fr auto;
+}
+
+.map-more .map-menu:not(:has(.map-menu-glyph svg)) .map-menu-glyph,
+.project-card .map-menu:not(:has(.map-menu-glyph svg)) .map-menu-glyph {
+  display: none;
 }
 
 .map-bar-end .ds-button {
@@ -7151,6 +7246,18 @@ button.map-restyle:hover {
 .design-close {
   flex: none;
   align-self: flex-start;
+}
+
+/* The way back sits where a page's way back always sits: top left. */
+.design-head > .ds-button--bare {
+  flex: none;
+  align-self: flex-start;
+  margin: 0 calc(var(--space-2) * -1) 0 calc(var(--space-3) * -1);
+}
+
+.design-head-name {
+  flex: 1;
+  min-width: 0;
 }
 
 /* ---- a design page with nothing in it yet says how to start ------------- */

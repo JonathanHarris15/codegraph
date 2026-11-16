@@ -56,7 +56,7 @@ export const Trail = ({
         </span>
         <span className="map-trail-here map-trail-then" aria-current="page">
           <span>{then}</span>
-          <span className="map-trail-level">open</span>
+          <span className="map-trail-level">view</span>
         </span>
       </span>
     ) : null}

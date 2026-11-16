@@ -1,5 +1,5 @@
 // codegraph: test ui canvas
-import { writeFileSync } from 'node:fs'
+import { existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { type ElectronApplication, type Locator, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -129,5 +129,27 @@ describe('how a proposal comes about', () => {
   it('has no way to draw one straight onto a map: it comes from a sketch', async () => {
     expect(await page.getByRole('button', { name: 'Propose a change' }).count()).toBe(0)
     expect(await page.getByRole('button', { name: 'Change the proposal' }).count()).toBe(0)
+  })
+})
+
+describe('throwing a proposal away', () => {
+  it('asks first, then takes it off the map and out of the folder', async () => {
+    await meter().click()
+    const list = page.getByRole('complementary', { name: 'The proposal on this branch' })
+    await list.getByRole('button', { name: 'Throw this proposal away' }).click()
+    const sheet = page.getByRole('dialog', { name: 'Throw this proposal away?' })
+    expect(await shown(sheet)).toContain('The branch and the code already built on it stay')
+    await picture('p4-4-throw-away')
+    // Keeping it changes nothing.
+    await sheet.getByRole('button', { name: 'Keep it' }).click()
+    await sheet.waitFor({ state: 'detached', timeout: PATIENCE })
+    expect(existsSync(join(repo, 'codegraph-proposal'))).toBe(true)
+
+    await list.getByRole('button', { name: 'Throw this proposal away' }).click()
+    await sheet.getByRole('button', { name: 'Throw it away' }).click()
+    await meter().waitFor({ state: 'detached', timeout: PATIENCE })
+    expect(await list.count()).toBe(0)
+    expect(existsSync(join(repo, 'codegraph-proposal'))).toBe(false)
+    expect(git(repo, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('search')
   })
 })

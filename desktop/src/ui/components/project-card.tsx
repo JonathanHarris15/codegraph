@@ -1,8 +1,9 @@
 // codegraph: component project-card
-import { ArrowRight, MoreHorizontal } from 'lucide-react'
+import { ArrowRight, FolderPlus, MoreHorizontal } from 'lucide-react'
 import { useRef, useState } from 'react'
 import type { ProjectView } from '../../features/list-projects.js'
 import type { Point } from '../../modules/reader/index.js'
+import { Button } from '../design-system/kit.js'
 import { CanvasMenu, type MenuItem } from './canvas-menu.js'
 import { SoftwareSystemRow } from './software-system-row.js'
 
@@ -10,7 +11,8 @@ const countWords = (many: number): string =>
   many === 0 ? 'no software systems yet' : many === 1 ? '1 software system' : `${many} software systems`
 
 /** One project: a click on its head opens its map, and the head says so.
- *  The repos fill its lower half, with a quiet last line to link another.
+ *  The repos fill its lower half, with a quiet last line to link another;
+ *  with none yet, linking the first is the one thing it asks.
  *  Its ... holds what is done to the project itself. */
 export const ProjectCard = ({
   project,
@@ -132,9 +134,19 @@ export const ProjectCard = ({
           onChoose={(point) => onChoose(system.id, point)}
         />
       ))}
-      <button type="button" className="project-repos-link" onClick={() => onLink(project.id)} disabled={linking}>
-        {linking ? 'Linking…' : '+ Link a repo'}
-      </button>
+      {project.systems.length === 0 ? (
+        <div className="project-repos-empty">
+          <span>Link the git repos this project is made of. Each one's map is read from its code.</span>
+          <Button onClick={() => onLink(project.id)} disabled={linking}>
+            <FolderPlus size={14} aria-hidden="true" />
+            {linking ? 'Linking…' : 'Link a repo'}
+          </Button>
+        </div>
+      ) : (
+        <button type="button" className="project-repos-link" onClick={() => onLink(project.id)} disabled={linking}>
+          {linking ? 'Linking…' : '+ Link a repo'}
+        </button>
+      )}
     </div>
   </div>
   )
