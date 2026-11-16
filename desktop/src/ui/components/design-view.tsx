@@ -417,7 +417,10 @@ export const DesignView = ({
   return (
     <section className="design-view" aria-label={design?.name ? `Design system ${design.name}` : 'Design system'}>
       <header className="design-head">
-        <div>
+        <Button look="bare" title="Back to the map (Esc)" onClick={onClose}>
+          ← Map
+        </Button>
+        <div className="design-head-name">
           <h2 className="design-title">{design?.name || 'Design system'}</h2>
           {design?.description ? <p className="design-says">{design.description}</p> : null}
         </div>
@@ -434,7 +437,7 @@ export const DesignView = ({
             </button>
           </div>
         )}
-        <button type="button" className="ds-sheet-close design-close" aria-label="Close" title="Close (Esc)" onClick={onClose}>
+        <button type="button" className="ds-sheet-close design-close" aria-label="Close" title="Back to the map (Esc)" onClick={onClose}>
           <X size={16} />
         </button>
       </header>

@@ -14,6 +14,7 @@ import { createProject } from '../features/create-project.js'
 import { deleteFolder } from '../features/delete-folder.js'
 import { deleteProject } from '../features/delete-project.js'
 import { deleteSketch } from '../features/delete-sketch.js'
+import { dropProposal } from '../features/drop-proposal.js'
 import { editInstructions } from '../features/edit-instructions.js'
 import { fileSketch } from '../features/file-sketch.js'
 import { finishSignIn } from '../features/finish-sign-in.js'
@@ -76,6 +77,7 @@ export const FEATURES = {
   showMap,
   listPoints,
   switchBranch,
+  dropProposal,
   chooseBranch,
   changeToken,
   reachDevServer,
