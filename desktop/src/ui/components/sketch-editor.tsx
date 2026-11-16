@@ -24,6 +24,8 @@ import {
   ownTypesAt,
   makeRoom,
   moveThings,
+  moveInside,
+  canGoInside,
   nudge,
   paste,
   pick,
@@ -357,6 +359,12 @@ export const SketchEditor = ({
             return id
           },
           onMove: (moves, join) => change((f) => moveThings(f, moves), join ? 'join' : ''),
+          canInside: (id, into) => canGoInside(focus.children.find((c) => c.id === id), focus.children.find((c) => c.id === into)),
+          onInside: (id, into) => {
+            change((f) => moveInside(f, id, into))
+            // What it went into is picked, so the person sees where it went.
+            setSelected([into])
+          },
           onWire: (from, to, kind, sides) => {
             let id = ''
             change((f) => {

@@ -113,6 +113,10 @@ export type Drawing = {
   /** Puts things down where they were dragged. Joining makes the move one
    *  step with the one before, as when Alt and drag copied what it carries. */
   onMove: (moves: Arrangement, join?: boolean) => void
+  /** Whether one card can be put inside another on this level, and putting it
+   *  there: a card dragged and let go over another that can hold it goes in. */
+  canInside?: (id: string, into: string) => boolean
+  onInside?: (id: string, into: string) => void
   /** A wire between two cards, plugged into the sides given, if any. */
   onWire: (from: string, to: string, kind?: string, sides?: { from?: Side; to?: Side }) => string
   /** Points one end of a wire at a card, plugged into a side if given, and
@@ -338,6 +342,8 @@ type Live = {
   room?: { id: string; box: Box }
   /** A right-angle wire whose piece is being dragged, as it now runs. */
   bend?: { key: string; route: Spot[] }
+  /** The card a card being dragged would go inside, let go now. */
+  into?: string
 }
 
 /** The outline of a card that is not a plain box, if it is one. */
@@ -2338,7 +2344,11 @@ export const MapCanvas = ({
       } else dy = Math.round((first.y + dy) / GRID) * GRID - first.y
       const moves = new Map<string, Spot>()
       for (const [id, box] of now.starts) moves.set(id, { x: box.x + dx, y: box.y + dy })
-      setLive({ moves, guides: lines })
+      // One card held over another that can hold it goes in when let go.
+      const lone = now.ids.length === 1 && !now.copied ? now.ids[0]! : ''
+      const over = lone && drawing?.onInside ? cardUnder(at, lone) : ''
+      const into = over && !drawing?.locked?.some((one) => one === lone || one === over) && drawing?.canInside?.(lone, over) ? over : undefined
+      setLive({ moves, guides: into ? { x: [], y: [] } : lines, ...(into ? { into } : {}) })
       together?.onDragging([...moves].map(([id, spot]) => ({ id, ...spot })))
       return
     }
@@ -2517,6 +2527,11 @@ export const MapCanvas = ({
       if (now.moved) {
         together?.onDragging([])
         together?.onLetGo(now.ids)
+      }
+      if (now.moved && shown.into && drawing?.onInside) {
+        drawing.onInside(now.ids[0]!, shown.into)
+        dragged.current = true
+        return
       }
       if (now.moved && shown.moves) {
         // Whatever was carried past the edge of the card it is in has made
@@ -3176,7 +3191,7 @@ export const MapCanvas = ({
                 passing={passingOf(p.card.id)}
                 onIcon={drawing && restyles(p.card) && !drawing.locked?.includes(p.card.id) ? () => setIconsFor(p.card.id) : undefined}
                 onType={drawing && restyles(p.card) && !drawing.locked?.includes(p.card.id) ? () => startTyping(p.card) : undefined}
-                target={live.line?.target === p.card.id}
+                target={live.line?.target === p.card.id || live.into === p.card.id}
                 handles={Boolean(drawing) && (tool === 'pick' || tool === 'wire') && !armed && (hover === p.card.id || (picked && selected.length === 1)) && !live.moves}
                 movable={canMove}
                 drawing={Boolean(drawing)}
@@ -3194,6 +3209,17 @@ export const MapCanvas = ({
               />
             )
           })}
+
+          {(() => {
+            // Says what letting go will do, over the card it would go into, at
+            // a size that reads however far out the board is.
+            const target = live.into ? placed.find((p) => p.card.id === live.into) : undefined
+            return target ? (
+              <div className="map-into-hint" style={{ left: target.box.x, top: target.box.y, transform: `scale(${1 / view.k}) translateY(calc(-100% - 8px))` }} role="status">
+                Let go to put it inside {target.card.name || 'this card'}
+              </div>
+            ) : null
+          })()}
 
           {/* A hub is where a wire from outside meets the open card's border.
               A part inside wires to it to say which part the wire really

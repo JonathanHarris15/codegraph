@@ -2775,6 +2775,21 @@ select.map-add-field-holds {
   box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 18%, transparent), var(--shadow-card);
 }
 
+/* Over a card that a card being dragged will go inside, once let go. */
+.map-into-hint {
+  position: absolute;
+  z-index: 30;
+  transform-origin: left top;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--ink-inverse);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 .map-card--person {
   border-radius: var(--radius-xl) var(--radius-xl) var(--radius-lg) var(--radius-lg);
 }
