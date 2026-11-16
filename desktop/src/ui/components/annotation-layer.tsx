@@ -1,4 +1,5 @@
 // codegraph: component annotation-layer
+import { Copy as CopyIcon, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type PointerEvent, type ReactElement } from 'react'
 import type { Annotation, AnnotationEnd, Layer } from '../../modules/annotations/index.js'
 import {
@@ -19,7 +20,9 @@ import {
   type Guides,
   type Side,
 } from './annotation-edits.js'
-import { shapeOf, type AnnotationShape } from './annotation-shapes.js'
+import { COLOR_NAMES, COLORS, shapeOf, type AnnotationShape } from './annotation-shapes.js'
+import { FloatingBar, LayerChip } from './context-bar.js'
+import { keysFor } from './hotkeys.js'
 import { meetOutline, seamFacing, seamOf, seamsOf, textAreaOf, type Seam } from './shape-outline.js'
 
 type Spot = { x: number; y: number }
@@ -934,5 +937,74 @@ export const AnnotationPlacer = ({
       ) : null}
       </div>
     </div>
+  )
+}
+
+/** The bar over picked annotations: their colour, the layer they are on,
+ *  and copying or deleting them. It keeps on the board, and hangs under
+ *  them when over them it would cover something else. */
+export const AnnotationBar = ({
+  at,
+  picked,
+  layers,
+  onChange,
+  onPicked,
+  onLayers,
+}: {
+  /** Where the bar's bottom middle sits on the screen, over what is picked. */
+  at: Spot
+  picked: Drawn[]
+  layers: Layer[]
+  onChange: (layers: Layer[]) => void
+  onPicked: (ids: string[]) => void
+  /** Opens the layers list, from the name of the layer. */
+  onLayers?: () => void
+}) => {
+  const one = picked.length === 1 ? picked[0]! : null
+  const ids = picked.map((d) => d.a.id)
+  return (
+    <FloatingBar at={at} label="What to do with the annotation" className="map-anno-bar">
+      {COLORS.map((color) => (
+        <button
+          key={color || 'none'}
+          type="button"
+          className={`map-anno-swatch map-anno-fill--${color || 'none'}${one?.a.color === color ? ' map-anno-swatch--on' : ''}`}
+          aria-label={`Colour: ${COLOR_NAMES[color]}`}
+          title={COLOR_NAMES[color]}
+          onClick={() => {
+            let next = layers
+            for (const d of picked) next = changeAnnotation(next, d.a.id, { color })
+            onChange(next)
+          }}
+        />
+      ))}
+      <span className="map-context-rule" />
+      {one ? <LayerChip name={one.layer.name} {...(onLayers ? { onLayers } : {})} /> : null}
+      <button
+        type="button"
+        className="map-act"
+        aria-label={keysFor('Duplicate (Ctrl+D)')}
+        title={keysFor('Duplicate (Ctrl+D)')}
+        onClick={() => {
+          const [next, made] = duplicateAnnotations(layers, ids)
+          onChange(next)
+          onPicked(made)
+        }}
+      >
+        <CopyIcon size={15} />
+      </button>
+      <button
+        type="button"
+        className="map-act map-act--danger"
+        aria-label="Delete (Delete)"
+        title="Delete (Delete)"
+        onClick={() => {
+          onChange(removeAnnotations(layers, ids))
+          onPicked([])
+        }}
+      >
+        <Trash2 size={15} />
+      </button>
+    </FloatingBar>
   )
 }

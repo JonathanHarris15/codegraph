@@ -1,5 +1,5 @@
 // codegraph: component tool-rail
-import { Keyboard, Layers, PenTool } from 'lucide-react'
+import { ArrowUpRight, Keyboard, Layers, Shapes, Type } from 'lucide-react'
 import { Tool } from '../design-system/kit.js'
 import { keysFor } from './hotkeys.js'
 import { Glyph } from './kind-glyph.js'
@@ -9,7 +9,9 @@ import type { Tool as Which } from './map-canvas.js'
  *  so the board never slides under them and a card never hides behind them.
  *  Each one carries its name, and the key that picks it. A tool in use is
  *  ink; a button whose panel is open is sunken, so the two never read alike.
- *  Fitting and the overview live by the zoom, not here. */
+ *  Fitting and the overview live by the zoom, not here. The annotations
+ *  people reach for most sit on the rail itself; the rest wait behind
+ *  Shapes. */
 export const ToolRail = ({
   tool,
   sketch,
@@ -22,6 +24,8 @@ export const ToolRail = ({
   onUndo,
   onRedo,
   onStartSketch,
+  shape = '',
+  onShape,
   annotations,
   layers,
   keys,
@@ -52,12 +56,16 @@ export const ToolRail = ({
   onUndo: () => void
   onRedo: () => void
   onStartSketch: () => void
+  /** The annotation in hand, if any, and picking one up by its kind. Without
+   *  a way to pick one up, only the sticky note is on the rail. */
+  shape?: string
+  onShape?: (kind: string) => void
 }) => (
   <div className="map-rail" role="toolbar" aria-label="Tools">
     <div className="map-rail-group">
       <Tool
         name="Pick"
-        on={tool === 'pick'}
+        on={tool === 'pick' && !shape}
         hint={
           sketch
             ? 'Pick; drag cards and words to move them, Shift and drag a box to pick many (V)'
@@ -106,17 +114,36 @@ export const ToolRail = ({
     {annotating ? (
       <>
         <span className="map-rail-rule" />
-        {/* One way in to annotations, sticky notes first: N still puts one
-            down straight away. */}
-        <div className="map-rail-group">
+        {/* The annotations reached for most, one click each, then the
+            library for every other shape, then the layers they sit on. */}
+        <div className="map-rail-group" role="group" aria-label="Annotate">
           <Tool
-            name="Annotate"
-            on={tool === 'note'}
+            name="Note"
+            on={tool === 'note' || shape === 'sticky'}
+            hint="Sticky note: click the board, or drag to size it (N)"
+            onPick={() => (onShape ? onShape('sticky') : onTool('note'))}
+          >
+            <Glyph of="note" />
+          </Tool>
+          {onShape ? (
+            <>
+              <Tool name="Text" on={shape === 'text'} hint="Words on the board, with no box round them (T)" onPick={() => onShape('text')}>
+                <Type size={18} strokeWidth={2} aria-hidden="true" />
+              </Tool>
+              <Tool name="Arrow" on={shape === 'arrow'} hint="Drag from one place to another (A)" onPick={() => onShape('arrow')}>
+                <ArrowUpRight size={18} strokeWidth={2} aria-hidden="true" />
+              </Tool>
+            </>
+          ) : null}
+          <Tool
+            name="Shapes"
+            on={false}
             open={annotations}
-            hint="Sticky notes, text, shapes and lines over the diagram (Shift+A; N for a note)"
+            more
+            hint="Every annotation: shapes, lines, frames and more kinds of note (Shift+A)"
             onPick={onAnnotations}
           >
-            <PenTool size={18} strokeWidth={2} aria-hidden="true" />
+            <Shapes size={18} strokeWidth={2} aria-hidden="true" />
           </Tool>
           <Tool
             name="Layers"
@@ -131,7 +158,9 @@ export const ToolRail = ({
       </>
     ) : null}
 
-    {sketch ? (
+    {/* Notes are changed on the map as well as on a sketch, so undo is
+        wherever they are. */}
+    {sketch || annotating ? (
       <>
         <span className="map-rail-rule" />
         <div className="map-rail-group">

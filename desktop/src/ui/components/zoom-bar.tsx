@@ -3,10 +3,11 @@ import { useEffect, useRef, useState } from 'react'
 import { Glyph } from './kind-glyph.js'
 import type { WireStyle } from './square-wires.js'
 
-/** Zoom, fit, and out a level, bottom left of the board. The scale is shown
- *  as a number because a person on a canvas with no number has to guess. How
- *  wires are drawn is a rare choice for the whole board, so it waits behind
- *  the last button rather than sitting beside the zoom. */
+/** Zoom and out a level, bottom left of the board. The scale is shown as a
+ *  number because a person on a canvas with no number has to guess, and
+ *  clicking it fits the level to the window. How wires are drawn is a choice
+ *  for the whole board, made from the board's own menu; it shows here, set
+ *  apart, only while that menu does not offer it. */
 export const ZoomBar = ({
   scale,
   atTop,
@@ -26,8 +27,8 @@ export const ZoomBar = ({
   onOut: () => void
   onFit: () => void
   onUp: () => void
-  wires: WireStyle
-  onWires: (style: WireStyle) => void
+  wires?: WireStyle
+  onWires?: (style: WireStyle) => void
 }) => {
   const [menu, setMenu] = useState(false)
   const box = useRef<HTMLDivElement>(null)
@@ -61,7 +62,7 @@ export const ZoomBar = ({
       className={wires === style ? 'map-menu-item map-menu-item--on' : 'map-menu-item'}
       title={hint}
       onClick={() => {
-        onWires(style)
+        onWires?.(style)
         setMenu(false)
       }}
     >
@@ -82,7 +83,7 @@ export const ZoomBar = ({
         type="button"
         className="map-zoom-scale"
         aria-label={`Zoom ${percent}%, click to fit`}
-        title="Fit to the level (0)"
+        title="Click to fit the level to the window (0)"
         onClick={onFit}
       >
         {percent}%
@@ -91,29 +92,30 @@ export const ZoomBar = ({
         <Glyph of="in" size={16} />
       </button>
       <span className="map-zoom-sep" />
-      <button type="button" className="map-zoom-button" aria-label="Fit" title="Fit to the level (0)" onClick={onFit}>
-        <Glyph of="fit" size={16} />
-      </button>
       <button type="button" className="map-zoom-button" aria-label={up} title={up} disabled={atTop} onClick={onUp}>
         <Glyph of="up" size={16} />
       </button>
-      <span className="map-zoom-sep" />
-      <button
-        type="button"
-        className={menu ? 'map-zoom-button map-zoom-last map-zoom-button--on' : 'map-zoom-button map-zoom-last'}
-        aria-label="How wires are drawn"
-        aria-haspopup="menu"
-        aria-expanded={menu}
-        title="How wires are drawn"
-        onClick={() => setMenu(!menu)}
-      >
-        <Glyph of={wires === 'curved' ? 'curvedWires' : 'squareWires'} size={16} />
-      </button>
-      {menu ? (
-        <div className="map-menu map-zoom-menu" role="menu" aria-label="How wires are drawn">
-          {choice('curved', 'Curved wires', 'Curved wires')}
-          {choice('square', 'Right-angle wires', 'Right-angle wires: pick one to move its pieces')}
-        </div>
+      {wires && onWires ? (
+        <>
+          <span className="map-zoom-sep" />
+          <button
+            type="button"
+            className={menu ? 'map-zoom-button map-zoom-last map-zoom-button--on' : 'map-zoom-button map-zoom-last'}
+            aria-label="How wires are drawn"
+            aria-haspopup="menu"
+            aria-expanded={menu}
+            title="How wires are drawn"
+            onClick={() => setMenu(!menu)}
+          >
+            <Glyph of={wires === 'curved' ? 'curvedWires' : 'squareWires'} size={16} />
+          </button>
+          {menu ? (
+            <div className="map-menu map-zoom-menu" role="menu" aria-label="How wires are drawn">
+              {choice('curved', 'Curved wires', 'Curved wires')}
+              {choice('square', 'Right-angle wires', 'Right-angle wires: pick one to move its pieces')}
+            </div>
+          ) : null}
+        </>
       ) : null}
     </div>
   )

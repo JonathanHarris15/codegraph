@@ -485,12 +485,13 @@ export const SketchEditor = ({
               ) : picked.card.kind === 'database' ? (
                 <StoresInside card={picked.card} onAdd={(name) => change((f) => addStoreInside(f, picked.card.id, name)[0])} />
               ) : ownTypesAt(picked.card.level) && picked.card.kind !== 'page' ? (
-                /* Its type and colour are on the bar over it; its own type's
-                   name, icon and shape are here. */
+                /* Its type and colour are on the card and the bar over it;
+                   its type's icon and shape are here. */
                 <CardLookEditor
                   kind={picked.card.kind}
                   look={lookOf(picked.card) ?? BLANK_LOOK}
                   color={false}
+                  typed={false}
                   canSave={Boolean(picked.card.kind.trim()) && picked.card.kind !== 'card' && !TEMPLATES[picked.card.kind] && !cardTypes.some((type) => type.name === picked.card.kind)}
                   onKind={(kind) => change((f) => changeCard(f, picked.card.id, { kind, look: lookOf(picked.card) ?? BLANK_LOOK }), `kind:${picked.card.id}`)}
                   onLook={(look: CardLook) => change((f) => changeCard(f, picked.card.id, { look }))}
@@ -547,17 +548,8 @@ export const SketchEditor = ({
               />
             </>
           ) : null}
-          <hr className="sketch-rule" />
-          <Button
-            look="danger"
-            onClick={() => {
-              change((f) => remove(f, selected))
-              setSelected([])
-            }}
-          >
-            <Glyph of="bin" size={14} />
-            Take it off the sketch
-          </Button>
+          {/* Taking it away is on the bar over it, the Delete key and the
+              board's menu, so the panel keeps to what it is. */}
         </aside>
       ) : picked ? (
         <button type="button" className="sketch-panel-tab" aria-label="Show the panel" title="Show the panel" onClick={() => setPanel(true)}>

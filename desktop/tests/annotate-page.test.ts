@@ -80,7 +80,10 @@ afterAll(async () => {
 
 describe('annotating a map', () => {
   it('opens the library of annotations from the tools', async () => {
-    await page.getByRole('button', { name: 'Annotate' }).click()
+    // The sticky note is a tool of its own; the rest wait behind Shapes.
+    const annotate = page.getByRole('toolbar', { name: 'Tools' }).getByRole('group', { name: 'Annotate' })
+    expect(await annotate.getByRole('button', { name: 'Note' }).count()).toBe(1)
+    await annotate.getByRole('button', { name: 'Shapes' }).click()
     const library = page.getByRole('complementary', { name: 'Annotations' })
     // Each group is named for what its shapes do, and says so under its name.
     for (const group of ['Notes', 'Lines', 'Frames', 'Shapes'])
