@@ -60,11 +60,15 @@ export const BranchPicker = ({
   onPick,
   onOpen,
   compact = false,
+  folder = false,
 }: {
   system: string
   points: Point[]
   point: Point
   onPick: (point: Point) => void
+  /** The repo has a folder on this computer, so a branch read from git is
+   *  said to be not in it. */
+  folder?: boolean
   /** Called as the menu opens, for a page that reads the branches only then. */
   onOpen?: () => void
   /** Smaller, branches only, for a row on the projects page. */
@@ -121,7 +125,9 @@ export const BranchPicker = ({
           {point.kind === 'live' ? checkedOut || 'this folder' : point.kind === 'branch' ? point.name.replace(/^origin\//, '') : point.sha.slice(0, 7)}
         </span>
         {point.kind === 'commit' ? <span className="map-picker-title">{point.title}</span> : null}
-        {point.kind === 'branch' && (point.where === 'cloud' || point.name.startsWith('origin/')) ? (
+        {folder && !compact && point.kind !== 'live' ? (
+          <span className="map-branch-note map-branch-note--away">not in your folder</span>
+        ) : point.kind === 'branch' && (point.where === 'cloud' || point.name.startsWith('origin/')) ? (
           <span className="map-branch-note">on GitHub</span>
         ) : point.kind !== 'live' && !compact ? (
           <span className="map-branch-note">not checked out</span>

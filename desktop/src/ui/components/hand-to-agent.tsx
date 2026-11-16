@@ -13,7 +13,18 @@ export const proposalPrompt = (system: string, branch: string): string =>
   `Use codegraph: build the proposal on the ${branch ? `${branch} branch` : 'branch checked out'} of ${system}.`
 
 /** A button that puts words on the clipboard, and says so for a moment. */
-export const CopyButton = ({ text, words = 'Copy', loud = false }: { text: string; words?: string; loud?: boolean }) => {
+export const CopyButton = ({
+  text,
+  words = 'Copy',
+  loud = false,
+  onCopied,
+}: {
+  text: string
+  words?: string
+  loud?: boolean
+  /** Told once the words are on the clipboard. */
+  onCopied?: () => void
+}) => {
   const [copied, setCopied] = useState(false)
   useEffect(() => {
     if (!copied) return
@@ -25,7 +36,10 @@ export const CopyButton = ({ text, words = 'Copy', loud = false }: { text: strin
       look={loud ? 'loud' : 'normal'}
       onClick={() => {
         void navigator.clipboard.writeText(text).then(
-          () => setCopied(true),
+          () => {
+            setCopied(true)
+            onCopied?.()
+          },
           () => setCopied(false),
         )
       }}
@@ -37,24 +51,38 @@ export const CopyButton = ({ text, words = 'Copy', loud = false }: { text: strin
 }
 
 /** The words to paste, set apart, with the button that copies them. */
-export const PromptToCopy = ({ prompt, words = 'Copy' }: { prompt: string; words?: string }) => (
+export const PromptToCopy = ({ prompt, words = 'Copy', onCopied }: { prompt: string; words?: string; onCopied?: () => void }) => (
   <div className="design-start-ask hand-prompt">
     <code>{prompt}</code>
-    <CopyButton text={prompt} words={words} />
+    <CopyButton text={prompt} words={words} {...(onCopied ? { onCopied } : {})} />
   </div>
 )
 
+/** How a handed-over sketch stands, once the app can tell: the proposal made
+ *  from it and how far it is built, which goes to it on the map. */
+export type HandedOver = { words: string; built: number; of: number; onGo: () => void }
+
 /** The job a sketch is drawn for: handing it to the person's own agent to
- *  build. The app does not run the agent; it gives the words to paste. */
+ *  build. The app does not run the agent; it gives the words to paste. Once
+ *  copied the button says it is waiting, and once a proposal comes of it the
+ *  button becomes that proposal, so the hand-off leaves a trace. */
 export const HandToAgent = ({
   prompt,
   onSetUp,
+  waiting = false,
+  onCopied,
+  handed = null,
   children,
 }: {
   /** The words to paste; '' when the sketch cannot be handed over as it is. */
   prompt: string
   /** Opens how to connect an agent, for someone who has not yet. */
   onSetUp?: () => void
+  /** The words have been copied and nothing has come of them yet. */
+  waiting?: boolean
+  onCopied?: () => void
+  /** The proposal made from it, once there is one. */
+  handed?: HandedOver | null
   /** Said instead of the prompt when there is none. */
   children?: ReactNode
 }) => {
@@ -78,17 +106,36 @@ export const HandToAgent = ({
     }
   }, [open])
 
+  if (handed)
+    return (
+      <button
+        type="button"
+        className={handed.of > 0 && handed.built === handed.of ? 'map-proposal map-proposal--built' : 'map-proposal'}
+        title="Go to it on the map"
+        onClick={handed.onGo}
+      >
+        <span>{handed.words}</span>
+        <span className="map-proposal-meter" aria-hidden="true">
+          <span style={{ width: `${handed.of ? (handed.built / handed.of) * 100 : 100}%` }} />
+        </span>
+        <span>
+          {handed.built} of {handed.of} built
+        </span>
+      </button>
+    )
+
   return (
     <span ref={box} className="hand-agent">
       <button
         type="button"
-        className="ds-button ds-button--loud"
+        className={waiting ? 'ds-button hand-agent-waiting' : 'ds-button ds-button--loud'}
         aria-expanded={open}
         aria-haspopup="dialog"
+        title={waiting ? 'Copied. Once your agent makes a proposal from this sketch, it shows here.' : undefined}
         onClick={() => setOpen(!open)}
       >
-        <Bot size={15} aria-hidden="true" />
-        Hand to your agent
+        {waiting ? <span className="map-agent-dot" aria-hidden="true" /> : <Bot size={15} aria-hidden="true" />}
+        {waiting ? 'Waiting for your agent…' : 'Hand to your agent'}
       </button>
       {open ? (
         <div className="hand-agent-pop" role="dialog" aria-label="Hand to your agent">
@@ -99,7 +146,7 @@ export const HandToAgent = ({
                 Paste this into your coding agent, in the repo. It turns the sketch into a proposal on a branch of its
                 own and builds it. The map shows how far it has got.
               </div>
-              <PromptToCopy prompt={prompt} words="Copy" />
+              <PromptToCopy prompt={prompt} words="Copy" {...(onCopied ? { onCopied } : {})} />
             </>
           ) : (
             children

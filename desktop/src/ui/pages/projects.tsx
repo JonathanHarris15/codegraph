@@ -171,7 +171,7 @@ export const ProjectsPage = ({ onOpen, onOpenSketch }: { onOpen: (projectId: str
           <div className="ds-sub">
             {tab === 'projects'
               ? 'A project holds the software systems you work on together, each one a git repo. Click one to open its map.'
-              : 'Drawings of anything, outside any project. Yours alone until you share them, and they open with no connection.'}
+              : 'Drawings of anything, outside any project. Yours alone until you share them, and they work offline.'}
           </div>
         </div>
         <div className="ds-row projects-actions">

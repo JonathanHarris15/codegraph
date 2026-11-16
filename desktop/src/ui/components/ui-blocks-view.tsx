@@ -1,4 +1,5 @@
 // codegraph: component ui-blocks-view
+import { ChevronDown } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { UiBlock, UiOption } from '../../features/show-map.js'
 import { Badge, Button } from '../design-system/kit.js'
@@ -52,7 +53,7 @@ const Tile = ({ block, picked, onPick }: { block: UiBlock; picked: boolean; onPi
 const FolderView = ({ folder, pickedPath, onPick }: { folder: Folder; pickedPath: string; onPick: (path: string) => void }) => (
   <>
     {folder.blocks.length ? (
-      <div className="design-tiles">
+      <div className="design-tiles ui-block-tiles">
         {folder.blocks.map((b) => (
           <Tile key={pathOf(b)} block={b} picked={pathOf(b) === pickedPath} onPick={() => onPick(pathOf(b) === pickedPath ? '' : pathOf(b))} />
         ))}
@@ -60,7 +61,10 @@ const FolderView = ({ folder, pickedPath, onPick }: { folder: Folder; pickedPath
     ) : null}
     {folder.folders.map((f) => (
       <details key={f.path} className="ui-block-folder" open>
-        <summary aria-label={`Folder ${f.path}`}>{f.name}</summary>
+        <summary aria-label={`Folder ${f.path}`}>
+          <ChevronDown size={14} className="ui-block-folder-chevron" aria-hidden="true" />
+          {f.name}
+        </summary>
         <FolderView folder={f} pickedPath={pickedPath} onPick={onPick} />
       </details>
     ))}
@@ -144,7 +148,7 @@ const PickedBlock = ({
         <span className="ds-hint">to tell your agent which one</span>
       </div>
       {block.live ? (
-        <Button look={live ? 'bare' : 'normal'} onClick={() => onLive(!live)}>
+        <Button onClick={() => onLive(!live)}>
           {live ? 'Back to the pictures' : 'See it live'}
         </Button>
       ) : (

@@ -63,10 +63,10 @@ describe('the canvas in the real app', () => {
     await picture('1-project')
   })
 
-  it("shows each software system's branch on its card at the project level, not in the bar", async () => {
-    const onCard = page.locator('.map-world').getByRole('button', { name: 'Branch of notes' })
-    expect(await shown(onCard)).toContain('main')
-    expect(await page.locator('.map-bar').getByRole('button', { name: /^Branch of/ }).count()).toBe(0)
+  it("holds the only software system's branch in the bar at the project level, not on its card too", async () => {
+    const inBar = page.locator('.map-bar').getByRole('button', { name: 'Branch of notes' })
+    expect(await shown(inBar)).toContain('main')
+    expect(await page.locator('.map-world').getByRole('button', { name: /^Branch of/ }).count()).toBe(0)
   })
 
   it('suggests what the code calls out to, and draws it once agreed', async () => {
@@ -122,7 +122,7 @@ describe('the canvas in the real app', () => {
     expect(await shown(menu.getByRole('menuitemradio', { name: /^main/ }))).toContain('checked out')
     expect(await shown(menu.getByRole('menuitemradio', { name: /^add-search/ }))).toContain('local')
     await menu.getByRole('menuitemradio', { name: /^add-search/ }).click()
-    await expect.poll(async () => branch.textContent(), { timeout: PATIENCE }).toContain('not checked out')
+    await expect.poll(async () => branch.textContent(), { timeout: PATIENCE }).toContain('not in your folder')
     await page.getByRole('button', { name: 'Open web' }).dblclick()
     expect(await shown(page.getByRole('button', { name: 'Open search' }))).toContain('/search')
     await settle()
@@ -130,11 +130,11 @@ describe('the canvas in the real app', () => {
   })
 
   it('switches the folder to the branch being looked at, from the bar', async () => {
-    await page.getByRole('button', { name: 'Switch folder to add-search' }).click()
+    await page.getByRole('button', { name: 'Open add-search in your folder' }).click()
     const branch = page.getByRole('button', { name: 'Branch of notes' })
-    await expect.poll(async () => branch.textContent(), { timeout: PATIENCE }).not.toContain('not checked out')
+    await expect.poll(async () => branch.textContent(), { timeout: PATIENCE }).not.toContain('not in your folder')
     await expect.poll(async () => branch.textContent(), { timeout: PATIENCE }).toContain('add-search')
-    await expect.poll(() => page.getByRole('button', { name: /^Switch folder/ }).count(), { timeout: PATIENCE }).toBe(0)
+    await expect.poll(() => page.getByRole('button', { name: /^Open .* in your folder$/ }).count(), { timeout: PATIENCE }).toBe(0)
   })
 
   it('opens on the branch picked for a repo on the projects page', async () => {
@@ -145,11 +145,11 @@ describe('the canvas in the real app', () => {
     await page.getByRole('menu', { name: 'Branches of notes' }).getByRole('menuitemradio', { name: /^main/ }).click()
     await expect.poll(async () => row.textContent(), { timeout: PATIENCE }).toContain('main')
     await page.getByRole('button', { name: 'Open Notes', exact: true }).dblclick()
-    const card = page.locator('.map-world').getByRole('button', { name: 'Branch of notes' })
+    const card = page.locator('.map-bar').getByRole('button', { name: 'Branch of notes' })
     await expect.poll(async () => card.textContent(), { timeout: PATIENCE }).toContain('main')
     await page.getByRole('button', { name: 'Open notes' }).dblclick()
     const bar = page.locator('.map-bar').getByRole('button', { name: 'Branch of notes' })
     await expect.poll(async () => bar.textContent(), { timeout: PATIENCE }).toContain('main')
-    expect(await bar.textContent()).toContain('not checked out')
+    expect(await bar.textContent()).toContain('not in your folder')
   })
 })

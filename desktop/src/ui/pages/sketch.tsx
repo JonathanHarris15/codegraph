@@ -12,7 +12,8 @@ import { MapCanvas } from '../components/map-canvas.js'
 import { walk } from '../components/map-layout.js'
 import { SketchEditor } from '../components/sketch-editor.js'
 import { togetherOn, useRoom } from '../components/together.js'
-import { AGENT_COLOR, agentsAsOthers, pathTo, useAgents, useFollowAgent, useLooking } from '../components/agents.js'
+import { agentsAsOthers, pathTo, useAgents, useFollowAgent, useLooking } from '../components/agents.js'
+import { AgentFace } from '../components/together-layer.js'
 import { Trail } from '../components/trail.js'
 import { AgentWindow } from '../components/agent-window.js'
 import { HandToAgent } from '../components/hand-to-agent.js'
@@ -171,10 +172,10 @@ export const SketchPage = ({ library, sketchId, onLeave }: { library: string; sk
         </span>
         {sketch ? (
           <input
-            className="ds-input map-sketch-name"
+            className="map-sketch-name"
             aria-label="Sketch name"
             readOnly={!canDraw}
-            style={{ width: `${Math.min(Math.max(sketch.name.length + 3, 14), 44)}ch` }}
+            style={{ width: `${Math.min(Math.max(sketch.name.length + 2, 12), 44)}ch` }}
             value={sketch.name}
             onChange={(e) => changed({ ...sketch, name: e.target.value })}
           />
@@ -186,11 +187,7 @@ export const SketchPage = ({ library, sketchId, onLeave }: { library: string; sk
               {p.name}
             </span>
           ))}
-          {agentHere ? (
-            <span className="together-face" style={{ background: AGENT_COLOR }} title={`${agentHere.who} is drawing here`}>
-              {agentHere.who} is drawing
-            </span>
-          ) : null}
+          {agentHere ? <AgentFace who={agentHere.who} /> : null}
           {canDraw ? (
             <HandToAgent
               prompt=""

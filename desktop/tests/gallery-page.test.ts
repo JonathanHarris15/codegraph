@@ -111,7 +111,7 @@ describe('a viewer', () => {
   })
 
   it('can read a sketch but not draw on it', async () => {
-    await page.getByRole('button', { name: /^Sketches/ }).click()
+    await page.getByRole('button', { name: /^Project sketches/ }).click()
     await page.getByText('Plan').first().click()
     await page.locator('.map-world [data-card="thing"]').waitFor({ timeout: PATIENCE })
     expect(await page.getByRole('button', { name: 'Card: software system' }).count()).toBe(0)

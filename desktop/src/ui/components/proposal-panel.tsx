@@ -1,4 +1,5 @@
 // codegraph: component proposal-panel
+import { X } from 'lucide-react'
 import type { AgentShown } from '../../features/show-map.js'
 import type { Progress } from '../../modules/reader/index.js'
 import { Button } from '../design-system/kit.js'
@@ -10,6 +11,24 @@ const MARK: Record<string, { state: string; words: string }> = {
   'to remove': { state: 'gone', words: 'To remove' },
   removed: { state: 'built', words: 'Removed' },
 }
+
+/** How wide the panel is, with the gap it keeps from the edge, so the map
+ *  can keep what it centres on clear of it. */
+export const PROPOSAL_PANEL_COVERS = 420 + 24
+
+/** A thing a proposal names, said the way a person would: "web/feature
+ *  find-notes" is "find-notes" and a feature; "web" is a container. */
+const plainly = (item: Progress['items'][number]): { name: string; kind: string } => {
+  if (item.what === 'container') return { name: item.name, kind: 'container' }
+  const slash = item.name.indexOf('/')
+  if (slash < 0) return { name: item.name, kind: item.what }
+  const [kind = '', ...rest] = item.name.slice(slash + 1).split(' ')
+  return rest.length ? { name: rest.join(' '), kind } : { name: kind, kind: item.what }
+}
+
+/** A wire as a sentence of names: "web/page search asks web/feature
+ *  find-notes" reads "search asks find-notes". */
+const wireWords = (name: string): string => name.replace(/[^\s/]+\/[^\s/]+ /g, '')
 
 /** The proposal on a branch, as a list: each thing it draws and how it
  *  stands, what changed that it does not draw, and where the agent is. It
@@ -33,11 +52,11 @@ export const ProposalPanel = ({
   onClose: () => void
 }) => (
   <aside className="map-problems map-proposal-list" aria-label="The proposal on this branch">
-    <div className="ds-row" style={{ justifyContent: 'space-between' }}>
-      <span className="ds-label">{progress.says || 'The proposal on this branch'}</span>
-      <Button look="bare" onClick={onClose}>
-        Close
-      </Button>
+    <div className="map-proposal-head">
+      <span className="map-proposal-title">{progress.says || 'The proposal on this branch'}</span>
+      <button type="button" className="ds-sheet-close" aria-label="Close" onClick={onClose}>
+        <X size={16} />
+      </button>
     </div>
     <div className="ds-hint">
       {progress.built
@@ -55,20 +74,30 @@ export const ProposalPanel = ({
       </div>
     ) : null}
     <ul>
-      {progress.items.map((item) => (
-        <li key={`${item.what}:${item.name}`}>
-          <button
-            type="button"
-            className="map-proposal-item"
-            title={item.what === 'wire' ? undefined : 'Go to it on the map'}
-            disabled={item.what === 'wire' || !item.id}
-            onClick={() => onGoTo(item.id)}
-          >
-            <span className={`map-state map-state--${MARK[item.state]!.state}`}>{MARK[item.state]!.words}</span>
-            <span>{item.what === 'wire' ? `wire: ${item.name}` : item.name}</span>
-          </button>
-        </li>
-      ))}
+      {progress.items.map((item) => {
+        const said = plainly(item)
+        return (
+          <li key={`${item.what}:${item.name}`}>
+            <button
+              type="button"
+              className="map-proposal-item"
+              title={item.what === 'wire' ? item.name : `${item.name}. Go to it on the map`}
+              disabled={item.what === 'wire' || !item.id}
+              onClick={() => onGoTo(item.id)}
+            >
+              <span className={`map-state map-state--${MARK[item.state]!.state}`}>{MARK[item.state]!.words}</span>
+              {item.what === 'wire' ? (
+                <span>{wireWords(item.name)}</span>
+              ) : (
+                <span>
+                  {said.name}
+                  <span className="map-proposal-kind"> · {said.kind}</span>
+                </span>
+              )}
+            </button>
+          </li>
+        )
+      })}
     </ul>
     {progress.unasked.length ? (
       <>

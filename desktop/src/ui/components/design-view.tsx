@@ -1,4 +1,5 @@
 // codegraph: component design-view
+import { X } from 'lucide-react'
 import { useEffect, useState, type CSSProperties } from 'react'
 import type { DesignSystem, RecipeShown, Token, TokenGroup, UiBlock } from '../../features/show-map.js'
 import { Badge, Button } from '../design-system/kit.js'
@@ -388,12 +389,26 @@ export const DesignView = ({
     if (agent?.uiBlock) setTab('blocks')
   }, [agent?.uiBlock])
 
+  // The page covers the map, so the map's keys wait while it is open: Escape
+  // closes this page, not the level under it. A menu or window open over it
+  // takes Escape first.
   useEffect(() => {
+    const typing = (target: EventTarget | null): boolean =>
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLSelectElement ||
+      target instanceof HTMLTextAreaElement ||
+      (target instanceof HTMLElement && target.isContentEditable)
     const keys = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') {
+        if (document.querySelector('[role="menu"], [role="dialog"]')) return
+        event.stopPropagation()
+        onClose()
+        return
+      }
+      if (!typing(event.target) && !event.ctrlKey && !event.metaKey) event.stopPropagation()
     }
-    window.addEventListener('keydown', keys)
-    return () => window.removeEventListener('keydown', keys)
+    window.addEventListener('keydown', keys, true)
+    return () => window.removeEventListener('keydown', keys, true)
   }, [onClose])
 
   // With nothing at all yet, the page is one panel saying how to start.
@@ -419,9 +434,9 @@ export const DesignView = ({
             </button>
           </div>
         )}
-        <Button look="bare" onClick={onClose}>
-          Close
-        </Button>
+        <button type="button" className="ds-sheet-close design-close" aria-label="Close" title="Close (Esc)" onClick={onClose}>
+          <X size={16} />
+        </button>
       </header>
       {nothing ? (
         <DesignStart part="all" />
