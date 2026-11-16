@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { blankCard, type SketchCard } from '../src/modules/sketches/index.js'
 import { bendWire, moveThings, rewire } from '../src/ui/components/sketch-edits.js'
-import { addBend, dragPiece, nearestOn, pieceOf, pointAlong, squareRoute, type Point } from '../src/ui/components/square-wires.js'
+import { addBend, dragPiece, nearestOn, pieceOf, pointAlong, squareRoute, takePieceOut, type Point } from '../src/ui/components/square-wires.js'
 
 const left = { x: 0, y: 0, w: 100, h: 60 }
 const right = { x: 300, y: 100, w: 100, h: 60 }
@@ -148,5 +148,84 @@ describe('a sketch keeps where a right-angle wire turns', () => {
     expect(elsewhere.wires[0]).toMatchObject({ to: 'c', sides: { to: 'w' } })
     expect(elsewhere.wires[0]!.bends).toBeUndefined()
     expect(elsewhere.wires[0]!.along).toBeUndefined()
+  })
+})
+
+describe('taking a piece out of a right-angle wire', () => {
+  // Down out of one card, across, down, across, and down into another.
+  const route: Point[] = [
+    { x: 0, y: 0 },
+    { x: 0, y: 48 },
+    { x: 96, y: 48 },
+    { x: 96, y: 120 },
+    { x: 192, y: 120 },
+    { x: 192, y: 200 },
+  ]
+
+  it('slides the piece after into line with the piece before, taking two turns out', () => {
+    expect(takePieceOut(route, 2)).toEqual([
+      { x: 0, y: 0 },
+      { x: 0, y: 48 },
+      { x: 192, y: 48 },
+      { x: 192, y: 200 },
+    ])
+    expect(takePieceOut(route, 1)).toEqual([
+      { x: 0, y: 0 },
+      { x: 0, y: 120 },
+      { x: 192, y: 120 },
+      { x: 192, y: 200 },
+    ])
+  })
+
+  it('slides the piece before instead where the piece after reaches a card', () => {
+    expect(takePieceOut(route, 3)).toEqual([
+      { x: 0, y: 0 },
+      { x: 0, y: 48 },
+      { x: 192, y: 48 },
+      { x: 192, y: 200 },
+    ])
+  })
+
+  it('never moves an end, nor turns one back through its card', () => {
+    expect(takePieceOut(route, 0)).toBeNull()
+    expect(takePieceOut(route, 4)).toBeNull()
+    // The only piece between the two that leave the cards.
+    expect(takePieceOut([{ x: 0, y: 0 }, { x: 0, y: 40 }, { x: 60, y: 40 }, { x: 60, y: 80 }], 1)).toBeNull()
+    // Sliding either way would bring the wire into the card from below.
+    const hooked: Point[] = [
+      { x: 0, y: 0 },
+      { x: 0, y: 200 },
+      { x: 96, y: 200 },
+      { x: 96, y: 40 },
+      { x: 192, y: 40 },
+      { x: 192, y: 100 },
+    ]
+    expect(takePieceOut(hooked, 3)).toBeNull()
+  })
+})
+
+describe('taking out the one turn between two cards', () => {
+  // Out of one card's east side, down, and into another's west side.
+  const route: Point[] = [
+    { x: 0, y: 0 },
+    { x: 40, y: 0 },
+    { x: 40, y: 60 },
+    { x: 100, y: 60 },
+  ]
+
+  it('slides an end along its card’s side, and the wire runs straight', () => {
+    expect(takePieceOut(route, 1, { to: [-20, 120] })).toEqual([
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+    ])
+    expect(takePieceOut(route, 1, { from: [-20, 120] })).toEqual([
+      { x: 0, y: 60 },
+      { x: 100, y: 60 },
+    ])
+  })
+
+  it('leaves it where an end would come off its side, or has no room to slide', () => {
+    expect(takePieceOut(route, 1, { to: [20, 120] })).toBeNull()
+    expect(takePieceOut(route, 1)).toBeNull()
   })
 })

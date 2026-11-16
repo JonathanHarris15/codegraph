@@ -26,7 +26,7 @@ import { shapeOf } from './annotation-shapes.js'
 import { IconPick } from './card-look-editor.js'
 import { BLANK_LOOK, CARD_SHAPES, drawnShape, lookOf } from './card-looks.js'
 import { meetOutline, textAreaOf } from './shape-outline.js'
-import { addBend, dragPiece, nearestOn, pathOf, pieceOf, pointAlong, spotOn, squareBetween, squareRoute, toOutlines, type WireStyle } from './square-wires.js'
+import { addBend, dragPiece, nearestOn, pathOf, pieceOf, pointAlong, spotOn, squareBetween, squareRoute, takePieceOut, toOutlines, type EndRoom, type WireStyle } from './square-wires.js'
 import { CanvasMenu, type MenuItem } from './canvas-menu.js'
 import { SidePanel } from './side-panel.js'
 import { CardPalette } from './card-palette.js'
@@ -2027,6 +2027,48 @@ export const MapCanvas = ({
     if (split !== route) drawing.onBend(wireId, split.slice(1, -1).map((p) => ({ x: p.x - shift.x, y: p.y - shift.y })))
   }
 
+  /** How far each end of a picked right-angle wire may slide along the side of
+   *  the card it meets, kept a little in from the corners. */
+  const endRoom = (wire: { from: string; to: string }, route: Spot[]): EndRoom => {
+    const span = (id: string, a: Spot, b: Spot): [number, number] | undefined => {
+      const box = shapes.boxes.get(id)
+      if (!box || endsAtHub(id)) return undefined
+      // Clear of a card's rounded corners.
+      const inset = 16
+      // An end piece running across meets a side that runs down, and slides down it.
+      return a.y === b.y ? [box.y + inset, box.y + box.h - inset] : [box.x + inset, box.x + box.w - inset]
+    }
+    const from = span(wire.from, route[0]!, route[1]!)
+    const to = span(wire.to, route.at(-2)!, route.at(-1)!)
+    return { ...(from ? { from } : {}), ...(to ? { to } : {}) }
+  }
+
+  /** Takes one piece of a right-angle wire out where its handle is
+   *  double-clicked, and the turn at each end of it, where the wire still runs
+   *  true without it, sliding an end along its side if it must. A wire left
+   *  with no turns of its own finds its own way. One undo puts it back. */
+  const takeOut = (wire: { id?: string; from: string; to: string }, route: Spot[], piece: number): void => {
+    if (!drawing || !wire.id) return
+    const fewer = takePieceOut(route, piece, endRoom(wire, route))
+    if (!fewer) return
+    const id = wire.id
+    let joined = false
+    for (const end of ['from', 'to'] as const) {
+      const was = end === 'from' ? route[0]! : route.at(-1)!
+      const now = end === 'from' ? fewer[0]! : fewer.at(-1)!
+      const box = shapes.boxes.get(wire[end])
+      if (!box || (was.x === now.x && was.y === now.y)) continue
+      // The side the end meets, from the way its piece runs.
+      const [p, q] = end === 'from' ? [fewer[0]!, fewer[1]!] : [fewer.at(-1)!, fewer.at(-2)!]
+      const side: Side = p.y === q.y ? (q.x > p.x ? 'e' : 'w') : q.y > p.y ? 's' : 'n'
+      const flat = side === 'n' || side === 's'
+      drawing.onRewire(id, end, wire[end], side, (flat ? now.x - box.x : now.y - box.y) / (flat ? box.w : box.h))
+      joined = true
+    }
+    const bends = fewer.slice(1, -1).map((p) => ({ x: p.x - shift.x, y: p.y - shift.y }))
+    drawing.onBend(id, bends.length ? bends : undefined, joined)
+  }
+
   /** Where along a side of a card a wire's end was let go, as a share of the
    *  side, on the grid of the level when the wire is drawn square. */
   const shareAlong = (target: string, side: Side, at: Spot): number | undefined => {
@@ -3420,9 +3462,15 @@ export const MapCanvas = ({
                     height={across ? 8 : 14}
                     rx={2}
                     className={`map-wire-piece map-wire-piece--${across ? 'across' : 'down'}`}
-                    aria-label="Move this piece of the wire"
+                    aria-label={takePieceOut(route, i, endRoom(pickedWire.wire, route)) ? 'Move this piece of the wire; double-click to take it out' : 'Move this piece of the wire'}
                     onPointerDown={pressPiece(pickedWire.wire.id!, pickedWire.key, route, i)}
-                  />,
+                    onDoubleClick={(event) => {
+                      event.stopPropagation()
+                      takeOut(pickedWire.wire, route, i)
+                    }}
+                  >
+                    <title>{takePieceOut(route, i, endRoom(pickedWire.wire, route)) ? 'Drag to move it; double-click to take this turn out' : 'Drag to move it'}</title>
+                  </rect>,
                 ]
               })}
               <circle

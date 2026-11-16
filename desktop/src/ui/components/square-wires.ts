@@ -209,6 +209,54 @@ export const addBend = (route: Point[], piece: number, at: Point): Point[] => {
   return [...route.slice(0, piece + 1), spot, ...route.slice(piece + 1)]
 }
 
+/** How far each end of a route may slide along the side of the card it
+ *  meets, as the lowest and highest it may reach on that side's axis. An end
+ *  left out stays where it is. */
+export type EndRoom = { from?: [number, number]; to?: [number, number] }
+
+/** A route with one piece taken out, and the turn at each end of it: the piece
+ *  after it slides into line with the piece before, or the piece before into
+ *  line with the piece after, so the route still runs in straight pieces at
+ *  right angles. An end of the route slides along its card's side only where
+ *  it has to and there is room for it; one that need not move never does.
+ *  Null where no way works: for a piece that leaves or reaches a card, or
+ *  where a slide would take an end off its side or turn it back through its
+ *  card. */
+export const takePieceOut = (route: Point[], piece: number, room: EndRoom = {}): Point[] | null => {
+  const last = route.length - 1
+  if (piece <= 0 || piece + 1 >= last) return null
+  const p = route[piece]!
+  const q = route[piece + 1]!
+  const across = flat(p, q)
+  /** A spot moved onto the line a neighbour runs along. */
+  const onto = (at: Point, line: Point): Point => (across ? { x: line.x, y: at.y } : { x: at.x, y: line.y })
+  /** Which way a piece runs, as a sign along each axis. */
+  const way = (from: Point, to: Point): string => `${Math.sign(Math.round(to.x - from.x))},${Math.sign(Math.round(to.y - from.y))}`
+  /** An end that moved stays on its side, and only where it may. */
+  const onSide = (end: 'from' | 'to', at: Point): boolean => {
+    const was = end === 'from' ? route[0]! : route[last]!
+    if (same(at, was)) return true
+    const span = room[end]
+    const v = across ? at.x : at.y
+    return Boolean(span) && v >= span![0] && v <= span![1]
+  }
+  // Still leaving and reaching each card the way it did, not back through it.
+  const fits = (next: Point[]): boolean =>
+    next.length >= 2 &&
+    onSide('from', next[0]!) &&
+    onSide('to', next.at(-1)!) &&
+    way(next[0]!, next[1]!) === way(route[0]!, route[1]!) &&
+    way(next.at(-2)!, next.at(-1)!) === way(route[last - 1]!, route[last]!)
+  // The piece after slides onto the line of the piece before; or else the
+  // piece before onto the line of the piece after. A way that keeps both ends
+  // where they are comes first.
+  const after = tidy([...route.slice(0, piece + 1), onto(q, p), onto(route[piece + 2]!, p), ...route.slice(piece + 3)])
+  const before = tidy([...route.slice(0, piece - 1), onto(route[piece - 1]!, q), onto(p, q), ...route.slice(piece + 1)])
+  const still = (next: Point[]): boolean => same(next[0]!, route[0]!) && same(next.at(-1)!, route[last]!)
+  const ways = [after, before].sort((x, y) => Number(still(y)) - Number(still(x)))
+  return ways.find(fits) ?? null
+}
+
 /** The spot a share of the way along a route, by its length. */
 export const pointAlong = (route: Point[], t: number): Point => {
   const lengths = route.slice(1).map((q, i) => Math.hypot(q.x - route[i]!.x, q.y - route[i]!.y))

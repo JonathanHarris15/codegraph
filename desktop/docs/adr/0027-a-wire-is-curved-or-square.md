@@ -28,7 +28,10 @@ card at a chosen spot on its edge.
   side stretch to follow. Dragging the piece that leaves or reaches a card
   keeps a short stub at the card and adds two bends, so the wire still meets
   the card where it did. Double-clicking the line splits a piece in two, so
-  either half can be moved. Its menu lets it find its own way again.
+  either half can be moved. Double-clicking a piece's handle takes it out, and
+  the turn at each end of it, where the wire still runs true: the piece beside
+  it slides into line, and an end slides along its card's side only where it
+  must and stays on that side. Its menu lets it find its own way again.
 - **Dragging an end onto a side** keeps where along that side it was let go,
   on the grid when the board is square, for curved wires too.
 - **Bends are kept on the wire** in a sketch, in the level's own space, and a

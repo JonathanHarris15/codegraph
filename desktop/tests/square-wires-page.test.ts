@@ -208,6 +208,32 @@ describe('moving the pieces of a right-angle wire', () => {
     await settle()
     expect(kept().root.wires.find((w) => w.id === 'reads')!.bends).toBeUndefined()
   })
+
+  it('takes a piece out, and the turn at each end of it, with a double-click on its handle', async () => {
+    await page.locator('.map-sentence', { hasText: 'to read notes' }).click()
+    const pieces = page.locator('.map-wire-piece')
+    await pieces.first().waitFor({ timeout: PATIENCE })
+    const handle = (await pieces.nth(Math.floor((await pieces.count()) / 2)).boundingBox())!
+    const down = (await pieces.nth(Math.floor((await pieces.count()) / 2)).getAttribute('class'))!.includes('down')
+    await drag(middle(handle), { x: middle(handle).x + (down ? 90 : 0), y: middle(handle).y + (down ? 0 : 90) })
+    await settle()
+    const turns = (): number => kept().root.wires.find((w) => w.id === 'reads')!.bends?.length ?? 0
+    const before = turns()
+    const pieceCount = await pieces.count()
+    await picture('square-6-before-taking-out')
+    const removable = page.locator('.map-wire-piece[aria-label$="double-click to take it out"]')
+    expect(await removable.count()).toBeGreaterThan(0)
+    // A piece that leaves or reaches a card cannot go: the wire would come loose.
+    expect(await removable.count()).toBeLessThan(pieceCount)
+    await removable.first().dblclick()
+    await settle()
+    expect(turns()).toBeLessThan(before)
+    expect(await pieces.count()).toBe(pieceCount - 2)
+    await picture('square-7-taken-out')
+    await page.keyboard.press('Control+z')
+    await settle()
+    expect(turns()).toBe(before)
+  })
 })
 
 describe('stores whose fields point at each other', () => {
