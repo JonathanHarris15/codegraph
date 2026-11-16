@@ -326,13 +326,26 @@ describe('drawing a sketch in the real app', () => {
     const name = `main (sketch ${two(day.getDate())}/${two(day.getMonth() + 1)}/${two(day.getFullYear() % 100)})`
     expect(await page.getByLabel('Sketch name').inputValue()).toBe(name)
     // The bar says a sketch is being worked on, and the branch is put away.
-    expect(await shown(page.getByRole('button', { name: `Sketches: working on ${name}` }))).toContain('Sketching')
+    expect(await shown(page.getByRole('button', { name: `Sketches: working on ${name}` }))).toContain('Sketches')
+    expect(await shown(page.locator('.map-mode-chip'))).toBe('Sketch')
     expect(await page.getByRole('button', { name: /^Branch of/ }).count()).toBe(0)
     await card('web').click()
     await page.getByRole('button', { name: 'Draw inside it' }).click()
     expect(await shown(card('write-note'))).toContain('feature')
     await settle()
     await picture('sketch-2-from-map')
+  })
+
+  it('hands the sketch to an agent: the words to paste, ready to copy', async () => {
+    const hand = page.getByRole('button', { name: 'Hand to your agent' })
+    await hand.click()
+    const pop = page.getByRole('dialog', { name: 'Hand to your agent' })
+    expect(await shown(pop.locator('code'))).toContain('make a proposal from the sketch “main (sketch')
+    expect(await pop.getByRole('button', { name: 'Copy' }).count()).toBe(1)
+    await page.waitForTimeout(300)
+    await picture('sketch-3-hand-to-agent')
+    await hand.click()
+    await pop.waitFor({ state: 'detached', timeout: PATIENCE })
   })
 
   it('asks before it throws a sketch away, and keeps it when the answer is no', async () => {

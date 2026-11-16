@@ -139,7 +139,10 @@ describe('two members on one map', () => {
   })
 
   it('says who did what in the history', async () => {
-    await anaPage.getByRole('button', { name: 'History' }).click()
+    await anaPage.getByRole('button', { name: 'More' }).click()
+    await anaPage.getByRole('menuitem', { name: 'Members' }).waitFor({ timeout: PATIENCE })
+    await picture(anaPage, 'together-more')
+    await anaPage.getByRole('menuitem', { name: 'History' }).click()
     const panel = anaPage.getByRole('complementary', { name: 'History' })
     await panel.getByText('on the map of notes on main').first().waitFor({ timeout: PATIENCE })
     expect(await panel.textContent()).toContain('Ana')

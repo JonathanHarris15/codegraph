@@ -78,6 +78,20 @@ describe('watching a proposal get built', () => {
     const list = page.getByRole('complementary', { name: 'The proposal on this branch' })
     expect(await shown(list)).toContain('Let people search their notes')
     expect(await shown(list)).toContain('web/page search')
+    expect(await shown(meter())).toContain('0 of 5 built')
+    // Nobody is building it yet, so it gives the words that set an agent going.
+    expect(await shown(list.locator('code'))).toContain('build the proposal on the search branch of notes')
+    expect(await list.getByRole('button', { name: 'Copy the prompt to build it' }).count()).toBe(1)
+    await picture('p4-0-list')
+    // Each thing goes to where it is drawn, from wherever the map is.
+    const trail = page.getByRole('navigation', { name: 'Where you are' })
+    await trail.getByRole('button').nth(1).click()
+    await settle()
+    expect(await shown(trail.locator('[aria-current="page"]'))).toContain('notes')
+    await list.getByRole('button', { name: 'To build web/page search', exact: true }).click()
+    await settle()
+    expect(await shown(trail.locator('[aria-current="page"]'))).toContain('web')
+    expect(await onMap('web:page:search').count()).toBe(1)
     await meter().click()
   })
 

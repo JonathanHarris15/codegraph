@@ -230,6 +230,7 @@ export const FolderBrowser = ({
   canEdit,
   sketchFolders,
   onFiled,
+  actions,
   children,
 }: {
   library: string
@@ -243,6 +244,8 @@ export const FolderBrowser = ({
   sketchFolders: Record<string, string>
   /** After a sketch is filed, so the list can read it again. */
   onFiled: () => void
+  /** More to do here, at the end of the bar after New folder. */
+  actions?: ReactNode
   /** The sketches in this folder, as the list draws them. */
   children: ReactNode
 }) => {
@@ -284,11 +287,14 @@ export const FolderBrowser = ({
             </span>
           ))}
         </nav>
-        {canEdit ? (
-          <Button look="bare" onClick={() => setNaming({})} label="New folder">
-            <FolderPlus size={15} aria-hidden="true" /> New folder
-          </Button>
-        ) : null}
+        <span className="ds-row">
+          {canEdit ? (
+            <Button look="bare" onClick={() => setNaming({})} label="New folder">
+              <FolderPlus size={15} aria-hidden="true" /> New folder
+            </Button>
+          ) : null}
+          {actions}
+        </span>
       </div>
       {problem ? (
         <div className="ds-hint" role="alert">

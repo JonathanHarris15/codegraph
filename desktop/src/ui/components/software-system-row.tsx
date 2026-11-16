@@ -65,6 +65,12 @@ const SetupBadge = ({ system, project }: { system: SoftwareSystemView; project: 
   )
 }
 
+/** A folder's path cut to its last two parts, the ones a person knows it by. */
+const shortPath = (path: string): string => {
+  const parts = path.split(/[\\/]/).filter(Boolean)
+  return parts.length > 2 ? `…/${parts.slice(-2).join('/')}` : path
+}
+
 export const SoftwareSystemRow = ({
   system,
   project,
@@ -89,7 +95,16 @@ export const SoftwareSystemRow = ({
         <Badge tone={cloud.tone}>{cloud.words}</Badge>
         {system.dirty ? <Badge>uncommitted changes</Badge> : null}
       </div>
-      <span className="ds-mono">{system.path}</span>
+      {system.path && system.setUp && !system.namesThisProject ? (
+        <span className="project-repo-hint">
+          Add <span className="ds-mono">{project}</span> to the projects in its codegraph.config.json, or ask your agent to.
+        </span>
+      ) : null}
+      {system.path ? (
+        <span className="project-repo-path" title={system.path}>
+          {shortPath(system.path)}
+        </span>
+      ) : null}
     </div>
   )
 }
