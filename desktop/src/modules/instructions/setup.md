@@ -17,7 +17,10 @@ below assumes them.
   shows nothing yet; that is expected.
 - Find out which project or projects this repo serves. If the person has not
   said, ask them for the short name (like `harris-appraisals`). This is the
-  one question worth stopping for.
+  one question worth stopping for. Ask in the same breath whether this repo is
+  the whole of what people use, or one part kept beside other repos, like a
+  phone app whose server lives elsewhere; if it is a part, the software
+  system's name goes in `system`.
 
 ## 1. Survey, on your own
 

@@ -7,8 +7,9 @@ import { Button } from '../design-system/kit.js'
 import { CanvasMenu, type MenuItem } from './canvas-menu.js'
 import { SoftwareSystemRow } from './software-system-row.js'
 
-const countWords = (many: number): string =>
-  many === 0 ? 'no software systems yet' : many === 1 ? '1 software system' : `${many} software systems`
+/** How many repos, which is not how many software systems: one can be kept
+ *  in several (ADR 0028). */
+const countWords = (many: number): string => (many === 0 ? 'no repos yet' : many === 1 ? '1 repo' : `${many} repos`)
 
 /** One project: a click on its head opens its map, and the head says so.
  *  The repos fill its lower half, with a quiet last line to link another;

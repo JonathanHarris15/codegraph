@@ -78,7 +78,7 @@ describe('the projects screen in the real app', () => {
     await page.getByRole('button', { name: 'Make it' }).click()
 
     expect(await shown(page.getByText('Mosaic Manager'))).toContain('Mosaic Manager')
-    expect(await shown(page.getByText('no software systems yet'))).toContain('short name')
+    expect(await shown(page.getByText('no repos yet'))).toContain('short name')
     expect(await shown(page.getByText('mosaic-manager', { exact: true }))).toBe('mosaic-manager')
     // With no repo yet, linking the first is the card's one plain ask.
     const card = page.locator('.project-card').filter({ hasText: 'Mosaic Manager' })

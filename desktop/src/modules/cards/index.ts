@@ -59,6 +59,10 @@ export type Card = {
   state?: CardState
   /** A software system this member cannot open right now, and why, in words. */
   outOfReach?: string
+  /** In a software system of several repos, the id of the repo this
+   *  container is in, and its name (ADR 0028). */
+  repo?: string
+  repoName?: string
   /** A store's fields; null when its shape is unknown. Left out for anything
    *  that is not a store. */
   fields?: CardField[] | null

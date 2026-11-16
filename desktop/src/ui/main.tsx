@@ -8,6 +8,7 @@ import '@fontsource/ibm-plex-mono/400.css'
 import '@fontsource/ibm-plex-mono/500.css'
 import './design-system/theme.css'
 import { wearTheme } from './design-system/kit.js'
+import { LevelsHelp } from './components/levels-help.js'
 import { CanvasPage } from './pages/canvas.js'
 import { ProjectsPage } from './pages/projects.js'
 import { SettingsPage } from './pages/settings.js'
@@ -33,13 +34,21 @@ const App = () => {
     return () => window.removeEventListener('hashchange', moved)
   }, [])
   const [library = '', sketchId = ''] = sketch.split('/')
-  if (settings) return <SettingsPage onLeave={() => (window.location.hash = '')} />
-  return sketch ? (
+  const page = settings ? (
+    <SettingsPage onLeave={() => (window.location.hash = '')} />
+  ) : sketch ? (
     <SketchPage key={sketch} library={library} sketchId={sketchId} onLeave={() => (window.location.hash = '#/sketches')} />
   ) : project ? (
     <CanvasPage key={project} projectId={project} onLeave={() => (window.location.hash = '')} />
   ) : (
     <ProjectsPage onOpen={(id) => (window.location.hash = `#/projects/${id}`)} onOpenSketch={(from, id) => (window.location.hash = `#/sketches/${from}/${id}`)} />
+  )
+  return (
+    <>
+      {page}
+      {/* What the levels are, in the same corner on every page. */}
+      <LevelsHelp />
+    </>
   )
 }
 

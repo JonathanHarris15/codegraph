@@ -51,6 +51,9 @@ now deletes, and the two must never be mistaken for each other.
 
 - **projects** names each project the repo serves, by a short name that
   stays put when the project is renamed in the app.
+- **system**, which ADR 0028 added, names the software system the repo is
+  part of, where that is more than this one repo. Repos that name the same
+  one are drawn as one software system.
 - **containers** names each container, its kind, a line saying what it is
   for, and the folders its code lives in. A kind is a few plain words:
   browser app, server, desktop app, database, files on disk, function,

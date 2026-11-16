@@ -13,7 +13,10 @@ Codegraph follows C4, from the outside in.
   it serves by their short name, and may serve more than one.
 - **Person**: someone who uses the software. No code says who they are, so
   people are drawn in the app, never read or tagged.
-- **Software system**: the whole repo. Yours is the only one you tag.
+- **Software system**: one thing people use, seen whole. Usually that is the
+  whole repo. Where a team keeps it in several repos, each a container or
+  two, every one of them names it in `system` in its config and the map
+  draws them as one. Yours is the only repo you tag.
 - **Shallow software system**: something the project leans on that has no
   repo here, usually because someone else runs it. A call out of your
   container names one (see Words on wires); it only reaches the map once a
@@ -47,6 +50,9 @@ Codegraph follows C4, from the outside in.
 ```
 
 - `projects`: the short name of each project the repo serves.
+- `system`, only where the software system is kept in more than one repo:
+  its name, the same in every one of them. Leave it out where this repo is
+  the whole system.
 - `containers`: each one's kind, one line on what it is for, and the folders
   its code lives in. A container with no code here, like a database, has no
   folders. Every component file sits under exactly one container's folders.
@@ -167,6 +173,10 @@ the app offers it to the person as a shallow software system, and once they
 agree it is a card on the map. So name the system, as a person would say it
 — `to stripe:`, `to companies house:` — not the library, the URL or the
 function.
+
+A call to another repo of the same software system names that repo, and the
+map joins the two containers: `to billing-api:`. Where that repo has more
+than one container, `to billing-api/api:` says which.
 
 **The kinds of wire.** The reader works these out; you never write a kind in
 a tag. It helps to know what it will read:

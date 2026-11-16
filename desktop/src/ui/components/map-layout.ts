@@ -171,7 +171,9 @@ const SKETCH_BODY = 32
 const huggedHeight = (card: DrawnCard, inside: number): number => {
   const says = card.says ? 4 + Math.min(2, linesFor(card.says, inside, 7)) * 17 : 0
   const chips = card.children.length ? 8 + chipRows(card.children.map((c) => c.name), inside) * 20 : 0
-  return Math.max(LEAST_HEIGHT, 72 + says + chips + (card.snug ? 0 : SKETCH_BODY))
+  // The repo a container is in, where its software system is kept in several.
+  const repo = card.repoName ? 20 : 0
+  return Math.max(LEAST_HEIGHT, 72 + says + repo + chips + (card.snug ? 0 : SKETCH_BODY))
 }
 
 export const sizeOf = (card: DrawnCard): { w: number; h: number } => {

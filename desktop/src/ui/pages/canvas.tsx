@@ -1,4 +1,5 @@
 // codegraph: page canvas at /projects/:id
+import { levelInside, showLevel } from '../components/levels-help.js'
 import { ChevronDown, Pencil } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AgentConnection } from '../../features/connect-agent.js'
@@ -277,7 +278,12 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
   }, [onMap])
 
   const trail = shown ? walk(shown.card, path) : []
-  const system = trail[1]
+  /** The repo being looked at: the software system opened, or, inside one
+   *  kept in several repos, the repo of the container opened (ADR 0028). */
+  const joinedOpen = trail[1] && shown && trail[1].kind === 'software system' && !shown.systems.some((s) => s.id === trail[1]!.id) ? trail[1] : undefined
+  const system: { id: string; name: string } | undefined = joinedOpen
+    ? shown?.systems.find((s) => s.id === trail[2]?.repo)
+    : trail[1]
   const systemShown = shown?.systems.find((s) => s.id === system?.id)
   const working: SystemShown | undefined = shown?.systems.find((s) => s.agent)
   /** The software system whose branch the bar shows: the one opened, or at
@@ -551,6 +557,10 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
   useFollowAgent(agentHere, sketch?.root ?? null, setSketchPath)
   const onLooking = useLooking(sketch ? { library: projectId, id: sketch.id, name: sketch.name, trail: walk(sketch.root, sketchPath).map((c) => c.name) } : null)
   const focusId = (sketch ? walk(sketch.root, sketchPath) : trail).at(-1)?.id ?? ''
+  // The ? in the corner marks the level on the board.
+  const focusLevel = levelInside((sketch ? walk(sketch.root, sketchPath) : trail).at(-1)?.level)
+  useEffect(() => showLevel(focusLevel), [focusLevel])
+  useEffect(() => () => showLevel(-1), [])
   const focusSystem = sketch ? undefined : inSystem(focusId)
   const board = !online ? '' : sketch ? `sketch:${sketch.id}` : focusSystem ? (sharedMaps[focusSystem.id] ? `${focusSystem.id}@${sharedMaps[focusSystem.id]}` : '') : 'project'
   const together: Together | undefined = online || sketch
@@ -697,6 +707,8 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
     </span>
   ) : shown && shown.systems.length > 1 && trail.length === 1 ? (
     <span className="map-branch-slot map-branch-slot--quiet">Pick a software system to choose its branch</span>
+  ) : joinedOpen && trail.length === 2 ? (
+    <span className="map-branch-slot map-branch-slot--quiet">Each container shows its repo and branch</span>
   ) : null
 
   return (
@@ -897,8 +909,11 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
             }}
             {...(together ? { together } : {})}
             cardExtra={(card) => {
-              const at = card.level === 'system' ? shown.systems.find((s) => s.id === card.id) : undefined
-              if (!at || at.reach !== 'open' || !at.setUp || branchSystem?.id === card.id) return null
+              // A container of a software system kept in several repos carries
+              // its repo's branch, as a software system's card does.
+              const at =
+                card.level === 'system' ? shown.systems.find((s) => s.id === card.id) : card.repo ? shown.systems.find((s) => s.id === card.repo) : undefined
+              if (!at || at.reach !== 'open' || !at.setUp || branchSystem?.id === at.id) return null
               return (
                 <BranchPicker
                   system={at.name}

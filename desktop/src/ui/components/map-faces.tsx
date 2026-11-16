@@ -1,4 +1,5 @@
 // codegraph: component map-canvas
+import { FolderGit2 } from 'lucide-react'
 import { useState, type PointerEvent, type ReactNode } from 'react'
 import type { Said } from '../../modules/wording/index.js'
 import { CARD_SHAPES, drawnShape, lookOf } from './card-looks.js'
@@ -302,6 +303,12 @@ export const CardFace = ({
       <div className="map-name" onDoubleClick={onField(false)}>
         {card.name || <span className="map-more">Unnamed</span>}
       </div>
+      {card.repoName ? (
+        <div className="map-repo" title={`Kept in the repo ${card.repoName}`}>
+          <FolderGit2 size={12} aria-hidden="true" />
+          {card.repoName}
+        </div>
+      ) : null}
       {card.says ? (
         <div className="map-says" onDoubleClick={onField(true)}>
           {card.says}

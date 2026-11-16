@@ -22,8 +22,9 @@ inside, so their card does not open.
 _Avoid_: user, actor, persona, role
 
 **Software system**:
-One repo, seen whole. It can serve more than one project, and it says in its
-own code which ones.
+One thing people use, seen whole: one repo, or several that each say in their
+code that they are part of it. It can serve more than one project, and its
+repos say which ones.
 _Avoid_: codebase, app, service, repo (say repo for the git folder itself)
 
 **Shallow software system**:
@@ -223,7 +224,7 @@ _Avoid_: preset, stencil
 **Sketch**:
 A drawing that is not read from any repo: any diagram at all, sometimes started
 from a snapshot of a map. An agent can be handed a sketch to make proposals
-from: one for each software system it changes, making the repo first where
+from: one for each repo it changes, making the repo first where
 there is none.
 _Avoid_: drawing, draft, plan, diagram
 

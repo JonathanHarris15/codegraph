@@ -28,6 +28,9 @@ export const CONFIG = 'codegraph.config.json'
 
 type Config = {
   projects: string[]
+  /** The software system this repo is part of, where that is more than it
+   *  alone (ADR 0028); '' for none. */
+  system: string
   containers: { name: string; kind: string; says: string; folders: string[]; dev: string }[]
 }
 
@@ -63,11 +66,13 @@ const readConfig = (text: string | undefined, problems: Mismatch[]): Config | nu
   try {
     const raw = JSON.parse(text) as {
       projects?: unknown
+      system?: unknown
       containers?: Record<string, { kind?: unknown; says?: unknown; folders?: unknown; dev?: unknown }>
     }
     const words = (value: unknown): string => (typeof value === 'string' ? value : '')
     return {
       projects: Array.isArray(raw.projects) ? raw.projects.filter((p): p is string => typeof p === 'string') : [],
+      system: words(raw.system).trim(),
       containers: Object.entries(raw.containers ?? {}).map(([name, c]) => ({
         name,
         kind: words(c.kind),
@@ -114,6 +119,7 @@ export const readFacts = (point: Point, files: Map<string, string>): Facts => {
     point,
     setUp: config !== null,
     projects: config?.projects ?? [],
+    system: config?.system ?? '',
     containers: [],
     components: [],
     stores: [],

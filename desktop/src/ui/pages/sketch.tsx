@@ -1,4 +1,5 @@
 // codegraph: page sketch at /sketches/:library/:id
+import { levelInside, showLevel } from '../components/levels-help.js'
 import { Pencil } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AgentConnection } from '../../features/connect-agent.js'
@@ -121,6 +122,10 @@ export const SketchPage = ({ library, sketchId, onLeave }: { library: string; sk
   const myRole = sketch?.members?.find((m) => m.id === me)?.role
   const canDraw = library === LOOSE || myRole === 'owner' || myRole === 'collaborator'
   const trail = sketch ? walk(sketch.root, path) : []
+  // The ? in the corner marks the level on the board.
+  const level = levelInside(trail.at(-1)?.level)
+  useEffect(() => showLevel(level), [level])
+  useEffect(() => () => showLevel(-1), [])
   const onLooking = useLooking(sketch ? { library, id: sketch.id, name: sketch.name, trail: trail.map((c) => c.name) } : null)
   const together = {
     ...togetherOn({

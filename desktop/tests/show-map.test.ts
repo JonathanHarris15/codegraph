@@ -8,7 +8,7 @@ import { showMap, type Card } from '../src/features/show-map.js'
 import { useChooser } from '../src/modules/machine/index.js'
 import { useFolder } from '../src/modules/projects/index.js'
 import { sayWhere, useFolder as useAgents } from '../src/modules/agents/index.js'
-import { aMappedRepo, aProposal, aSoftwareSystem, buildSearch, closeYard, git, openYard, searchProposal, type Yard } from './yard.js'
+import { aMappedRepo, aProposal, aSoftwareSystem, buildSearch, closeYard, git, openYard, searchProposal, writeInto, type Yard } from './yard.js'
 
 let yard: Yard
 
@@ -157,5 +157,68 @@ describe('the map of a branch with a proposal', () => {
     const agent = (await showMap(id)).systems[0]?.agent
     expect(agent).toMatchObject({ name: 'ui block settings/SettingsRow', uiBlock: 'settings/SettingsRow', words: 'adding a hint' })
     expect(agent?.card.endsWith('/web:module:ui')).toBe(true)
+  })
+})
+
+/** A repo set up as one container of a software system it shares with others. */
+const aRepoOf = (name: string, system: string, container: Record<string, unknown>, files: Record<string, string>): string => {
+  const path = join(yard.path, name)
+  mkdirSync(path, { recursive: true })
+  git(path, 'init', '--initial-branch=main')
+  git(path, 'config', 'user.email', 'test@example.com')
+  git(path, 'config', 'user.name', 'Test')
+  writeInto(path, { 'codegraph.config.json': JSON.stringify({ projects: ['billing'], system, containers: container }), ...files })
+  git(path, 'add', '-A')
+  git(path, 'commit', '-m', 'first')
+  return path
+}
+
+describe('a software system kept in more than one repo', () => {
+  const billing = async (): Promise<string> => {
+    const { id } = await createProject('Billing')
+    await linkSoftwareSystem(
+      id,
+      aRepoOf('billing-api', 'Billing', { api: { kind: 'server', folders: ['src'] } }, {
+        'src/charge.ts': "// codegraph: feature charge\nexport const charge = () => fetch('https://pay.example') // codegraph: wire to stripe: takes the payment\n",
+      }),
+    )
+    await linkSoftwareSystem(
+      id,
+      aRepoOf('billing-phone', 'billing', { phone: { kind: 'mobile app', folders: ['app'] } }, {
+        'app/pay.ts': "// codegraph: page pay at /pay\nexport const pay = () => fetch('/charge') // codegraph: wire to billing-api: asks for the charge\n",
+      }),
+    )
+    await linkSoftwareSystem(id, aMappedRepo(yard))
+    return id
+  }
+
+  it('draws repos that name the same system as one card, holding all their containers', async () => {
+    const shown = await showMap(await billing())
+    expect(shown.card.children.map((c) => c.name)).toEqual(['Billing', 'notes'])
+    const system = child(shown.card, 'Billing')
+    expect(system?.says).toBe('2 repos: billing-api, billing-phone')
+    expect(system?.children.map((c) => [c.name, c.kind])).toEqual([
+      ['api', 'server'],
+      ['phone', 'mobile app'],
+    ])
+    // Each container still knows its repo, so its branch and places stay that repo's.
+    const repoOf = (name: string) => shown.systems.find((s) => s.id === child(system, name)?.repo)?.name
+    expect([repoOf('api'), repoOf('phone')]).toEqual(['billing-api', 'billing-phone'])
+    expect(shown.systems.map((s) => s.name)).toEqual(['billing-api', 'billing-phone', 'notes'])
+  })
+
+  it('joins the containers a wire from one of its repos to another reaches', async () => {
+    const shown = await showMap(await billing())
+    const system = child(shown.card, 'Billing')
+    expect(system?.wires.map((w) => [named(system, w.from), named(system, w.to), w.words])).toEqual([['phone', 'api', 'asks for the charge']])
+    expect(shown.card.wires.some((w) => w.to === system?.id || w.from === system?.id)).toBe(false)
+    expect(shown.suggestions.sort()).toEqual(['mailer', 'stripe'])
+  })
+
+  it('keeps a repo that is the only one to name its system a system of its own', async () => {
+    const { id } = await createProject('Solo')
+    await linkSoftwareSystem(id, aRepoOf('solo', 'Solo things', { app: { kind: 'server', folders: [''] } }, { 'a.ts': '// codegraph: module a\n' }))
+    const shown = await showMap(id)
+    expect(shown.card.children.map((c) => [c.id, c.name])).toEqual([[shown.systems[0]!.id, 'solo']])
   })
 })
