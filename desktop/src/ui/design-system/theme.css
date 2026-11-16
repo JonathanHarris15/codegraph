@@ -1203,13 +1203,111 @@ select.map-add-field-holds {
   cursor: nesw-resize;
 }
 
-/* where a wire from outside crosses its border */
+/* ---- design pass: B, the map ---- */
+
+/* The corners only show while the pointer is at the card's edge or name tab,
+   or the card is being resized or is picked, so an open card does not look
+   picked just for being open. The edges still answer the pointer. */
+.map-grip--nw,
+.map-grip--ne,
+.map-grip--sw,
+.map-grip--se {
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+.map-card--open:hover .map-grip,
+.map-card--open.map-card--resizing .map-grip,
+.map-card--open.map-card--selected .map-grip {
+  opacity: 1;
+}
+
+/* The levels further out stay faint, but their name tabs stay readable: the
+   fade is on the border and the tint, not on the whole card. */
+.map-card--open.map-up {
+  opacity: 1;
+  border-color: transparent;
+}
+
+.map-card--open.map-up--1 { --up-fade: var(--opacity-up-1); }
+.map-card--open.map-up--2 { --up-fade: var(--opacity-up-2); }
+.map-card--open.map-up--3 { --up-fade: var(--opacity-up-3); }
+
+.map-card--open.map-up::before {
+  opacity: calc(var(--opacity-open-fill) * var(--up-fade, 0.34));
+}
+
+.map-card--open.map-up::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--stroke-open));
+  border: var(--stroke-open) solid var(--k, var(--line-edge));
+  border-radius: inherit;
+  opacity: var(--up-fade, 0.34);
+  pointer-events: none;
+}
+
+.map-card--open.map-up.map-card--wired::after {
+  border-color: var(--focus-ring);
+  opacity: 0.85;
+}
+
+.map-card--open.map-up .map-lip {
+  opacity: 0.7;
+}
+
+.map-card--open.map-up .map-port {
+  opacity: var(--up-fade, 0.34);
+}
+
+/* Zoomed out, names keep a size a person can read, never much under 12px
+   on screen: a card's name grows as the board shrinks, and an open card's
+   name tab with it, up to what still fits on the card. */
+.map-world .map-name {
+  font-size: clamp(15px, calc(12.5px / var(--zoom, 1)), 34px);
+  line-height: 1.3;
+}
+
+.map-world .map-frame-name .map-name {
+  font-size: clamp(14px, calc(12.5px / var(--zoom, 1)), 30px);
+}
+
+.map-world .map-lip {
+  transform-origin: 0 100%;
+  scale: clamp(1, calc(0.8 / var(--zoom, 1)), 2.5);
+}
+
+/* the tab grows as a whole, so its name does not grow again inside it */
+.map-world .map-lip .map-name {
+  font-size: 15px;
+  line-height: 20px;
+}
+
+/* Further out still, a card is only its glyph and name and a wire only its
+   line: the rest is too small to read and only crowds the board. A wire's
+   words come back while its card is under the pointer. */
+.map-world--far .map-kind-word,
+.map-world--far .map-says,
+.map-world--far .map-chips,
+.map-world--far .map-fields,
+.map-world--far .map-names,
+.map-world--far .map-add-field,
+.map-world--far .map-recipe {
+  display: none;
+}
+
+.map-world--far .map-sentence:not(.map-sentence--lit) {
+  visibility: hidden;
+}
+
+/* where a wire from outside crosses its border: a small dot in the wire's own
+   colour, so it reads as the wire going through, not a handle to drag */
 .map-port {
   position: absolute;
-  width: var(--space-2);
-  height: var(--space-2);
+  width: 6px;
+  height: 6px;
   border-radius: var(--radius-pill);
-  background: var(--ink-000);
+  background: var(--wire-line);
   transform: translate(-50%, -50%);
   pointer-events: auto;
 }
@@ -1285,15 +1383,31 @@ select.map-add-field-holds {
   margin-top: var(--space-2);
 }
 
+/* Each name inside a card carries its kind's glyph, in its kind's colour, on
+   a wash of it, so a page and a module of one name read as two things. */
 .map-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   font-size: var(--text-xs);
   line-height: 14px;
   font-weight: 500;
-  padding: 1px var(--space-2);
+  padding: 1px var(--space-2) 1px 5px;
   border-radius: var(--radius-pill);
-  background: var(--surface-sunken);
+  background: color-mix(in srgb, var(--kw, var(--surface-sunken)) 70%, var(--surface-sunken));
   color: var(--ink-soft);
   white-space: nowrap;
+}
+
+.map-chip-glyph {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  color: var(--k, var(--ink-faint));
+}
+
+.map-chip.map-more {
+  padding-left: var(--space-2);
 }
 
 .map-chip--store {

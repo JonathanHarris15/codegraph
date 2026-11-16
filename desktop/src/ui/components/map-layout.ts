@@ -40,6 +40,9 @@ export type DrawnCard = Omit<Card, 'children' | 'wires'> & {
   /** How much room it has when open, in the space its insides are laid out
    *  in. Left out, it gets most of the screen when it is opened. */
   room?: Box
+  /** Only as tall as what it says: on the map, where a card is read and
+   *  never drawn in. */
+  snug?: boolean
   children: DrawnCard[]
   wires: DrawnWire[]
   notes?: DrawnNote[]
@@ -112,13 +115,14 @@ const linesFor = (text: string, width: number, letter: number): number => {
 
 /** How many rows a card's chips take: up to six names and a count of the rest,
  *  each in a pill, wrapped across the card. */
-const chipRows = (names: string[]): number => {
+const chipRows = (names: string[], inside = STORE_INSIDE): number => {
   const chips = [...names.slice(0, 6), ...(names.length > 6 ? [`+${names.length - 6}`] : [])]
   let rows = 1
   let used = 0
   for (const chip of chips) {
-    const wide = Math.min(chip.length * 6.4 + 16, STORE_INSIDE)
-    if (used && used + 4 + wide > STORE_INSIDE) {
+    // Each name has its kind's glyph before it.
+    const wide = Math.min(chip.length * 6.4 + 30, inside)
+    if (used && used + 4 + wide > inside) {
       rows += 1
       used = wide
     } else used = used ? used + 4 + wide : wide
@@ -141,6 +145,18 @@ const storeHeight = (card: DrawnCard): number => {
 /** The row on a store's card where a field is added. */
 const ADD_FIELD_ROW = 28
 
+/** The room inside a software system's or a container's card, across. */
+const WIDE_INSIDE = 246
+
+/** A software system's or a container's card is as tall as what it says: its
+ *  type and name, a line or two of what it is for, and the rows of what is
+ *  inside it, so a card with little to say has no blank foot. */
+const wideHeight = (card: DrawnCard): number => {
+  const says = card.says ? 4 + Math.min(2, linesFor(card.says, WIDE_INSIDE, 7)) * 17 : 0
+  const chips = card.children.length ? 8 + chipRows(card.children.map((c) => c.name), WIDE_INSIDE) * 20 : 0
+  return Math.max(96, 72 + says + chips)
+}
+
 export const sizeOf = (card: DrawnCard): { w: number; h: number } => {
   const shape = drawnShape(card)
   if (shape) return { w: CARD_SHAPES[shape].w, h: CARD_SHAPES[shape].h }
@@ -150,7 +166,7 @@ export const sizeOf = (card: DrawnCard): { w: number; h: number } => {
     : card.level === 'code'
       ? { w: 240, h: 104 + Math.min(card.names.length, 9) * 18 }
       : card.level === 'system' || card.level === 'container'
-        ? { w: 280, h: 150 }
+        ? { w: 280, h: card.snug ? wideHeight(card) : 150 }
         : { w: 240, h: card.says ? 124 : 104 }
 }
 
@@ -641,10 +657,11 @@ export const openLevels = ({
     const pushed = new Set<string>()
     let step = { x: 0, y: 0 }
     if (found && innerRoom) {
-      const anchor = anchors.get(innerId) ?? middleOfBox(innerRoom)
+      // Pinned by the middle of the closed card's top edge, which holds still
+      // as the card grows a row of names for what is drawn inside it.
+      const anchor = anchors.get(innerId) ?? { x: middleOfBox(innerRoom).x, y: middleOfBox(innerRoom).y - found.box.h / 2 }
       anchors.set(innerId, anchor)
-      const middle = middleOfBox(found.box)
-      step = { x: middle.x - anchor.x, y: middle.y - anchor.y }
+      step = { x: found.box.x + found.box.w / 2 - anchor.x, y: found.box.y - anchor.y }
       const box: Box = { x: innerRoom.x + step.x, y: innerRoom.y + step.y, w: innerRoom.w, h: innerRoom.h }
       open = { card: found.card, box }
       // A card wired to the open one needs room for the words between them,
@@ -708,6 +725,44 @@ export const openLevels = ({
  *  several wires into one card arrive apart. */
 export type Slots = { from: number; to: number }
 
+/** Where along its card's side each end of each wire meets it. Every end on
+ *  one side of a card gets a place of its own, in the order of where the other
+ *  ends are, so two wires between the same two cards, either way round, run
+ *  apart and never draw as one. Two cards side by side meet on their facing
+ *  sides; one above another, on top and bottom. */
+export const endSlots = <W extends { from: string; to: string }>(wires: W[], boxes: Map<string, Box>, keyOf: (wire: W) => string): Map<W, Slots> => {
+  const sideOf = (box: Box, other: Box): Side => {
+    const dx = other.x + other.w / 2 - (box.x + box.w / 2)
+    const dy = other.y + other.h / 2 - (box.y + box.h / 2)
+    const across = Math.abs(dx) - (box.w + other.w) / 2
+    const down = Math.abs(dy) - (box.h + other.h) / 2
+    if (down > 24 && down > across) return dy > 0 ? 's' : 'n'
+    return dx > 0 ? 'e' : 'w'
+  }
+  const ends = new Map<string, { wire: W; end: 'from' | 'to'; along: number; key: string }[]>()
+  for (const wire of wires) {
+    const from = boxes.get(wire.from)
+    const to = boxes.get(wire.to)
+    if (!from || !to || wire.from === wire.to) continue
+    for (const end of ['from', 'to'] as const) {
+      const box = end === 'from' ? from : to
+      const other = end === 'from' ? to : from
+      const side = sideOf(box, other)
+      const along = side === 'e' || side === 'w' ? other.y + other.h / 2 : other.x + other.w / 2
+      const at = `${wire[end]}:${side}`
+      ends.set(at, [...(ends.get(at) ?? []), { wire, end, along, key: keyOf(wire) }])
+    }
+  }
+  const out = new Map<W, Slots>()
+  for (const list of ends.values()) {
+    list.sort((a, b) => a.along - b.along || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+    list.forEach((one, i) => {
+      out.set(one.wire, { ...(out.get(one.wire) ?? { from: 0.5, to: 0.5 }), [one.end]: (i + 1) / (list.length + 1) })
+    })
+  }
+  return out
+}
+
 export type WireShape = {
   d: string
   /** The middle of the curve, where the sentence sits. */
@@ -762,6 +817,10 @@ const middleOf = (
  *  side, and where along that side it leaves and arrives. */
 export type Loop = { side: 'e' | 'w'; from: number; to: number }
 
+/** One box holds another: an open card round the cards inside it, which is
+ *  never in the way of a wire between them. */
+const around = (o: Box, box: Box): boolean => o.x <= box.x && o.y <= box.y && o.x + o.w >= box.x + box.w && o.y + o.h >= box.y + box.h
+
 const isSideways = (from: Box, to: Box): boolean => {
   const across = Math.abs(to.x + to.w / 2 - (from.x + from.w / 2))
   const down = Math.abs(to.y + to.h / 2 - (from.y + from.h / 2))
@@ -795,7 +854,7 @@ export const loopSides = <W extends { from: string; to: string }>(wires: W[], bo
     const bottom = Math.max(from.y, to.y)
     const left = Math.min(from.x + from.w / 2, to.x + to.w / 2) - 8
     const right = Math.max(from.x + from.w / 2, to.x + to.w / 2) + 8
-    const blocked = others.some((o) => o !== from && o !== to && o.x < right && o.x + o.w > left && o.y < bottom && o.y + o.h > top)
+    const blocked = others.some((o) => o !== from && o !== to && !around(o, from) && !around(o, to) && o.x < right && o.x + o.w > left && o.y < bottom && o.y + o.h > top)
     if (bottom - top > 24 && !blocked) continue
     stacked.push({ wire, from, to })
   }
@@ -896,7 +955,7 @@ export const wirePath = (
     const gap = down ? b.y - a.y : a.y - b.y
     const lane = { x: Math.min(a.x, b.x) - 8, y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x) + 16, h: Math.abs(b.y - a.y) }
     const blocked = others.some(
-      (o) => o !== from && o !== to && o.x < lane.x + lane.w && o.x + o.w > lane.x && o.y < lane.y + lane.h && o.y + o.h > lane.y,
+      (o) => o !== from && o !== to && !around(o, from) && !around(o, to) && o.x < lane.x + lane.w && o.x + o.w > lane.x && o.y < lane.y + lane.h && o.y + o.h > lane.y,
     )
     if (gap > 24 && !blocked) {
       const bend = Math.max(24, gap / 2) * (down ? 1 : -1)
@@ -909,6 +968,31 @@ export const wirePath = (
     const a = { x: forward ? from.x + from.w : from.x, y: from.y + from.h * slots.from }
     const b = { x: forward ? to.x : to.x + to.w, y: to.y + to.h * slots.to }
     const bend = Math.max(40, Math.abs(b.x - a.x) / 2) * (forward ? 1 : -1)
+    // A card in the way between them: the wire bows over or under it, the
+    // nearer way, rather than running behind it and seeming to come out of it.
+    const left = Math.min(a.x, b.x)
+    const right = Math.max(a.x, b.x)
+    const blockers = others.filter(
+      (o) =>
+        o !== from &&
+        o !== to &&
+        !around(o, from) &&
+        !around(o, to) &&
+        o.x < right - 4 &&
+        o.x + o.w > left + 4 &&
+        o.y < Math.max(a.y, b.y) + 12 &&
+        o.y + o.h > Math.min(a.y, b.y) - 12,
+    )
+    if (blockers.length) {
+      const over = Math.min(...blockers.map((o) => o.y)) - 28
+      const under = Math.max(...blockers.map((o) => o.y + o.h)) + 28
+      const level = (a.y + b.y) / 2
+      const peak = level - over <= under - level ? over : under
+      // The curve's middle is an eighth each of its ends and three eighths
+      // each of its two pulls, so this is how far to pull for it to clear.
+      const pull = (8 * peak - a.y - b.y) / 6
+      return finish(a, { x: a.x + bend, y: pull }, { x: b.x - bend, y: pull }, b)
+    }
     return finish(a, { x: a.x + bend, y: a.y }, { x: b.x - bend, y: b.y }, b)
   }
   // Stacked in one column: loop out to one side and back in.
@@ -955,24 +1039,51 @@ export const spread = (
     fixed?: boolean
     /** The spot a share of the way along a wire that is not one curve. */
     on?: (t: number) => { x: number; y: number }
+    /** The open card it is drawn inside, whose border it never straddles. */
+    within?: Box
+    /** What else it keeps off, for this wire alone: the open card a wire
+     *  from outside runs up to, its name tab, the dots where wires cross it. */
+    avoid?: Box[]
   }[],
   cards: Box[] = [],
 ): { x: number; y: number }[] => {
   const AIR = 6
   const hits = (one: Box, other: Box): boolean =>
     one.x < other.x + other.w + AIR && one.x + one.w + AIR > other.x && one.y < other.y + other.h + AIR && one.y + one.h + AIR > other.y
+  const overlap = (one: Box, other: Box): number =>
+    Math.max(0, Math.min(one.x + one.w, other.x + other.w) - Math.max(one.x, other.x)) *
+    Math.max(0, Math.min(one.y + one.h, other.y + other.h) - Math.max(one.y, other.y))
   const boxAt = (at: { x: number; y: number }, w: number, h: number): Box => ({ x: at.x - w / 2, y: at.y - h / 2, w, h })
+  const inside = (box: Box, room: Box): boolean =>
+    box.x >= room.x + AIR && box.y >= room.y + AIR && box.x + box.w <= room.x + room.w - AIR && box.y + box.h <= room.y + room.h - AIR
   const placed: Box[] = chips.filter((chip) => chip.fixed).map((chip) => boxAt(chip.at, chip.w, chip.h))
-  const SLIDES = [0.5, 0.42, 0.58, 0.34, 0.66, 0.26, 0.74, 0.18, 0.82, 0.1, 0.9]
+  const SLIDES = [0.5, 0.44, 0.56, 0.38, 0.62, 0.32, 0.68, 0.26, 0.74, 0.2, 0.8, 0.14, 0.86, 0.08, 0.92]
   return chips.map((chip) => {
     if (chip.fixed) return chip.at
-    const free = SLIDES.map((t) => (chip.on ? chip.on(t) : pointOn(chip.tail, chip.c1, chip.c2, chip.head, t))).find((at) => {
+    const keepOff = [...cards, ...(chip.avoid ?? []), ...placed]
+    const spots = SLIDES.map((t) => (chip.on ? chip.on(t) : pointOn(chip.tail, chip.c1, chip.c2, chip.head, t)))
+    const free = spots.find((at) => {
       const box = boxAt(at, chip.w, chip.h)
-      return !cards.some((card) => hits(box, card)) && !placed.some((other) => hits(box, other))
+      return (!chip.within || inside(box, chip.within)) && !keepOff.some((other) => hits(box, other))
     })
-    // On a level too crowded for anywhere to be clear, the middle is still
-    // the most honest place for it.
-    const at = free ?? chip.at
+    // On a level too crowded for anywhere to be clear, the spot that covers
+    // least wins, the middle first among equals.
+    let at = free
+    if (!at) {
+      const cost = (spot: { x: number; y: number }): number => {
+        const box = boxAt(spot, chip.w, chip.h)
+        return keepOff.reduce((sum, other) => sum + overlap(box, other), 0) + (chip.within && !inside(box, chip.within) ? chip.w * chip.h : 0)
+      }
+      at = spots.reduce((best, spot) => (cost(spot) < cost(best) - 1 ? spot : best), spots[0] ?? chip.at)
+    }
+    // Inside an open card, it is never cut by the border: pulled in just far
+    // enough, which keeps it over its own wire near the edge.
+    if (chip.within) {
+      const room = chip.within
+      const x = Math.min(Math.max(at.x, room.x + chip.w / 2 + AIR), room.x + room.w - chip.w / 2 - AIR)
+      const y = Math.min(Math.max(at.y, room.y + chip.h / 2 + AIR), room.y + room.h - chip.h / 2 - AIR)
+      if (room.w > chip.w + AIR * 2 && room.h > chip.h + AIR * 2) at = { x, y }
+    }
     placed.push(boxAt(at, chip.w, chip.h))
     return at
   })

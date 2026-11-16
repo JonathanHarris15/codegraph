@@ -39,6 +39,7 @@ import {
   boundsOf,
   curve,
   deeper,
+  endSlots,
   facing,
   holds,
   inBox,
@@ -165,6 +166,19 @@ const SETTLE_MS = 420
 /** How much of the board's visible space a newly opened card takes. */
 const ROOM_ACROSS = 0.7
 const ROOM_DOWN = 0.78
+/** The least room a card opened on the map gets, and the air it keeps
+ *  around what is inside it, beyond the usual, for wires that loop round. */
+const MAP_ROOM = { w: 480, h: 320 }
+const MAP_AIR = 40
+
+/** The air kept around what is fitted on screen, clear of the zoom bar along
+ *  the foot and of the tool rail on the left. */
+const FIT_PAD = { left: 24, right: 48, top: 48, bottom: 96 }
+
+/** Zoomed out past this, a card shows only its glyph and name, and wires
+ *  their lines: the rest is too small to read. A sketch keeps its details
+ *  much further out, since a person is still writing them. */
+const FAR = { map: 0.6, sketch: 0.3 }
 
 const GRIPS: Grip[] = ['n', 'e', 's', 'w', 'nw', 'ne', 'sw', 'se']
 
@@ -347,6 +361,15 @@ const STORE_EDITOR_ROOM = 560
 
 /** How wide a hub is on the board. */
 const HUB_SIZE = 16
+
+/** Near enough where an open card's name tab sits, above its top left
+ *  corner, for wire sentences to keep off it. */
+const lipBox = (card: DrawnCard, box: Box): Box => ({
+  x: box.x,
+  y: box.y - 30,
+  w: 52 + kindWords(card).length * 7.5 + (card.name || 'Unnamed').length * 8.5,
+  h: 30,
+})
 
 /** How far a level is from the one in hand: how faded it is. */
 const upClass = (up: number): string => (up > 0 ? ` map-up map-up--${Math.min(up, 3)}` : '')
@@ -597,17 +620,20 @@ export const MapCanvas = ({
       trail.map((card, depth) => {
         const put = asPut(card)
         const moves = depth === workAt ? live.moves : undefined
+        // On the map a card is read, not drawn in, so it is only as tall as
+        // what it says. On a sketch its body is kept to double-click into.
+        const kids = drawing ? put.children : put.children.map((child) => ({ ...child, snug: true }))
         return {
           card,
           wires: put.wires,
           // Everything else holds still under the drag, even a card nobody
           // has put anywhere yet, which would otherwise be laid out afresh.
           children: moves
-            ? layOut(put.children, put.wires).map(({ card: child, box }) => {
+            ? layOut(kids, put.wires).map(({ card: child, box }) => {
                 const to = moves.get(child.id)
                 return { ...child, x: to?.x ?? box.x, y: to?.y ?? box.y }
               })
-            : put.children,
+            : kids,
           notes: (card.notes ?? []).map((note) => {
             const to = moves?.get(note.id)
             return to ? { ...note, x: to.x, y: to.y } : note
@@ -615,7 +641,7 @@ export const MapCanvas = ({
           annos: annosOf(card.id),
         }
       }),
-    [trail, workAt, asPut, live.moves, annosOf],
+    [trail, workAt, asPut, live.moves, annosOf, drawing ? 1 : 0],
   )
 
   const anchors = useRef(new Map<string, Spot>())
@@ -645,6 +671,17 @@ export const MapCanvas = ({
           if (given) return given
           const made = defaults.current.get(card.id)
           if (made) return made
+          // On the map, nothing is drawn inside, so the room fits what is
+          // there with air for wires that loop round, rather than a screen
+          // around one small card. A sketch gets room to draw in.
+          if (!drawing) {
+            const room = roomAround(
+              inside ? { x: inside.x - MAP_AIR, y: inside.y - MAP_AIR, w: inside.w + MAP_AIR * 2, h: inside.h + MAP_AIR * 2 } : null,
+              { w: Math.max(sizeOf(card).w, MAP_ROOM.w), h: Math.max(sizeOf(card).h, MAP_ROOM.h) },
+            )
+            defaults.current.set(card.id, room)
+            return room
+          }
           const el = frame.current
           const k = seen.current.k
           const room = roomAround(inside, {
@@ -655,7 +692,7 @@ export const MapCanvas = ({
           return room
         },
       }),
-    [contents, live.moves, live.room, roomGiven],
+    [contents, live.moves, live.room, roomGiven, drawing ? 1 : 0],
   )
 
   // As a card opens or closes, everything on the board slides from where it
@@ -745,19 +782,12 @@ export const MapCanvas = ({
     const names = new Map(nameOf)
     const hubs: Hub[] = []
     const draw = (level: OpenLevel, depth: number) => {
-      const outs = new Map<string, string[]>()
       const ins = new Map<string, string[]>()
-      const height = (id: string): number => boxes.get(id)?.y ?? 0
-      for (const wire of level.wires) {
-        outs.set(wire.from, [...(outs.get(wire.from) ?? []), wire.to])
-        ins.set(wire.to, [...(ins.get(wire.to) ?? []), wire.from])
-      }
-      for (const list of [...outs.values(), ...ins.values()]) list.sort((a, b) => height(a) - height(b))
-      const share = (ends: Map<string, string[]>, id: string, other: string): number => {
-        const list = ends.get(id) ?? []
-        return (list.indexOf(other) + 1) / (list.length + 1)
-      }
-      const slots = (from: string, to: string): Slots => ({ from: share(outs, from, to), to: share(ins, to, from) })
+      for (const wire of level.wires) ins.set(wire.to, [...(ins.get(wire.to) ?? []), wire.from])
+      // Each end has a place of its own on its card's side, so two wires
+      // between the same two cards are drawn apart.
+      const slotted = endSlots(level.wires, boxes, keyOf)
+      const slotsOf = (wire: DrawnWire): Slots => slotted.get(wire) ?? { from: 0.5, to: 0.5 }
       const fitTo = (id: string, box: Box): ((at: Spot) => Spot) | undefined => {
         const d = shapedAt.get(id)
         return d ? (at) => meetOutline(d, box, at) : undefined
@@ -778,7 +808,7 @@ export const MapCanvas = ({
                 to,
                 sides: wire.sides,
                 along: wire.along,
-                slots: slots(wire.from, wire.to),
+                slots: slotsOf(wire),
                 bends: wire.bends?.map((p) => ({ x: p.x + level.shift.x, y: p.y + level.shift.y })),
               }), { from: outlineAt(wire.from, from), to: outlineAt(wire.to, to) })
         return { d: pathOf(route), at: pointAlong(route, 0.5), tail: route[0]!, head: route.at(-1)!, c1: route[1] ?? route[0]!, c2: route.at(-2) ?? route[0]!, route }
@@ -801,8 +831,10 @@ export const MapCanvas = ({
             depth,
             shape: (square
               ? squared(wire, key, from, to)
-              : wirePath(from, to, slots(wire.from, wire.to), cardBoxes, { from: fitTo(wire.from, from), to: fitTo(wire.to, to) }, loops.get(wire), wire.sides, wire.along)) as WireShape & { route?: Spot[] },
-            small: (ins.get(wire.to) ?? []).length > BUSY,
+              : wirePath(from, to, slotsOf(wire), cardBoxes, { from: fitTo(wire.from, from), to: fitTo(wire.to, to) }, loops.get(wire), wire.sides, wire.along)) as WireShape & { route?: Spot[] },
+            // Further out than the level in hand, the verb alone, so the faded
+            // levels around do not crowd the edges with words.
+            small: (ins.get(wire.to) ?? []).length > BUSY || depth !== workAt,
             said: sentenceOf(names.get(wire.from) ?? '', wire.kind, names.get(wire.to) ?? '', wire.words),
           },
         ]
@@ -822,8 +854,18 @@ export const MapCanvas = ({
       return rows
     }
     const all = shown.flatMap(draw)
+    // What every sentence keeps off besides the cards: the name tab on each
+    // open card, and the dots where wires cross into one.
+    const tabs = shown.flatMap((level) => (level.open ? [lipBox(level.open.card, level.open.box)] : []))
+    const crossings = all.flatMap((one) => {
+      const open = shown[one.depth]!.open?.card.id
+      if (!open || (one.wire.to !== open && one.wire.from !== open)) return []
+      const at = one.wire.to === open ? one.shape.head : one.shape.tail
+      return [{ x: at.x - 8, y: at.y - 8, w: 16, h: 16 }]
+    })
     // Each sentence keeps clear of every card and of every other sentence,
-    // at the size it was really drawn.
+    // at the size it was really drawn. Inside an open card it stays inside;
+    // around one, it keeps off it.
     const chipsNow = all.map((one) => {
         const size = sizes[one.key]
         const level = shown[one.depth]!
@@ -859,6 +901,8 @@ export const MapCanvas = ({
           head: one.shape.head,
           fixed: Boolean(held) || put,
           ...(route ? { on: (t: number) => pointAlong(route, t) } : {}),
+          within: one.depth > 0 ? shown[one.depth - 1]!.open?.box : undefined,
+          avoid: [...tabs, ...crossings, ...(level.open ? [level.open.box] : [])],
         }
       })
     const spots = spread(
@@ -982,18 +1026,21 @@ export const MapCanvas = ({
     const open = level?.open ?? null
     const bounds = level && open
       ? boundsOf([
-          open.box,
+          // with its name tab above it
+          { ...open.box, y: open.box.y - 28, h: open.box.h + 28 },
           ...level.placed
             .filter((p) => level.wires.some((wire) => (wire.from === open.card.id && wire.to === p.card.id) || (wire.to === open.card.id && wire.from === p.card.id)))
             .map((p) => p.box),
         ])
       : boundsOf([...levels[0]!.placed.map((p) => p.box), ...levels[0]!.noteBoxes.map((n) => n.box)])
     if (!el || bounds.w === 0) return { x: (el?.clientWidth ?? 0) / 2, y: (el?.clientHeight ?? 0) / 2, k: 1 }
-    const pad = 120
-    const k = Math.min((el.clientWidth - pad) / bounds.w, (el.clientHeight - pad) / bounds.h, 1.3)
+    // Fitted into what the floating controls leave clear.
+    const across = el.clientWidth - FIT_PAD.left - FIT_PAD.right
+    const down = el.clientHeight - FIT_PAD.top - FIT_PAD.bottom
+    const k = Math.max(0.05, Math.min(across / bounds.w, down / bounds.h, 1.3))
     return {
-      x: el.clientWidth / 2 - (bounds.x + bounds.w / 2) * k,
-      y: el.clientHeight / 2 - (bounds.y + bounds.h / 2) * k,
+      x: FIT_PAD.left + across / 2 - (bounds.x + bounds.w / 2) * k,
+      y: FIT_PAD.top + down / 2 - (bounds.y + bounds.h / 2) * k,
       k,
     }
   }, [levels])
@@ -1047,7 +1094,11 @@ export const MapCanvas = ({
       setQuick(null)
       const around = levels.at(-2)
       const deepest = around?.open
-      if (opened.length && around && deepest && el) {
+      if (opened.length && around && deepest && el && !drawing) {
+        // On the map the room fits what is inside, so the board fits the room
+        // and the cards wired to it, nearer or further.
+        glide(fittedNow.current())
+      } else if (opened.length && around && deepest && el) {
         const pad = 36
         const lip = 40
         const k = Math.min(now.k, (el.clientWidth - pad * 2) / deepest.box.w, (el.clientHeight - pad * 2 - lip) / deepest.box.h)
@@ -1057,12 +1108,13 @@ export const MapCanvas = ({
           around.wires.some((w) => (w.from === deepest.card.id && w.to === p.card.id) || (w.to === deepest.card.id && w.from === p.card.id)),
         )
         const middle = boundsOf([deepest.box, ...wired.map((p) => p.box)])
-        const onto = (size: number, at: number, length: number, centre: number, before: number): number =>
-          Math.max(before - at * k, Math.min(size - pad - (at + length) * k, size / 2 - centre * k))
+        // Kept clear of the zoom bar at the foot where there is room to.
+        const onto = (size: number, at: number, length: number, centre: number, before: number, after: number): number =>
+          Math.max(before - at * k, Math.min(size - after - (at + length) * k, size / 2 - centre * k))
         glide({
           k,
-          x: onto(el.clientWidth, deepest.box.x, deepest.box.w, middle.x + middle.w / 2, pad),
-          y: onto(el.clientHeight, deepest.box.y, deepest.box.h, middle.y + middle.h / 2, pad + lip),
+          x: onto(el.clientWidth, deepest.box.x, deepest.box.w, middle.x + middle.w / 2, FIT_PAD.left, pad),
+          y: onto(el.clientHeight, deepest.box.y, deepest.box.h, middle.y + middle.h / 2, pad + lip, FIT_PAD.bottom),
         })
       } else if (closed.length) {
         const back = viewsAt.current.get(closed[0]!)
@@ -2369,7 +2421,7 @@ export const MapCanvas = ({
               },
             ]
           : []),
-        { name: 'Fit it all on screen', glyph: 'keys' as const, keys: '0', act: fit },
+        { name: 'Fit it all on screen', glyph: 'fit' as const, keys: '0', act: fit },
       ]
     }
     const one = ids.length === 1 ? ids[0]! : ''
@@ -2575,8 +2627,12 @@ export const MapCanvas = ({
           </div>
         ) : null}
         <div
-          className={`map-world${moving ? ' map-world--moving' : ''}${linked.size ? ' map-world--lit' : ''}`}
-          style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})` }}
+          className={`map-world${moving ? ' map-world--moving' : ''}${linked.size ? ' map-world--lit' : ''}${
+            view.k < (drawing ? FAR.sketch : FAR.map) ? ' map-world--far' : ''
+          }`}
+          // The zoom, for names that keep a size a person can read however
+          // far out the board is.
+          style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})`, ['--zoom' as string]: view.k }}
         >
           {/* Open cards first, outermost first, so what is drawn inside each,
               wires included, is on top of its tint. */}
@@ -2588,7 +2644,7 @@ export const MapCanvas = ({
             return (
               <div
                 key={card.id}
-                className={`map-card map-card--open ${kindClass(card.kind)}${lookOf(card) ? ` ${lookClass(lookOf(card)!)}` : ''}${here ? ' map-card--here' : ''}${upClass(workAt - depth - 1)}${linked.has(card.id) ? ' map-card--wired' : ''}`}
+                className={`map-card map-card--open ${kindClass(card.kind)}${lookOf(card) ? ` ${lookClass(lookOf(card)!)}` : ''}${here ? ' map-card--here' : ''}${upClass(workAt - depth - 1)}${linked.has(card.id) ? ' map-card--wired' : ''}${live.room?.id === card.id ? ' map-card--resizing' : ''}`}
                 style={{ left: box.x, top: box.y, width: box.w, height: box.h }}
                 data-open={card.id}
               >
