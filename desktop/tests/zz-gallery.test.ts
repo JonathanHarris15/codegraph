@@ -134,7 +134,7 @@ describe('gallery', () => {
     await both('12-board-menu')
     await page.keyboard.press('Escape')
     await page.waitForTimeout(300)
-    const card = page.locator('.map-card').first()
+    const card = page.locator('.map-world .map-card[role="button"]').first()
     await card.click()
     await both('16-sketch-picked')
   }, 90_000)

@@ -258,7 +258,7 @@ describe('drawing a sketch in the real app', () => {
   it('takes a card off from the right-click menu', async () => {
     await card('index').click({ button: 'right' })
     await page.getByRole('menu', { name: 'What to do here' }).waitFor({ timeout: PATIENCE })
-    await page.getByRole('menuitem', { name: /Take it off the sketch/ }).click()
+    await page.getByRole('menuitem', { name: /Delete from sketch/ }).click()
     await page.waitForTimeout(200)
     expect(await card('index').count()).toBe(0)
   })
