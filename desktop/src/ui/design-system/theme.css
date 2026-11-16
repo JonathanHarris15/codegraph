@@ -804,6 +804,40 @@ select.map-add-field-holds {
   color: var(--ink-inverse);
 }
 
+/* A panel that is open: sunken, ink words, a short bar at the rail's edge.
+   Never ink-filled, which is only for the tool in hand. */
+.ds-tool--open,
+.ds-tool--open:hover {
+  background: var(--surface-sunken);
+  color: var(--ink-000);
+}
+
+.ds-tool--open::before {
+  content: '';
+  position: absolute;
+  left: calc(-1 * var(--space-1));
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--accent, var(--ink-000));
+}
+
+.ds-tool:disabled {
+  color: var(--ink-faint);
+  opacity: 0.55;
+  cursor: default;
+}
+
+.ds-tool:disabled:hover {
+  background: none;
+}
+
+/* Keys, at the foot of the rail. */
+.map-rail-foot {
+  margin-top: auto;
+}
+
 .ds-tool-more {
   position: absolute;
   right: 3px;
@@ -1312,36 +1346,97 @@ select.map-add-field-holds {
   gap: var(--space-2);
 }
 
-.store-field {
+/* One row a field, under one set of column names: name, what it holds, what
+   it points at, whether every record has it, and a way to take it off. */
+.store-field-table {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-  margin: 0;
-  padding: var(--space-2);
-  border: var(--stroke-edge) solid var(--line-hair);
-  border-radius: var(--radius-card, 8px);
+  gap: 2px;
 }
 
-.store-field-head {
-  display: flex;
+.store-field-heads,
+.store-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr) 40px 20px;
   align-items: center;
   gap: var(--space-1);
 }
 
+.store-field-heads {
+  padding: 0 0 2px;
+  color: var(--ink-faint);
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 600;
+}
+
+.store-field-heads > span:nth-child(4) {
+  text-align: center;
+}
+
+.store-field {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.store-field .ds-input {
+  min-width: 0;
+  height: 28px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+}
+
 .store-field-name {
-  flex: 1;
   font-family: var(--font-mono);
 }
 
+/* A narrow select draws its own small arrow, so its words keep the room. */
+.store-field .store-field-cell {
+  appearance: none;
+  padding-right: 16px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238a857c' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 5px center;
+  background-size: 8px 5px;
+  text-overflow: ellipsis;
+}
+
+/* What a list holds, or the choices, under its row. */
+.store-field-more {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-1) var(--space-3);
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
 .store-field-drop {
+  display: grid;
+  place-items: center;
   border: 0;
   background: transparent;
   color: var(--ink-faint);
   cursor: pointer;
   padding: var(--space-1);
+  border-radius: var(--radius-sm);
 }
 
-.store-field-needed,
+.store-field-drop:hover {
+  background: var(--surface-sunken);
+  color: var(--ink-000);
+}
+
+.store-field-needed {
+  justify-self: center;
+  margin: 0;
+}
+
 .store-fields-rest label {
   display: flex;
   align-items: center;
@@ -1762,6 +1857,32 @@ select.map-add-field-holds {
   border: var(--stroke-open) dashed var(--pick-ring);
   border-radius: var(--radius-xs);
   pointer-events: none;
+}
+
+/* ---- design pass: C, the zoom bar's wire menu ------------------------- */
+
+/* The bar lets its menu out, rising above it. */
+.map-zoom {
+  overflow: visible;
+}
+
+.map-zoom > .map-zoom-button:first-child {
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+}
+
+.map-zoom > .map-zoom-last {
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+
+.map-zoom-menu {
+  bottom: calc(100% + 6px);
+  right: 0;
+  min-width: 200px;
+}
+
+.map-menu-item--on .map-menu-keys {
+  color: var(--ink-000);
+  font-family: inherit;
 }
 
 /* ---- the things the canvas has to say --------------------------------- */
@@ -2314,6 +2435,8 @@ select.map-add-field-holds {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  width: 100%;
+  box-sizing: border-box;
   padding: 6px var(--space-2);
   border: var(--stroke-edge) solid transparent;
   border-radius: var(--radius-md);
@@ -2375,12 +2498,13 @@ select.map-add-field-holds {
 }
 
 .map-palette-says {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   font-size: var(--text-xs);
   line-height: 14px;
   color: var(--ink-faint);
-  white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* a kind lifted from the library, following the pointer */
@@ -2604,11 +2728,32 @@ select.map-add-field-holds {
   -webkit-user-select: text;
 }
 
-/* the panel is always there on a sketch, docked, so picking something
-   never squeezes the board and moves what is on it */
+/* the panel comes out only while one thing is picked, and floats over the
+   board's right edge, so picking never squeezes the board or moves what is
+   on it, and with nothing picked the board has the whole window */
 .sketch-panel {
-  width: 288px;
-  z-index: 2;
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  width: 320px;
+  max-height: calc(100% - 2 * var(--space-3) - 56px);
+  z-index: 4;
+  gap: var(--space-3);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
+}
+
+.sketch-panel .ds-button--danger {
+  align-self: flex-start;
+  background: none;
+  color: var(--state-problem);
+  border-color: color-mix(in srgb, var(--state-problem) 40%, transparent);
+}
+
+.sketch-panel .ds-button--danger:hover:not(:disabled) {
+  background: var(--state-problem);
+  color: #fff;
 }
 
 .sketch-keys {
@@ -2665,10 +2810,6 @@ kbd {
 
 .map-context--below {
   transform: translate(-50%, 0);
-}
-
-.sketch-panel {
-  position: relative;
 }
 
 .sketch-panel-hide {
@@ -2942,15 +3083,11 @@ kbd {
   stroke-width: var(--stroke-wire-strong);
 }
 
-/* a narrower window: the panel floats over the board instead of squeezing
-   it, and the card library keeps only its glyphs */
+/* a narrower window: the panel floating over the board takes less of it,
+   and the card library keeps only its glyphs */
 @media (max-width: 1100px) {
   .sketch-panel {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    box-shadow: var(--shadow-float);
+    width: 280px;
   }
 }
 
@@ -4520,31 +4657,32 @@ kbd {
 }
 
 .map-anno-search {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
+  position: relative;
+  display: block;
   margin: 0 var(--space-3) var(--space-2);
-  padding: 6px var(--space-2);
-  border: var(--stroke-edge) solid var(--line-edge);
-  border-radius: var(--radius-md);
-  background: var(--surface-000);
   color: var(--ink-faint);
 }
 
-.map-anno-search input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  background: none;
-  color: var(--ink-000);
-  font: inherit;
+/* The search box is the kit's input, with its glass inside its left edge. */
+.map-anno-search > svg {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.map-anno-search .ds-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding-left: 30px;
   font-size: var(--text-md);
-  outline: none;
 }
 
 .map-anno-groups {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 0 var(--space-2) var(--space-3);
 }
 
@@ -4575,7 +4713,7 @@ kbd {
 
 .map-anno-grid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 2px;
 }
 
@@ -4905,10 +5043,24 @@ input.map-layers-name:focus {
   line-height: 17px;
 }
 
-.map-keys-row kbd {
+.map-keys-row kbd,
+.map-keys-how {
   flex: none;
   min-width: 52px;
   text-align: center;
+}
+
+/* A thing to do with the mouse, said in words beside the keys. */
+.map-keys-how {
+  max-width: 120px;
+  color: var(--ink-000);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.map-keys {
+  width: 680px;
 }
 
 .map-palette-key {

@@ -82,7 +82,7 @@ export const AnnotationLibrary = ({
       <div className="map-palette-hint">Notes for people and agents, drawn over the diagram. They never change the code.</div>
       <label className="map-anno-search">
         <Search size={14} aria-hidden="true" />
-        <input aria-label="Search shapes" placeholder="Search shapes" value={find} onChange={(e) => setFind(e.target.value)} />
+        <input className="ds-input" aria-label="Search shapes" placeholder="Search shapes" value={find} onChange={(e) => setFind(e.target.value)} />
       </label>
       <div className="map-anno-groups">
         {groups.map((g) => {

@@ -50,8 +50,21 @@ const SHAPE_KEYS: Record<string, string> = {
   d: 'diamond',
 }
 
-/** Every key, for the list a person opens with `?`. */
-export const KEY_GROUPS: { name: string; rows: { keys: string; says: string }[] }[] = [
+/** Whether this is a Mac, where the key the lists call Ctrl is Command. */
+export const onMac = (): boolean => {
+  try {
+    return /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)
+  } catch {
+    return false
+  }
+}
+
+/** Keys written for any computer, said the way this one's keyboard says them:
+ *  on a Mac, Ctrl is ⌘. */
+export const keysFor = (keys: string, mac = onMac()): string => (mac ? keys.replace(/Ctrl/g, '⌘') : keys)
+
+/** Every key, and every way to draw, for the list a person opens with `?`. */
+export const KEY_GROUPS: { name: string; rows: { keys: string; says: string; gesture?: boolean }[] }[] = [
   {
     name: 'Tools',
     rows: [
@@ -61,6 +74,18 @@ export const KEY_GROUPS: { name: string; rows: { keys: string; says: string }[] 
       { keys: 'Z', says: 'Zoom to a box, on a map' },
       { keys: 'W', says: 'Wire, on a sketch' },
       { keys: 'Esc', says: 'Put the tool down, back to Pick' },
+    ],
+  },
+  {
+    name: 'Drawing on a sketch',
+    rows: [
+      { gesture: true, keys: 'Double-click the board', says: 'Add a card there' },
+      { gesture: true, keys: 'Drag from a dot', says: 'Wire to another card, or let go on empty board for a new one' },
+      { keys: 'Type', says: 'Write on what is picked; Enter finishes' },
+      { gesture: true, keys: 'Double-click a card', says: 'Draw inside it; drag its corners for room, Esc backs out' },
+      { keys: 'Shift+drag', says: 'Pick many with a box; out round an open card, annotations' },
+      { keys: 'Shift+click', says: 'Add to what is picked' },
+      { keys: 'Alt+drag', says: 'Copy what is dragged' },
     ],
   },
   {
@@ -93,6 +118,9 @@ export const KEY_GROUPS: { name: string; rows: { keys: string; says: string }[] 
   {
     name: 'Moving about',
     rows: [
+      { gesture: true, keys: 'Drag the board', says: 'Move it, or two fingers on a trackpad' },
+      { keys: 'Wheel', says: 'Zoom; or Ctrl and two fingers on a trackpad' },
+      { keys: 'Ctrl+wheel', says: 'Scroll up and down; Shift and the wheel, across' },
       { keys: 'F', says: 'Fill the screen with the card or shape under the pointer' },
       { keys: '0', says: 'Fit the level to the window' },
       { keys: '+  −', says: 'Zoom in and out' },
@@ -102,8 +130,13 @@ export const KEY_GROUPS: { name: string; rows: { keys: string; says: string }[] 
     name: 'What is picked',
     rows: [
       { keys: 'Double-click', says: 'Change a field on a card, or write on a wire or note' },
-      { keys: 'Delete', says: 'Take it away' },
+      { keys: 'Arrows', says: 'Nudge it; with Shift, further' },
+      { keys: 'Delete', says: 'Delete' },
       { keys: 'Ctrl+Z', says: 'Undo' },
+      { keys: 'Ctrl+Shift+Z', says: 'Redo' },
+      { keys: 'Ctrl+C  X  V', says: 'Copy, cut, paste' },
+      { keys: 'Ctrl+D', says: 'Duplicate' },
+      { keys: 'Ctrl+A', says: 'Pick everything' },
     ],
   },
 ]

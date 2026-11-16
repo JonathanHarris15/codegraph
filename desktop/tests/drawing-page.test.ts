@@ -81,13 +81,15 @@ beforeAll(async () => {
   app = await openTheApp(yard.home)
   page = await app.firstWindow()
   await page.setViewportSize({ width: 1400, height: 860 })
+  // The panel about what is picked is put away, as a person can ask, so it
+  // covers nothing these tests reach for.
+  await page.evaluate(() => window.localStorage.setItem('codegraph-panel', 'no'))
   await page.getByRole('button', { name: 'Open Notes', exact: true }).dblclick()
   await page.getByRole('button', { name: 'Open notes' }).waitFor({ timeout: PATIENCE })
   await page.getByRole('button', { name: /^Sketches/ }).click()
   await page.getByRole('button', { name: 'New sketch' }).click()
   await page.getByRole('button', { name: /^Blank/ }).click()
   await page.getByLabel('Sketch name').waitFor({ timeout: PATIENCE })
-  await page.getByRole('button', { name: 'Hide this panel' }).click().catch(() => undefined)
 }, 60_000)
 
 afterAll(async () => {

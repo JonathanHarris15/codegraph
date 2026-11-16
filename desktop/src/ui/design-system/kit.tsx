@@ -50,10 +50,13 @@ export const Button = ({
   </button>
 )
 
-/** A tool in the rail: a glyph with its name under it, never a bare icon. */
+/** A tool in the rail: a glyph with its name under it, never a bare icon.
+ *  `on` is the tool in use, drawn in ink; `open` is a button whose panel is
+ *  showing, drawn sunken, so a panel never reads as the tool in hand. */
 export const Tool = ({
   name,
   on,
+  open = false,
   hint,
   more = false,
   disabled = false,
@@ -62,6 +65,7 @@ export const Tool = ({
 }: {
   name: string
   on: boolean
+  open?: boolean
   hint?: string
   more?: boolean
   disabled?: boolean
@@ -70,8 +74,8 @@ export const Tool = ({
 }) => (
   <button
     type="button"
-    className={on ? 'ds-tool ds-tool--on' : 'ds-tool'}
-    aria-pressed={on}
+    className={on ? 'ds-tool ds-tool--on' : open ? 'ds-tool ds-tool--open' : 'ds-tool'}
+    aria-pressed={on || open}
     title={hint}
     disabled={disabled}
     onClick={onPick}

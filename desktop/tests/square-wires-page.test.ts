@@ -69,12 +69,14 @@ beforeAll(async () => {
   app = await openTheApp(yard.home)
   page = await app.firstWindow()
   await page.setViewportSize({ width: 1400, height: 860 })
+  // The panel about what is picked is put away, as a person can ask, so it
+  // covers nothing these tests reach for.
+  await page.evaluate(() => window.localStorage.setItem('codegraph-panel', 'no'))
   await page.getByRole('button', { name: 'Open Notes', exact: true }).dblclick()
   await page.getByRole('button', { name: 'Open notes' }).waitFor({ timeout: PATIENCE })
   await page.getByRole('button', { name: /^Sketches/ }).click()
   await page.getByRole('button', { name: /^Wires/ }).click()
   await card('Reader').waitFor({ timeout: PATIENCE })
-  await page.getByRole('button', { name: 'Hide this panel' }).click().catch(() => undefined)
   await settle()
 }, 60_000)
 
@@ -85,13 +87,16 @@ afterAll(async () => {
 
 describe('choosing how wires are drawn', () => {
   it('draws curved wires until told otherwise', async () => {
-    expect(await page.getByRole('button', { name: 'Curved wires' }).getAttribute('aria-pressed')).toBe('true')
+    // The choice waits behind one button by the zoom, not beside it.
+    await page.getByRole('button', { name: 'How wires are drawn' }).click()
+    expect(await page.getByRole('menuitemradio', { name: 'Curved wires' }).getAttribute('aria-checked')).toBe('true')
     expect((await wirePaths()).every((d) => d.includes('C'))).toBe(true)
     await picture('square-1-curved')
   })
 
   it('draws every wire in straight pieces and right angles once asked', async () => {
-    await page.getByRole('button', { name: 'Right-angle wires' }).click()
+    await page.getByRole('menuitemradio', { name: 'Right-angle wires' }).click()
+    expect(await page.getByRole('menu', { name: 'How wires are drawn' }).count()).toBe(0)
     await settle()
     const paths = await wirePaths()
     expect(paths.length).toBe(2)
@@ -144,6 +149,10 @@ describe('moving the pieces of a right-angle wire', () => {
 describe('stores whose fields point at each other', () => {
   it('are wired as soon as the sketch is open, though no one drew the wire', async () => {
     await page.keyboard.press('Escape')
+    // Let the wire go, so the panel about it is put away and the card is clear.
+    const board = (await page.locator('.map-frame-area').boundingBox())!
+    await page.mouse.click(board.x + board.width * 0.6, board.y + board.height * 0.97)
+    await page.getByRole('complementary', { name: 'What is picked' }).waitFor({ state: 'detached', timeout: PATIENCE })
     await card('Notes app').dblclick()
     await settle()
     await card('Data').dblclick()
