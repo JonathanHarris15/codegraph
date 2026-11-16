@@ -56,7 +56,7 @@ import {
   Package,
   Play,
   Plus,
-  Scan,
+  ScanSearch,
   Server,
   Smartphone,
   SquareFunction,
@@ -102,7 +102,7 @@ const GLYPHS: Record<string, LucideIcon> = {
 export const TOOL_GLYPHS = {
   pick: MousePointer2,
   pan: Hand,
-  area: Scan,
+  area: ScanSearch,
   card: SquarePlus,
   wire: ArrowRight,
   note: StickyNote,
