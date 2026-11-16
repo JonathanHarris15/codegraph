@@ -4554,18 +4554,6 @@ kbd {
   min-width: 200px;
 }
 
-/* A menu whose items have no glyphs keeps no empty gutter for them: the
-   words start at the edge, all in line. */
-.map-more .map-menu:not(:has(.map-menu-glyph svg)) .map-menu-item,
-.project-card .map-menu:not(:has(.map-menu-glyph svg)) .map-menu-item {
-  grid-template-columns: 1fr auto;
-}
-
-.map-more .map-menu:not(:has(.map-menu-glyph svg)) .map-menu-glyph,
-.project-card .map-menu:not(:has(.map-menu-glyph svg)) .map-menu-glyph {
-  display: none;
-}
-
 .map-bar-end .ds-button {
   white-space: nowrap;
 }
