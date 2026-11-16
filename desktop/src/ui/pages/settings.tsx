@@ -1,7 +1,7 @@
 // codegraph: page settings at /settings
 import { useEffect, useState } from 'react'
 import type { InstructionsView } from '../../features/show-instructions.js'
-import { Badge, Button, Card, Lines } from '../design-system/kit.js'
+import { Badge, Button, Card, Lines, Waiting } from '../design-system/kit.js'
 
 const when = (at: string): string => {
   const moment = new Date(at)
@@ -82,7 +82,7 @@ export const SettingsPage = ({ onLeave }: { onLeave: () => void }) => {
       </div>
 
       {all === null ? (
-        <div className="ds-empty">Reading your instructions…</div>
+        <Waiting what="Reading your instructions…" />
       ) : (
         <div className="settings">
           <div className="settings-topics" role="group" aria-label="Topics">

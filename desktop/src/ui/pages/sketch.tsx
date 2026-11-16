@@ -7,7 +7,7 @@ import type { Session } from '../../features/show-session.js'
 import { LOOSE } from '../../modules/sketches/schema.js'
 import type { Sketch } from '../../modules/sketches/index.js'
 import { sameDoc } from '../../modules/together/index.js'
-import { Button, ThemeSwitch } from '../design-system/kit.js'
+import { Button, Problem, ThemeSwitch, Waiting } from '../design-system/kit.js'
 import { MapCanvas } from '../components/map-canvas.js'
 import { walk } from '../components/map-layout.js'
 import { SketchEditor } from '../components/sketch-editor.js'
@@ -222,9 +222,9 @@ export const SketchPage = ({ library, sketchId, onLeave }: { library: string; sk
       </div>
       <div className="map-body">
         {missing ? (
-          <div className="ds-empty">That sketch is not on this computer.</div>
+          <Problem>That sketch is not on this computer.</Problem>
         ) : !sketch ? (
-          <div className="ds-empty">Opening the sketch…</div>
+          <Waiting what="Opening the sketch…" />
         ) : canDraw ? (
           <SketchEditor key={sketch.id} sketch={sketch} mockups={mockups} path={path} onPath={setPath} onChange={changed} onAddMockup={(id) => void addMockup(id)} together={together} />
         ) : (

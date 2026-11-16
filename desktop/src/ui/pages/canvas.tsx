@@ -9,7 +9,7 @@ import { forgetting, movedTo, type Arrangement } from '../../modules/arrangement
 import { mergeItems, sameDoc, undoStep } from '../../modules/together/index.js'
 import type { Point, Progress } from '../../modules/reader/index.js'
 import type { Sketch } from '../../modules/sketches/index.js'
-import { Button, ThemeSwitch, Waiting } from '../design-system/kit.js'
+import { Button, Problem, ThemeSwitch, Waiting } from '../design-system/kit.js'
 import { MapCanvas, type Together } from '../components/map-canvas.js'
 import { walk } from '../components/map-layout.js'
 import { AgentWindow } from '../components/agent-window.js'
@@ -851,7 +851,7 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
       </div>
       <div className="map-body">
         {problem ? (
-          <div className="ds-empty">{problem}</div>
+          <Problem>{problem}</Problem>
         ) : sketch ? (
           canDraw ? (
             <SketchEditor
