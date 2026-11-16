@@ -100,6 +100,21 @@ describe('the canvas in the real app', () => {
     await picture('3-container')
   })
 
+  it('opens a menu on the board with a right-click, to fit, zoom, step out and draw wires', async () => {
+    const room = (await page.locator('.map-card--open.map-card--here').boundingBox())!
+    await page.mouse.click(room.x + room.width * 0.7, room.y + room.height * 0.88, { button: 'right' })
+    const menu = page.getByRole('menu', { name: 'What to do here' })
+    await menu.waitFor({ timeout: PATIENCE })
+    for (const name of [/^Fit it all on screen/, /^Zoom to 100%/, /^Out a level/, /^Draw wires at right angles/])
+      expect(await menu.getByRole('menuitem', { name }).count()).toBe(1)
+    await menu.getByRole('menuitem', { name: /^Zoom to 100%/ }).click()
+    const zoom = (): Promise<number> => page.locator('.map-world').evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).a)
+    await expect.poll(zoom, { timeout: PATIENCE }).toBeCloseTo(1, 2)
+    await page.keyboard.press('0')
+    await expect.poll(zoom, { timeout: PATIENCE }).toBeLessThan(1)
+    await settle()
+  })
+
   it('opens down to the code', async () => {
     await page.getByRole('button', { name: 'Open write-note' }).dblclick()
     expect(await shown(page.getByText('writeNote'))).toBe('writeNote')
