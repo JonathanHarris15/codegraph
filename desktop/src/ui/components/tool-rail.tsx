@@ -1,15 +1,19 @@
 // codegraph: component tool-rail
-import { Keyboard, Layers, StickyNote } from 'lucide-react'
+import { Keyboard, Layers, PenTool } from 'lucide-react'
 import { Tool } from '../design-system/kit.js'
+import { keysFor } from './hotkeys.js'
 import { Glyph } from './kind-glyph.js'
 import type { Tool as Which } from './map-canvas.js'
 
 /** The tools, down the left, part of the frame rather than a floating strip,
  *  so the board never slides under them and a card never hides behind them.
- *  Each one carries its name, and the key that picks it. */
+ *  Each one carries its name, and the key that picks it. A tool in use is
+ *  ink; a button whose panel is open is sunken, so the two never read alike.
+ *  Fitting and the overview live by the zoom, not here. */
 export const ToolRail = ({
   tool,
   sketch,
+  annotating = true,
   palette,
   canUndo,
   canRedo,
@@ -18,8 +22,6 @@ export const ToolRail = ({
   onUndo,
   onRedo,
   onStartSketch,
-  onFit,
-  onOverview,
   annotations,
   layers,
   keys,
@@ -38,6 +40,9 @@ export const ToolRail = ({
   tool: Which
   /** On the map the drawing tools are not there at all. */
   sketch: boolean
+  /** Annotations can be drawn here. Where they cannot, as on a proposal, a
+   *  plain note stands in for them. */
+  annotating?: boolean
   /** The card library beside the rail is open. */
   palette: boolean
   canUndo: boolean
@@ -47,8 +52,10 @@ export const ToolRail = ({
   onUndo: () => void
   onRedo: () => void
   onStartSketch: () => void
-  onFit: () => void
-  onOverview: () => void
+  /** No longer on the rail: the zoom bar fits, and the corner button shows
+   *  the overview. Kept so a caller that still hands them in compiles. */
+  onFit?: () => void
+  onOverview?: () => void
 }) => (
   <div className="map-rail" role="toolbar" aria-label="Tools">
     <div className="map-rail-group">
@@ -78,15 +85,17 @@ export const ToolRail = ({
 
     {sketch ? (
       <div className="map-rail-group">
-        <Tool name="Cards" on={palette} hint="Show or hide the cards to drag in (C)" onPick={onPalette}>
+        <Tool name="Cards" on={false} open={palette} hint="Show or hide the cards to drag in (C)" onPick={onPalette}>
           <Glyph of="cards" />
         </Tool>
         <Tool name="Wire" on={tool === 'wire'} hint="Drag from one card to another (W)" onPick={() => onTool('wire')}>
           <Glyph of="wire" />
         </Tool>
-        <Tool name="Note" on={tool === 'note'} hint="Click to leave a note (N)" onPick={() => onTool('note')}>
-          <Glyph of="note" />
-        </Tool>
+        {annotating ? null : (
+          <Tool name="Note" on={tool === 'note'} hint="Click to leave a note (N)" onPick={() => onTool('note')}>
+            <Glyph of="note" />
+          </Tool>
+        )}
       </div>
     ) : (
       /* Greyed-out drawing tools tell a person they did something wrong.
@@ -98,41 +107,51 @@ export const ToolRail = ({
       </div>
     )}
 
-    <span className="map-rail-rule" />
-
-    <div className="map-rail-group">
-      <Tool name="Annotate" on={annotations} hint="Text, notes, shapes and lines over the diagram (Shift+A)" onPick={onAnnotations}>
-        <StickyNote size={18} strokeWidth={2} aria-hidden="true" />
-      </Tool>
-      <Tool name="Layers" on={layers} hint="Show, hide and pick annotation layers (Shift+L, or [ and ] to step through them)" onPick={onLayers}>
-        <Layers size={18} strokeWidth={2} aria-hidden="true" />
-      </Tool>
-    </div>
-
-    <span className="map-rail-rule" />
-
-    {sketch ? (
+    {annotating ? (
       <>
+        <span className="map-rail-rule" />
+        {/* One way in to annotations, sticky notes first: N still puts one
+            down straight away. */}
         <div className="map-rail-group">
-          <Tool name="Undo" on={false} hint="Undo (Ctrl+Z)" disabled={!canUndo} onPick={onUndo}>
-            <Glyph of="undo" />
+          <Tool
+            name="Annotate"
+            on={tool === 'note'}
+            open={annotations}
+            hint="Sticky notes, text, shapes and lines over the diagram (Shift+A; N for a note)"
+            onPick={onAnnotations}
+          >
+            <PenTool size={18} strokeWidth={2} aria-hidden="true" />
           </Tool>
-          <Tool name="Redo" on={false} hint="Redo (Ctrl+Shift+Z)" disabled={!canRedo} onPick={onRedo}>
-            <Glyph of="redo" />
+          <Tool
+            name="Layers"
+            on={false}
+            open={layers}
+            hint="Show, hide and pick annotation layers (Shift+L, or [ and ] to step through them)"
+            onPick={onLayers}
+          >
+            <Layers size={18} strokeWidth={2} aria-hidden="true" />
           </Tool>
         </div>
-        <span className="map-rail-rule" />
       </>
     ) : null}
 
-    <div className="map-rail-group">
-      <Tool name="Fit" on={false} hint="Fit the level to the window (0)" onPick={onFit}>
-        <Glyph of="fit" />
-      </Tool>
-      <Tool name="Overview" on={false} hint="Show where you are" onPick={onOverview}>
-        <Glyph of="overview" />
-      </Tool>
-      <Tool name="Keys" on={keys} hint="Every key on the canvas (?)" onPick={onKeys}>
+    {sketch ? (
+      <>
+        <span className="map-rail-rule" />
+        <div className="map-rail-group">
+          <Tool name="Undo" on={false} hint={keysFor('Undo (Ctrl+Z)')} disabled={!canUndo} onPick={onUndo}>
+            <Glyph of="undo" />
+          </Tool>
+          <Tool name="Redo" on={false} hint={keysFor('Redo (Ctrl+Shift+Z)')} disabled={!canRedo} onPick={onRedo}>
+            <Glyph of="redo" />
+          </Tool>
+        </div>
+      </>
+    ) : null}
+
+    {/* Keys sits at the foot, out of the way of the tools. */}
+    <div className="map-rail-group map-rail-foot">
+      <Tool name="Keys" on={false} open={keys} hint="Every key, and every way to draw (?)" onPick={onKeys}>
         <Keyboard size={18} strokeWidth={2} aria-hidden="true" />
       </Tool>
     </div>

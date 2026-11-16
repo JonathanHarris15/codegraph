@@ -47,6 +47,7 @@ export const CardLookEditor = ({
   kind,
   look,
   canSave = false,
+  color = true,
   onKind,
   onLook,
   onSave,
@@ -55,6 +56,9 @@ export const CardLookEditor = ({
   look: CardLook
   /** There is something new here worth keeping as a type. */
   canSave?: boolean
+  /** The colour is picked here too; left out where the bar over the card
+   *  already picks it. */
+  color?: boolean
   onKind: (kind: string) => void
   onLook: (look: CardLook) => void
   onSave?: () => void
@@ -95,10 +99,12 @@ export const CardLookEditor = ({
         ))}
       </div>
     </div>
-    <div className="map-look-group">
-      <span className="ds-label">Colour</span>
-      <ColorPick color={look.color} onPick={(color) => onLook({ ...look, color })} />
-    </div>
+    {color ? (
+      <div className="map-look-group">
+        <span className="ds-label">Colour</span>
+        <ColorPick color={look.color} onPick={(next) => onLook({ ...look, color: next })} />
+      </div>
+    ) : null}
     {canSave && onSave ? (
       <button type="button" className="ds-button" onClick={onSave}>
         Save as a card type

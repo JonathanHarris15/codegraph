@@ -1,6 +1,6 @@
 // codegraph: test ui canvas
 import { describe, expect, it } from 'vitest'
-import { hotkeyFor, KEY_GROUPS } from '../src/ui/components/hotkeys.js'
+import { hotkeyFor, keysFor, KEY_GROUPS } from '../src/ui/components/hotkeys.js'
 
 const sketch = { drawing: true, annotating: true }
 const map = { drawing: false, annotating: true }
@@ -79,5 +79,18 @@ describe('the list of keys', () => {
   it('never gives one key two jobs', () => {
     const keys = KEY_GROUPS.flatMap((g) => g.rows.map((r) => r.keys))
     expect(new Set(keys).size).toBe(keys.length)
+  })
+})
+
+describe('the keys as this keyboard says them', () => {
+  it('says ⌘ for Ctrl on a Mac, and leaves them be elsewhere', () => {
+    expect(keysFor('Ctrl+Shift+Z', true)).toBe('⌘+Shift+Z')
+    expect(keysFor('Ctrl+Shift+Z', false)).toBe('Ctrl+Shift+Z')
+  })
+
+  it('says how to draw on a sketch, which the panel once listed', () => {
+    const says = KEY_GROUPS.flatMap((g) => g.rows.map((r) => r.says))
+    expect(says).toContain('Add a card there')
+    expect(says).toContain('Redo')
   })
 })

@@ -1,5 +1,6 @@
 // codegraph: component canvas-menu
 import { useEffect, useRef, type RefObject } from 'react'
+import { keysFor } from './hotkeys.js'
 import { Glyph, type ToolGlyph } from './kind-glyph.js'
 
 export type MenuItem = { name: string; keys?: string; glyph?: ToolGlyph; danger?: boolean; act: () => void } | 'rule'
@@ -67,7 +68,7 @@ export const CanvasMenu = ({
           >
             <span className="map-menu-glyph">{item.glyph ? <Glyph of={item.glyph} size={15} /> : null}</span>
             <span className="map-menu-name">{item.name}</span>
-            {item.keys ? <span className="map-menu-keys">{item.keys}</span> : null}
+            {item.keys ? <span className="map-menu-keys">{keysFor(item.keys)}</span> : null}
           </button>
         ),
       )}

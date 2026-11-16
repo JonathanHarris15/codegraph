@@ -1,5 +1,5 @@
 // codegraph: component context-bar
-import { useState, type ReactNode } from 'react'
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { Level } from '../../features/show-map.js'
 import type { CardLook } from '../../modules/sketches/schema.js'
 import { ColorPick } from './card-look-editor.js'
@@ -51,6 +51,38 @@ const Act = ({
   </button>
 )
 
+type Box = { left: number; right: number; top: number; bottom: number }
+const overlaps = (a: Box, b: Box): boolean => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
+
+/** Where on the board the bar should hang under what is picked, or null to
+ *  stay over it. It moves only when, over it, it would cover another card or
+ *  note, and under it covers fewer and still fits. The board is read as it is
+ *  drawn, so the bar needs to be told nothing more than where it goes. */
+const roomUnder = (bar: HTMLElement | null, at: { x: number; y: number }): number | null => {
+  const board = bar?.offsetParent
+  if (!bar || !(board instanceof HTMLElement)) return null
+  const origin = board.getBoundingClientRect()
+  const w = bar.offsetWidth
+  const h = bar.offsetHeight
+  const placed = (top: number): Box => ({
+    left: origin.left + at.x - w / 2,
+    right: origin.left + at.x + w / 2,
+    top: origin.top + top,
+    bottom: origin.top + top + h,
+  })
+  const boxes = (find: string): DOMRect[] => [...board.querySelectorAll(find)].map((one) => one.getBoundingClientRect())
+  const picked = boxes('.map-card--selected, .map-sentence--selected')
+  if (!picked.length) return null
+  const others = boxes(
+    '.map-card:not(.map-card--selected):not(.map-frame):not(.map-up), .map-note:not(.map-card--selected), .map-anno:not(.map-anno--behind):not(.map-anno--picked)',
+  )
+  const covered = (box: Box): number => others.filter((other) => overlaps(box, other)).length
+  const over = covered(placed(at.y - h))
+  if (over === 0) return null
+  const top = Math.max(...picked.map((one) => one.bottom)) - origin.top + 12
+  return top + h < origin.height && covered(placed(top)) < over ? top : null
+}
+
 /** The few things a person most often does to what they picked, floating
  *  just over it: change its kind, write its words, draw inside it, line a
  *  group up, take it away. The panel at the side has the rest. */
@@ -91,6 +123,13 @@ export const ContextBar = ({
   removeName?: string
 }) => {
   const [kinds, setKinds] = useState(false)
+  const bar = useRef<HTMLDivElement>(null)
+  /** Where the bar hangs instead, under what is picked, when over it the bar
+   *  would cover another card or note. */
+  const [under, setUnder] = useState<number | null>(null)
+  useLayoutEffect(() => {
+    setUnder(below ? null : roomUnder(bar.current, at))
+  }, [at.x, at.y, below])
   const choices: CardChoice[] =
     picking.what === 'card'
       ? cardChoices
@@ -100,8 +139,9 @@ export const ContextBar = ({
 
   return (
     <div
-      className={below ? 'map-context map-context--below' : 'map-context'}
-      style={{ left: at.x, top: at.y }}
+      ref={bar}
+      className={below || under !== null ? 'map-context map-context--below' : 'map-context'}
+      style={{ left: at.x, top: under ?? at.y }}
       role="toolbar"
       aria-label="What to do with what is picked"
       onPointerDown={(event) => event.stopPropagation()}
@@ -153,10 +193,14 @@ export const ContextBar = ({
           glyph="edit"
           name={picking.what === 'card' ? 'Rename' : picking.what === 'wire' ? 'Say what it is for' : 'Edit the note'}
           onAct={() => onEdit(picking.id)}
-        />
+        >
+          <span className="map-act-words">{picking.what === 'card' ? 'Rename' : picking.what === 'wire' ? 'Words' : 'Edit'}</span>
+        </Act>
       ) : null}
       {picking.what === 'card' && picking.opens ? (
-        <Act glyph="inside" name="Draw inside it" onAct={() => onOpen(picking.id)} />
+        <Act glyph="inside" name="Draw inside it" onAct={() => onOpen(picking.id)}>
+          <span className="map-act-words">Draw inside</span>
+        </Act>
       ) : null}
       {picking.what === 'card' && picking.stores && onStore && !locked ? (
         <Act
