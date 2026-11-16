@@ -3726,6 +3726,7 @@ export const MapCanvas = ({
           onIn={() => zoomBy(1.25)}
           onOut={() => zoomBy(0.8)}
           onFit={fit}
+          onScale={(k) => zoomTo(k)}
           onUp={backOut}
         />
         <Overview
