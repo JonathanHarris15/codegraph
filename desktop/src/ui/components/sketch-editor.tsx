@@ -1,5 +1,5 @@
 // codegraph: component sketch-editor
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Sketch, SketchCard, SketchField } from '../../modules/sketches/index.js'
 import { undoStep } from '../../modules/together/index.js'
 import { sentenceOf } from '../../modules/wording/index.js'
@@ -53,7 +53,9 @@ let clipboard: Clip | null = null
 const ONE_STEP_MS = 900
 const HISTORY = 200
 /** How far the floating panel keeps from the board's edges. */
-const PANEL_GAP = 12
+/** How much of the board's right the panel covers: its width, its gap from the
+ *  edge, and room to breathe. */
+const PANEL_COVERS = 320 + 12 + 16
 
 /** Draws on a sketch: the canvas with its tools, and a panel for whatever is
  *  picked. Every change goes straight back to the page, which keeps it, and
@@ -290,49 +292,9 @@ export const SketchEditor = ({
 
   const picked = selected.length === 1 ? pick(focus, selected[0]!) : null
 
-  /** The panel floats at the board's right, unless what is picked is there,
-   *  when it moves to the board's left so it never hides what it is about. */
+  /** The panel floats at the board's right edge, always in the same place; the
+   *  board slides what is picked, and what it is wired to, out from under it. */
   const area = useRef<HTMLDivElement>(null)
-  const [panelAt, setPanelAt] = useState<number | null>(null)
-  useLayoutEffect(() => {
-    const place = (): void => {
-      const box = area.current
-      const board = box?.querySelector('.map-frame-area')?.getBoundingClientRect()
-      const width = box?.querySelector<HTMLElement>('.sketch-panel')?.offsetWidth ?? 0
-      if (!box || !board || !width) return setPanelAt(null)
-      const outer = box.getBoundingClientRect()
-      const picks = [...box.querySelectorAll('.map-world .map-card--selected, .map-world .map-sentence--selected')].map((one) =>
-        one.getBoundingClientRect(),
-      )
-      // The cards wired straight to what is picked, which a person reads with it.
-      const near = new Set(
-        focus.wires.flatMap((w) =>
-          selected.includes(w.id) ? [w.from, w.to] : selected.includes(w.from) ? [w.to] : selected.includes(w.to) ? [w.from] : [],
-        ),
-      )
-      for (const id of selected) near.delete(id)
-      const neighbours = [...box.querySelectorAll<HTMLElement>('.map-world [data-card]')]
-        .filter((one) => near.has(one.dataset.card ?? ''))
-        .map((one) => one.getBoundingClientRect())
-      const covers = (boxes: DOMRect[], from: number): boolean => boxes.some((one) => one.right > from && one.left < from + width)
-      const right = outer.right - PANEL_GAP - width
-      const left = board.left + PANEL_GAP
-      // What is picked decides first; then its neighbours, if only one side
-      // keeps them clear.
-      const toLeft =
-        covers(picks, right) !== covers(picks, left)
-          ? covers(picks, right)
-          : !covers(picks, right) && covers(neighbours, right) && !covers(neighbours, left)
-      setPanelAt(toLeft ? left - outer.left : null)
-    }
-    place()
-    if (!selected.length || !panel) return
-    // The board moves under the panel as a person zooms, pans and opens
-    // cards, and something just made is put down a moment after it is
-    // picked, so it keeps looking while the panel is out.
-    const again = window.setInterval(place, 300)
-    return () => window.clearInterval(again)
-  }, [selected.join(','), panel])
 
   /** Changes a store's fields, wiring it to any store a field now points at, or
    *  whether it is fixed or open. Typing in one store's fields is one undo. */
@@ -358,7 +320,7 @@ export const SketchEditor = ({
   return (
     <div ref={area} className="sketch-area">
       <MapCanvas
-        {...(picked && panel ? { cover: panelAt === null ? { right: 348 } : { left: 348 } } : {})}
+        {...(picked && panel ? { cover: { right: PANEL_COVERS } } : {})}
         root={sketch.root}
         path={path}
         onPath={onPath}
@@ -460,14 +422,12 @@ export const SketchEditor = ({
           board's edge so the board never shifts under it. How to draw is in
           the Keys list, not here. */}
       {picked && panel ? (
-        <aside
-          className="sketch-panel"
-          aria-label="What is picked"
-          style={panelAt === null ? undefined : { left: panelAt, right: 'auto' }}
-        >
+        <aside className="sketch-panel" aria-label="What is picked">
           <button type="button" className="sketch-panel-hide" aria-label="Hide this panel" title="Hide this panel" onClick={() => setPanel(false)}>
             <Glyph of="close" size={14} />
           </button>
+          {/* Only this scrolls, so the panel's name and its close stay put. */}
+          <div className="sketch-panel-body">
           {picked.kind === 'card' ? (
             <>
               <div className="sketch-panel-head">
@@ -567,6 +527,7 @@ export const SketchEditor = ({
           ) : null}
           {/* Taking it away is on the bar over it, the Delete key and the
               board's menu, so the panel keeps to what it is. */}
+          </div>
         </aside>
       ) : picked ? (
         <button type="button" className="sketch-panel-tab" aria-label="Show the panel" title="Show the panel" onClick={() => setPanel(true)}>

@@ -1,7 +1,10 @@
 // codegraph: component canvas-menu
-import { useEffect, useRef, type RefObject } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { keysFor } from './hotkeys.js'
 import { Glyph, type ToolGlyph } from './kind-glyph.js'
+
+/** How far a menu keeps from the edge of the window. */
+const EDGE = 8
 
 export type MenuItem = { name: string; keys?: string; glyph?: ToolGlyph; danger?: boolean; act: () => void } | 'rule'
 
@@ -21,6 +24,23 @@ export const CanvasMenu = ({
   opener?: RefObject<HTMLElement | null>
 }) => {
   const box = useRef<HTMLDivElement>(null)
+  // Where it really goes: where it was asked for, turned back in from any
+  // edge it would run past, so it is never squeezed against one.
+  const [spot, setSpot] = useState(at)
+  useLayoutEffect(() => {
+    const menu = box.current
+    const room = menu?.offsetParent
+    if (!menu || !(room instanceof HTMLElement)) return setSpot(at)
+    const w = menu.offsetWidth
+    const h = menu.offsetHeight
+    const inside = room.getBoundingClientRect()
+    // The window is the real edge: the menu's parent may be smaller than it.
+    const right = Math.min(room.clientWidth, window.innerWidth - inside.left) - EDGE
+    const bottom = Math.min(room.clientHeight, window.innerHeight - inside.top) - EDGE
+    const x = at.x + w > right ? Math.max(EDGE - inside.left, right - w) : at.x
+    const y = at.y + h > bottom ? Math.max(EDGE - inside.top, bottom - h) : at.y
+    setSpot({ x, y })
+  }, [at.x, at.y])
 
   useEffect(() => {
     box.current?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true })
@@ -52,7 +72,7 @@ export const CanvasMenu = ({
       className={pictured ? 'map-menu' : 'map-menu map-menu--bare'}
       role="menu"
       aria-label="What to do here"
-      style={{ left: at.x, top: at.y }}
+      style={{ left: spot.x, top: spot.y }}
       onPointerDown={(event) => event.stopPropagation()}
       onContextMenu={(event) => event.preventDefault()}
     >

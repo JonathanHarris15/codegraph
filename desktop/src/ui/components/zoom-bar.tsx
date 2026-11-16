@@ -1,4 +1,5 @@
 // codegraph: component zoom-bar
+import { Check } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Glyph } from './kind-glyph.js'
 import type { WireStyle } from './square-wires.js'
@@ -127,9 +128,8 @@ export const ZoomBar = ({
                     setMenu('')
                   }}
                 >
-                  <span className="map-menu-glyph" />
+                  <span className="map-menu-glyph">{percent === k * 100 ? <Check size={15} aria-hidden="true" /> : null}</span>
                   <span className="map-menu-name">{k * 100}%</span>
-                  <span className="map-menu-keys">{percent === k * 100 ? '✓' : ''}</span>
                 </button>
               ))}
             </>

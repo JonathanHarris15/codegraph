@@ -1960,6 +1960,12 @@ select.map-add-field-holds {
     var(--surface-000);
 }
 
+/* On the dark board a faded level's real screenshot would stay a bright grey
+   slab after losing its colour; it steps back with the rest of its level. */
+[data-theme='dark'] .map-up .map-shot--real {
+  filter: brightness(0.45);
+}
+
 .map-shot--real {
   display: block;
   width: 100%;
@@ -2341,7 +2347,9 @@ select.map-add-field-holds {
   left: 0;
   right: auto;
   min-width: 180px;
-} --------------------------------- */
+}
+
+/* ---- the things the canvas has to say --------------------------------- */
 
 .map-suggestions {
   position: absolute;
@@ -3182,10 +3190,36 @@ select.map-add-field-holds {
   width: 320px;
   max-height: calc(100% - 2 * var(--space-3) - 56px);
   z-index: 4;
-  gap: var(--space-3);
-  border: var(--stroke-edge) solid var(--line-edge);
+  padding: 0;
+  overflow: hidden;
+  border: var(--stroke-edge) solid var(--line-card);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-float);
+}
+
+/* The panel's insides scroll under its name, which stays at the top with
+   the close beside it. */
+.sketch-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 0;
+  padding: 0 var(--space-4) var(--space-4);
+  overflow-y: auto;
+}
+
+.sketch-panel-body > .sketch-panel-head:first-child {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 calc(-1 * var(--space-4));
+  padding: var(--space-4) calc(var(--space-4) + 28px) var(--space-3) var(--space-4);
+  border-bottom: var(--stroke-edge) solid var(--line-hair);
+  background: var(--surface-100);
+}
+
+.sketch-panel-hide {
+  z-index: 2;
 }
 
 .sketch-panel .ds-button--danger {
@@ -3303,6 +3337,7 @@ kbd {
 .map-menu {
   position: absolute;
   z-index: 9;
+  width: max-content;
   min-width: 220px;
   padding: var(--space-1);
   border: var(--stroke-edge) solid var(--line-card);
@@ -3327,6 +3362,11 @@ kbd {
   font-size: var(--text-md);
   text-align: left;
   cursor: pointer;
+}
+
+.map-menu-name,
+.map-menu-keys {
+  white-space: nowrap;
 }
 
 .map-menu--bare .map-menu-item {
@@ -3502,8 +3542,7 @@ kbd {
    the accent or a glow: only what is picked, or under the pointer, wears
    those, so two cards never both read as picked. */
 .map-card--wired:not(.map-card--shaped):not(.map-card--open) {
-  border-color: var(--wire-strong);
-  box-shadow: 0 0 0 0.5px var(--wire-strong);
+  border-color: color-mix(in srgb, var(--wire-strong) 55%, var(--line-card));
 }
 
 .map-card--selected.map-card--hovered:not(.map-card--shaped),
@@ -3543,9 +3582,9 @@ kbd {
   }
 }
 
-/* a wire under the pointer darkens, so it is plain it can be picked */
+/* a wire under the pointer thickens, so it is plain it can be picked; it
+   keeps its colour, so its arrowhead still matches it */
 .map-wire:has(.map-wire-hit:hover) path:first-child {
-  stroke: var(--wire-strong);
   stroke-width: var(--stroke-wire-strong);
 }
 

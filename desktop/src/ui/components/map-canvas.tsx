@@ -2771,8 +2771,10 @@ export const MapCanvas = ({
       const tabW = lipWidth(card, band) * scale * k
       const tabH = TAB_HIGH * scale * k
       const room = { w: Math.max(0, box.w * k - tabW), h: Math.max(0, box.h * k - tabH) }
-      let dx = Math.max(0, Math.min(coverLeft + TAB_EDGE - left, room.w))
-      let dy = Math.max(0, Math.min(TAB_EDGE + tabH - top, room.h))
+      // A tab leaves its corner only once that corner is out of sight: past
+      // the board's edge or under a panel, not merely near it.
+      let dx = left < coverLeft ? Math.max(0, Math.min(coverLeft + TAB_EDGE - left, room.w)) : 0
+      let dy = top - tabH < 0 ? Math.max(0, Math.min(TAB_EDGE + tabH - top, room.h)) : 0
       // Each tab sits on its own card's corner; the layout leaves room above
       // a card open inside another for its tab to sit below the outer one's.
       // Only where both are kept at the top of the screen, or the board is so

@@ -68,6 +68,9 @@ const AROUND =
 const PICKED =
   '.map-card--selected, .map-sentence--selected, .map-anno--picked, .map-anno-line--picked, .map-anno-wire-words--picked'
 
+/** The panels that float over the board, which a bar keeps clear of. */
+const PANELS = '.sketch-panel, .map-side, .map-proposal-list'
+
 /** The bar's top left on the board. */
 type Placed = { left: number; top: number }
 
@@ -104,7 +107,9 @@ const placeBar = (bar: HTMLElement | null, at: { x: number; y: number }, below: 
     : below
       ? { left: at.x, right: at.x, top: at.y - 12, bottom: at.y - 12 }
       : { left: at.x, right: at.x, top: at.y + 12, bottom: at.y + 12 }
-  const others = boxes(AROUND)
+  // Panels float over the board's edges from outside it, and are kept off too.
+  const panels = [...document.querySelectorAll(PANELS)].map((one) => local(one.getBoundingClientRect()))
+  const others = [...boxes(AROUND), ...panels]
   const slide = (from: number, size: number, span: number): number =>
     size > span - 2 * EDGE ? EDGE : Math.min(span - EDGE - size, Math.max(EDGE, from))
   const midX = slide((picked.left + picked.right) / 2 - w / 2, w, room.w)
