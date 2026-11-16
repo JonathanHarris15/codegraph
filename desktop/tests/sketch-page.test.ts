@@ -279,6 +279,41 @@ describe('drawing a sketch in the real app', () => {
     expect(await card('billing').count()).toBe(1)
   })
 
+  it('leaves the board still when a picked card is clear of the panel, and slides only one it hides', async () => {
+    const board = page.locator('.map-world')
+    const at = (): Promise<string> => board.evaluate((el) => (el as HTMLElement).style.transform)
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('Control+0')
+    await settle()
+    const before = await at()
+    await card('notes').click()
+    await page.locator('.sketch-panel').waitFor({ timeout: PATIENCE })
+    await settle()
+    expect(await at()).toBe(before)
+
+    // Off with the panel, then the card is pushed under where it comes out.
+    await page.keyboard.press('Escape')
+    await settle()
+    const area = (await page.locator('.map-frame-area').boundingBox())!
+    const there = (await card('notes').boundingBox())!
+    const push = area.x + area.width - 100 - there.x
+    await page.mouse.move(area.x + area.width / 2, area.y + area.height / 2)
+    await page.keyboard.down('Shift')
+    await page.mouse.wheel(0, -push)
+    await page.keyboard.up('Shift')
+    await settle()
+    await card('notes').click()
+    const panel = page.locator('.sketch-panel')
+    await panel.waitFor({ timeout: PATIENCE })
+    await settle()
+    const side = (await panel.boundingBox())!
+    const now = (await card('notes').boundingBox())!
+    expect(now.x + now.width).toBeLessThanOrEqual(side.x)
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('Control+0')
+    await settle()
+  })
+
   it('points a wire at another card by dragging its end', async () => {
     await page.keyboard.press('Escape')
     await page.keyboard.press('0')

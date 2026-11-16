@@ -179,6 +179,9 @@ const MAP_AIR = 40
 /** The air kept around what is fitted on screen, clear of the zoom bar along
  *  the foot and of the tool rail on the left. */
 const FIT_PAD = { left: 24, right: 48, top: 48, bottom: 96 }
+/** How far clear of a panel a picked card is brought, when the panel would
+ *  hide it. */
+const PICK_CLEAR = 16
 
 /** Zoomed out past this, a card shows only its glyph and name and a wire only
  *  its verb, each drawn big enough to read: the rest is too small. On the map
@@ -1198,8 +1201,10 @@ export const MapCanvas = ({
   }, [])
 
   // A panel coming out over the board brings what it is about out from under
-  // it, sliding the board just enough: the whole level in hand where that
-  // fits beside the panel, else what is picked and the cards wired to it.
+  // it. One that came out for a pick moves the board only if it hides part
+  // of what was picked, and only as far as brings it out; one that came out
+  // on its own, like a proposal's list, slides the level clear, or fits it
+  // into what is left where a slide is not enough.
   const coverKey = `${coverLeft},${coverRight}`
   const coverWas = useRef(coverKey)
   /** How far the board was slid to clear a panel, so it slides back the same
@@ -1222,21 +1227,12 @@ export const MapCanvas = ({
         }, STEP_MS)
       return
     }
-    const picked = selected.filter((id) => where.has(id))
-    // A picked wire's panel already keeps to the side away from it.
-    if (selected.length && !picked.length) return
-    const ids = new Set(picked)
-    for (const wire of wires) {
-      if (picked.includes(wire.from)) ids.add(wire.to)
-      if (picked.includes(wire.to)) ids.add(wire.from)
-    }
-    const level = [...placed.map((p) => p.box), ...noteBoxes.map((n) => n.box)]
-    const near = [...ids].flatMap((id) => {
-      const box = where.get(id)
-      return box ? [box] : []
-    })
-    if (!level.length) return
     const v = seen.current
+    const slide = (dx: number): void => {
+      if (!dx) return
+      slidFor.current += dx
+      glide({ ...v, x: v.x + dx })
+    }
     const clear = {
       x: coverNow.current.left + FIT_PAD.left,
       y: FIT_PAD.top,
@@ -1244,47 +1240,37 @@ export const MapCanvas = ({
       h: el.clientHeight - FIT_PAD.top - FIT_PAD.bottom,
     }
     if (clear.w <= 0 || clear.h <= 0) return
-    // The whole level if a slide brings it all clear, else what is picked
-    // and wired to it, else what is picked. A pick never zooms the board:
-    // only the last of these is slid in, its left edge first.
-    const own = picked.flatMap((id) => {
-      const box = where.get(id)
-      return box ? [box] : []
-    })
-    const tries = ownOnly ? [own] : picked.length ? [level, near, own] : [level]
-    const slide = (dx: number): void => {
-      if (!dx) return
-      slidFor.current += dx
-      glide({ ...v, x: v.x + dx })
-    }
-    for (const boxes of tries) {
-      const target = boundsOf(boxes)
-      if (target.w * v.k > clear.w && boxes !== own) continue
+    if (ownOnly) {
+      const own = selected.flatMap((id) => {
+        const box = where.get(id)
+        return box ? [box] : []
+      })
+      // A picked wire's panel already keeps to the side away from it.
+      if (!own.length) return
+      const target = boundsOf(own)
       const left = v.x + target.x * v.k
       const right = left + target.w * v.k
+      const edge = el.clientWidth - coverNow.current.right - PICK_CLEAR
+      // Its left edge first, where it is wider than what the panel leaves.
+      if (right > edge) slide(Math.max(edge - right, clear.x - left))
+      return
+    }
+    const level = [...placed.map((p) => p.box), ...noteBoxes.map((n) => n.box)]
+    if (!level.length) return
+    const whole = boundsOf(level)
+    if (whole.w * v.k <= clear.w) {
+      const left = v.x + whole.x * v.k
+      const right = left + whole.w * v.k
       let dx = 0
       if (right > clear.x + clear.w) dx = clear.x + clear.w - right
       if (left + dx < clear.x) dx = clear.x - left
-      // What is picked is clear, but not all it is wired to: slide on toward
-      // them as far as keeps the picked thing clear, so its wires and as much
-      // of each neighbour as fits still show.
-      if (boxes === own && near.length && !ownOnly) {
-        const reach = boundsOf(near)
-        const reachLeft = v.x + reach.x * v.k
-        const reachRight = reachLeft + reach.w * v.k
-        if (reachRight > clear.x + clear.w) dx = Math.min(dx, Math.max(clear.x - left, clear.x + clear.w - reachRight))
-        else if (reachLeft < clear.x) dx = Math.max(dx, Math.min(clear.x + clear.w - right, clear.x - reachLeft))
-      }
       slide(dx)
       return
     }
-    // With nothing picked, a level too wide to slide clear is fitted into
-    // what the panel leaves, zooming out only as far as that takes.
-    const whole = boundsOf(level)
     const k = Math.min(v.k, clear.w / whole.w, clear.h / whole.h)
     slidFor.current = 0
     glide({ k, x: clear.x + clear.w / 2 - (whole.x + whole.w / 2) * k, y: clear.y + clear.h / 2 - (whole.y + whole.h / 2) * k })
-  }, [selected, where, wires, placed, noteBoxes, glide])
+  }, [selected, where, placed, noteBoxes, glide])
   const clearOfCoverNow = useRef(clearOfCover)
   clearOfCoverNow.current = clearOfCover
   /** The board never slides under a hand that is still pressing: a slide asked
@@ -1297,7 +1283,9 @@ export const MapCanvas = ({
   useEffect(() => {
     if (coverWas.current === coverKey) return
     coverWas.current = coverKey
-    clearSoon()
+    // A panel that came out for a pick only clears the pick; one that came
+    // out on its own clears the level.
+    clearSoon(selected.length > 0)
   }, [coverKey])
   // Picking something else while a panel is out brings it out from under the
   // panel, if it is there; the board stays put otherwise.
