@@ -1205,7 +1205,7 @@ export const MapCanvas = ({
   /** How far the board was slid to clear a panel, so it slides back the same
    *  way once the panel goes. */
   const slidFor = useRef(0)
-  const clearOfCover = useCallback((): void => {
+  const clearOfCover = useCallback((ownOnly = false): void => {
     const el = frame.current
     if (!el) return
     if (!coverNow.current.left && !coverNow.current.right) {
@@ -1213,7 +1213,13 @@ export const MapCanvas = ({
       slidFor.current = 0
       // A moment later, once whatever closed the panel (a card taken off,
       // say) has settled on the board.
-      if (back) setTimeout(() => glide({ ...seen.current, x: seen.current.x - back }), STEP_MS)
+      // If the person moves the board in that moment, it stays where they put it.
+      const from = seen.current
+      if (back)
+        setTimeout(() => {
+          const now = seen.current
+          if (now.x === from.x && now.y === from.y && now.k === from.k) glide({ ...now, x: now.x - back })
+        }, STEP_MS)
       return
     }
     const picked = selected.filter((id) => where.has(id))
@@ -1245,7 +1251,7 @@ export const MapCanvas = ({
       const box = where.get(id)
       return box ? [box] : []
     })
-    const tries = picked.length ? [level, near, own] : [level]
+    const tries = ownOnly ? [own] : picked.length ? [level, near, own] : [level]
     const slide = (dx: number): void => {
       if (!dx) return
       slidFor.current += dx
@@ -1262,7 +1268,7 @@ export const MapCanvas = ({
       // What is picked is clear, but not all it is wired to: slide on toward
       // them as far as keeps the picked thing clear, so its wires and as much
       // of each neighbour as fits still show.
-      if (boxes === own && near.length) {
+      if (boxes === own && near.length && !ownOnly) {
         const reach = boundsOf(near)
         const reachLeft = v.x + reach.x * v.k
         const reachRight = reachLeft + reach.w * v.k
@@ -1281,11 +1287,27 @@ export const MapCanvas = ({
   }, [selected, where, wires, placed, noteBoxes, glide])
   const clearOfCoverNow = useRef(clearOfCover)
   clearOfCoverNow.current = clearOfCover
+  /** The board never slides under a hand that is still pressing: a slide asked
+   *  for then waits until the pointer is let go. */
+  const clearWaits = useRef<'all' | 'own' | ''>('')
+  const clearSoon = (ownOnly = false): void => {
+    if (gesture.current || pending.current !== null) clearWaits.current = clearWaits.current === 'all' || !ownOnly ? 'all' : 'own'
+    else clearOfCoverNow.current(ownOnly)
+  }
   useEffect(() => {
     if (coverWas.current === coverKey) return
     coverWas.current = coverKey
-    clearOfCoverNow.current()
+    clearSoon()
   }, [coverKey])
+  // Picking something else while a panel is out brings it out from under the
+  // panel, if it is there; the board stays put otherwise.
+  const pickKey = selected.join(',')
+  const pickWas = useRef(pickKey)
+  useEffect(() => {
+    if (pickWas.current === pickKey) return
+    pickWas.current = pickKey
+    if (pickKey && (coverNow.current.left || coverNow.current.right)) clearSoon(true)
+  }, [pickKey])
 
   // The board opens fitted to what is there. Drawing on a level leaves the
   // view where the person has it.
@@ -2434,6 +2456,11 @@ export const MapCanvas = ({
     const now = gesture.current
     gesture.current = null
     pending.current = null
+    if (clearWaits.current) {
+      const ownOnly = clearWaits.current === 'own'
+      clearWaits.current = ''
+      setTimeout(() => clearOfCoverNow.current(ownOnly), 0)
+    }
     const shown = live
     setLive({})
     if (!now) return
