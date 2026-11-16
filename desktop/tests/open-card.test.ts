@@ -1,6 +1,6 @@
 // codegraph: test ui canvas
 import { describe, expect, it } from 'vitest'
-import { openLevels, pushAside, resized, roomAround, type Box, type DrawnCard } from '../src/ui/components/map-layout.js'
+import { openLevels, pushAside, resized, roomAround, sizeOf, type Box, type DrawnCard } from '../src/ui/components/map-layout.js'
 
 const card = (id: string, x: number, y: number, children: DrawnCard[] = []): DrawnCard =>
   ({ id, name: id, level: 'container', kind: 'server', says: '', at: '', start: false, setUp: true, names: [], shot: '', mockup: '', x, y, children, wires: [], notes: [] }) as unknown as DrawnCard
@@ -58,7 +58,8 @@ describe('an open card', () => {
   it('grows round its own middle, so it stays where it was on its level', () => {
     const inner = card('inner', 0, 0)
     const levels = openLevels({ levels: levelsOf([card('root', 0, 0, [inner]), inner]), roomOf: room800, anchors: new Map() })
-    expect(levels[0]!.open!.box).toEqual({ x: 140 - 400, y: 75 - 300, w: 800, h: 600 })
+    const { w, h } = sizeOf(inner)
+    expect(levels[0]!.open!.box).toEqual({ x: w / 2 - 400, y: h / 2 - 300, w: 800, h: 600 })
   })
 
   it('does not slide what is inside it when a card is carried past its edge', () => {

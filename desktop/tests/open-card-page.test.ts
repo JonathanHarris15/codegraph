@@ -131,16 +131,18 @@ describe('opening a card in the real app', () => {
     // A card outside is faded, and a press on it neither picks it up nor adds anything.
     const beside = await boxOf(card('Beside'))
     expect(await card('Beside').evaluate((el) => el.classList.contains('map-up'))).toBe(true)
-    await page.mouse.click(middle(beside).x, middle(beside).y)
+    // Pressed near its right edge: its middle can be under the card library.
+    const on = (box: Box): { x: number; y: number } => ({ x: box.x + box.width - 16, y: box.y + box.height / 2 })
+    await page.mouse.click(on(beside).x, on(beside).y)
     expect(await card('Beside').getAttribute('aria-pressed')).toBe(null)
     const k = await worldScale()
-    await drag(middle(beside), { x: middle(beside).x, y: middle(beside).y + 30 })
+    await drag(on(beside), { x: on(beside).x, y: on(beside).y + 30 })
     await settle()
     // That drag moved the board, not the card: the two go together.
     const after = await boxOf(card('Beside'))
     const openAfter = await boxOf(openBox('Main'))
     expect(Math.round(after.y - openAfter.y)).toBe(Math.round(beside.y - open.y))
-    await page.mouse.dblclick(middle(after).x, middle(after).y)
+    await page.mouse.dblclick(on(after).x, on(after).y)
     await page.waitForTimeout(100)
     expect(await page.getByRole('dialog', { name: 'Add to the board' }).count()).toBe(0)
     expect(k).toBeGreaterThan(0)

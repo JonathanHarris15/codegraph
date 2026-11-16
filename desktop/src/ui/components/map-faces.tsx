@@ -118,13 +118,25 @@ const AddField = ({ store, onAdd }: { store: string; onAdd: (field: { name: stri
   )
 }
 
+/** What is inside a card, by name, each with its kind's glyph in its kind's
+ *  colour, so a page and a module of one name read as two things. */
 const Chips = ({ card }: { card: DrawnCard }) => (
   <div className="map-chips">
-    {card.children.slice(0, 6).map((child) => (
-      <span key={child.id} className={`map-chip${isStore(child.kind) ? ' map-chip--store' : ''}`}>
-        {child.name}
-      </span>
-    ))}
+    {card.children.slice(0, 6).map((child) => {
+      const look = lookOf(child)
+      return (
+        <span
+          key={child.id}
+          className={`map-chip ${kindClass(child.kind)}${look ? ` ${lookClass(look)}` : ''}${isStore(child.kind) ? ' map-chip--store' : ''}`}
+          title={`${kindWords(child)}: ${child.name}`}
+        >
+          <span className="map-chip-glyph" aria-hidden="true">
+            {look ? <LookGlyph icon={look.icon} size={10} /> : <KindGlyph kind={child.kind} size={10} />}
+          </span>
+          {child.name}
+        </span>
+      )
+    })}
     {card.children.length > 6 ? <span className="map-chip map-more">+{card.children.length - 6}</span> : null}
   </div>
 )
