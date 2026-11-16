@@ -1202,9 +1202,18 @@ export const MapCanvas = ({
   // fits beside the panel, else what is picked and the cards wired to it.
   const coverKey = `${coverLeft},${coverRight}`
   const coverWas = useRef(coverKey)
+  /** How far the board was slid to clear a panel, so it slides back the same
+   *  way once the panel goes. */
+  const slidFor = useRef(0)
   const clearOfCover = useCallback((): void => {
     const el = frame.current
-    if (!el || (!coverNow.current.left && !coverNow.current.right)) return
+    if (!el) return
+    if (!coverNow.current.left && !coverNow.current.right) {
+      const back = slidFor.current
+      slidFor.current = 0
+      if (back) glide({ ...seen.current, x: seen.current.x - back })
+      return
+    }
     const picked = selected.filter((id) => where.has(id))
     // A picked wire's panel already keeps to the side away from it.
     if (selected.length && !picked.length) return
@@ -1235,6 +1244,11 @@ export const MapCanvas = ({
       return box ? [box] : []
     })
     const tries = picked.length ? [level, near, own] : [level]
+    const slide = (dx: number): void => {
+      if (!dx) return
+      slidFor.current += dx
+      glide({ ...v, x: v.x + dx })
+    }
     for (const boxes of tries) {
       const target = boundsOf(boxes)
       if (target.w * v.k > clear.w && boxes !== own) continue
@@ -1243,13 +1257,24 @@ export const MapCanvas = ({
       let dx = 0
       if (right > clear.x + clear.w) dx = clear.x + clear.w - right
       if (left + dx < clear.x) dx = clear.x - left
-      if (dx) glide({ ...v, x: v.x + dx })
+      // What is picked is clear, but not all it is wired to: slide on toward
+      // them as far as keeps the picked thing clear, so its wires and as much
+      // of each neighbour as fits still show.
+      if (boxes === own && near.length) {
+        const reach = boundsOf(near)
+        const reachLeft = v.x + reach.x * v.k
+        const reachRight = reachLeft + reach.w * v.k
+        if (reachRight > clear.x + clear.w) dx = Math.min(dx, Math.max(clear.x - left, clear.x + clear.w - reachRight))
+        else if (reachLeft < clear.x) dx = Math.max(dx, Math.min(clear.x + clear.w - right, clear.x - reachLeft))
+      }
+      slide(dx)
       return
     }
     // With nothing picked, a level too wide to slide clear is fitted into
     // what the panel leaves, zooming out only as far as that takes.
     const whole = boundsOf(level)
     const k = Math.min(v.k, clear.w / whole.w, clear.h / whole.h)
+    slidFor.current = 0
     glide({ k, x: clear.x + clear.w / 2 - (whole.x + whole.w / 2) * k, y: clear.y + clear.h / 2 - (whole.y + whole.h / 2) * k })
   }, [selected, where, wires, placed, noteBoxes, glide])
   const clearOfCoverNow = useRef(clearOfCover)

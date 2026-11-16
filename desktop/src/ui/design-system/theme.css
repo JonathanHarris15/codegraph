@@ -2057,6 +2057,16 @@ select.map-add-field-holds {
   fill: var(--state-problem);
 }
 
+/* Where the browser can, every head takes its wire's own colour, whatever
+   state the wire is drawn in; the colours above are the fallback. */
+.map-head,
+.map-head--lit,
+.map-head--picked,
+.map-head--proposed,
+.map-head--gone {
+  fill: context-stroke;
+}
+
 /* What a wire is for, as one chip at the midpoint of its own curve. */
 .map-sentence {
   position: absolute;

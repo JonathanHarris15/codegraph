@@ -34,11 +34,13 @@ export const CanvasMenu = ({
     const w = menu.offsetWidth
     const h = menu.offsetHeight
     const inside = room.getBoundingClientRect()
-    // The window is the real edge: the menu's parent may be smaller than it.
-    const right = Math.min(room.clientWidth, window.innerWidth - inside.left) - EDGE
-    const bottom = Math.min(room.clientHeight, window.innerHeight - inside.top) - EDGE
+    // The window is the edge that matters: the menu's parent may be only as
+    // big as the button that opened it.
+    const right = window.innerWidth - inside.left - EDGE
+    const bottom = window.innerHeight - inside.top - EDGE
     const x = at.x + w > right ? Math.max(EDGE - inside.left, right - w) : at.x
-    const y = at.y + h > bottom ? Math.max(EDGE - inside.top, bottom - h) : at.y
+    // Below where it was asked for, unless there is no room there; then above.
+    const y = at.y + h > bottom ? Math.max(EDGE - inside.top, Math.min(at.y - h, bottom - h)) : at.y
     setSpot({ x, y })
   }, [at.x, at.y])
 
