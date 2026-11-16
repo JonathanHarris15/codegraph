@@ -342,6 +342,7 @@ export const SketchEditor = ({
   return (
     <div ref={area} className="sketch-area">
       <MapCanvas
+        {...(picked && panel ? { cover: panelAt === null ? { right: 348 } : { left: 348 } } : {})}
         root={sketch.root}
         path={path}
         onPath={onPath}

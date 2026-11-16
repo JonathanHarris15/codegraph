@@ -970,6 +970,7 @@ export const AnnotationBar = ({
           type="button"
           className={`map-anno-swatch map-anno-fill--${color || 'none'}${one?.a.color === color ? ' map-anno-swatch--on' : ''}`}
           aria-label={`Colour: ${COLOR_NAMES[color]}`}
+          aria-pressed={picked.every((d) => (d.a.color ?? '') === color)}
           title={COLOR_NAMES[color]}
           onClick={() => {
             let next = layers

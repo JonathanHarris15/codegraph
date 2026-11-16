@@ -13,16 +13,16 @@ import {
   type SetStateAction,
 } from 'react'
 import { sentenceOf } from '../../modules/wording/index.js'
-import { ArrowLeft, Copy as CopyIcon, Trash2 } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { roomKey } from '../../modules/arrangements/schema.js'
 import type { Layer } from '../../modules/annotations/index.js'
 import type { CardType } from '../../modules/card-types/schema.js'
 import type { CardLook } from '../../modules/sketches/schema.js'
-import { addLayer, changeAnnotation, changeLayer, duplicateAnnotations, layerOf, placeAnnotation, removeAnnotations, removeLayer } from './annotation-edits.js'
-import { AnnotationLayer, AnnotationPlacer, aroundBox, caughtBy, drawnAmong, drawnOn } from './annotation-layer.js'
+import { addLayer, changeLayer, layerOf, placeAnnotation, removeLayer } from './annotation-edits.js'
+import { AnnotationBar, AnnotationLayer, AnnotationPlacer, aroundBox, caughtBy, drawnAmong, drawnOn } from './annotation-layer.js'
 import type { Seen } from '../../features/say-looking.js'
 import { AnnotationLibrary, LayersPanel } from './annotation-library.js'
-import { COLOR_NAMES, COLORS, shapeOf } from './annotation-shapes.js'
+import { shapeOf } from './annotation-shapes.js'
 import { IconPick } from './card-look-editor.js'
 import { BLANK_LOOK, CARD_SHAPES, drawnShape, lookOf } from './card-looks.js'
 import { meetOutline, textAreaOf } from './shape-outline.js'
@@ -219,6 +219,8 @@ export type Annotating = {
   layers: Layer[]
   onChange: (layers: Layer[], step?: string) => void
   frozen?: boolean
+  /** Undo and redo for annotations where nothing else keeps a history: the map. */
+  history?: { canUndo: boolean; canRedo: boolean; onUndo: () => void; onRedo: () => void }
 }
 
 /** Who else is on this board, and how this member's hands reach them. */
@@ -2702,16 +2704,18 @@ export const MapCanvas = ({
         tool={annoArmed === 'sticky' ? 'note' : tool}
         sketch={Boolean(drawing)}
         palette={palette}
-        canUndo={drawing?.canUndo ?? false}
-        canRedo={drawing?.canRedo ?? false}
+        shape={annoArmed}
+        onShape={armShape}
+        canUndo={drawing?.canUndo ?? annotating?.history?.canUndo ?? false}
+        canRedo={drawing?.canRedo ?? annotating?.history?.canRedo ?? false}
         onTool={(next) => {
           // A note is a sticky note wherever annotations can be drawn.
           if (next === 'note' && annotating) armShape('sticky')
           else pickTool(next)
         }}
         onPalette={() => openPalette(!palette)}
-        onUndo={() => drawing?.onUndo()}
-        onRedo={() => drawing?.onRedo()}
+        onUndo={() => (drawing ? drawing.onUndo() : annotating?.history?.onUndo())}
+        onRedo={() => (drawing ? drawing.onRedo() : annotating?.history?.onRedo())}
         onStartSketch={() => onStartSketch?.()}
         annotating={Boolean(annotating && !annotating.frozen)}
         annotations={annoOpen}
@@ -3445,67 +3449,22 @@ export const MapCanvas = ({
           const left = Math.min(...onBar.map((d) => d.box.x))
           const right = Math.max(...onBar.map((d) => d.box.x + d.box.w))
           const at = { x: view.x + ((left + right) / 2) * view.k, y: view.y + top * view.k - 12 }
-          const one = onBar.length === 1 ? onBar[0]! : null
           return (
-            <div
-              className="map-context map-anno-bar"
-              style={{ left: Math.max(160, at.x), top: Math.max(44, at.y) }}
-              role="toolbar"
-              aria-label="What to do with the annotation"
-              onPointerDown={(event) => event.stopPropagation()}
-            >
-              {COLORS.map((color) => (
-                <button
-                  key={color || 'none'}
-                  type="button"
-                  className={`map-anno-swatch map-anno-fill--${color || 'none'}${one?.a.color === color ? ' map-anno-swatch--on' : ''}`}
-                  aria-label={`Colour: ${COLOR_NAMES[color]}`}
-                  aria-pressed={onBar.every((d) => (d.a.color ?? '') === color)}
-                  title={COLOR_NAMES[color]}
-                  onClick={() => {
-                    let next = annotating.layers
-                    for (const d of onBar) next = changeAnnotation(next, d.a.id, { color })
-                    annotating.onChange(next)
-                  }}
-                />
-              ))}
-              <span className="map-context-rule" />
-              {one ? (
-                <span className="map-anno-bar-layer" title="The layer it is on">
-                  {one.layer.name}
-                </span>
-              ) : null}
-              <button
-                type="button"
-                className="map-act"
-                aria-label="Duplicate (Ctrl+D)"
-                title="Duplicate (Ctrl+D)"
-                onClick={() => {
-                  const [next, made] = duplicateAnnotations(annotating.layers, annoPicked)
-                  annotating.onChange(next)
-                  setAnnoPicked(made)
-                }}
-              >
-                <CopyIcon size={15} />
-              </button>
-              <button
-                type="button"
-                className="map-act map-act--danger"
-                aria-label="Delete (Delete)"
-                title="Delete (Delete)"
-                onClick={() => {
-                  annotating.onChange(removeAnnotations(annotating.layers, annoPicked))
-                  setAnnoPicked([])
-                }}
-              >
-                <Trash2 size={15} />
-              </button>
-            </div>
+            <AnnotationBar
+              at={at}
+              picked={onBar}
+              layers={annotating.layers}
+              onChange={(next) => annotating.onChange(next)}
+              onPicked={setAnnoPicked}
+              onLayers={() => setLayersOpen(true)}
+            />
           )
         })() : null}
 
         {annotating && layersOpen ? (
           <LayersPanel
+            wires={wireStyle}
+            onWires={setWireStyle}
             layers={annotating.layers}
             active={layerFor(annotating.layers)[1]}
             onActive={setActiveLayer}
@@ -3650,8 +3609,6 @@ export const MapCanvas = ({
           onOut={() => zoomBy(0.8)}
           onFit={fit}
           onUp={backOut}
-          wires={wireStyle}
-          onWires={setWireStyle}
         />
         <Overview
           of={focus.name || 'This level'}

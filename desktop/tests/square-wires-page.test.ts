@@ -85,18 +85,29 @@ afterAll(async () => {
   closeYard(yard)
 })
 
+/** The board's own menu, opened with a right-click on empty board. */
+const boardMenu = async () => {
+  const board = (await page.locator('.map-frame-area').boundingBox())!
+  await page.mouse.click(board.x + board.width - 120, board.y + 80, { button: 'right' })
+  const menu = page.getByRole('menu', { name: 'What to do here' })
+  await menu.waitFor({ timeout: PATIENCE })
+  return menu
+}
+
 describe('choosing how wires are drawn', () => {
   it('draws curved wires until told otherwise', async () => {
-    // The choice waits behind one button by the zoom, not beside it.
-    await page.getByRole('button', { name: 'How wires are drawn' }).click()
-    expect(await page.getByRole('menuitemradio', { name: 'Curved wires' }).getAttribute('aria-checked')).toBe('true')
+    // The choice is kept off the zoom bar: it is on the board's right-click menu.
+    const menu = await boardMenu()
+    expect(await menu.getByRole('menuitem', { name: /^Draw wires at right angles/ }).count()).toBe(1)
+    await page.keyboard.press('Escape')
     expect((await wirePaths()).every((d) => d.includes('C'))).toBe(true)
     await picture('square-1-curved')
   })
 
   it('draws every wire in straight pieces and right angles once asked', async () => {
-    await page.getByRole('menuitemradio', { name: 'Right-angle wires' }).click()
-    expect(await page.getByRole('menu', { name: 'How wires are drawn' }).count()).toBe(0)
+    const menu = await boardMenu()
+    await menu.getByRole('menuitem', { name: /^Draw wires at right angles/ }).click()
+    expect(await page.getByRole('menu', { name: 'What to do here' }).count()).toBe(0)
     await settle()
     const paths = await wirePaths()
     expect(paths.length).toBe(2)

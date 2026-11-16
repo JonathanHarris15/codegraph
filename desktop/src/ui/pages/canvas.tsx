@@ -245,8 +245,21 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
     [projectId, load],
   )
 
-  // Undo and redo for the map's annotations, while the map is what is shown.
+  // Undo and redo for the map's annotations, while the map is what is shown:
+  // from the keys, and from the rail.
   const onMap = !sketch
+  const stepLayers = useRef<(back: boolean) => boolean>(() => false)
+  stepLayers.current = (back: boolean): boolean => {
+    const from = back ? layersPast : layersFuture
+    const to = back ? layersFuture : layersPast
+    const step = from.current.at(-1)
+    if (!step) return false
+    from.current = from.current.slice(0, -1)
+    to.current = [...to.current, step]
+    layersStep.current = { step: '', at: 0 }
+    keepLayers(back ? undoStep(step.before, step.after, layersNow.current) : undoStep(step.after, step.before, layersNow.current))
+    return true
+  }
   useEffect(() => {
     if (!onMap) return
     const keys = (event: KeyboardEvent): void => {
@@ -257,15 +270,7 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
       const back = key === 'z' && !event.shiftKey
       const forward = key === 'y' || (key === 'z' && event.shiftKey)
       if (!back && !forward) return
-      const from = back ? layersPast : layersFuture
-      const to = back ? layersFuture : layersPast
-      const step = from.current.at(-1)
-      if (!step) return
-      event.preventDefault()
-      from.current = from.current.slice(0, -1)
-      to.current = [...to.current, step]
-      layersStep.current = { step: '', at: 0 }
-      keepLayers(back ? undoStep(step.before, step.after, layersNow.current) : undoStep(step.after, step.before, layersNow.current))
+      if (stepLayers.current(back)) event.preventDefault()
     }
     window.addEventListener('keydown', keys)
     return () => window.removeEventListener('keydown', keys)
@@ -661,11 +666,8 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
     : null
 
   // The proposal's list covers the right of the board, so the map centres
-  // clear of it. `cover` is new to MapCanvas: until it has it, nothing is
-  // passed, and this still compiles.
-  type CanvasProps = Parameters<typeof MapCanvas>[0]
-  type CoverOnly = { [K in Extract<keyof CanvasProps, 'cover'>]?: CanvasProps[K] }
-  const proposalCover = (!sketch && showProposal && progress ? { cover: { right: PROPOSAL_PANEL_COVERS + 16 } } : {}) as unknown as CoverOnly
+  // clear of it.
+  const proposalCover = !sketch && showProposal && progress ? { cover: { right: PROPOSAL_PANEL_COVERS + 16 } } : {}
 
   const moreItems: MenuItem[] = online
     ? [
@@ -882,7 +884,17 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
             path={path}
             onPath={setPath}
             rearranging={canMoveHere ? { spots, onMove: rearrange, onForget: forget } : { spots, onMove: () => undefined, onForget: () => undefined, frozen: true }}
-            annotating={{ layers: mapLayers, onChange: changeLayers, ...(canMoveHere ? {} : { frozen: true }) }}
+            annotating={{
+              layers: mapLayers,
+              onChange: changeLayers,
+              ...(canMoveHere ? {} : { frozen: true }),
+              history: {
+                canUndo: layersPast.current.length > 0,
+                canRedo: layersFuture.current.length > 0,
+                onUndo: () => void stepLayers.current(true),
+                onRedo: () => void stepLayers.current(false),
+              },
+            }}
             {...(together ? { together } : {})}
             cardExtra={(card) => {
               const at = card.level === 'system' ? shown.systems.find((s) => s.id === card.id) : undefined
