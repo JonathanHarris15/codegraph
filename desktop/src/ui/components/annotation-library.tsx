@@ -67,7 +67,7 @@ export const AnnotationLibrary = ({
   })).filter((g) => g.shapes.length)
 
   return (
-    <aside className="map-palette map-anno-library" aria-label="Annotations">
+    <aside className="map-palette map-anno-library" aria-label="Shapes">
       <svg width="0" height="0" style={{ position: 'absolute' }}>
         <defs>
           <marker id="map-anno-icon-head" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
@@ -76,12 +76,12 @@ export const AnnotationLibrary = ({
         </defs>
       </svg>
       <div className="map-palette-head">
-        <span>Annotations</span>
-        <button type="button" className="map-palette-close" aria-label="Close the annotations" onClick={onClose}>
+        <span>Shapes</span>
+        <button type="button" className="map-palette-close" aria-label="Close the shapes" onClick={onClose}>
           <X size={14} />
         </button>
       </div>
-      <div className="map-palette-hint">Notes for people and agents, drawn over the diagram. They never change the code.</div>
+      <div className="map-palette-hint">Annotations for people and agents, drawn over the diagram. They never change the code.</div>
       <label className="map-anno-search">
         <Search size={14} aria-hidden="true" />
         <input className="ds-input" aria-label="Search shapes" placeholder="Search shapes" value={find} onChange={(e) => setFind(e.target.value)} />
