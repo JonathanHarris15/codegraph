@@ -1,4 +1,5 @@
 // codegraph: component context-bar
+import { Layers } from 'lucide-react'
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { Level } from '../../features/show-map.js'
 import type { CardLook } from '../../modules/sketches/schema.js'
@@ -54,34 +55,97 @@ const Act = ({
 type Box = { left: number; right: number; top: number; bottom: number }
 const overlaps = (a: Box, b: Box): boolean => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
 
-/** Where on the board the bar should hang under what is picked, or null to
- *  stay over it. It moves only when, over it, it would cover another card or
- *  note, and under it covers fewer and still fits. The board is read as it is
- *  drawn, so the bar needs to be told nothing more than where it goes. */
-const roomUnder = (bar: HTMLElement | null, at: { x: number; y: number }): number | null => {
+/** How far a bar keeps inside the board's edges. */
+const EDGE = 8
+
+type Placed = { top: number; under: boolean; dx: number }
+
+/** Where on the board a bar goes: over what is picked, or under it when over
+ *  it would cover another card, note or wire's words, or run off the top, and
+ *  under covers fewer and still fits. Either way it slides along so it never
+ *  runs off a side. The board is read as it is drawn, so the bar needs to be
+ *  told nothing more than where it would go. */
+const placeBar = (bar: HTMLElement | null, at: { x: number; y: number }, below: boolean): Placed | null => {
   const board = bar?.offsetParent
   if (!bar || !(board instanceof HTMLElement)) return null
   const origin = board.getBoundingClientRect()
   const w = bar.offsetWidth
   const h = bar.offsetHeight
+  const half = w / 2
+  const room = board.clientWidth
+  const x = w > room - 2 * EDGE ? EDGE + half : Math.min(room - EDGE - half, Math.max(EDGE + half, at.x))
+  const dx = x - at.x
+  if (below) return { top: at.y, under: true, dx }
   const placed = (top: number): Box => ({
-    left: origin.left + at.x - w / 2,
-    right: origin.left + at.x + w / 2,
+    left: origin.left + x - half,
+    right: origin.left + x + half,
     top: origin.top + top,
     bottom: origin.top + top + h,
   })
   const boxes = (find: string): DOMRect[] => [...board.querySelectorAll(find)].map((one) => one.getBoundingClientRect())
-  const picked = boxes('.map-card--selected, .map-sentence--selected')
-  if (!picked.length) return null
   const others = boxes(
-    '.map-card:not(.map-card--selected):not(.map-frame):not(.map-up), .map-note:not(.map-card--selected), .map-anno:not(.map-anno--behind):not(.map-anno--picked)',
+    '.map-card:not(.map-card--selected):not(.map-frame):not(.map-up), .map-note:not(.map-card--selected), .map-sentence:not(.map-sentence--selected), .map-anno:not(.map-anno--behind):not(.map-anno--picked)',
   )
   const covered = (box: Box): number => others.filter((other) => overlaps(box, other)).length
-  const over = covered(placed(at.y - h))
-  if (over === 0) return null
+  const over = at.y - h < EDGE ? Infinity : covered(placed(at.y - h))
+  const stay = { top: Math.max(at.y, EDGE + h), under: false, dx }
+  if (over === 0) return stay
+  const picked = boxes('.map-card--selected, .map-sentence--selected, .map-anno--picked')
+  if (!picked.length) return stay
   const top = Math.max(...picked.map((one) => one.bottom)) - origin.top + 12
-  return top + h < origin.height && covered(placed(top)) < over ? top : null
+  return top + h < origin.height - EDGE && covered(placed(top)) < over ? { top, under: true, dx } : stay
 }
+
+/** A bar floating by what is picked, kept on the board and clear of what is
+ *  round it. `at` is where its bottom middle sits, or its top middle when it
+ *  hangs below. */
+export const FloatingBar = ({
+  at,
+  below = false,
+  label,
+  className,
+  children,
+}: {
+  at: { x: number; y: number }
+  below?: boolean
+  label: string
+  className?: string
+  children: ReactNode
+}) => {
+  const bar = useRef<HTMLDivElement>(null)
+  const [place, setPlace] = useState<Placed | null>(null)
+  useLayoutEffect(() => {
+    setPlace(placeBar(bar.current, at, below))
+  }, [at.x, at.y, below])
+  const under = place?.under ?? below
+  return (
+    <div
+      ref={bar}
+      className={`map-context${under ? ' map-context--below' : ''}${className ? ` ${className}` : ''}`}
+      style={{ left: at.x + (place?.dx ?? 0), top: place?.top ?? at.y }}
+      role="toolbar"
+      aria-label={label}
+      onPointerDown={(event) => event.stopPropagation()}
+    >
+      {children}
+    </div>
+  )
+}
+
+/** The layer a picked annotation is on, as a control that opens the layers. */
+export const LayerChip = ({ name, onLayers }: { name: string; onLayers?: () => void }) =>
+  onLayers ? (
+    <button type="button" className="map-anno-bar-layer" aria-label={`Layer: ${name}, show the layers`} title="The layer it is on" onClick={onLayers}>
+      <Layers size={13} aria-hidden="true" />
+      <span>{name}</span>
+      <Glyph of="down" size={12} />
+    </button>
+  ) : (
+    <span className="map-anno-bar-layer" title="The layer it is on">
+      <Layers size={13} aria-hidden="true" />
+      <span>{name}</span>
+    </span>
+  )
 
 /** The few things a person most often does to what they picked, floating
  *  just over it: change its kind, write its words, draw inside it, line a
@@ -123,13 +187,6 @@ export const ContextBar = ({
   removeName?: string
 }) => {
   const [kinds, setKinds] = useState(false)
-  const bar = useRef<HTMLDivElement>(null)
-  /** Where the bar hangs instead, under what is picked, when over it the bar
-   *  would cover another card or note. */
-  const [under, setUnder] = useState<number | null>(null)
-  useLayoutEffect(() => {
-    setUnder(below ? null : roomUnder(bar.current, at))
-  }, [at.x, at.y, below])
   const choices: CardChoice[] =
     picking.what === 'card'
       ? cardChoices
@@ -138,14 +195,7 @@ export const ContextBar = ({
         : []
 
   return (
-    <div
-      ref={bar}
-      className={below || under !== null ? 'map-context map-context--below' : 'map-context'}
-      style={{ left: at.x, top: under ?? at.y }}
-      role="toolbar"
-      aria-label="What to do with what is picked"
-      onPointerDown={(event) => event.stopPropagation()}
-    >
+    <FloatingBar at={at} below={below} label="What to do with what is picked">
       {(picking.what === 'card' || picking.what === 'wire') && !locked ? (
         <span className="map-context-kind">
           <button
@@ -245,6 +295,6 @@ export const ContextBar = ({
         name={`${removeName} (Delete)`}
         onAct={() => onRemove(picking.what === 'many' ? picking.ids : [picking.id])}
       />
-    </div>
+    </FloatingBar>
   )
 }

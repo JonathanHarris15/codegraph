@@ -283,7 +283,7 @@ describe('hubs on an open card’s border', () => {
 
 describe('annotations', () => {
   it('keeps a diamond’s words inside it, cut short, and shows more as it grows', async () => {
-    await page.getByRole('button', { name: 'Annotate' }).click()
+    await page.getByRole('button', { name: 'Shapes' }).click()
     await page.getByRole('button', { name: 'Add diamond' }).click()
     const open = await boxOf(openBox('Notes app'))
     await page.mouse.click(open.x + open.width * 0.5, open.y + open.height * 0.8)
