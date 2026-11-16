@@ -1211,7 +1211,9 @@ export const MapCanvas = ({
     if (!coverNow.current.left && !coverNow.current.right) {
       const back = slidFor.current
       slidFor.current = 0
-      if (back) glide({ ...seen.current, x: seen.current.x - back })
+      // A moment later, once whatever closed the panel (a card taken off,
+      // say) has settled on the board.
+      if (back) setTimeout(() => glide({ ...seen.current, x: seen.current.x - back }), STEP_MS)
       return
     }
     const picked = selected.filter((id) => where.has(id))
@@ -2441,7 +2443,12 @@ export const MapCanvas = ({
       // A right-click on the board inside the level in hand opens its menu: on a
       // map that is only shown, only on the board itself, where it says how
       // to look rather than what to change.
-      if (!now.moved && now.button === 2 && levelAt(at) === workAt && (canMove || !cardUnder(at))) openMenu(event, at)
+      // Read where it was pressed, as the board was then: a panel coming out
+      // for what the press picked may have slid the board since.
+      const rect = frame.current!.getBoundingClientRect()
+      const pressed = { x: (now.x - rect.left - now.vx) / seen.current.k, y: (now.y - rect.top - now.vy) / seen.current.k }
+      if (!now.moved && now.button === 2 && levelAt(pressed) === workAt && (canMove || !cardUnder(pressed)))
+        openMenu({ clientX: now.x, clientY: now.y }, pressed)
       // A click on the empty board, not a drag, lets go of what is picked.
       else if (!now.moved && now.button === 0 && canMove && tool === 'pick') select([])
       return
