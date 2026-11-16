@@ -13,18 +13,23 @@ const LEVEL_WORD: Record<Level, string> = {
 /** Where you are. Each step goes back to it; the last one is where you are.
  *  The level word under each name teaches the five levels, which a person
  *  needs taught once, and answers why a project and its software system can
- *  carry the same name. A store says it is one: it is not a component.
+ *  carry the same name. A store says it is one: it is not a component. A
+ *  page open over the map, like the design system, is a last step of its
+ *  own, so going back up the trail leaves it.
  */
 export const Trail = ({
   steps,
   onGo,
+  then = '',
 }: {
   steps: { id: string; name: string; level: Level; kind?: string }[]
   onGo: (i: number) => void
+  /** A page open over the last step, named as one more step. */
+  then?: string
 }) => (
   <nav className="map-trail" aria-label="Where you are">
     {steps.map((step, i) => {
-      const here = i === steps.length - 1
+      const here = !then && i === steps.length - 1
       return (
         <span key={step.id} className="map-trail-step">
           {i > 0 ? (
@@ -44,5 +49,16 @@ export const Trail = ({
         </span>
       )
     })}
+    {then ? (
+      <span className="map-trail-step">
+        <span className="map-trail-gap" aria-hidden="true">
+          ›
+        </span>
+        <span className="map-trail-here map-trail-then" aria-current="page">
+          <span>{then}</span>
+          <span className="map-trail-level">open</span>
+        </span>
+      </span>
+    ) : null}
   </nav>
 )

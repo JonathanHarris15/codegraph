@@ -74,7 +74,7 @@ beforeAll(async () => {
   await page.evaluate(() => window.localStorage.setItem('codegraph-panel', 'no'))
   await page.getByRole('button', { name: 'Open Notes', exact: true }).dblclick()
   await page.getByRole('button', { name: 'Open notes' }).waitFor({ timeout: PATIENCE })
-  await page.getByRole('button', { name: /^Sketches/ }).click()
+  await page.getByRole('button', { name: /^Project sketches/ }).click()
   await page.getByRole('button', { name: /^Wires/ }).click()
   await card('Reader').waitFor({ timeout: PATIENCE })
   await settle()

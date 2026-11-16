@@ -110,7 +110,7 @@ export const ProjectCard = ({
     {onMembers || onPutOnline ? (
       <div className="ds-row project-card-people">
         {onMembers ? (
-          <button type="button" className="map-notice" onClick={onMembers} aria-label={`Members of ${project.name}`}>
+          <button type="button" className="ds-badge project-card-members" onClick={onMembers} aria-label={`Members of ${project.name}`}>
             {project.members.length === 1 ? 'Just you' : `${project.members.length} members`}
             {project.role && project.role !== 'owner' ? ` · you are a ${project.role}` : ''}
           </button>

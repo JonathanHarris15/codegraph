@@ -187,7 +187,7 @@ describe('picking with Shift on a sketch', () => {
   it('reaches an annotation out around the open card, and only with Shift', async () => {
     await page.getByRole('button', { name: 'Back out of web' }).click()
     await page.waitForTimeout(900)
-    await page.getByRole('button', { name: /^Sketches/ }).click()
+    await page.getByRole('button', { name: /^Project sketches/ }).click()
     await page.getByRole('button', { name: 'New sketch' }).click()
     await page.getByRole('button', { name: /^From the map/ }).click()
     const world = page.locator('.map-world')

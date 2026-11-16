@@ -8,6 +8,17 @@ import { Glyph } from './kind-glyph.js'
 
 const when = (iso: string): string => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** Where a sketch came from, said short: "Copied from main · a1b2c3d · 15 Nov"
+ *  for a snapshot of the map, '' for a blank one. */
+export const fromWords = (from: string): string => {
+  const snapshot = from.match(/^A snapshot of the map(?: at (.+))?, (\d{4})-(\d{2})-(\d{2})$/)
+  if (!snapshot) return from
+  const [, where, , month, day] = snapshot
+  return `Copied from ${where || 'the map'} · ${Number(day)} ${MONTHS[Number(month) - 1] ?? ''}`.trim()
+}
+
 /** A project's sketches, in a drawer that slides in from the side: open
  *  one, or start one from the quiet button under the list, blank or from a
  *  snapshot of the map. Throwing one away is behind a menu and then asked
@@ -15,6 +26,7 @@ const when = (iso: string): string => new Date(iso).toLocaleString(undefined, { 
  *  back. */
 export const SketchLibrary = ({
   library,
+  projectName = '',
   shown,
   sketches,
   open,
@@ -29,6 +41,8 @@ export const SketchLibrary = ({
 }: {
   /** The project whose sketches these are. */
   library: string
+  /** The project's name, which the drawer is titled with. */
+  projectName?: string
   /** Whether the drawer is out; it stays put while away, so it can slide. */
   shown: boolean
   sketches: SketchListed[]
@@ -66,13 +80,13 @@ export const SketchLibrary = ({
   return (
     <aside
       className={shown ? 'sketch-library sketch-library--out' : 'sketch-library'}
-      aria-label="Sketches"
+      aria-label={projectName ? `Sketches in ${projectName}` : 'Sketches'}
       aria-hidden={!shown}
       // Away, nothing in it can be reached by Tab; React 18 knows no inert.
       {...(shown ? {} : { inert: '' })}
     >
       <div className="ds-row" style={{ justifyContent: 'space-between' }}>
-        <h2 style={{ fontSize: 15, lineHeight: '20px' }}>Sketches</h2>
+        <h2 style={{ fontSize: 'var(--text-lg)', lineHeight: '20px' }}>{projectName ? `Sketches in ${projectName}` : 'Sketches'}</h2>
         <Button look="bare" onClick={onClose}>
           Close
         </Button>
@@ -98,7 +112,7 @@ export const SketchLibrary = ({
                 <span className="sketch-item-name">{s.name}</span>
                 <span className="ds-hint">
                   {s.id === open ? 'Open now · ' : ''}
-                  {s.from || 'Blank'} · changed {when(s.updatedAt)}
+                  {s.from ? fromWords(s.from) : 'Blank'} · changed {when(s.updatedAt)}
                 </span>
               </button>
               <span className="sketch-menu">

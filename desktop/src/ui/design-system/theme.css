@@ -4068,15 +4068,136 @@ kbd {
   cursor: default;
 }
 
-/* Where a sketch started, in the slot the branch takes on the map. */
-.map-from-chip {
+/* Where a sketch started, in the slot the branch takes on the map: words, not
+   a thing to press. */
+.map-from {
   flex: none;
-  padding: 4px 10px;
-  border: var(--stroke-edge) dashed var(--line-edge);
-  border-radius: var(--radius-md);
+  color: var(--ink-faint);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  cursor: default;
+}
+
+/* A sketch's name is its title, written in place: no box until it is
+   pointed at or being typed in. */
+.map-bar .map-sketch-name {
+  min-width: 0;
+  padding: 3px 6px;
+  border: var(--stroke-edge) solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-000);
+  font: inherit;
+  font-size: var(--text-md);
+  font-weight: 600;
+  line-height: 20px;
+  text-overflow: ellipsis;
+}
+
+.map-bar .map-sketch-name:hover:not(:read-only),
+.map-bar .map-sketch-name:focus {
+  background: var(--surface-sunken);
+  border-color: var(--line-hair);
+  outline: none;
+}
+
+.map-bar .map-sketch-name:focus-visible {
+  border-color: var(--accent);
+}
+
+/* The board itself reads as a sketch: a thin edge in the accent, laid over
+   the board and under the panels beside it. */
+.map-page--sketch .map-body::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  border: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-top: 0;
+  pointer-events: none;
+}
+
+/* The project's sketches, the same button on the map and on a sketch. */
+.map-sketches {
+  gap: 6px;
+}
+
+.map-sketching-count {
+  min-width: 18px;
+  text-align: center;
+  line-height: 18px;
+}
+
+/* A bar button whose page is open over the map. */
+.map-bar-toggle[aria-pressed='true'],
+.map-bar-toggle[aria-pressed='true']:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+  color: var(--ink-000);
+}
+
+/* The branch, and the button that brings it into the folder, as one. */
+.map-branch-slot {
+  display: inline-flex;
+  align-items: stretch;
+  flex: none;
+}
+
+.map-branch-slot--joined .map-branch {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.map-branch-slot--joined > .ds-button {
+  margin-left: calc(var(--stroke-edge) * -1);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  font-size: var(--text-sm);
+}
+
+.map-branch-slot--quiet {
+  align-items: center;
+  color: var(--ink-faint);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.map-branch-note--away {
+  color: var(--ink-soft);
+}
+
+.map-branch-note--away::before {
+  content: '· ';
+  color: var(--ink-faint);
+}
+
+/* Handed over: quiet, and beating, until the agent comes back with something. */
+.hand-agent-waiting {
+  gap: var(--space-2);
+  color: var(--ink-soft);
+}
+
+.hand-agent-waiting .map-agent-dot {
+  color: var(--accent);
+}
+
+/* An agent here, shown like a member who is here: face, then what it does. */
+.together-here {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--ink-soft);
   font-size: var(--text-sm);
   white-space: nowrap;
+  cursor: default;
+}
+
+.together-here .together-face {
+  cursor: default;
+}
+
+/* The design system, open over the map, as the trail's last step. */
+.map-trail-then {
   cursor: default;
 }
 
@@ -4197,7 +4318,41 @@ kbd {
 .map-proposal-item:hover:not(:disabled),
 .map-proposal-item:focus-visible {
   background: var(--surface-sunken);
-  outline: none;
+}
+
+.map-proposal-item:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.map-proposal-kind {
+  color: var(--ink-faint);
+}
+
+.map-proposal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.map-proposal-title {
+  font-size: var(--text-lg);
+  line-height: 20px;
+  font-weight: 600;
+}
+
+/* Who is on a project, as a pill that opens the list. */
+.project-card-members {
+  background: none;
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.project-card-members:hover {
+  background: var(--surface-sunken);
+  color: var(--ink-000);
 }
 
 .map-proposal-item:disabled {
@@ -6093,8 +6248,8 @@ button.map-restyle:hover {
 }
 
 .settings-topic[aria-current='true'] {
-  background: var(--surface-sunken);
-  border-color: var(--line-edge);
+  background: var(--accent-wash);
+  border-color: var(--accent);
 }
 
 .settings-topic-about {
@@ -6239,9 +6394,11 @@ button.map-restyle:hover {
   border-color: var(--line-edge);
 }
 
+/* The picked one, in the accent, as anything picked is. */
 .design-token[aria-pressed='true'] {
-  border-color: var(--pick-ring);
-  box-shadow: 0 0 0 1px var(--pick-ring);
+  border-color: var(--accent);
+  background: var(--accent-wash);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
 .design-token:focus-visible {
@@ -6596,6 +6753,51 @@ button.map-restyle:hover {
 
 .ui-block-state {
   margin: 0;
+}
+
+/* ---- design pass: D, the design page ----------------------------------- */
+
+/* Bigger tiles for UI blocks: a picture of a piece of screen needs room. */
+.design-tiles.ui-block-tiles {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-4);
+}
+
+.ui-block-tiles .ui-block-shot {
+  height: 150px;
+}
+
+/* A folder opens and shuts by the same chevron as the rest of the app. */
+.ui-block-folder > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  list-style: none;
+}
+
+.ui-block-folder > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ui-block-folder-chevron {
+  flex: none;
+  color: var(--ink-faint);
+  transition: transform 120ms ease;
+}
+
+.ui-block-folder:not([open]) > summary .ui-block-folder-chevron {
+  transform: rotate(-90deg);
+}
+
+/* "See it live" and "Back to the pictures" are buttons, not bars. */
+.design-picked > .ds-button {
+  align-self: flex-start;
+}
+
+/* Closed by the same X, top right, as every other panel. */
+.design-close {
+  flex: none;
+  align-self: flex-start;
 }
 
 /* ---- a design page with nothing in it yet says how to start ------------- */

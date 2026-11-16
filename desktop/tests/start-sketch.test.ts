@@ -42,4 +42,13 @@ describe('starting a sketch', () => {
     expect(web?.wires.every((w) => w.id.length > 0)).toBe(true)
     expect(web?.children.every((c) => c.mockup === '' && c.shot === '' && Array.isArray(c.notes))).toBe(true)
   })
+
+  it('says the branch and commit a snapshot was read at, when told the software system', async () => {
+    await linkSoftwareSystem(projectId, aMappedRepo(yard))
+    const shown = await showMap(projectId)
+    const system = shown.systems[0]!
+    const sketch = await startSketch(projectId, 'Search', shown.card, { systemId: system.id, point: system.point })
+
+    expect(sketch.from).toMatch(/^A snapshot of the map at (\S+ · )?[0-9a-f]{7}, \d{4}-\d{2}-\d{2}$/)
+  })
 })

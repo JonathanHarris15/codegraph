@@ -34,7 +34,7 @@ const spot = async (across: number, down: number): Promise<{ x: number; y: numbe
 /** The sketch drawer, out and ready; clicking the bar again would put it away. */
 const theDrawer = async (): Promise<Locator> => {
   const drawer = page.getByRole('complementary', { name: 'Sketches' })
-  if (!(await drawer.isVisible())) await page.getByRole('button', { name: /^Sketches/ }).first().click()
+  if (!(await drawer.isVisible())) await page.getByRole('button', { name: /^Project sketches/ }).first().click()
   await drawer.waitFor({ state: 'visible', timeout: PATIENCE })
   return drawer
 }
@@ -80,7 +80,7 @@ afterAll(async () => {
 
 describe('drawing a sketch in the real app', () => {
   it('starts a blank sketch, with the cards for its level beside the tools', async () => {
-    await page.getByRole('button', { name: /^Sketches/ }).click()
+    await page.getByRole('button', { name: /^Project sketches/ }).click()
     await page.getByRole('button', { name: 'New sketch' }).click()
     await page.getByRole('button', { name: /^Blank/ }).click()
     expect(await page.getByLabel('Sketch name').inputValue()).toBe('New sketch')
@@ -295,7 +295,7 @@ describe('drawing a sketch in the real app', () => {
     await page.getByRole('button', { name: '← Map' }).click()
     await page.getByRole('button', { name: 'Open notes' }).waitFor({ timeout: PATIENCE })
 
-    await page.getByRole('button', { name: /^Sketches/ }).click()
+    await page.getByRole('button', { name: /^Project sketches/ }).click()
     await page.getByRole('button', { name: /^Search/ }).click()
     expect(await shown(wire('notes calls search to find notes by their words'))).toContain('notes')
     expect(await shown(page.locator('.map-anno--sticky'))).toBe('Which search service?')
@@ -316,7 +316,7 @@ describe('drawing a sketch in the real app', () => {
     await page.getByRole('button', { name: '← Map' }).click()
     await page.getByRole('button', { name: 'Open notes' }).dblclick()
     await page.getByRole('button', { name: 'Open web' }).waitFor({ timeout: PATIENCE })
-    await page.getByRole('button', { name: /^Sketches/ }).click()
+    await page.getByRole('button', { name: /^Project sketches/ }).click()
     await page.getByRole('button', { name: 'New sketch' }).click()
     await page.getByRole('button', { name: /^From the map/ }).click()
 
@@ -326,7 +326,7 @@ describe('drawing a sketch in the real app', () => {
     const name = `main (sketch ${two(day.getDate())}/${two(day.getMonth() + 1)}/${two(day.getFullYear() % 100)})`
     expect(await page.getByLabel('Sketch name').inputValue()).toBe(name)
     // The bar says a sketch is being worked on, and the branch is put away.
-    expect(await shown(page.getByRole('button', { name: `Sketches: working on ${name}` }))).toContain('Sketches')
+    expect(await shown(page.locator('.map-sketching'))).toContain('Project sketches')
     expect(await shown(page.locator('.map-mode-chip'))).toBe('Sketch')
     expect(await page.getByRole('button', { name: /^Branch of/ }).count()).toBe(0)
     await card('web').click()
@@ -345,6 +345,17 @@ describe('drawing a sketch in the real app', () => {
     await page.waitForTimeout(300)
     await picture('sketch-3-hand-to-agent')
     await hand.click()
+    await pop.waitFor({ state: 'detached', timeout: PATIENCE })
+  })
+
+  it('leaves a trace once handed over: the button waits for the agent', async () => {
+    await page.getByRole('button', { name: 'Hand to your agent' }).click()
+    const pop = page.getByRole('dialog', { name: 'Hand to your agent' })
+    await pop.getByRole('button', { name: 'Copy' }).click()
+    const waiting = page.getByRole('button', { name: 'Waiting for your agent…' })
+    await waiting.waitFor({ timeout: PATIENCE })
+    await picture('sketch-4-handed-over')
+    await waiting.click()
     await pop.waitFor({ state: 'detached', timeout: PATIENCE })
   })
 

@@ -289,7 +289,7 @@ describe('the keys on a map', () => {
 
 describe('annotating a sketch', () => {
   it('moves a note kept beside a card when the card is moved', async () => {
-    await page.getByRole('button', { name: /^Sketches/ }).click()
+    await page.getByRole('button', { name: /^Project sketches/ }).click()
     await page.getByRole('button', { name: 'New sketch' }).click()
     await page.getByRole('button', { name: /^From the map/ }).click()
     const web = page.locator('.map-world').getByRole('button', { name: 'web', exact: true })

@@ -59,7 +59,7 @@ describe('stores on a sketch', () => {
     await open('Church')
     await open('church')
     await open('firestore')
-    await page.getByRole('button', { name: /^Sketches/ }).click()
+    await page.getByRole('button', { name: /^Project sketches/ }).click()
     await page.getByRole('button', { name: 'New sketch' }).click()
     await page.getByRole('button', { name: /^From the map/ }).click()
     await page.getByLabel('Sketch name').waitFor({ timeout: PATIENCE })

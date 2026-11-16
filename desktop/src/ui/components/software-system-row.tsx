@@ -99,6 +99,15 @@ export const SoftwareSystemRow = ({
         <span className="project-repo-hint">
           Add <span className="ds-mono">{project}</span> to the projects in its codegraph.config.json, or ask your agent to.
         </span>
+      ) : system.path && !system.setUp && system.setUpHere ? (
+        <span className="project-repo-hint">
+          Set up on {system.branch} only. Merge it into {system.mainLine || 'the main line'} and the repo is set up.
+        </span>
+      ) : system.path && !system.setUp ? (
+        <span className="project-repo-hint">
+          No <span className="ds-mono">codegraph.config.json</span> on {system.mainLine || 'the main line'} yet. Ask your
+          agent to set this repo up.
+        </span>
       ) : null}
       {system.path ? (
         <span className="project-repo-path" title={system.path}>

@@ -77,7 +77,8 @@ describe('watching a proposal get built', () => {
     await meter().click()
     const list = page.getByRole('complementary', { name: 'The proposal on this branch' })
     expect(await shown(list)).toContain('Let people search their notes')
-    expect(await shown(list)).toContain('web/page search')
+    expect(await shown(list)).toContain('search · page')
+    expect(await shown(list)).toContain('search asks find-notes')
     expect(await shown(meter())).toContain('0 of 5 built')
     // Nobody is building it yet, so it gives the words that set an agent going.
     expect(await shown(list.locator('code'))).toContain('build the proposal on the search branch of notes')
@@ -88,7 +89,7 @@ describe('watching a proposal get built', () => {
     await trail.getByRole('button').nth(1).click()
     await settle()
     expect(await shown(trail.locator('[aria-current="page"]'))).toContain('notes')
-    await list.getByRole('button', { name: 'To build web/page search', exact: true }).click()
+    await list.getByRole('button', { name: 'To build search · page', exact: true }).click()
     await settle()
     expect(await shown(trail.locator('[aria-current="page"]'))).toContain('web')
     expect(await onMap('web:page:search').count()).toBe(1)
