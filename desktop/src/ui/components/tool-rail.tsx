@@ -52,10 +52,6 @@ export const ToolRail = ({
   onUndo: () => void
   onRedo: () => void
   onStartSketch: () => void
-  /** No longer on the rail: the zoom bar fits, and the corner button shows
-   *  the overview. Kept so a caller that still hands them in compiles. */
-  onFit?: () => void
-  onOverview?: () => void
 }) => (
   <div className="map-rail" role="toolbar" aria-label="Tools">
     <div className="map-rail-group">

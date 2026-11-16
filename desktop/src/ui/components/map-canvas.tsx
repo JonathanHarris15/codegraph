@@ -2522,8 +2522,7 @@ export const MapCanvas = ({
         onUndo={() => drawing?.onUndo()}
         onRedo={() => drawing?.onRedo()}
         onStartSketch={() => onStartSketch?.()}
-        onFit={fit}
-        onOverview={() => setShutOverview(!shutOverview)}
+        annotating={Boolean(annotating && !annotating.frozen)}
         annotations={annoOpen}
         layers={layersOpen}
         onAnnotations={() => openAnnotations(!annoOpen)}
@@ -3428,6 +3427,7 @@ export const MapCanvas = ({
         <ZoomBar
           scale={view.k}
           atTop={trail.length < 2}
+          {...(trail.length >= 2 ? { parent: trail[trail.length - 2]!.name } : {})}
           onIn={() => zoomBy(1.25)}
           onOut={() => zoomBy(0.8)}
           onFit={fit}

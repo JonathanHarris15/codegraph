@@ -1241,6 +1241,8 @@ select.map-add-field-holds {
   content: '';
   position: absolute;
   inset: calc(-1 * var(--stroke-open));
+  height: auto;
+  background: none;
   border: var(--stroke-open) solid var(--k, var(--line-edge));
   border-radius: inherit;
   opacity: var(--up-fade, 0.34);
@@ -1248,7 +1250,7 @@ select.map-add-field-holds {
 }
 
 .map-card--open.map-up.map-card--wired::after {
-  border-color: var(--focus-ring);
+  border-color: var(--accent);
   opacity: 0.85;
 }
 
@@ -3517,7 +3519,7 @@ kbd {
 }
 
 .project-card-top:hover {
-  background: color-mix(in srgb, var(--accent, var(--focus-ring)) 5%, transparent);
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
 }
 
 .project-card-top:focus-visible {
@@ -3539,14 +3541,14 @@ kbd {
 
 .project-card-top:hover .project-card-open,
 .project-card-top:focus-visible .project-card-open {
-  color: var(--accent, var(--focus-ring));
+  color: var(--accent);
 }
 
 /* Where the repo sits on this computer: there, but the quietest line. */
 .project-repo-path {
   overflow: hidden;
   font-family: var(--font-mono);
-  font-size: var(--text-xs, 11px);
+  font-size: var(--text-xs);
   color: var(--ink-faint);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3554,7 +3556,7 @@ kbd {
 
 /* What to do about a badge, said under it. */
 .project-repo-hint {
-  font-size: var(--text-sm, 12px);
+  font-size: var(--text-sm);
   line-height: 16px;
   color: var(--ink-soft);
 }
@@ -4046,8 +4048,8 @@ kbd {
 
 /* A sketch is not the map: its bar is tinted, and says so before its name. */
 .map-page--sketch .map-bar {
-  background: var(--accent-wash, color-mix(in srgb, var(--focus-ring) 9%, var(--surface-100)));
-  border-bottom-color: var(--accent, var(--focus-ring));
+  background: var(--accent-wash);
+  border-bottom-color: var(--accent);
 }
 
 .map-mode-chip {
@@ -4058,9 +4060,9 @@ kbd {
   margin-right: calc(var(--space-2) * -1);
   padding: 2px 8px;
   border-radius: var(--radius-pill);
-  background: var(--accent, var(--focus-ring));
+  background: var(--accent);
   color: var(--ink-inverse);
-  font-size: var(--text-sm, 12px);
+  font-size: var(--text-sm);
   line-height: 18px;
   font-weight: 600;
   cursor: default;
@@ -4073,7 +4075,7 @@ kbd {
   border: var(--stroke-edge) dashed var(--line-edge);
   border-radius: var(--radius-md);
   color: var(--ink-soft);
-  font-size: var(--text-sm, 12px);
+  font-size: var(--text-sm);
   white-space: nowrap;
   cursor: default;
 }
@@ -4117,7 +4119,7 @@ kbd {
 }
 
 .hand-agent-title {
-  font-size: var(--text-lg, 15px);
+  font-size: var(--text-lg);
   line-height: 20px;
   font-weight: 600;
 }
@@ -4187,7 +4189,7 @@ kbd {
   background: none;
   color: var(--ink-000);
   font: inherit;
-  font-size: var(--text-md, 13px);
+  font-size: var(--text-md);
   text-align: left;
   cursor: pointer;
 }
