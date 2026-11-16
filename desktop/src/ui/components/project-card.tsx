@@ -1,5 +1,5 @@
 // codegraph: component project-card
-import { MoreHorizontal } from 'lucide-react'
+import { ArrowRight, MoreHorizontal } from 'lucide-react'
 import { useRef, useState } from 'react'
 import type { ProjectView } from '../../features/list-projects.js'
 import type { Point } from '../../modules/reader/index.js'
@@ -9,19 +9,15 @@ import { SoftwareSystemRow } from './software-system-row.js'
 const countWords = (many: number): string =>
   many === 0 ? 'no software systems yet' : many === 1 ? '1 software system' : `${many} software systems`
 
-/** One project: double-click anywhere on it, but its list of repos, to open
- *  its map. One click picks it instead, which is how a person sees that the
- *  click landed and learns the next one opens it. The repos fill its lower
- *  half, with a quiet last line to link another. Its ... holds what is done
- *  to the project itself. */
+/** One project: a click on its head opens its map, and the head says so.
+ *  The repos fill its lower half, with a quiet last line to link another.
+ *  Its ... holds what is done to the project itself. */
 export const ProjectCard = ({
   project,
   onLink,
   onOpen,
   onChoose,
   linking,
-  picked,
-  onPick,
   onPutOnline,
   onMembers,
   onRename,
@@ -33,9 +29,6 @@ export const ProjectCard = ({
   /** A person chose the branch one of its repos' maps opens on. */
   onChoose: (systemId: string, point: Point) => void
   linking: boolean
-  /** The card a person clicked last, and so the one a second click opens. */
-  picked: boolean
-  onPick: () => void
   /** Only on this computer, with an online side to go to. */
   onPutOnline?: () => void
   /** Online: who is on it. */
@@ -62,31 +55,28 @@ export const ProjectCard = ({
   }
 
   return (
-  <div
-    ref={card}
-    className={picked ? 'ds-card project-card project-card--picked' : 'ds-card project-card'}
-    onDoubleClick={() => onOpen(project.id)}
-  >
+  <div ref={card} className="ds-card project-card">
     <div
       className="project-card-top"
       role="button"
       tabIndex={0}
       aria-label={`Open ${project.name}`}
       data-to={`/projects/${project.id}`}
-      onMouseDown={(event) => {
-        // Kept from the page, which unpicks on a click anywhere else.
-        event.stopPropagation()
-        onPick()
-      }}
+      onClick={() => onOpen(project.id)}
       onKeyDown={(event) => {
-        if (event.key === 'Enter') onOpen(project.id)
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onOpen(project.id)
+        }
       }}
     >
       <div className="ds-card-name">{project.name}</div>
-      <div className="ds-hint">
-        {countWords(project.systems.length)} · repos call it <span className="ds-mono">{project.shortName}</span>
+      <div className="ds-hint" title="The name this project goes by in its repos' codegraph.config.json">
+        {countWords(project.systems.length)} · short name <span className="ds-mono">{project.shortName}</span>
       </div>
-      <span className="project-card-open">{picked ? 'Click again to open' : 'Double-click to open'}</span>
+      <span className="project-card-open" aria-hidden="true">
+        Open map <ArrowRight size={13} />
+      </span>
       {items.length ? (
         <button
           ref={more}
@@ -100,16 +90,14 @@ export const ProjectCard = ({
             if (menuAt) setMenuAt(null)
             else openMenu()
           }}
-          onMouseDown={(event) => event.stopPropagation()}
           onKeyDown={(event) => event.stopPropagation()}
-          onDoubleClick={(event) => event.stopPropagation()}
         >
           <MoreHorizontal size={16} />
         </button>
       ) : null}
     </div>
     {menuAt ? (
-      <div onDoubleClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+      <div onKeyDown={(event) => event.stopPropagation()}>
         <CanvasMenu
           at={menuAt}
           items={items}
@@ -120,7 +108,7 @@ export const ProjectCard = ({
     ) : null}
 
     {onMembers || onPutOnline ? (
-      <div className="ds-row project-card-people" onDoubleClick={(event) => event.stopPropagation()}>
+      <div className="ds-row project-card-people">
         {onMembers ? (
           <button type="button" className="map-notice" onClick={onMembers} aria-label={`Members of ${project.name}`}>
             {project.members.length === 1 ? 'Just you' : `${project.members.length} members`}
@@ -135,7 +123,7 @@ export const ProjectCard = ({
       </div>
     ) : null}
 
-    <div className="project-repos" aria-label={`Repos in ${project.name}`} onDoubleClick={(event) => event.stopPropagation()}>
+    <div className="project-repos" aria-label={`Repos in ${project.name}`}>
       {project.systems.map((system) => (
         <SoftwareSystemRow
           key={system.id}
@@ -145,11 +133,7 @@ export const ProjectCard = ({
         />
       ))}
       <button type="button" className="project-repos-link" onClick={() => onLink(project.id)} disabled={linking}>
-        {linking
-          ? 'Linking…'
-          : project.systems.length === 0
-            ? '+ Link a repo git already tracks'
-            : '+ Link a new repo'}
+        {linking ? 'Linking…' : '+ Link a repo'}
       </button>
     </div>
   </div>

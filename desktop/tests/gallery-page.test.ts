@@ -18,6 +18,7 @@ import { aComputer, aMappedRepo, closeYard, git, githubAnswers, openTheApp, open
 /** The gallery and a project as a viewer sees them, with a repo they can reach and
  *  one GitHub will not hand over; then signed out. */
 const PATIENCE = 15_000
+const pictures = process.env.CODEGRAPH_PICTURES ?? ''
 const ana: Member = { id: '1', login: 'ana', name: 'Ana', avatar: '' }
 const ben: Member = { id: '2', login: 'ben', name: 'Ben', avatar: '' }
 
@@ -60,6 +61,10 @@ beforeAll(async () => {
   await page.setViewportSize({ width: 1300, height: 800 })
 }, 90_000)
 
+const picture = async (name: string): Promise<void> => {
+  if (pictures) await page.screenshot({ path: join(pictures, `${name}.png`) })
+}
+
 afterAll(async () => {
   await app?.close()
   closeYard(yard)
@@ -69,6 +74,8 @@ describe('a viewer', () => {
   it('sees who they are, and what they are on the project', async () => {
     await page.getByText('Ben', { exact: true }).waitFor({ timeout: PATIENCE })
     expect(await page.getByRole('button', { name: 'Members of Notes' }).textContent()).toContain('you are a viewer')
+    await page.getByText('level with GitHub').first().waitFor({ timeout: PATIENCE }).catch(() => undefined)
+    await picture('gallery-projects')
   })
 
   it('sees who is on it, with no way to change that', async () => {
@@ -116,11 +123,11 @@ describe('a viewer', () => {
 
 describe('sketches outside any project', () => {
   it('has a library of a member\'s own, to draw in straight away', async () => {
-    await page.getByRole('button', { name: 'Sketches tab' }).click()
+    await page.getByRole('tab', { name: 'My sketches' }).click()
     await page.getByRole('button', { name: 'New sketch' }).first().click()
     await page.getByLabel('Sketch name').fill('My idea')
     await page.waitForTimeout(800)
-    await page.getByRole('button', { name: '← Sketches' }).click()
+    await page.getByRole('button', { name: '← My sketches' }).click()
     await page.getByRole('button', { name: 'Open My idea' }).waitFor({ timeout: PATIENCE })
     expect(await page.getByText('Only you').count()).toBe(1)
   })
@@ -130,10 +137,10 @@ describe('signed out', () => {
   it('shows no projects, and asks to sign in, but keeps the sketches open', async () => {
     await page.getByRole('button', { name: 'Sign out' }).click()
     await page.getByRole('button', { name: 'Sign in with GitHub' }).first().waitFor({ timeout: PATIENCE })
-    await page.getByRole('button', { name: 'Projects tab' }).click()
+    await page.getByRole('tab', { name: 'Projects' }).click()
     await page.getByText('Sign in to see your projects').waitFor({ timeout: PATIENCE })
     expect(await page.getByRole('button', { name: 'Open Notes', exact: true }).count()).toBe(0)
-    await page.getByRole('button', { name: 'Sketches tab' }).click()
+    await page.getByRole('tab', { name: 'My sketches' }).click()
     await page.getByRole('button', { name: 'Open My idea' }).waitFor({ timeout: PATIENCE })
   })
 })

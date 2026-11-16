@@ -3128,7 +3128,7 @@ kbd {
 
 /* ---- a project on the projects page ----------------------------------- */
 
-/* Double-click opens it; the repos below keep their own clicks. */
+/* A click on its head opens it; the repos below keep their own clicks. */
 .project-card {
   display: flex;
   flex-direction: column;
@@ -3149,9 +3149,14 @@ kbd {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  min-height: 88px;
   padding: var(--space-4);
   outline: none;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.project-card-top:hover {
+  background: color-mix(in srgb, var(--accent, var(--focus-ring)) 5%, transparent);
 }
 
 .project-card-top:focus-visible {
@@ -3160,17 +3165,53 @@ kbd {
 
 .project-card-open {
   position: absolute;
-  top: var(--space-4);
+  top: calc(var(--space-4) + 1px);
   right: var(--space-4);
-  font-size: 11.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-sm, 12px);
+  font-weight: 500;
   color: var(--ink-faint);
-  opacity: 0;
-  transition: opacity 120ms ease;
+  transition: color 120ms ease;
 }
 
-.project-card:hover .project-card-open,
+.project-card-top:hover .project-card-open,
 .project-card-top:focus-visible .project-card-open {
-  opacity: 1;
+  color: var(--accent, var(--focus-ring));
+}
+
+/* Where the repo sits on this computer: there, but the quietest line. */
+.project-repo-path {
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs, 11px);
+  color: var(--ink-faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* What to do about a badge, said under it. */
+.project-repo-hint {
+  font-size: var(--text-sm, 12px);
+  line-height: 16px;
+  color: var(--ink-soft);
+}
+
+@keyframes projects-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.projects-refreshing {
+  animation: projects-turn 900ms linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .projects-refreshing {
+    animation: none;
+  }
 }
 
 /* The lower half: the repos, one under the next. */
@@ -3643,6 +3684,208 @@ kbd {
 /* Header buttons keep their words on one line. */
 .ds-head .ds-button {
   white-space: nowrap;
+}
+
+/* ---- design pass: D, the bar, handing work to an agent, the projects page */
+
+/* A sketch is not the map: its bar is tinted, and says so before its name. */
+.map-page--sketch .map-bar {
+  background: var(--accent-wash, color-mix(in srgb, var(--focus-ring) 9%, var(--surface-100)));
+  border-bottom-color: var(--accent, var(--focus-ring));
+}
+
+.map-mode-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: calc(var(--space-2) * -1);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--accent, var(--focus-ring));
+  color: var(--ink-inverse);
+  font-size: var(--text-sm, 12px);
+  line-height: 18px;
+  font-weight: 600;
+  cursor: default;
+}
+
+/* Where a sketch started, in the slot the branch takes on the map. */
+.map-from-chip {
+  flex: none;
+  padding: 4px 10px;
+  border: var(--stroke-edge) dashed var(--line-edge);
+  border-radius: var(--radius-md);
+  color: var(--ink-soft);
+  font-size: var(--text-sm, 12px);
+  white-space: nowrap;
+  cursor: default;
+}
+
+/* The bar's things done now and then. */
+.map-more {
+  position: relative;
+  display: inline-flex;
+}
+
+.map-more .map-menu {
+  min-width: 200px;
+}
+
+.map-bar-end .ds-button {
+  white-space: nowrap;
+}
+
+/* Handing a sketch to an agent: the words to paste, and a button to copy them. */
+.hand-agent {
+  position: relative;
+  display: inline-flex;
+}
+
+.hand-agent-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 9;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 420px;
+  padding: var(--space-4);
+  border: var(--stroke-edge) solid var(--line-edge);
+  border-radius: var(--radius-md);
+  background: var(--surface-100);
+  box-shadow: var(--shadow-float);
+  color: var(--ink-000);
+  animation: sketch-new-in 140ms ease;
+}
+
+.hand-agent-title {
+  font-size: var(--text-lg, 15px);
+  line-height: 20px;
+  font-weight: 600;
+}
+
+/* The words first, the whole width, and the button under them. */
+.design-start-ask.hand-prompt {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+
+.hand-prompt .ds-button {
+  align-self: flex-start;
+}
+
+.hand-prompt code {
+  font-size: 12.5px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.hand-prompt .ds-button {
+  flex: none;
+  white-space: nowrap;
+}
+
+.hand-agent-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: var(--stroke-edge) solid var(--line-hair);
+}
+
+.hand-agent-projects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* The proposal's list: the words to build it, then each thing, a way to it. */
+.map-proposal-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-height: calc(100% - var(--space-6) * 2);
+  overflow: auto;
+}
+
+.map-proposal-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.map-proposal-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-000);
+  font: inherit;
+  font-size: var(--text-md, 13px);
+  text-align: left;
+  cursor: pointer;
+}
+
+.map-proposal-item:hover:not(:disabled),
+.map-proposal-item:focus-visible {
+  background: var(--surface-sunken);
+  outline: none;
+}
+
+.map-proposal-item:disabled {
+  cursor: default;
+  color: var(--ink-soft);
+}
+
+/* A long name keeps clear of "Open map" and the ... beside it. */
+.project-card-top .ds-card-name {
+  padding-right: 130px;
+}
+
+/* The projects page: its title and the tabs beside it. */
+.projects-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.projects-actions {
+  min-height: 36px;
+}
+
+.projects-tabs.design-tabs {
+  margin-left: 0;
+}
+
+.projects-tabs [role='tab'] {
+  font-weight: 500;
+}
+
+/* A page under another starts with the way back, top left. */
+.page-back {
+  margin: -8px 0 var(--space-3) -12px;
+}
+
+/* The words an agent is told, with room before the buttons that keep them. */
+.settings-pane .ds-card:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.settings-pane .ds-card:first-child > .ds-title,
+.settings-pane .ds-card:first-child > .ds-sub {
+  margin: 0;
 }
 
 /* ---- annotations ---------------------------------------------------------
@@ -5966,7 +6209,9 @@ button.map-restyle:hover {
 /* ---- a design page with nothing in it yet says how to start ------------- */
 
 .design-start {
+  width: 100%;
   max-width: 680px;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: var(--space-5);

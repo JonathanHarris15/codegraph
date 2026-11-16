@@ -1,6 +1,7 @@
 // codegraph: page canvas at /projects/:id
-import { Pencil } from 'lucide-react'
+import { ChevronDown, Pencil } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { AgentConnection } from '../../features/connect-agent.js'
 import type { SketchListed } from '../../features/list-sketches.js'
 import type { MapShown, SystemShown } from '../../features/show-map.js'
 import type { Layer } from '../../modules/annotations/index.js'
@@ -11,7 +12,10 @@ import type { Sketch } from '../../modules/sketches/index.js'
 import { Button, ThemeSwitch, Waiting } from '../design-system/kit.js'
 import { MapCanvas, type Together } from '../components/map-canvas.js'
 import { walk } from '../components/map-layout.js'
+import { AgentWindow } from '../components/agent-window.js'
 import { BranchPicker } from '../components/branch-picker.js'
+import { CanvasMenu, type MenuItem } from '../components/canvas-menu.js'
+import { HandToAgent, proposalPrompt, sketchPrompt } from '../components/hand-to-agent.js'
 import { DesignView } from '../components/design-view.js'
 import { ProposalPanel } from '../components/proposal-panel.js'
 import { SketchEditor } from '../components/sketch-editor.js'
@@ -33,6 +37,44 @@ const pathTo = (card: { id: string; children: { id: string; children: unknown[] 
     if (below.length) return [card.id, ...below]
   }
   return []
+}
+
+/** The ids from the top of a card down to the first one inside it that
+ *  answers, or [] if none does. */
+const pathWhere = (card: { id: string; children: unknown[] }, test: (c: { id: string }) => boolean): string[] => {
+  if (test(card)) return [card.id]
+  for (const child of card.children as (typeof card)[]) {
+    const below = pathWhere(child, test)
+    if (below.length) return [card.id, ...below]
+  }
+  return []
+}
+
+/** What the bar keeps out of the way: things done now and then, not each visit. */
+const BarMore = ({ items }: { items: MenuItem[] }) => {
+  const opener = useRef<HTMLButtonElement>(null)
+  const [at, setAt] = useState<{ x: number; y: number } | null>(null)
+  const close = useCallback(() => setAt(null), [])
+  return (
+    <span className="map-more">
+      <button
+        ref={opener}
+        type="button"
+        className="ds-button ds-button--bare"
+        aria-haspopup="menu"
+        aria-expanded={at !== null}
+        onClick={() => {
+          const box = opener.current?.getBoundingClientRect()
+          if (at || !box) setAt(null)
+          else setAt({ x: box.width - 200, y: box.height + 6 })
+        }}
+      >
+        More
+        <ChevronDown size={14} aria-hidden="true" />
+      </button>
+      {at ? <CanvasMenu at={at} items={items} opener={opener} onClose={close} /> : null}
+    </span>
+  )
 }
 
 /** One project's canvas: its map, read from the code, zoomed through level
@@ -509,6 +551,18 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
   /** Moving things on a local map is always this member's own to do. */
   const canMoveHere = canDraw || (focusSystem !== undefined && !sharedMaps[focusSystem.id])
   const [showRevisions, setShowRevisions] = useState(false)
+  // The project's short name, which an agent names it by, and how to connect one.
+  const [shortName, setShortName] = useState('')
+  const sketchOpen = sketch !== null
+  useEffect(() => {
+    if (!sketchOpen || shortName) return
+    void window.codegraph.listProjects().then((all) => setShortName(all.find((p) => p.id === projectId)?.shortName ?? ''))
+  }, [sketchOpen, shortName, projectId])
+  const [agentSetUp, setAgentSetUp] = useState<AgentConnection | null | false>(false)
+  const showAgentSetUp = async (): Promise<void> => {
+    setAgentSetUp(null)
+    setAgentSetUp(await window.codegraph.connectAgent())
+  }
   const [showMembers, setShowMembers] = useState(false)
   const [showDesign, setShowDesign] = useState(false)
   const closeDesign = useCallback(() => setShowDesign(false), [])
@@ -535,8 +589,24 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
   const progress = systemShown?.proposal ?? null
   const builtCount = progress ? progress.items.filter((i) => i.state === 'built' || i.state === 'removed').length : 0
 
+  const branchName = branchShown?.point.kind === 'branch' ? branchShown.point.name.replace(/^origin\//, '') : branchShown?.point.kind === 'live' ? (branchShown.point.branch ?? '') : ''
+  const proposalSketch = progress?.sketch ? sketches.find((s) => s.name === progress.sketch) : undefined
+  /** The level a card of the proposal is drawn on, to go and look at it. */
+  const goToItem = (id: string): void => {
+    if (!shown) return
+    const to = pathWhere(shown.card, (c) => c.id === id || c.id.endsWith(`/${id}`))
+    if (to.length > 1) setPath(to.slice(0, -1))
+  }
+  const fromWords = sketch?.from ? (sketch.from.startsWith('A snapshot of the map') ? 'From the map' : sketch.from) : ''
+  const moreItems: MenuItem[] = online
+    ? [
+        { name: 'Members', act: () => setShowMembers(true) },
+        { name: 'History', act: () => setShowRevisions(!showRevisions) },
+      ]
+    : []
+
   return (
-    <div className="map-page">
+    <div className={sketch ? 'map-page map-page--sketch' : 'map-page'}>
       <div className="map-bar">
         {sketch ? (
           <Button look="bare" onClick={() => void backToMap()}>
@@ -548,17 +618,24 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
           </Button>
         )}
         {sketch ? (
-          <input
-            className="ds-input map-sketch-name"
-            aria-label="Sketch name"
-            readOnly={!canDraw}
-            style={{ width: `${Math.min(Math.max(sketch.name.length + 3, 14), 44)}ch` }}
-            value={sketch.name}
-            onChange={(e) => changed({ ...sketch, name: e.target.value })}
-          />
+          <>
+            <span className="map-mode-chip" title="A drawing of a change. Nothing on it is read from the code.">
+              <Pencil size={12} aria-hidden="true" />
+              Sketch
+            </span>
+            <input
+              className="ds-input map-sketch-name"
+              aria-label="Sketch name"
+              readOnly={!canDraw}
+              style={{ width: `${Math.min(Math.max(sketch.name.length + 3, 14), 44)}ch` }}
+              value={sketch.name}
+              onChange={(e) => changed({ ...sketch, name: e.target.value })}
+            />
+          </>
         ) : null}
         <Trail steps={showing.map((card) => ({ id: card.id, name: card.name, level: card.level, kind: card.kind }))} onGo={goTo} />
         <div className="map-bar-end">
+          {/* What is going on: who is here, the agent, the proposal. */}
           {online ? (
             <span className="together-bar" aria-label="Who is here">
               {room.people.map((p) => (
@@ -580,13 +657,14 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
                   {p.name}
                 </button>
               ))}
-              <Button look="bare" onClick={() => setShowMembers(true)}>
-                Members
-              </Button>
-              <Button look="bare" onClick={() => setShowRevisions(!showRevisions)}>
-                History
-              </Button>
             </span>
+          ) : null}
+          {!sketch && problems.length > 0 ? (
+            <button type="button" className="map-count" onClick={() => setShowProblems(!showProblems)}>
+              {problems.length === 1
+                ? '1 thing in this repo the map could not place'
+                : `${problems.length} things in this repo the map could not place`}
+            </button>
           ) : null}
           {!sketch && systemShown?.proposalsElsewhere.length ? (
             <button
@@ -598,48 +676,6 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
             </button>
           ) : null}
           {!sketch && systemShown?.sketchMoved ? <span className="map-notice map-notice--plain">The sketch has changed since this was started</span> : null}
-          {!sketch && branchSystem && branchShown ? (
-            <BranchPicker system={branchSystem.name} points={choices} point={branchShown.point} onPick={(p) => void pickPoint(p)} />
-          ) : null}
-          {!sketch && branchShown?.point.kind === 'branch' && branchShown.path ? (
-            <Button onClick={() => void switchFolder()} disabled={switching}>
-              {switching ? 'Switching…' : `Switch folder to ${branchShown.point.name.replace(/^origin\//, '')}`}
-            </Button>
-          ) : null}
-          {!sketch && progress ? (
-            <button
-              type="button"
-              className={progress.built ? 'map-proposal map-proposal--built' : 'map-proposal'}
-              aria-expanded={showProposal}
-              onClick={() => setShowProposal(!showProposal)}
-            >
-              <span>{progress.built ? 'Proposal built' : 'Proposal'}</span>
-              <span className="map-proposal-meter" aria-hidden="true">
-                <span style={{ width: `${progress.items.length ? (builtCount / progress.items.length) * 100 : 100}%` }} />
-              </span>
-              <span>
-                {builtCount} of {progress.items.length}
-              </span>
-            </button>
-          ) : null}
-          {!sketch && working ? (
-            <label className="map-follow">
-              <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} />
-              Follow the agent
-            </label>
-          ) : null}
-          {hasDesign ? (
-            <Button look="bare" onClick={() => setShowDesign(!showDesign)}>
-              Design system
-            </Button>
-          ) : null}
-          {!sketch && problems.length > 0 ? (
-            <button type="button" className="map-count" onClick={() => setShowProblems(!showProblems)}>
-              {problems.length === 1
-                ? '1 thing in this repo the map could not place'
-                : `${problems.length} things in this repo the map could not place`}
-            </button>
-          ) : null}
           {agentElsewhere ? (
             <button
               type="button"
@@ -656,21 +692,67 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
               {agentHere.who} is drawing
             </span>
           ) : null}
+          {!sketch && progress ? (
+            <button
+              type="button"
+              className={progress.built ? 'map-proposal map-proposal--built' : 'map-proposal'}
+              aria-expanded={showProposal}
+              onClick={() => setShowProposal(!showProposal)}
+            >
+              <span>{progress.built ? 'Proposal built' : 'Proposal'}</span>
+              <span className="map-proposal-meter" aria-hidden="true">
+                <span style={{ width: `${progress.items.length ? (builtCount / progress.items.length) * 100 : 100}%` }} />
+              </span>
+              <span>
+                {builtCount} of {progress.items.length} built
+              </span>
+            </button>
+          ) : null}
+          {!sketch && working ? (
+            <label className="map-follow">
+              <input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} />
+              Follow the agent
+            </label>
+          ) : null}
+
+          {/* Where the map is read from; a sketch says where it started. */}
+          {hasDesign ? (
+            <Button look="bare" onClick={() => setShowDesign(!showDesign)}>
+              Design system
+            </Button>
+          ) : null}
+          {!sketch && branchShown?.point.kind === 'branch' && branchShown.path ? (
+            <Button look="bare" onClick={() => void switchFolder()} disabled={switching}>
+              {switching ? 'Switching…' : `Switch folder to ${branchShown.point.name.replace(/^origin\//, '')}`}
+            </Button>
+          ) : null}
+          {!sketch && branchSystem && branchShown ? (
+            <BranchPicker system={branchSystem.name} points={choices} point={branchShown.point} onPick={(p) => void pickPoint(p)} />
+          ) : null}
+          {sketch && fromWords ? (
+            <span className="map-from-chip" title={`${sketch.from}. A copy of the map as it was then; the code may have moved on since.`}>
+              {fromWords}
+            </span>
+          ) : null}
+
+          {/* The same few, in the same places, on every level. */}
           {sketch ? (
-              <button
-                type="button"
-                className="map-sketching"
-                aria-expanded={library}
-                aria-label={`Sketches: working on ${sketch.name}`}
-                onClick={() => setLibrary(!library)}
-              >
-                <Pencil size={13} aria-hidden="true" />
-                <span>Sketching</span>
-                <span className="map-sketching-count">{sketches.length}</span>
-              </button>
-            ) : (
-              <Button onClick={() => setLibrary(!library)}>Sketches{sketches.length ? ` (${sketches.length})` : ''}</Button>
+            <button
+              type="button"
+              className="map-sketching"
+              aria-expanded={library}
+              aria-label={`Sketches: working on ${sketch.name}`}
+              onClick={() => setLibrary(!library)}
+            >
+              <Pencil size={13} aria-hidden="true" />
+              <span>Sketches</span>
+              <span className="map-sketching-count">{sketches.length}</span>
+            </button>
+          ) : (
+            <Button onClick={() => setLibrary(!library)}>Sketches{sketches.length ? ` (${sketches.length})` : ''}</Button>
           )}
+          {sketch ? <HandToAgent prompt={sketchPrompt(sketch.name, shortName)} onSetUp={() => void showAgentSetUp()} /> : null}
+          {moreItems.length ? <BarMore items={moreItems} /> : null}
           <ThemeSwitch />
         </div>
       </div>
@@ -748,7 +830,14 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
         ) : null}
 
         {!sketch && showProposal && progress ? (
-          <ProposalPanel progress={progress} agent={systemShown?.agent ?? null} onClose={() => setShowProposal(false)} />
+          <ProposalPanel
+            progress={progress}
+            agent={systemShown?.agent ?? null}
+            prompt={proposalPrompt(systemShown?.name ?? '', branchName)}
+            onGoTo={goToItem}
+            {...(proposalSketch ? { onOpenSketch: () => void openOne(proposalSketch.id) } : {})}
+            onClose={() => setShowProposal(false)}
+          />
         ) : null}
 
         {!sketch && showProblems && problems.length > 0 ? (
@@ -784,6 +873,8 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
             onClose={() => setShowRevisions(false)}
           />
         ) : null}
+
+        {agentSetUp !== false ? <AgentWindow connection={agentSetUp} onClose={() => setAgentSetUp(false)} /> : null}
 
         {showMembers && shown ? <MembersSheet projectId={projectId} onClose={() => setShowMembers(false)} /> : null}
 

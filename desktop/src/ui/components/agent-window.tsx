@@ -3,8 +3,18 @@ import { useState } from 'react'
 import type { AgentConnection } from '../../features/connect-agent.js'
 import { Button, Sheet } from '../design-system/kit.js'
 
-/** How to connect the agent a person already uses: one command, run once. */
-export const AgentWindow = ({ connection, onClose }: { connection: AgentConnection | null; onClose: () => void }) => {
+/** How to connect the agent a person already uses: one command, run once.
+ *  Beside it, the way to what codegraph tells that agent. */
+export const AgentWindow = ({
+  connection,
+  onClose,
+  onInstructions,
+}: {
+  connection: AgentConnection | null
+  onClose: () => void
+  /** Goes to the page of what codegraph tells agents, where there is one. */
+  onInstructions?: () => void
+}) => {
   const [copied, setCopied] = useState(false)
   return (
     <Sheet title="Your agent" onClose={onClose} wide>
@@ -35,6 +45,14 @@ export const AgentWindow = ({ connection, onClose }: { connection: AgentConnecti
       ) : (
         <div className="ds-hint">Finding the MCP…</div>
       )}
+      {onInstructions ? (
+        <div className="hand-agent-foot">
+          <span className="ds-hint">Codegraph tells your agent how to work in your repos. The words are yours to change.</span>
+          <Button look="bare" onClick={onInstructions}>
+            Agent instructions
+          </Button>
+        </div>
+      ) : null}
     </Sheet>
   )
 }
