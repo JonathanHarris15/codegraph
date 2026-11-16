@@ -106,6 +106,8 @@ const serve = async (): Promise<void> => {
   }
   const spot = z.object({ x: z.number(), y: z.number() })
   const end = z.union([z.string(), spot])
+  const shape = z.enum(['square', 'curved'])
+  const side = z.enum(['n', 'e', 's', 'w'])
   const where = {
     in: z.string().optional().describe("The card whose insides this goes on, by id or name; the top level if left out."),
   }
@@ -123,9 +125,13 @@ const serve = async (): Promise<void> => {
     }),
     z.object({
       do: z.literal('change'),
-      what: z.string().describe('A card by id or name, or an annotation by id.'),
+      what: z.string().describe('A card by id or name, an annotation by id, or a wire by id or as `from -> to`.'),
       name: z.string().optional(),
       kind: z.string().optional(),
+      words: z.string().optional().describe("A wire's words."),
+      shape: shape.optional().describe('A wire: square runs at right angles, curved is one smooth line.'),
+      sides: z.object({ from: side.optional(), to: side.optional() }).optional().describe('A wire: the side of a card each end meets, n, e, s or w.'),
+      bends: z.array(spot).optional().describe('A square wire: the spots it turns at, in order, in the level\'s space. An empty list lets it find its own way.'),
       says: z.string().optional(),
       at: z.string().optional(),
       text: z.string().optional(),
@@ -142,6 +148,7 @@ const serve = async (): Promise<void> => {
       to: z.string(),
       kind: z.string().optional().describe('uses, asks, reads, starts, keeps, leads to, calls or points at.'),
       words: z.string().optional().describe('What it is for: "to fetch suggestions".'),
+      shape: shape.optional().describe('square (right angles) or curved; as the board draws wires if left out.'),
     }),
     z.object({
       do: z.literal('fields'),
@@ -183,11 +190,17 @@ const serve = async (): Promise<void> => {
       h: z.number().optional(),
     }),
     z.object({ do: z.literal('point'), at: end.describe('A card or annotation, or a spot {x, y} on the level `in` names.'), ...where, words: z.string().optional() }),
+    z.object({
+      do: z.literal('tidy'),
+      ...where,
+      direction: z.enum(['down', 'right']).optional().describe('Which way the level reads: down (the default) or right.'),
+      wires: z.enum(['square', 'curved', 'keep']).optional().describe('square (the default) routes every wire at right angles; keep leaves each wire its shape.'),
+    }),
   ])
 
   server.tool(
     'edit',
-    "Draws on a sketch one step at a time, the way a person would, while they watch your cursor do it: cards (any kind, stores and inner stores too), wires, a store's fields, notes, lines, frames and shapes; changing, moving and taking things away; and pointing at things. Leave `sketch` out to draw on the one the person has open; a name no sketch has makes a new one. Read the `sketches` instructions first. If any step is wrong, nothing is drawn.",
+    "Draws on a sketch one step at a time, the way a person would, while they watch your cursor do it: cards (any kind, stores and inner stores too), wires, a store's fields, notes, lines, frames and shapes; changing, moving and taking things away; pointing at things; and tidying a level, which lays it out like a diagram tool, with wires at right angles that do not cross cards or each other where they can help it. Leave `sketch` out to draw on the one the person has open; a name no sketch has makes a new one. Read the `sketches` instructions first. If any step is wrong, nothing is drawn.",
     {
       sketch: z.string().optional().describe("The sketch's name; the one open in the app if left out. A new name makes a new sketch."),
       steps: z.array(step).describe('What to do, in order.'),

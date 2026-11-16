@@ -1,29 +1,53 @@
 // codegraph: module sketch-steps
-// codegraph: front door applyStep, findCard, AGENT_LAYER, Step, StepDone, Cursor, End
+// codegraph: front door applyStep, findCard, AGENT_LAYER, Step, StepDone, Cursor, End, Direction
 import { randomUUID } from 'node:crypto'
 import { annotationKind, type Annotation, type AnnotationEnd, type Layer } from '../annotations/index.js'
 import { kindsInside } from '../card-types/index.js'
 import { readField } from '../flowchart/index.js'
-import { blankCard, hubOf, isStore, wireOfHub, wireStores, type Sketch, type SketchCard, type SketchWire } from '../sketches/index.js'
+import { blankCard, hubOf, isStore, wireOfHub, wireStores, type Sketch, type SketchCard, type SketchWire, type WireSides } from '../sketches/index.js'
 import { WIRE_KINDS } from '../wording/index.js'
+import { cardSize, tidyLevel, type Direction } from './tidy.js'
+
+export type { Direction } from './tidy.js'
 
 /** One end of a line: a card or an annotation, by id or name, or a spot on the
  *  level. */
 export type End = string | { x: number; y: number }
+
+/** How a wire is drawn: curved, or in straight pieces at right angles. */
+export type WireShape = 'curved' | 'square'
 
 /** One thing an agent does to a sketch, the way a person would with the mouse.
  *  A card is named by its id or its name; `in` is the card whose insides the
  *  step is on, left out for the top level. */
 export type Step =
   | { do: 'card'; name: string; kind?: string; in?: string; id?: string; says?: string; at?: string; x?: number; y?: number }
-  | { do: 'change'; what: string; name?: string; kind?: string; says?: string; at?: string; text?: string; color?: string; x?: number; y?: number; w?: number; h?: number }
+  | {
+      do: 'change'
+      what: string
+      name?: string
+      kind?: string
+      says?: string
+      at?: string
+      text?: string
+      color?: string
+      x?: number
+      y?: number
+      w?: number
+      h?: number
+      words?: string
+      shape?: WireShape
+      sides?: WireSides
+      bends?: { x: number; y: number }[]
+    }
   | { do: 'remove'; what: string }
-  | { do: 'wire'; from: string; to: string; kind?: string; words?: string }
+  | { do: 'wire'; from: string; to: string; kind?: string; words?: string; shape?: WireShape }
   | { do: 'fields'; store: string; fields?: string[]; open?: string; unknown?: boolean }
   | { do: 'note'; text: string; kind?: string; in?: string; near?: string; x?: number; y?: number; w?: number; h?: number; color?: string }
   | { do: 'line'; from: End; to: End; kind?: string; text?: string; in?: string }
   | { do: 'frame'; text: string; around?: string[]; kind?: string; in?: string; color?: string; x?: number; y?: number; w?: number; h?: number }
   | { do: 'point'; at: End; in?: string; words?: string }
+  | { do: 'tidy'; in?: string; direction?: Direction; wires?: WireShape | 'keep' }
 
 /** Where the agent's cursor is: on the insides of a card, at a thing by id or
  *  at a spot there, with a few words on what it is doing. */
@@ -222,6 +246,18 @@ export const applyStep = (sketch: Sketch, step: Step, savedTypes: string[] = [])
         )
         return ok(next, `Changed the annotation [${anno.id}].`, cursorOn(anno, 'Changing a note'), cursorOn(anno, 'Changed a note'))
       }
+      const wire = findWire(root, step.what)
+      if (wire) {
+        const changed = changeWire(wire.wire, step)
+        if (typeof changed === 'string') return no(changed)
+        const next = changeCard(root, wire.level.id, (l) => ({ ...l, wires: l.wires.map((w) => (w.id === wire.wire.id ? changed : w)) }))
+        return ok(
+          { ...sketch, root: next },
+          `Changed the wire [${wire.wire.id}]${changed.shape ? `, drawn ${changed.shape === 'square' ? 'at right angles' : 'curved'}` : ''}.`,
+          { inside: wire.level.id, target: wire.wire.from, words: 'Changing a wire' },
+          { inside: wire.level.id, target: wire.wire.to, words: 'Changed a wire' },
+        )
+      }
       const found = findCard(root, step.what)
       if (typeof found === 'string') return no(`Nothing to change: ${found} An annotation is named by its id.`)
       if (!found.parent) return no('The top level is not a card that can be changed.')
@@ -291,7 +327,8 @@ export const applyStep = (sketch: Sketch, step: Step, savedTypes: string[] = [])
       const to = findCard(root, step.to)
       if (typeof from === 'string') return no(`The wire's \`from\`: ${from}`)
       if (typeof to === 'string') return no(`The wire's \`to\`: ${to}`)
-      const joined = joinCards(root, from.card.id, to.card.id, { kind, words: step.words?.trim() ?? '' })
+      if (step.shape !== undefined && !SHAPES.includes(step.shape)) return no(`"${step.shape}" is not a shape of wire. It is square (right angles) or curved.`)
+      const joined = joinCards(root, from.card.id, to.card.id, { kind, words: step.words?.trim() ?? '', ...(step.shape ? { shape: step.shape } : {}) })
       if (typeof joined === 'string') return no(joined)
       return ok(
         { ...sketch, root: joined.root },
@@ -450,8 +487,11 @@ export const applyStep = (sketch: Sketch, step: Step, savedTypes: string[] = [])
       if (typeof found === 'string') return no(`Nothing to point at: ${found}`)
       return ok(sketch, `Pointed at ${found.parent ? called(found.card) : 'the top level'}.`, null, cursorAt(found, words))
     }
+
+    case 'tidy':
+      return tidy(sketch, step)
   }
-  return no(`"${(step as { do: string }).do}" is not a step. A step is card, change, remove, wire, fields, note, line, frame or point.`)
+  return no(`"${(step as { do: string }).do}" is not a step. A step is card, change, remove, wire, fields, note, line, frame, point or tidy.`)
 }
 
 /** A wire by its id, or as `from -> to` by the cards' ids or names. */
@@ -487,7 +527,7 @@ const withoutWires = (root: SketchCard, ids: Set<string>): SketchCard => {
 
 /** Joins two cards as a flowchart does: on the level both are on, or reaching
  *  one level into a card from beside it, through a hub on its border. */
-const joinCards = (root: SketchCard, fromId: string, toId: string, said: { kind: string; words: string }): { root: SketchCard } | string => {
+const joinCards = (root: SketchCard, fromId: string, toId: string, said: { kind: string; words: string; shape?: WireShape }): { root: SketchCard } | string => {
   if (fromId === toId) return 'A wire cannot run from a card to itself.'
   const parent = new Map<string, string>()
   const cards = new Map<string, SketchCard>()
@@ -519,4 +559,163 @@ const joinCards = (root: SketchCard, fromId: string, toId: string, said: { kind:
   if (a.length - k === 2) next = changeCard(next, from, (c) => ({ ...c, wires: [...c.wires, { id: randomUUID(), from: fromId, to: hubOf(outerWire.id), ...said }] }))
   if (b.length - k === 2) next = changeCard(next, to, (c) => ({ ...c, wires: [...c.wires, { id: randomUUID(), from: hubOf(outerWire.id), to: toId, ...said }] }))
   return { root: next }
+}
+
+const SHAPES: WireShape[] = ['square', 'curved']
+const SIDES = ['n', 'e', 's', 'w']
+
+/** A wire with what a \`change\` step says done to it: its kind, words, shape,
+ *  the sides it leaves and reaches, and where it turns. Or what is wrong. */
+const changeWire = (wire: SketchWire, step: Extract<Step, { do: 'change' }>): SketchWire | string => {
+  const next: SketchWire = { ...wire }
+  if (step.kind !== undefined) {
+    const kind = wireKind(step.kind)
+    if (!kind) return `"${step.kind}" is not a kind of wire. It is one of ${WIRE_KINDS.join(', ')}.`
+    next.kind = kind
+  }
+  if (step.words !== undefined) next.words = step.words.trim()
+  if (step.shape !== undefined) {
+    if (!SHAPES.includes(step.shape)) return `"${step.shape}" is not a shape of wire. It is square (right angles) or curved.`
+    next.shape = step.shape
+  }
+  if (step.sides !== undefined) {
+    const sides: WireSides = { ...(wire.sides ?? {}) }
+    const along = { ...(wire.along ?? {}) }
+    for (const end of ['from', 'to'] as const) {
+      const side = step.sides[end]
+      if (side === undefined) continue
+      if (!SIDES.includes(side)) return `"${side}" is not a side. A side is n, e, s or w.`
+      sides[end] = side
+      delete along[end]
+    }
+    next.sides = sides
+    next.along = along
+  }
+  if (step.bends !== undefined) {
+    if (step.bends.length) next.bends = step.bends.map((b) => ({ x: Math.round(b.x), y: Math.round(b.y) }))
+    else delete next.bends
+  }
+  // A sentence a person put somewhere was put there for the wire as it ran.
+  if (step.bends !== undefined || step.sides !== undefined) {
+    delete next.x
+    delete next.y
+  }
+  return next
+}
+
+/** The room between a note and the card it keeps beside, and between notes. */
+const NOTE_AIR = 20
+
+/** Lays a level out afresh, as a diagram tool would: in ranks along the way it
+ *  reads, with wires at right angles on tracks of their own. Notes on the
+ *  level keep beside the card they were nearest, out of the wires' way. */
+const tidy = (sketch: Sketch, step: Extract<Step, { do: 'tidy' }>): StepDone => {
+  const found = findCard(sketch.root, step.in ?? '')
+  if (typeof found === 'string') return no(`The tidy's \`in\`: ${found}`)
+  const level = found.card
+  const direction: Direction = step.direction ?? 'down'
+  if (direction !== 'down' && direction !== 'right') return no(`"${step.direction}" is not a way to read a level. It is down or right.`)
+  const shape = step.wires ?? 'square'
+  if (shape !== 'keep' && !SHAPES.includes(shape)) return no(`"${shape}" is not a shape of wire. It is square, curved or keep.`)
+  if (!level.children.length) return no(`There is nothing inside ${levelName(level)} to tidy.`)
+
+  // The notes on this level, each kept beside a card: the one it already keeps
+  // beside, or else the one it sits nearest.
+  const cardIds = new Set(level.children.map((c) => c.id))
+  const box = (card: SketchCard) => ({ x: card.x ?? 0, y: card.y ?? 0, ...cardSize(card) })
+  const placed = level.children.filter((c) => c.x !== undefined && c.y !== undefined)
+  const owner = new Map<string, string>()
+  const notes = annotations(sketch).filter(({ a }) => {
+    if (a.at !== level.id || a.from || a.to || a.around) return false
+    const group = annotationKind(a.kind)?.group
+    return group !== 'line' && group !== 'frame'
+  })
+  for (const { a } of notes) {
+    if (a.near && cardIds.has(a.near.card)) {
+      owner.set(a.id, a.near.card)
+      continue
+    }
+    if (!placed.length) continue
+    const mid = { x: a.x + a.w / 2, y: a.y + a.h / 2 }
+    const away = (card: SketchCard): number => {
+      const b = box(card)
+      const dx = Math.max(b.x - mid.x, 0, mid.x - (b.x + b.w))
+      const dy = Math.max(b.y - mid.y, 0, mid.y - (b.y + b.h))
+      return dx * dx + dy * dy
+    }
+    owner.set(a.id, [...placed].sort((p, q) => away(p) - away(q))[0]!.id)
+  }
+  const kept = new Map<string, Annotation[]>()
+  for (const { a } of notes) {
+    const card = owner.get(a.id)
+    if (card) kept.set(card, [...(kept.get(card) ?? []), a])
+  }
+  for (const list of kept.values()) list.sort((p, q) => p.y - q.y || p.x - q.x)
+  const beside = new Map(
+    [...kept].map(([card, list]) => [card, { w: Math.max(...list.map((a) => a.w)), h: list.reduce((sum, a) => sum + a.h, 0) + NOTE_AIR * (list.length - 1) }]),
+  )
+
+  // A frame round cards keeps them together, so it holds nothing else.
+  const groups = annotations(sketch)
+    .filter(({ a }) => a.at === level.id && a.around?.length)
+    .map(({ a }) => a.around!.filter((id) => cardIds.has(id)))
+  const laid = tidyLevel(level, direction, beside, groups)
+  const withShape = (wire: SketchWire): SketchWire => {
+    const next: SketchWire = { ...wire, ...(shape === 'keep' ? {} : { shape }) }
+    delete next.x
+    delete next.y
+    const route = laid.wires.get(wire.id)
+    if (route) {
+      const routedWire: SketchWire = { ...next, sides: route.sides, along: route.along, bends: route.bends }
+      if (!route.bends.length) delete routedWire.bends
+      return routedWire
+    }
+    delete next.bends
+    delete next.sides
+    delete next.along
+    return next
+  }
+  const nextLevel: SketchCard = {
+    ...level,
+    children: level.children.map((card) => ({ ...card, ...laid.places.get(card.id)! })),
+    wires: level.wires.map(withShape),
+    ...(level.room
+      ? { room: { x: laid.bounds.x - 64, y: laid.bounds.y - 64, w: laid.bounds.w + 128, h: laid.bounds.h + 128 } }
+      : {}),
+  }
+
+  // Each card's notes, stacked beside it: to its right on a level that reads
+  // down, above it on one that reads right.
+  const spots = new Map<string, { x: number; y: number; near: { card: string; dx: number; dy: number } }>()
+  for (const [cardId, list] of kept) {
+    const card = nextLevel.children.find((c) => c.id === cardId)!
+    const size = cardSize(card)
+    const room = beside.get(cardId)!
+    let along = 0
+    for (const a of list) {
+      const dx = direction === 'down' ? size.w + NOTE_AIR : 0
+      const dy = direction === 'down' ? along : -(room.h + NOTE_AIR) + along
+      along += a.h + NOTE_AIR
+      spots.set(a.id, { x: card.x! + dx, y: card.y! + dy, near: { card: cardId, dx, dy } })
+    }
+  }
+  const tidied = changeItems({ ...sketch, root: changeCard(sketch.root, level.id, () => nextLevel) }, (items) =>
+    items.map((a) => (spots.has(a.id) ? { ...a, ...spots.get(a.id)! } : a)),
+  )
+
+  const routed = level.wires.filter((w) => laid.wires.has(w.id)).length
+  const fixed = annotations(sketch).filter(({ a }) => a.at === level.id && !a.around && annotationKind(a.kind)?.group === 'frame').length
+  const words = `Tidying ${levelName(level)}`
+  return ok(
+    tidied,
+    [
+      `Tidied ${levelName(level)}: ${level.children.length} cards, reading ${direction === 'down' ? 'from the top down' : 'from left to right'}, and ${routed} wires routed${shape === 'square' ? ' at right angles' : shape === 'curved' ? ', drawn curved' : ''}.`,
+      spots.size ? `${spots.size} notes keep beside the card they were nearest.` : '',
+      fixed ? `${fixed} frames drawn at a spot of their own stayed where they were; move them with \`change\`.` : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+    { inside: level.id, target: '', words },
+    { inside: level.id, target: '', x: laid.bounds.x + laid.bounds.w / 2, y: laid.bounds.y + laid.bounds.h / 2, words: `Tidied ${levelName(level)}` },
+  )
 }

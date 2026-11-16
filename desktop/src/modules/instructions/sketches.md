@@ -123,10 +123,15 @@ before any is drawn, so a wrong one draws nothing and says which it was.
   or the canvas lays it out.
 - **`change`**: `what`, then any of `name`, `kind`, `says`, `at`, `x`, `y`
   for a card, or `text`, `color`, `kind`, `x`, `y`, `w`, `h` for an annotation.
+  For a wire, named by its id or as `from -> to`: `kind`, `words`, `shape`
+  (`square` for right angles, `curved`), `sides` (`{ "from": "s", "to": "n" }`,
+  each `n`, `e`, `s` or `w`) and `bends`, the spots a square wire turns at in
+  order (`[]` lets it find its own way again).
 - **`remove`**: `what`: a card (with what is inside it and its wires), an
   annotation, or a wire by its id or as `from -> to`.
-- **`wire`**: `from`, `to`, `kind` (`uses` if left out) and `words`. It can
-  reach one level into a card from beside it, as in a flowchart.
+- **`wire`**: `from`, `to`, `kind` (`uses` if left out), `words` and `shape`
+  (`square` or `curved`; as the board draws wires if left out). It can reach
+  one level into a card from beside it, as in a flowchart.
 - **`fields`**: `store`, and `fields`, each written like a flowchart field
   above; `open` for what an open store's other fields hold; `unknown: true`
   when its shape is not known. It replaces the fields the store had.
@@ -140,6 +145,23 @@ before any is drawn, so a wrong one draws nothing and says which it was.
   fitted to them when the person next sees that level.
 - **`point`**: `at` a card, an annotation or a spot, with `words` beside your
   cursor. Use it to show the person what you mean.
+- **`tidy`**: lays out the level `in` names (the top level if left out) the
+  way a diagram tool would: each card a rank after what reaches it, ordered
+  so wires cross as little as they can, and every wire routed at right angles
+  on a track of its own, round the cards, never through one. `direction` is
+  `down` (the default) or `right`; `wires` is `square` (the default), `curved`,
+  or `keep` to leave each wire its own shape. The cards a frame goes round
+  stay side by side inside it; notes keep beside the card they were nearest;
+  cards with no wires go in rows at the end.
+
+## Keeping a drawing clean
+
+Do not place cards by hand with `x` and `y` and hope: wires end up crossing
+cards and each other. Draw the cards and wires, then finish with one `tidy`
+step on each level you drew on, inside out, so the person sees a clean
+diagram. Tidy again after adding or removing a few cards. A card placed after
+a tidy goes beside the rest; tidy once more when you are done. Frame cards
+that belong together before you tidy, so they are kept together.
 
 The kinds of annotation:
 
