@@ -21,6 +21,11 @@
   --line-hair: #e4e0d9;
   --line-card: rgba(28, 26, 23, 0.12);
   --line-edge: #959189;
+  /* A field sits level with the card it is on: a white fill and a fine
+     edge, which darkens a step under the pointer. */
+  --field-fill: var(--surface-000);
+  --field-line: rgba(28, 26, 23, 0.16);
+  --field-line-hover: rgba(28, 26, 23, 0.3);
   /* Focus is the keyboard's mark and nothing else. Accent is what is picked,
      armed or current. Neither is ever a kind's colour. */
   --focus-ring: #0e7490;
@@ -145,6 +150,10 @@
   --line-hair: #2e2b27;
   --line-card: rgba(255, 255, 255, 0.08);
   --line-edge: #716b62;
+  /* on a dark panel a field sinks a little, or it would vanish into it */
+  --field-fill: var(--surface-sunken);
+  --field-line: rgba(255, 255, 255, 0.12);
+  --field-line-hover: rgba(255, 255, 255, 0.24);
   --focus-ring: #22d3ee;
   --accent: #8b8cf8;
   --accent-wash: #26243d;
@@ -438,13 +447,31 @@ h3 {
 }
 
 .ds-input {
-  background: var(--surface-sunken);
-  border: var(--stroke-edge) solid var(--line-edge);
+  background-color: var(--field-fill);
+  border: var(--stroke-edge) solid var(--field-line);
   border-radius: var(--radius-md);
   color: var(--ink-000);
   padding: var(--space-2) var(--space-3);
   font: inherit;
   width: 100%;
+  transition: border-color 120ms ease;
+}
+
+.ds-input:hover:not(:disabled):not(:read-only) {
+  border-color: var(--field-line-hover);
+}
+
+select.ds-input:hover:not(:disabled) {
+  border-color: var(--field-line-hover);
+}
+
+.ds-input:focus,
+.ds-input:focus-visible {
+  border-color: var(--line-edge);
+}
+
+.ds-input:read-only:not(select) {
+  background-color: var(--surface-sunken);
 }
 
 .ds-input::placeholder {
@@ -1100,6 +1127,17 @@ select.map-add-field-holds {
 /* the open card a person is working inside */
 .map-card--open.map-card--here {
   box-shadow: 0 0 0 1px var(--k, var(--line-edge));
+}
+
+/* On a dark board a kind's colour is pale, so a frame drawn in it full
+   strength outshines the cards inside. It goes back to a little over half,
+   and sits behind its contents as it does on paper. */
+[data-theme='dark'] .map-card--open {
+  border-color: color-mix(in srgb, var(--k, var(--line-edge)) 55%, transparent);
+}
+
+[data-theme='dark'] .map-card--open.map-card--here {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--k, var(--line-edge)) 55%, transparent);
 }
 
 .map-card--open::before {
@@ -3205,6 +3243,11 @@ kbd {
   font-size: var(--text-md);
   text-align: left;
   cursor: pointer;
+}
+
+.map-menu--bare .map-menu-item {
+  grid-template-columns: 1fr auto;
+  padding-inline: var(--space-3) var(--space-2);
 }
 
 .map-menu-item:hover,

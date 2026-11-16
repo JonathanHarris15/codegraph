@@ -42,10 +42,14 @@ export const CanvasMenu = ({
     }
   }, [onClose, opener])
 
+  // A menu with no pictures at all leaves no room for them; one with some
+  // keeps the room on every row, so the words line up.
+  const pictured = items.some((item) => item !== 'rule' && item.glyph)
+
   return (
     <div
       ref={box}
-      className="map-menu"
+      className={pictured ? 'map-menu' : 'map-menu map-menu--bare'}
       role="menu"
       aria-label="What to do here"
       style={{ left: at.x, top: at.y }}
@@ -66,7 +70,7 @@ export const CanvasMenu = ({
               item.act()
             }}
           >
-            <span className="map-menu-glyph">{item.glyph ? <Glyph of={item.glyph} size={15} /> : null}</span>
+            {pictured ? <span className="map-menu-glyph">{item.glyph ? <Glyph of={item.glyph} size={15} /> : null}</span> : null}
             <span className="map-menu-name">{item.name}</span>
             {item.keys ? <span className="map-menu-keys">{keysFor(item.keys)}</span> : null}
           </button>
