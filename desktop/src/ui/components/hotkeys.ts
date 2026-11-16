@@ -88,6 +88,7 @@ export const KEY_GROUPS: { name: string; rows: KeyRow[] }[] = [
     rows: [
       { keys: 'Double-click', on: 'Empty board', says: 'Add a card there' },
       { keys: 'Drag', on: 'A card’s dot', says: 'Wire to another card, or let go on empty board for a new one' },
+      { keys: 'Tab', on: 'A wire', says: 'Switch it between curved and right angles, while drawing it or once picked' },
       { keys: 'Type', says: 'Write on what is picked; Enter finishes' },
       { keys: 'Double-click', on: 'A card', says: 'Draw inside it; drag its corners for room, Esc backs out' },
       { keys: 'Drag', on: 'A card, onto another', says: 'Put it inside, a level in; its wires follow it' },

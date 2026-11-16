@@ -94,6 +94,59 @@ const boardMenu = async () => {
   return menu
 }
 
+const shapeKept = (id: string) => kept().root.wires.find((w) => w.id === id)?.shape
+
+describe('a wire of its own shape', () => {
+  it('draws one wire at right angles from its bar, and leaves the rest curved', async () => {
+    await page.locator('.map-sentence', { hasText: 'to send a reminder' }).click()
+    const shape = page.getByRole('group', { name: 'How the wire is drawn' })
+    await shape.waitFor({ timeout: PATIENCE })
+    expect(await shape.getByRole('button', { name: 'Curved' }).getAttribute('aria-pressed')).toBe('true')
+    await shape.getByRole('button', { name: 'Right angles' }).click()
+    await settle()
+    expect(shapeKept('sends')).toBe('square')
+    expect(await shape.getByRole('button', { name: 'Right angles' }).getAttribute('aria-pressed')).toBe('true')
+    const paths = await wirePaths()
+    expect(paths.filter((d) => d.includes('C')).length).toBe(1)
+    await picture('square-0-one-wire')
+  })
+
+  it('switches the picked wire back with Tab', async () => {
+    await page.keyboard.press('Tab')
+    await settle()
+    expect(shapeKept('sends')).toBe('curved')
+    expect((await wirePaths()).every((d) => d.includes('C'))).toBe(true)
+  })
+
+  it('switches a wire being drawn with Tab, and says how it will be drawn', async () => {
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('w')
+    const hint = page.getByRole('status').filter({ hasText: 'Drag from one card to another' })
+    expect(await hint.textContent({ timeout: PATIENCE })).toContain('Curved.')
+    const from = middle((await card('Mail').boundingBox())!)
+    const to = middle((await card('Reader').boundingBox())!)
+    await page.mouse.move(from.x, from.y)
+    await page.mouse.down()
+    await page.mouse.move((from.x + to.x) / 2, (from.y + to.y) / 2, { steps: 8 })
+    await page.keyboard.press('Tab')
+    expect(await page.getByRole('status').filter({ hasText: 'Let go on a card' }).textContent()).toContain('At right angles.')
+    await page.mouse.move(to.x, to.y, { steps: 8 })
+    await page.mouse.up()
+    await settle()
+    const made = kept().root.wires.find((w) => w.from === 'mail' && w.to === 'reader')
+    expect(made?.shape).toBe('square')
+    // Put back as it was, for what follows.
+    for (let i = 0; i < 3; i++) await page.keyboard.press('Control+z')
+    await settle()
+    expect(kept().root.wires.map((w) => [w.id, w.shape])).toEqual([
+      ['reads', undefined],
+      ['sends', undefined],
+    ])
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('v')
+  })
+})
+
 describe('choosing how wires are drawn', () => {
   it('draws curved wires until told otherwise', async () => {
     // The choice is kept off the zoom bar: it is on the board's right-click menu.

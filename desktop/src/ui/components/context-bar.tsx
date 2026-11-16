@@ -22,7 +22,8 @@ export type Picking =
        *  database, whose stores can. */
       stores?: 'store' | 'database'
     }
-  | { what: 'wire'; id: string; kind: string }
+  /** A wire, and whether it is drawn curved or at right angles. */
+  | { what: 'wire'; id: string; kind: string; shape: 'curved' | 'square' }
   | { what: 'note'; id: string }
   | { what: 'many'; ids: string[]; cards: number }
 
@@ -252,6 +253,7 @@ export const ContextBar = ({
   onStore,
   onAlign,
   onRemove,
+  onShape,
   locked = false,
   removeName = 'Delete from sketch',
 }: {
@@ -271,6 +273,8 @@ export const ContextBar = ({
   onStore?: (id: string) => void
   onAlign: (ids: string[], how: Alignment) => void
   onRemove: (ids: string[]) => void
+  /** Draws a wire curved or at right angles. */
+  onShape?: (id: string, shape: 'curved' | 'square') => void
   /** From the code: it keeps its kind and words, and can only be crossed out. */
   locked?: boolean
   removeName?: string
@@ -321,6 +325,32 @@ export const ContextBar = ({
         </span>
       ) : null}
 
+      {picking.what === 'wire' && onShape && !locked ? (
+        <>
+          <span className="map-context-shape" role="group" aria-label="How the wire is drawn">
+            {(
+              [
+                ['curved', 'curvedWires', 'Curved'],
+                ['square', 'squareWires', 'Right angles'],
+              ] as const
+            ).map(([shape, glyph, name]) => (
+              <button
+                key={shape}
+                type="button"
+                className="map-act"
+                aria-pressed={picking.shape === shape}
+                title={`${name} (Tab switches)`}
+                aria-label={name}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={() => onShape(picking.id, shape)}
+              >
+                <Glyph of={glyph} size={16} />
+              </button>
+            ))}
+          </span>
+          <span className="map-context-rule" />
+        </>
+      ) : null}
       {picking.what === 'card' && picking.restyles && picking.look && !locked ? (
         <>
           <ColorPick color={picking.look.color} onPick={(color) => onLook(picking.id, { ...picking.look!, color })} />

@@ -27,6 +27,9 @@ export type SketchWire = {
    *  in the level's own space. Left out, it finds its own way. A curved wire
    *  keeps them, unused, for when the board is drawn square again. */
   bends?: { x: number; y: number }[]
+  /** Drawn curved or at right angles, as a person chose for it; left out, as
+   *  the board draws wires (ADR 0029). */
+  shape?: 'curved' | 'square'
 }
 
 export type WireSides = { from?: 'n' | 'e' | 's' | 'w'; to?: 'n' | 'e' | 's' | 'w' }

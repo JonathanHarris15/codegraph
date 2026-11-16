@@ -25,6 +25,7 @@ import {
   makeRoom,
   moveThings,
   moveInside,
+  shapeWire,
   canGoInside,
   nudge,
   paste,
@@ -340,10 +341,10 @@ export const SketchEditor = ({
             keep({ ...now.current, root: changeAt(now.current.root, to, (card) => ({ ...card, room })) }, join ? 'join' : ''),
           onSelect: setSelected,
           onPin: (arrangement) => change((f) => pinAll(f, arrangement), '', true),
-          onPlace: (at, kind, from, hub, look) => {
+          onPlace: (at, kind, from, hub, look, shape) => {
             let id = ''
             change((f) => {
-              const [next, made] = placeCard(f, at, kind, from, hub, look)
+              const [next, made] = placeCard(f, at, kind, from, hub, look, shape)
               id = made
               return next
             })
@@ -365,10 +366,10 @@ export const SketchEditor = ({
             // What it went into is picked, so the person sees where it went.
             setSelected([into])
           },
-          onWire: (from, to, kind, sides) => {
+          onWire: (from, to, kind, sides, shape) => {
             let id = ''
             change((f) => {
-              const [next, made] = addWire(f, from, to, kind, sides)
+              const [next, made] = addWire(f, from, to, kind, sides, shape)
               id = made
               return next
             })
@@ -376,6 +377,7 @@ export const SketchEditor = ({
           },
           onRewire: (id, end, card, side, share) => change((f) => rewire(f, id, end, card, side, share)),
           onBend: (id, bends, join) => change((f) => bendWire(f, id, bends), join ? 'join' : ''),
+          onWireShape: (id, shape, join) => change((f) => shapeWire(f, id, shape), join ? 'join' : ''),
           onText: (id, text, first, field) =>
             change(
               (f) => (field === 'says' ? changeCard(f, id, { says: text }) : retext(f, id, text)),

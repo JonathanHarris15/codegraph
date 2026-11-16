@@ -26,6 +26,9 @@ export type DrawnWire = {
   along?: { from?: number; to?: number }
   /** Where a right-angle wire turns, if a person moved its pieces. */
   bends?: Spot[]
+  /** Drawn curved or at right angles, as a person chose for it; left out, as
+   *  the board draws wires (ADR 0029). */
+  shape?: 'curved' | 'square'
 }
 
 /** A note a person left on a level of a sketch. */

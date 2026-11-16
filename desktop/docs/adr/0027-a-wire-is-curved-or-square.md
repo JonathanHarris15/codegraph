@@ -4,7 +4,8 @@ Date: 2026-11-15
 
 ## Status
 
-Accepted. Adds to ADR 0016, which still holds for curved wires.
+Accepted. Adds to ADR 0016, which still holds for curved wires. ADR 0029 lets a
+wire on a sketch keep a shape of its own, whatever the board draws.
 
 ## Context
 

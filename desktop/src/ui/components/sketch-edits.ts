@@ -174,6 +174,7 @@ export const placeCard = (
   from = '',
   hub?: { into: boolean; kind: string },
   look?: CardLook,
+  shape?: 'curved' | 'square',
 ): [SketchCard, string] => {
   const level = levelIn(focus)
   const type = kind || choicesIn(focus)[0]?.choices[0]?.kind || kindsAt[level][0] || ''
@@ -185,11 +186,11 @@ export const placeCard = (
   const placed: SketchCard = { ...card, x: Math.round(at.x - w / 2), y: Math.round(at.y - h / 2) }
   const next = { ...focus, children: [...focus.children, placed] }
   if (from && isHub(from) && hub) {
-    const [wired] = hub.into ? addWire(next, from, card.id, hub.kind) : addWire(next, card.id, from, hub.kind)
+    const [wired] = hub.into ? addWire(next, from, card.id, hub.kind, undefined, shape) : addWire(next, card.id, from, hub.kind, undefined, shape)
     return [wired, card.id]
   }
   if (!from || !focus.children.some((c) => c.id === from)) return [next, card.id]
-  const [wired] = addWire(next, from, card.id)
+  const [wired] = addWire(next, from, card.id, undefined, undefined, shape)
   return [wired, card.id]
 }
 
@@ -243,7 +244,14 @@ export const nudge = (focus: SketchCard, ids: string[], dx: number, dy: number):
       .map((thing) => ({ id: thing.id, x: thing.x! + dx, y: thing.y! + dy })),
   )
 
-export const addWire = (focus: SketchCard, from: string, to: string, kind?: string, sides?: WireSides): [SketchCard, string] => {
+export const addWire = (
+  focus: SketchCard,
+  from: string,
+  to: string,
+  kind?: string,
+  sides?: WireSides,
+  shape?: 'curved' | 'square',
+): [SketchCard, string] => {
   const plugged = sides && (sides.from || sides.to) ? { sides: { ...(sides.from ? { from: sides.from } : {}), ...(sides.to ? { to: sides.to } : {}) } } : {}
   // One wire between the same two cards is enough; drawing it again picks it,
   // and plugs it in where it was drawn this time.
@@ -259,6 +267,7 @@ export const addWire = (focus: SketchCard, from: string, to: string, kind?: stri
     kind: kind ?? kindBetween(focus.children.find((c) => c.id === from), focus.children.find((c) => c.id === to)),
     words: '',
     ...plugged,
+    ...(shape ? { shape } : {}),
   }
   return [{ ...focus, wires: [...focus.wires, wire] }, wire.id]
 }
@@ -318,6 +327,12 @@ export const bendWire = (focus: SketchCard, id: string, bends: { x: number; y: n
     const { bends: _was, ...bare } = w
     return bends?.length ? { ...bare, bends: bends.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })) } : bare
   }),
+})
+
+/** Draws a wire curved or at right angles, whatever the board draws the rest. */
+export const shapeWire = (focus: SketchCard, id: string, shape: 'curved' | 'square'): SketchCard => ({
+  ...focus,
+  wires: focus.wires.map((w) => (w.id === id ? { ...w, shape } : w)),
 })
 
 export type Picked =

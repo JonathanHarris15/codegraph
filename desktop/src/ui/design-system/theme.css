@@ -2775,6 +2775,17 @@ select.map-add-field-holds {
   box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 18%, transparent), var(--shadow-card);
 }
 
+/* A wire's two shapes, side by side, the one it has pressed in. */
+.map-context-shape {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.map-context-shape .map-act[aria-pressed='true'] {
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+
 /* Over a card that a card being dragged will go inside, once let go. */
 .map-into-hint {
   position: absolute;

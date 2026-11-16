@@ -108,7 +108,7 @@ export type Drawing = {
   onPin: (arrangement: Arrangement) => void
   /** A card of a kind, centred on a spot, wired from another card if given,
    *  or to a hub the way the hub's wire runs. Hands back the new card's id. */
-  onPlace: (at: Spot, kind: string, from?: string, hub?: { into: boolean; kind: string }, look?: CardLook) => string
+  onPlace: (at: Spot, kind: string, from?: string, hub?: { into: boolean; kind: string }, look?: CardLook, shape?: WireStyle) => string
   onNote: (at: Spot) => string
   /** Puts things down where they were dragged. Joining makes the move one
    *  step with the one before, as when Alt and drag copied what it carries. */
@@ -118,13 +118,16 @@ export type Drawing = {
   canInside?: (id: string, into: string) => boolean
   onInside?: (id: string, into: string) => void
   /** A wire between two cards, plugged into the sides given, if any. */
-  onWire: (from: string, to: string, kind?: string, sides?: { from?: Side; to?: Side }) => string
+  onWire: (from: string, to: string, kind?: string, sides?: { from?: Side; to?: Side }, shape?: WireStyle) => string
   /** Points one end of a wire at a card, plugged into a side if given, and
    *  where along it as a share of it. */
   onRewire: (id: string, end: 'from' | 'to', card: string, side?: Side, share?: number) => void
   /** Where a right-angle wire turns, in the level's own space; none, and it
    *  finds its own way. Joining makes it one step with the one before. */
   onBend: (id: string, bends: Spot[] | undefined, join?: boolean) => void
+  /** Draws one wire curved or at right angles, whatever the board draws the
+   *  rest (ADR 0029). Joining makes it one step with the one before. */
+  onWireShape?: (id: string, shape: WireStyle, join?: boolean) => void
   /** A card's name, a wire's words, or a note's words; or, for a card,
    *  what it is for. Writing the first words of something just made joins
    *  the step that made it, so one undo takes the whole thing away. */
@@ -483,6 +486,12 @@ export const MapCanvas = ({
     setWireStyleNow(style)
   }
   const square = wireStyle === 'square'
+  /** The shape a wire being drawn now takes: the board's, until Tab switches
+   *  it, and then that, for the wires after it too. */
+  const [drawAs, setDrawAs] = useState<WireStyle>(wireStyle)
+  useEffect(() => setDrawAs(wireStyle), [wireStyle])
+  /** How one wire is drawn: as a person chose for it, or as the board draws. */
+  const wireShapeOf = (wire: { shape?: WireStyle }): WireStyle => wire.shape ?? wireStyle
   /** Something from the library waiting to be placed with a click, by its key. */
   const [armed, setArmed] = useState('')
   // Annotations: the library and the layers list, a shape waiting to be put
@@ -928,7 +937,7 @@ export const MapCanvas = ({
             wire,
             key,
             depth,
-            shape: (square
+            shape: ((wire.shape ?? wireStyle) === 'square'
               ? squared(wire, key, from, to)
               : wirePath(from, to, slotsOf(wire), cardBoxes, { from: fitTo(wire.from, from), to: fitTo(wire.to, to) }, loops.get(wire), wire.sides, wire.along)) as WireShape & { route?: Spot[] },
             // Further out than the level in hand, the verb alone, so the faded
@@ -1042,7 +1051,7 @@ export const MapCanvas = ({
       shape: { ...one.shape, d: chipsNow[i]!.fixed && !one.shape.route ? wireThrough(one.shape, spots[i]!) : one.shape.d },
     }))
     return { all: at, outer: at.filter((one) => one.depth !== workAt), inner: at.filter((one) => one.depth === workAt), hubs, boxes }
-  }, [shown, where, cardBoxes, shapedAt, canDraw, nameOf, sizes, everyCard, everyNote, workAt, live.moves, live.bend, notDrawn, passing, reaching, square, band, stepK, annoKeeps])
+  }, [shown, where, cardBoxes, shapedAt, canDraw, nameOf, sizes, everyCard, everyNote, workAt, live.moves, live.bend, notDrawn, passing, reaching, wireStyle, band, stepK, annoKeeps])
 
   /** The hubs on the border of the card open now: the only ones in reach. */
   const hubsHere = useMemo(() => shapes.hubs.filter((hub) => hub.depth + 1 === workAt), [shapes.hubs, workAt])
@@ -1634,11 +1643,11 @@ export const MapCanvas = ({
       if (!drawing) return
       const choice = choices.find((one) => one.key === key)
       const hub = shapes.hubs.find((one) => one.id === from)
-      const id = drawing.onPlace(at, choice?.kind ?? key, from, hub ? { into: hub.into, kind: hub.kind } : undefined, look ?? choice?.look)
+      const id = drawing.onPlace(at, choice?.kind ?? key, from, hub ? { into: hub.into, kind: hub.kind } : undefined, look ?? choice?.look, from && drawAs !== wireStyle ? drawAs : undefined)
       drawing.onSelect([id])
       writeSoon(id)
     },
-    [drawing, choices, shapes.hubs],
+    [drawing, choices, shapes.hubs, drawAs, wireStyle],
   )
 
   /** A note is a sticky note: an annotation, put on the layer in use and
@@ -1699,6 +1708,22 @@ export const MapCanvas = ({
       }
       if (typing(event.target)) return
       const plain = !event.ctrlKey && !event.metaKey && !event.altKey
+      // Tab switches a wire between curved and right angles: the one being
+      // drawn, and the ones after it; or else the one wire picked.
+      if (event.key === 'Tab' && plain && !event.shiftKey && drawing) {
+        const drawingOne = gesture.current?.type === 'connect' || tool === 'wire'
+        const wire = !drawingOne && selected.length === 1 ? shapes.inner.find((x) => x.wire.id === selected[0])?.wire : undefined
+        if (drawingOne) {
+          event.preventDefault()
+          setDrawAs((was) => (was === 'square' ? 'curved' : 'square'))
+          return
+        }
+        if (wire?.id && drawing.onWireShape) {
+          event.preventDefault()
+          drawing.onWireShape(wire.id, wireShapeOf(wire) === 'square' ? 'curved' : 'square')
+          return
+        }
+      }
       if (event.key === 'Escape') {
         if (iconsFor) setIconsFor('')
         else if (keysOpen) setKeysOpen(false)
@@ -1762,7 +1787,7 @@ export const MapCanvas = ({
       window.removeEventListener('keydown', down)
       window.removeEventListener('keyup', up)
     }
-  }, [backOut, drawing, fit, zoomBy, quick, armed, tool, selected, startEditing, hover, frameOn, frameBox, view, palette, annoOpen, annotating, annoArmed, annoPicked, select, keysOpen, focus.level, ready, choices, iconsFor])
+  }, [backOut, drawing, fit, zoomBy, quick, armed, tool, selected, startEditing, hover, frameOn, frameBox, view, palette, annoOpen, annotating, annoArmed, annoPicked, select, keysOpen, focus.level, ready, choices, iconsFor, shapes, wireStyle])
 
   useEffect(() => {
     if (!layerSaid) return
@@ -2003,14 +2028,14 @@ export const MapCanvas = ({
   }
 
   /** Where along a side of a card a wire's end was let go, as a share of the
-   *  side, on the grid of the level when the board draws square. */
+   *  side, on the grid of the level when the wire is drawn square. */
   const shareAlong = (target: string, side: Side, at: Spot): number | undefined => {
     const box = shapes.boxes.get(target)
     if (!box) return undefined
     const flat = side === 'n' || side === 's'
     const raw = flat ? at.x : at.y
     const by = flat ? shift.x : shift.y
-    const spot = square ? Math.round((raw - by) / GRID) * GRID + by : raw
+    const spot = drawAs === 'square' ? Math.round((raw - by) / GRID) * GRID + by : raw
     const share = (spot - (flat ? box.x : box.y)) / (flat ? box.w : box.h)
     // Near the middle is the middle, so a wire put back there runs as before.
     if (Math.abs(share - 0.5) < 0.04) return undefined
@@ -2561,7 +2586,12 @@ export const MapCanvas = ({
       const target = landing(at, now.from, now.rewire?.end)
       const plugged = target ? pluggedInto(target, at) : undefined
       if (now.rewire) {
-        if (target) drawing.onRewire(now.rewire.id, now.rewire.end, target, plugged, plugged ? shareAlong(target, plugged, at) : undefined)
+        if (target) {
+          drawing.onRewire(now.rewire.id, now.rewire.end, target, plugged, plugged ? shareAlong(target, plugged, at) : undefined)
+          // Tab while it was in hand switched its shape.
+          const was = shapes.inner.find((x) => x.wire.id === now.rewire!.id)?.wire
+          if (was && wireShapeOf(was) !== drawAs) drawing.onWireShape?.(now.rewire.id, drawAs, true)
+        }
         return
       }
       if (target) {
@@ -2575,7 +2605,7 @@ export const MapCanvas = ({
           [now.from, now.side ?? undefined],
           [target, plugged],
         ])
-        const id = drawing.onWire(from, to, hub?.kind, { from: sideAt.get(from), to: sideAt.get(to) })
+        const id = drawing.onWire(from, to, hub?.kind, { from: sideAt.get(from), to: sideAt.get(to) }, drawAs === wireStyle ? undefined : drawAs)
         drawing.onSelect([id])
         return
       }
@@ -2660,7 +2690,7 @@ export const MapCanvas = ({
     const wire = shapes.inner.find((one) => one.wire.id === id)
     if (wire) {
       const size = sizes[wire.key] ?? { w: 160, h: 24 }
-      return { what: { what: 'wire', id, kind: wire.wire.kind }, box: { x: wire.at.x - size.w / 2, y: wire.at.y - size.h / 2, ...size } }
+      return { what: { what: 'wire', id, kind: wire.wire.kind, shape: wireShapeOf(wire.wire) }, box: { x: wire.at.x - size.w / 2, y: wire.at.y - size.h / 2, ...size } }
     }
     const note = noteBoxes.find((n) => n.note.id === id)
     return note ? { what: { what: 'note', id }, box: note.box } : null
@@ -2731,6 +2761,7 @@ export const MapCanvas = ({
     }
     const one = ids.length === 1 ? ids[0]! : ''
     const card = one ? children.find((c) => c.id === one) : undefined
+    const pickedWire = one && !card ? shapes.inner.find((x) => x.wire.id === one)?.wire : undefined
     if (ids.length === 0)
       return [
         { name: 'Add a card here…', glyph: 'card', keys: 'Double-click', act: () => setQuick({ screen: menu!.screen, inside, from: '' }) },
@@ -2753,7 +2784,14 @@ export const MapCanvas = ({
           } }]
         : []),
       ...(card?.kind === 'page' ? [{ name: 'Add a mockup', glyph: 'mockup' as const, act: () => drawing.onMockup(one) }] : []),
-      ...(square && !card && shapes.inner.find((x) => x.wire.id === one)?.wire.bends?.length
+      ...(pickedWire && drawing.onWireShape
+        ? [
+            wireShapeOf(pickedWire) === 'square'
+              ? { name: 'Draw it curved', glyph: 'curvedWires' as const, keys: 'Tab', act: () => drawing.onWireShape!(one, 'curved') }
+              : { name: 'Draw it at right angles', glyph: 'squareWires' as const, keys: 'Tab', act: () => drawing.onWireShape!(one, 'square') },
+          ]
+        : []),
+      ...(pickedWire && wireShapeOf(pickedWire) === 'square' && pickedWire.bends?.length
         ? [{ name: 'Let it find its own way', glyph: 'undo' as const, act: () => drawing.onBend(one, undefined) }]
         : []),
       'rule',
@@ -2976,13 +3014,23 @@ export const MapCanvas = ({
             Drawing on {layerSaid}
           </div>
         ) : null}
-        {drawing && !annoArmed && (armed || tool === 'wire' || tool === 'note') ? (
+        {drawing && !annoArmed && (live.line || tool === 'wire') ? (
+          // A wire in hand says how it will be drawn, and how to change that.
           <div className="map-hint" role="status">
-            {armed
-              ? `Click to place a ${armedChoice?.kind ?? armed}. Hold Shift to place more.`
-              : tool === 'wire'
-                ? 'Drag from one card to another.'
-                : 'Click to leave a note.'}
+            {drawAs === 'square' ? 'At right angles.' : 'Curved.'} {live.line ? 'Let go on a card.' : 'Drag from one card to another.'}
+            <span className="map-hint-keys">
+              <kbd>Tab</kbd> {drawAs === 'square' ? 'for curved' : 'for right angles'}
+              {live.line ? null : (
+                <>
+                  {' · '}
+                  <kbd>Esc</kbd> to stop
+                </>
+              )}
+            </span>
+          </div>
+        ) : drawing && !annoArmed && (armed || tool === 'note') ? (
+          <div className="map-hint" role="status">
+            {armed ? `Click to place a ${armedChoice?.kind ?? armed}. Hold Shift to place more.` : 'Click to leave a note.'}
             <span className="map-hint-keys">
               <kbd>Esc</kbd> to stop
             </span>
@@ -3105,7 +3153,7 @@ export const MapCanvas = ({
             )}
             {wireGroup(shapes.inner)}
             {live.line ? (
-              <path d={square ? squareBetween(live.line.from, live.line.to) : curve(live.line.from, live.line.to)} className="map-wire-live" markerEnd="url(#map-head-live)" />
+              <path d={drawAs === 'square' ? squareBetween(live.line.from, live.line.to) : curve(live.line.from, live.line.to)} className="map-wire-live" markerEnd="url(#map-head-live)" />
             ) : null}
             {live.guides
               ? [
@@ -3711,6 +3759,7 @@ export const MapCanvas = ({
             onMockup={(id) => drawing?.onMockup(id)}
             onStore={(id) => setStoreFor(storeFor === id ? '' : id)}
             onAlign={(ids, how) => drawing?.onAlign(ids, how)}
+            {...(drawing?.onWireShape ? { onShape: (id: string, shape: WireStyle) => drawing.onWireShape!(id, shape) } : {})}
             locked={selected.length === 1 && Boolean(drawing?.locked?.includes(selected[0]!))}
             removeName={drawing?.removeName}
             onRemove={(ids) => {
