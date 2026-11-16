@@ -57,48 +57,133 @@ const overlaps = (a: Box, b: Box): boolean => a.left < b.right && a.right > b.le
 
 /** How far a bar keeps inside the board's edges. */
 const EDGE = 8
+/** How far a bar keeps from what is picked. */
+const GAP = 8
 
-type Placed = { top: number; under: boolean; dx: number }
+/** What a bar keeps off: other cards, the tabs of open ones, notes, wires' words and
+ *  annotations. */
+const AROUND =
+  '.map-card:not(.map-card--selected):not(.map-card--open):not(.map-up), .map-lip, .map-note:not(.map-card--selected), .map-sentence:not(.map-sentence--selected), .map-anno:not(.map-anno--behind):not(.map-anno--picked), .map-anno-wire-words:not(.map-anno-wire-words--picked), .map-anno-line-words'
+/** What is picked, which a bar never covers. */
+const PICKED =
+  '.map-card--selected, .map-sentence--selected, .map-anno--picked, .map-anno-line--picked, .map-anno-wire-words--picked'
 
-/** Where on the board a bar goes: over what is picked, or under it when over
- *  it would cover another card, note or wire's words, or run off the top, and
- *  under covers fewer and still fits. Either way it slides along so it never
- *  runs off a side. The board is read as it is drawn, so the bar needs to be
- *  told nothing more than where it would go. */
+/** The bar's top left on the board. */
+type Placed = { left: number; top: number }
+
+/** Where on the board a bar goes. It never covers what is picked: it tries
+ *  over it, then under, then to its right and left, and takes the first
+ *  spot that stays on the board and covers nothing else. When none is clear
+ *  it takes the one that covers least. The board is read as it is drawn, so
+ *  the bar needs to be told nothing more than where it would go: `at` is
+ *  the middle of the picked thing's top edge, or of its bottom edge when it
+ *  should hang below. */
 const placeBar = (bar: HTMLElement | null, at: { x: number; y: number }, below: boolean): Placed | null => {
   const board = bar?.offsetParent
   if (!bar || !(board instanceof HTMLElement)) return null
   const origin = board.getBoundingClientRect()
   const w = bar.offsetWidth
   const h = bar.offsetHeight
-  const half = w / 2
-  const room = board.clientWidth
-  const x = w > room - 2 * EDGE ? EDGE + half : Math.min(room - EDGE - half, Math.max(EDGE + half, at.x))
-  const dx = x - at.x
-  if (below) return { top: at.y, under: true, dx }
-  const placed = (top: number): Box => ({
-    left: origin.left + x - half,
-    right: origin.left + x + half,
-    top: origin.top + top,
-    bottom: origin.top + top + h,
+  const room = { w: board.clientWidth, h: board.clientHeight }
+  const local = (one: DOMRect): Box => ({
+    left: one.left - origin.left,
+    right: one.right - origin.left,
+    top: one.top - origin.top,
+    bottom: one.bottom - origin.top,
   })
-  const boxes = (find: string): DOMRect[] => [...board.querySelectorAll(find)].map((one) => one.getBoundingClientRect())
-  const others = boxes(
-    '.map-card:not(.map-card--selected):not(.map-frame):not(.map-up), .map-note:not(.map-card--selected), .map-sentence:not(.map-sentence--selected), .map-anno:not(.map-anno--behind):not(.map-anno--picked)',
-  )
-  const covered = (box: Box): number => others.filter((other) => overlaps(box, other)).length
-  const over = at.y - h < EDGE ? Infinity : covered(placed(at.y - h))
-  const stay = { top: Math.max(at.y, EDGE + h), under: false, dx }
-  if (over === 0) return stay
-  const picked = boxes('.map-card--selected, .map-sentence--selected, .map-anno--picked')
-  if (!picked.length) return stay
-  const top = Math.max(...picked.map((one) => one.bottom)) - origin.top + 12
-  return top + h < origin.height - EDGE && covered(placed(top)) < over ? { top, under: true, dx } : stay
+  const boxes = (find: string): Box[] =>
+    [...board.querySelectorAll(find)].filter((one) => !bar.contains(one)).map((one) => local(one.getBoundingClientRect()))
+  const marked = boxes(PICKED)
+  const picked: Box = marked.length
+    ? {
+        left: Math.min(...marked.map((one) => one.left)),
+        right: Math.max(...marked.map((one) => one.right)),
+        top: Math.min(...marked.map((one) => one.top)),
+        bottom: Math.max(...marked.map((one) => one.bottom)),
+      }
+    : below
+      ? { left: at.x, right: at.x, top: at.y - 12, bottom: at.y - 12 }
+      : { left: at.x, right: at.x, top: at.y + 12, bottom: at.y + 12 }
+  const others = boxes(AROUND)
+  const slide = (from: number, size: number, span: number): number =>
+    size > span - 2 * EDGE ? EDGE : Math.min(span - EDGE - size, Math.max(EDGE, from))
+  const midX = slide((picked.left + picked.right) / 2 - w / 2, w, room.w)
+  const over = { left: midX, top: picked.top - GAP - h }
+  const boxOf = (spot: Placed): Box => ({ left: spot.left, right: spot.left + w, top: spot.top, bottom: spot.top + h })
+  const fits = (box: Box): boolean =>
+    box.left >= EDGE - 0.5 && box.right <= room.w - EDGE + 0.5 && box.top >= EDGE - 0.5 && box.bottom <= room.h - EDGE + 0.5
+  const coveredBy = (box: Box): Box[] => others.filter((other) => overlaps(box, other))
+
+  type Way = 'over' | 'under' | 'right' | 'left'
+  const ways: Way[] = below ? ['under', 'over', 'right', 'left'] : ['over', 'under', 'right', 'left']
+  /** From its first spot one way, the bar steps on past whatever it would
+   *  cover, until it is clear or off the board. */
+  const clearOf = (way: Way, along: number): Placed | null => {
+    let spot: Placed =
+      way === 'over'
+        ? { left: along, top: picked.top - GAP - h }
+        : way === 'under'
+          ? { left: along, top: picked.bottom + GAP }
+          : way === 'right'
+            ? { left: picked.right + GAP, top: along }
+            : { left: picked.left - GAP - w, top: along }
+    for (let step = 0; step < 12; step += 1) {
+      const box = boxOf(spot)
+      if (!fits(box) || overlaps(box, picked)) return null
+      const hit = coveredBy(box)
+      if (!hit.length) return spot
+      spot =
+        way === 'over'
+          ? { ...spot, top: Math.min(...hit.map((one) => one.top)) - GAP - h }
+          : way === 'under'
+            ? { ...spot, top: Math.max(...hit.map((one) => one.bottom)) + GAP }
+            : way === 'right'
+              ? { ...spot, left: Math.max(...hit.map((one) => one.right)) + GAP }
+              : { ...spot, left: Math.min(...hit.map((one) => one.left)) - GAP - w }
+    }
+    return null
+  }
+  // Over and under, it may sit centred, or lined up with either end of
+  // what is picked; beside, centred, or level with its top or bottom.
+  const xs = [midX, slide(picked.left, w, room.w), slide(picked.right - w, w, room.w)]
+  const ys = [(picked.top + picked.bottom) / 2 - h / 2, picked.top, picked.bottom - h].map((y) => slide(y, h, room.h))
+  /** How far a spot is from what is picked, with a little more for each way
+   *  further down the order, so near and over wins. */
+  const away = (spot: Placed, order: number): number => {
+    const box = boxOf(spot)
+    const dx = Math.max(0, picked.left - box.right, box.left - picked.right)
+    const dy = Math.max(0, picked.top - box.bottom, box.top - picked.bottom)
+    return dx + dy + order * 6
+  }
+  let best: Placed | null = null
+  let nearest = Infinity
+  ways.forEach((way, order) => {
+    for (const along of way === 'over' || way === 'under' ? xs : ys) {
+      const spot = clearOf(way, along)
+      if (spot && away(spot, order) < nearest) {
+        nearest = away(spot, order)
+        best = spot
+      }
+    }
+  })
+  if (best) return best
+  // Nowhere is clear: the spot round it that covers least, and failing that,
+  // on the board over it.
+  let fewest = Infinity
+  for (const spot of [over, { left: midX, top: picked.bottom + GAP }]) {
+    const box = boxOf(spot)
+    if (!fits(box) || overlaps(box, picked)) continue
+    if (coveredBy(box).length < fewest) {
+      fewest = coveredBy(box).length
+      best = spot
+    }
+  }
+  return best ?? { left: midX, top: slide(over.top, h, room.h) }
 }
 
 /** A bar floating by what is picked, kept on the board and clear of what is
  *  round it. `at` is where its bottom middle sits, or its top middle when it
- *  hangs below. */
+ *  hangs below; it moves from there to the first clear spot. */
 export const FloatingBar = ({
   at,
   below = false,
@@ -117,12 +202,11 @@ export const FloatingBar = ({
   useLayoutEffect(() => {
     setPlace(placeBar(bar.current, at, below))
   }, [at.x, at.y, below])
-  const under = place?.under ?? below
   return (
     <div
       ref={bar}
-      className={`map-context${under ? ' map-context--below' : ''}${className ? ` ${className}` : ''}`}
-      style={{ left: at.x + (place?.dx ?? 0), top: place?.top ?? at.y }}
+      className={`map-context${place ? ' map-context--placed' : below ? ' map-context--below' : ''}${className ? ` ${className}` : ''}`}
+      style={place ? { left: place.left, top: place.top } : { left: at.x, top: at.y }}
       role="toolbar"
       aria-label={label}
       onPointerDown={(event) => event.stopPropagation()}
@@ -164,7 +248,7 @@ export const ContextBar = ({
   onAlign,
   onRemove,
   locked = false,
-  removeName = 'Take it off the sketch',
+  removeName = 'Delete from sketch',
 }: {
   picking: Picking
   /** Where on the screen the bar's bottom middle sits, or its top middle

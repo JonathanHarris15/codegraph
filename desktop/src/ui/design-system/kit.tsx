@@ -58,7 +58,6 @@ export const Tool = ({
   on,
   open = false,
   hint,
-  more = false,
   disabled = false,
   onPick,
   children,
@@ -67,7 +66,6 @@ export const Tool = ({
   on: boolean
   open?: boolean
   hint?: string
-  more?: boolean
   disabled?: boolean
   onPick: () => void
   children: ReactNode
@@ -82,7 +80,6 @@ export const Tool = ({
   >
     {children}
     <span>{name}</span>
-    {more ? <span className="ds-tool-more" aria-hidden="true">›</span> : null}
   </button>
 )
 

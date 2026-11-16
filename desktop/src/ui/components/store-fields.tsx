@@ -107,17 +107,13 @@ export const StoreFields = ({
         <div className="ds-hint">None yet. Every record of it will hold the fields you add.</div>
       ) : (
         <div className="store-field-table" role="group" aria-label="Fields">
-          <div className="store-field-heads" aria-hidden="true">
-            <span>Name</span>
-            <span>Holds</span>
-            <span>Points at</span>
-            <span title="Every record has it">Always</span>
-            <span />
-          </div>
           {fields.map((field, i) => {
             const is = typeOf(field.holds)
             return (
               <fieldset key={i} className="store-field" aria-label={`Field ${i + 1}`}>
+                {/* Its name has the row's width, with whether every record
+                    has it and a way to delete it; what it holds and points at
+                    read under it as a sentence. */}
                 <input
                   className="ds-input store-field-name"
                   aria-label={`Name of field ${i + 1}`}
@@ -125,37 +121,42 @@ export const StoreFields = ({
                   value={field.name}
                   onChange={(event) => put(i, { name: event.target.value })}
                 />
-                <Cell
-                  label={`What field ${i + 1} holds`}
-                  value={is.type}
-                  options={said(TYPES)}
-                  onChange={(type) => put(i, { holds: holdsFor(type, is) })}
-                />
-                <Cell
-                  label={`What field ${i + 1} points at`}
-                  value={field.pointsAt || 'nothing'}
-                  options={[...new Set(['nothing', field.pointsAt, ...stores])]
-                    .filter(Boolean)
-                    .map((store) => ({ value: store, says: store === 'nothing' ? '—' : store }))}
-                  onChange={(store) => put(i, { pointsAt: store === 'nothing' ? '' : store })}
-                />
-                <input
-                  type="checkbox"
-                  className="store-field-needed"
-                  aria-label={`Every record has field ${i + 1}`}
-                  title="Every record has it"
-                  checked={field.needed}
-                  onChange={(event) => put(i, { needed: event.target.checked })}
-                />
+                <label className="store-field-needed" title="Every record has it">
+                  <input
+                    type="checkbox"
+                    aria-label={`Every record has field ${i + 1}`}
+                    checked={field.needed}
+                    onChange={(event) => put(i, { needed: event.target.checked })}
+                  />
+                  <span>Required</span>
+                </label>
                 <button
                   type="button"
-                  className="store-field-drop"
-                  aria-label={`Take off field ${field.name || i + 1}`}
-                  title="Take this field off"
+                  className="store-field-drop store-field-drop--danger"
+                  aria-label={`Delete field ${field.name || i + 1}`}
+                  title="Delete this field"
                   onClick={() => onChange({ fields: fields.filter((_, at) => at !== i) })}
                 >
-                  <Glyph of="close" size={12} />
+                  <Glyph of="bin" size={14} />
                 </button>
+                <div className="store-field-type">
+                  <span aria-hidden="true">holds</span>
+                  <Cell
+                    label={`What field ${i + 1} holds`}
+                    value={is.type}
+                    options={said(TYPES)}
+                    onChange={(type) => put(i, { holds: holdsFor(type, is) })}
+                  />
+                  <span aria-hidden="true">points at</span>
+                  <Cell
+                    label={`What field ${i + 1} points at`}
+                    value={field.pointsAt || 'nothing'}
+                    options={[...new Set(['nothing', field.pointsAt, ...stores])]
+                      .filter(Boolean)
+                      .map((store) => ({ value: store, says: store === 'nothing' ? 'nothing' : store }))}
+                    onChange={(store) => put(i, { pointsAt: store === 'nothing' ? '' : store })}
+                  />
+                </div>
                 {is.type === 'a list' ? (
                   <label className="store-field-more">
                     <span>Each item is</span>

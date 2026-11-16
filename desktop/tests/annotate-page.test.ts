@@ -84,7 +84,7 @@ describe('annotating a map', () => {
     const annotate = page.getByRole('toolbar', { name: 'Tools' }).getByRole('group', { name: 'Annotate' })
     expect(await annotate.getByRole('button', { name: 'Note' }).count()).toBe(1)
     await annotate.getByRole('button', { name: 'Shapes' }).click()
-    const library = page.getByRole('complementary', { name: 'Annotations' })
+    const library = page.getByRole('complementary', { name: 'Shapes' })
     // Each group is named for what its shapes do, and says so under its name.
     for (const group of ['Notes', 'Lines', 'Frames', 'Shapes'])
       expect(await library.getByRole('button', { name: group, exact: true }).count()).toBe(1)
@@ -266,7 +266,7 @@ describe('the keys on a map', () => {
     await page.getByLabel('Search shapes').pressSequentially('rtn')
     expect(await said().count()).toBe(0)
     await page.getByLabel('Search shapes').fill('')
-    await page.getByRole('button', { name: 'Close the annotations' }).click()
+    await page.getByRole('button', { name: 'Close the shapes' }).click()
   })
 
   it('steps through the layers with the brackets, and draws on the one it lands on', async () => {
@@ -356,7 +356,7 @@ describe('annotating a sketch', () => {
 
   it('shows the cards or the annotations beside the board, never both', async () => {
     const cards = page.getByRole('complementary', { name: 'Cards' })
-    const annotations = page.getByRole('complementary', { name: 'Annotations' })
+    const annotations = page.getByRole('complementary', { name: 'Shapes' })
     if (!(await cards.isVisible())) await page.keyboard.press('c')
     await cards.waitFor({ timeout: PATIENCE })
     await page.keyboard.press('Shift+A')

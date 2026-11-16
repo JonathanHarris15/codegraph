@@ -139,7 +139,6 @@ export const ToolRail = ({
             name="Shapes"
             on={false}
             open={annotations}
-            more
             hint="Every annotation: shapes, lines, frames and more kinds of note (Shift+A)"
             onPick={onAnnotations}
           >

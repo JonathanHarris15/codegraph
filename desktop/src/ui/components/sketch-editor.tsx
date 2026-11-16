@@ -304,10 +304,26 @@ export const SketchEditor = ({
       const picks = [...box.querySelectorAll('.map-world .map-card--selected, .map-world .map-sentence--selected')].map((one) =>
         one.getBoundingClientRect(),
       )
-      const covers = (from: number): boolean => picks.some((one) => one.right > from && one.left < from + width)
+      // The cards wired straight to what is picked, which a person reads with it.
+      const near = new Set(
+        focus.wires.flatMap((w) =>
+          selected.includes(w.id) ? [w.from, w.to] : selected.includes(w.from) ? [w.to] : selected.includes(w.to) ? [w.from] : [],
+        ),
+      )
+      for (const id of selected) near.delete(id)
+      const neighbours = [...box.querySelectorAll<HTMLElement>('.map-world [data-card]')]
+        .filter((one) => near.has(one.dataset.card ?? ''))
+        .map((one) => one.getBoundingClientRect())
+      const covers = (boxes: DOMRect[], from: number): boolean => boxes.some((one) => one.right > from && one.left < from + width)
       const right = outer.right - PANEL_GAP - width
       const left = board.left + PANEL_GAP
-      setPanelAt(covers(right) && !covers(left) ? left - outer.left : null)
+      // What is picked decides first; then its neighbours, if only one side
+      // keeps them clear.
+      const toLeft =
+        covers(picks, right) !== covers(picks, left)
+          ? covers(picks, right)
+          : !covers(picks, right) && covers(neighbours, right) && !covers(neighbours, left)
+      setPanelAt(toLeft ? left - outer.left : null)
     }
     place()
     if (!selected.length || !panel) return

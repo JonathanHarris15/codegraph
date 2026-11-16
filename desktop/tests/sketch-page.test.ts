@@ -266,6 +266,8 @@ describe('drawing a sketch in the real app', () => {
   it('copies a card by dragging it with Alt held', async () => {
     await page.keyboard.press('Escape')
     await page.keyboard.press('0')
+    // The board glides back as the panel goes, so the card is found once still.
+    await settle()
     const from = await middle(card('billing'))
     await page.keyboard.down('Alt')
     await drag(from, { x: from.x + 40, y: from.y + 220 })
