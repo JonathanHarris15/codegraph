@@ -1144,10 +1144,11 @@ select.map-add-field-holds {
   pointer-events: none;
 }
 
-/* its name, out of the way of its insides */
+/* its name, on its own top left corner: the tab's foot sits on the card's
+   edge, so it reads as the card's and never floats */
 .map-lip {
   position: absolute;
-  top: calc(-1 * var(--space-6) - 2px);
+  bottom: 100%;
   left: calc(-1 * var(--stroke-open));
   display: inline-flex;
   align-items: center;
@@ -1160,6 +1161,11 @@ select.map-add-field-holds {
   background: var(--surface-100);
   white-space: nowrap;
   pointer-events: auto;
+}
+
+/* the card in hand's tab shares its frame's colour */
+.map-card--open.map-card--here > .map-lip {
+  border-color: var(--k, var(--line-edge));
 }
 
 .map-lip--movable {
@@ -1315,7 +1321,7 @@ select.map-add-field-holds {
 }
 
 .map-card--open.map-up.map-card--wired::after {
-  border-color: var(--accent);
+  border-color: var(--wire-strong);
   opacity: 0.85;
 }
 
@@ -1409,6 +1415,28 @@ select.map-add-field-holds {
   display: inline;
 }
 
+/* A page with no picture, zoomed out to names on the map, is only its name,
+   like any other card: no window bar, no empty picture. */
+.map-world--hugged .map-frame--unseen .map-frame-bar,
+.map-world--hugged .map-frame--unseen .map-shot {
+  display: none;
+}
+
+.map-world--hugged .map-frame--unseen .map-frame-name {
+  flex: 1;
+  border-top: 0;
+  padding: 0 min(calc(12px / var(--zoom, 1)), 6cqw);
+}
+
+.map-world--hugged .map-frame--unseen {
+  container-type: inline-size;
+}
+
+.map-world--hugged .map-frame--unseen .map-frame-name .map-name {
+  font-size: min(calc(15px / var(--zoom, 1)), 11cqw);
+  line-height: 1.25;
+}
+
 /* Each part is a size on the screen, but never more than a share of the
    card's width, so a narrow card still holds its name. The canvas reckons
    the card's height from the same sizes. */
@@ -1447,15 +1475,11 @@ select.map-add-field-holds {
 }
 
 /* What a proposal or an agent says on a card stays readable too. */
-.map-world--names .map-state,
+.map-world.map-world--names .map-state,
 .map-world--names .map-agent {
   font-size: calc(11px / var(--zoom, 1));
   line-height: 1.5;
   padding: 0 0.6em;
-}
-
-.map-world--names .map-state {
-  top: calc(-9px / var(--zoom, 1));
 }
 
 .map-world--names .map-agent {
@@ -1528,6 +1552,10 @@ select.map-add-field-holds {
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.map-world--blocks .map-card--glimpsed .map-name {
+  visibility: hidden;
 }
 
 .map-world--blocks .map-card--open::before {
@@ -2004,6 +2032,23 @@ select.map-add-field-holds {
 
 .map-head {
   fill: var(--wire-line);
+}
+
+/* each wire's arrowhead takes the colour of its line */
+.map-head--lit {
+  fill: var(--wire-strong);
+}
+
+.map-head--picked {
+  fill: var(--accent);
+}
+
+.map-head--proposed {
+  fill: var(--state-waiting);
+}
+
+.map-head--gone {
+  fill: var(--state-problem);
 }
 
 /* What a wire is for, as one chip at the midpoint of its own curve. */
@@ -3385,14 +3430,16 @@ kbd {
 }
 
 .map-wire--lit:not(.map-wire--selected) path:first-child {
-  stroke: var(--accent);
+  stroke: var(--wire-strong);
   stroke-width: 3;
   opacity: 1;
 }
 
+/* the dash runs along it as light on the dark line, so a lit wire never
+   takes the accent that marks what is picked */
 .map-wire .map-wire-flow {
   fill: none;
-  stroke: var(--accent);
+  stroke: var(--surface-100);
   stroke-width: var(--stroke-wire-strong);
   stroke-linecap: round;
   stroke-dasharray: 2 16;
@@ -3418,10 +3465,11 @@ kbd {
   }
 }
 
-/* the sentence of a lit wire comes forward with it */
+/* the sentence of a lit wire comes forward with it, in the wire's dark
+   edge rather than the accent that marks what is picked */
 .map-sentence--lit {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent), var(--shadow-float);
+  border-color: var(--wire-strong);
+  box-shadow: var(--shadow-float);
   opacity: 1;
   filter: none;
   z-index: 2;
@@ -3450,9 +3498,12 @@ kbd {
   box-shadow: 0 0 0 2px var(--accent), 0 10px 28px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
+/* A card the pointer's card is wired to is marked by a darker edge, never
+   the accent or a glow: only what is picked, or under the pointer, wears
+   those, so two cards never both read as picked. */
 .map-card--wired:not(.map-card--shaped):not(.map-card--open) {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent), 0 6px 18px color-mix(in srgb, var(--accent) 22%, transparent);
+  border-color: var(--wire-strong);
+  box-shadow: 0 0 0 0.5px var(--wire-strong);
 }
 
 .map-card--selected.map-card--hovered:not(.map-card--shaped),
@@ -3462,7 +3513,7 @@ kbd {
 }
 
 .map-card--open.map-card--wired {
-  border-color: var(--accent);
+  border-color: var(--wire-strong);
 }
 
 .map-card--hovered.map-card--shaped .map-card-outline path {
@@ -3471,7 +3522,7 @@ kbd {
 }
 
 .map-card--wired.map-card--shaped .map-card-outline path {
-  stroke: var(--accent);
+  stroke: var(--wire-strong);
   stroke-width: 2;
 }
 
@@ -3783,9 +3834,16 @@ kbd {
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
+/* It grows with the other small words as the board shrinks, and stays
+   centred on the card's top edge however tall that makes it. */
 .map-world .map-state {
-  font-size: var(--text-sm);
-  line-height: 18px;
+  top: 0;
+  transform: translateY(-50%);
+  /* over the card's coloured top edge, not under it */
+  z-index: 2;
+  font-size: max(var(--text-sm), min(calc(10.5px / var(--zoom, 1)), 17px));
+  line-height: 1.5;
+  padding: 0 0.6em;
 }
 
 /* ---- a project on the projects page ----------------------------------- */

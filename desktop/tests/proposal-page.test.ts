@@ -83,6 +83,8 @@ describe('watching a proposal get built', () => {
     // Nobody is building it yet, so it gives the words that set an agent going.
     expect(await shown(list.locator('code'))).toContain('build the proposal on the search branch of notes')
     expect(await list.getByRole('button', { name: 'Copy the prompt to build it' }).count()).toBe(1)
+    // The board slides out from under the list, so wait for it to stop.
+    await settle()
     await picture('p4-0-list')
     // Each thing goes to where it is drawn, from wherever the map is.
     const trail = page.getByRole('navigation', { name: 'Where you are' })

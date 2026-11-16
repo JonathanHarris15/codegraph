@@ -447,6 +447,22 @@ describe("a wire's sentence and its line", () => {
     expect(at).toEqual(on(0.5))
   })
 
+  it('wraps narrower to fit between two cards close together, and says so', () => {
+    // Two cards side by side with a 140 gap: a 260 wide sentence fits nowhere
+    // between them, but wrapped to 124 it does.
+    const straight = { tail: { x: 0, y: 50 }, c1: { x: 47, y: 50 }, c2: { x: 93, y: 50 }, head: { x: 140, y: 50 } }
+    const cards = [
+      { x: -200, y: 0, w: 200, h: 100 },
+      { x: 140, y: 0, w: 200, h: 100 },
+    ]
+    const [wide] = spread([{ ...straight, at: { x: 70, y: 50 }, w: 260, h: 24 }], cards)
+    expect(wide!.narrow).toBeUndefined()
+    const [at] = spread([{ ...straight, at: { x: 70, y: 50 }, w: 260, h: 24, narrow: { w: 124, h: 46 } }], cards)
+    expect(at!.narrow).toBe(true)
+    expect(at!.x - 62).toBeGreaterThanOrEqual(0)
+    expect(at!.x + 62).toBeLessThanOrEqual(140)
+  })
+
   it('stays where a person put it', () => {
     const [at] = spread([{ ...curve, at: { x: 40, y: 400 }, w: 80, h: 24, fixed: true }])
     expect(at).toEqual({ x: 40, y: 400 })

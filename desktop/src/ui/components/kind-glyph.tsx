@@ -1,6 +1,7 @@
 // codegraph: component kind-glyph
 import {
   AlarmClock,
+  SquareDashed,
   Rows3,
   Table2,
   Bell,
@@ -136,6 +137,7 @@ export const TOOL_GLYPHS = {
   spaceDown: AlignVerticalSpaceAround,
   curvedWires: Spline,
   squareWires: CornerDownRight,
+  pickAll: SquareDashed,
 } as const
 
 export type ToolGlyph = keyof typeof TOOL_GLYPHS

@@ -182,6 +182,7 @@ export const CardFace = ({
   drawing,
   agent,
   extra,
+  glimpsed,
   onIcon,
   onType,
   onOpen,
@@ -197,6 +198,8 @@ export const CardFace = ({
   extra?: ReactNode
   /** The agent says it is working here, or inside here: its words. */
   agent?: string
+  /** Mostly out of sight, at the edge of the board or under a panel. */
+  glimpsed?: boolean
   opens: boolean
   selected: boolean
   /** How many levels out from the one in hand it is. Past none, it cannot be
@@ -239,6 +242,8 @@ export const CardFace = ({
   if (!card.setUp || card.kind === 'shallow software system') classes.push('map-card--bare')
   if (card.kind === 'person') classes.push('map-card--person')
   if (isFrame(card)) classes.push('map-frame')
+  // A page with no picture to show: zoomed out to names, it is only its name.
+  if (isFrame(card) && !picture && !(drawing ? '' : card.mockup)) classes.push('map-frame--unseen')
   if (card.outOfReach) classes.push('map-card--out-of-reach')
   if (selected) classes.push('map-card--selected')
   if (locked) classes.push('map-up', `map-up--${Math.min(up, 3)}`)
@@ -247,6 +252,7 @@ export const CardFace = ({
   if (movable && !locked) classes.push('map-card--movable')
   if (card.state) classes.push(`map-card--${card.state}`)
   if (agent !== undefined) classes.push('map-card--agent')
+  if (glimpsed) classes.push('map-card--glimpsed')
   const mockup = drawing ? '' : (card.mockup ?? '')
   const onField = (says: boolean) =>
     drawing && onEdit && !locked
@@ -441,6 +447,7 @@ export const Sentence = ({
   at,
   state,
   small,
+  widest,
   missing,
   unfinished,
   selected,
@@ -459,6 +466,9 @@ export const Sentence = ({
   /** How the wire stands against a proposal. */
   state?: string
   small: boolean
+  /** Wrapped to this width to fit somewhere clear, as between two cards
+   *  close together. */
+  widest?: number
   /** On the map, the code gave this wire no words: a problem to show. */
   missing: boolean
   /** On a sketch, nobody has said what this wire is for yet. */
@@ -490,7 +500,8 @@ export const Sentence = ({
     <div
       ref={measure}
       className={classes.join(' ')}
-      style={{ left: at.x, top: at.y, visibility: hidden ? 'hidden' : undefined }}
+      style={{ left: at.x, top: at.y, visibility: hidden ? 'hidden' : undefined, ...(widest ? { maxWidth: widest } : {}) }}
+      data-narrow={widest ? 'yes' : undefined}
       role={pickable ? 'button' : undefined}
       aria-label={`Wire: ${words}`}
       title={small ? words : undefined}

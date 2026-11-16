@@ -77,6 +77,11 @@ const GAP_Y = 36
 /** The air between an open card's border and the level drawn inside it. */
 export const OPEN_PAD = 32
 
+/** The air above a card open inside another, for its name tab to sit below
+ *  the outer card's own, never beside it: a tab and the gap under it, at the
+ *  zoom a level is usually fitted at. */
+export const LIP_ROOM = 72
+
 /** The air an open card keeps around it when it pushes a card aside. */
 const OPEN_AIR = 72
 
@@ -729,7 +734,10 @@ export const openLevels = ({
     const inside: Box | null =
       boxes.length === 0
         ? null
-        : { x: around.x - OPEN_PAD, y: around.y - OPEN_PAD, w: around.w + OPEN_PAD * 2, h: around.h + OPEN_PAD * 2 }
+        : (() => {
+            const top = Math.min(around.y - OPEN_PAD, open ? open.box.y - LIP_ROOM : Infinity)
+            return { x: around.x - OPEN_PAD, y: top, w: around.w + OPEN_PAD * 2, h: around.y + around.h + OPEN_PAD - top }
+          })()
     // The root has no border, so it needs no room.
     const wanted = i === 0 ? (inside ?? { x: 0, y: 0, w: 0, h: 0 }) : roomOf(level.card, inside)
     const room: Box = inside ? boundsOf([wanted, inside]) : wanted
@@ -1103,9 +1111,12 @@ export const spread = (
     /** What else it keeps off, for this wire alone: the open card a wire
      *  from outside runs up to, its name tab, the dots where wires cross it. */
     avoid?: Box[]
+    /** Its size wrapped onto more lines, tried where it is nowhere clear at
+     *  its own: between two cards close together, or in a tight corner. */
+    narrow?: { w: number; h: number }
   }[],
   cards: Keep[] = [],
-): { x: number; y: number }[] => {
+): { x: number; y: number; narrow?: boolean }[] => {
   const AIR = 6
   const hits = (one: Box, other: Box): boolean =>
     one.x < other.x + other.w + AIR && one.x + one.w + AIR > other.x && one.y < other.y + other.h + AIR && one.y + one.h + AIR > other.y
@@ -1158,14 +1169,15 @@ export const spread = (
     const polys = outlineOf(keep)
     if (!polys.length) return area
     let inside = 0
-    for (let i = 0; i < 6; i += 1)
-      for (let j = 0; j < 4; j += 1) {
-        const at = { x: box.x + (box.w * (i + 0.5)) / 6, y: box.y + (box.h * (j + 0.5)) / 4 }
+    for (let i = 0; i < 12; i += 1)
+      for (let j = 0; j < 6; j += 1) {
+        const at = { x: box.x + (box.w * (i + 0.5)) / 12, y: box.y + (box.h * (j + 0.5)) / 6 }
         if (polys.some((poly) => inPolygon(at, poly))) inside += 1
       }
-    return (box.w * box.h * inside) / 24
+    return (box.w * box.h * inside) / 72
   }
-  return chips.map((chip) => {
+  /** Where one goes. Only trying, it gives up rather than cover something. */
+  const settle = (chip: (typeof chips)[number], trying = false): { x: number; y: number; narrow?: boolean } | null => {
     if (chip.fixed) return chip.at
     const keepOff: Keep[] = [...cards, ...(chip.avoid ?? []), ...placed]
     // Inside an open card, it is never cut by the border: pulled in just far
@@ -1203,6 +1215,12 @@ export const spread = (
     }
     const beside = raw.flatMap(besides)
     let at = raw.find(clear) ?? spots.find(clear) ?? beside.find(clear)
+    // Nowhere clear at its own size, it wraps narrower if that finds it room.
+    if (!at && chip.narrow && chip.narrow.w < chip.w) {
+      const wrapped = settle({ ...chip, ...chip.narrow, narrow: undefined }, true)
+      if (wrapped) return { ...wrapped, narrow: true }
+    }
+    if (!at && trying) return null
     // On a level too crowded for anywhere to be clear, the spot that covers
     // least wins, the middle first among equals.
     if (!at) {
@@ -1212,7 +1230,13 @@ export const spread = (
       }
       at = [...spots, ...beside].reduce((best, spot) => (cost(spot) < cost(best) - 1 ? spot : best), spots[0] ?? chip.at)
     }
-    placed.push(boxAt(at, chip.w, chip.h))
+    if (!trying) placed.push(boxAt(at, chip.w, chip.h))
+    return at
+  }
+  return chips.map((chip) => {
+    const at = settle(chip)!
+    // A wrapped one keeps the others off at its wrapped size.
+    if (at.narrow && chip.narrow) placed.push(boxAt(at, chip.narrow.w, chip.narrow.h))
     return at
   })
 }
