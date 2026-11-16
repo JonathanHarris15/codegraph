@@ -268,6 +268,16 @@ export const Waiting = ({ what, slow }: { what: string; slow?: string }) => {
   )
 }
 
+/** Something did not work. It says what in a few plain words, in the problem
+ *  tone but without shouting, and offers to try again when there is
+ *  something to try. It sits where the thing that failed would have been. */
+export const Problem = ({ children, onRetry }: { children: ReactNode; onRetry?: () => void }) => (
+  <div className="ds-problem-box" role="alert">
+    <div className="ds-problem-words">{children}</div>
+    {onRetry ? <Button onClick={onRetry}>Try again</Button> : null}
+  </div>
+)
+
 export const Rows = ({ children }: { children: ReactNode }) => (
   <div className="ds-rows">{children}</div>
 )

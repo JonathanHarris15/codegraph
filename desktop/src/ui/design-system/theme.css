@@ -150,8 +150,10 @@
   --accent-wash: #26243d;
   --scrim: rgba(0, 0, 0, 0.62);
 
-  --kind-structure: #c6d2e4;
-  --kind-structure-wash: #24262b;
+  /* warm and a step down, so an open system's frame is not the brightest
+     thing on a dark board */
+  --kind-structure: #aaa398;
+  --kind-structure-wash: #27251f;
   --kind-outside: #9b978c;
   --kind-outside-wash: #25251f;
   --kind-person: #c3ab8d;
@@ -458,6 +460,14 @@ h3 {
 .ds-problem {
   color: var(--state-problem);
   font-size: var(--text-md);
+}
+
+/* a problem on a line of its own, like under a form, reads as a short note */
+div.ds-problem {
+  padding: var(--space-2) var(--space-3);
+  border-left: var(--stroke-rule) solid var(--state-problem);
+  border-radius: var(--radius-sm);
+  background: var(--state-problem-wash);
 }
 
 .ds-veil {
@@ -950,16 +960,17 @@ select.map-add-field-holds {
   cursor: default;
 }
 
-/* The kind's colour runs along the top as a band inside the edge, so it
-   follows the rounded corners instead of thinning out at them. */
+/* The kind's colour runs along the top as a band inside the edge. It is an
+   inset shadow on a layer the card's own shape, so it bends with the rounded
+   corners and never pokes out past them, even on a card that lets its dots
+   and marks hang outside it. */
 .map-card::after {
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: var(--stroke-rule);
-  background: var(--k, var(--line-edge));
+  inset: 0;
+  border-radius: inherit;
+  background: none;
+  box-shadow: inset 0 var(--stroke-rule) 0 var(--k, var(--line-edge));
   pointer-events: none;
 }
 
@@ -979,9 +990,11 @@ select.map-add-field-holds {
   cursor: grab;
 }
 
+/* Under the pointer the edge warms toward the accent; it is a hint, not a
+   pick, so it stays quieter than the picked card's outline. */
 .map-card[role='button']:hover,
 .map-card[role='button']:focus-visible {
-  border-color: var(--pick-ring);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line-card));
 }
 
 /* a store is the one card shape that is not a rounded rectangle */
@@ -1058,13 +1071,21 @@ select.map-add-field-holds {
   filter: none;
 }
 
-.map-card--selected {
-  outline: var(--stroke-open) solid var(--pick-ring);
+/* A picked card wears one mark, the accent outline; its own edge stays as it
+   was, and the pointer's hint and the wire light do not pile on top. */
+.map-card--selected,
+.map-card--selected[role='button']:hover,
+.map-card--selected[role='button']:focus-visible {
+  outline: var(--stroke-open) solid var(--accent);
   outline-offset: 2px;
+  border-color: var(--line-card);
 }
 
-/* a card opened in place: it stays where it is and turns see-through */
+/* a card opened in place: it stays where it is and turns see-through. Its
+   frame is a little finer than a pick's outline, so the two never read alike;
+   the lip and the faded frame further out follow the same width. */
 .map-card--open {
+  --stroke-open: 1.5px;
   background: none;
   border: var(--stroke-open) solid var(--k, var(--line-edge));
   border-radius: var(--radius-lg);
@@ -1245,6 +1266,7 @@ select.map-add-field-holds {
   background: none;
   border: var(--stroke-open) solid var(--k, var(--line-edge));
   border-radius: inherit;
+  box-shadow: none;
   opacity: var(--up-fade, 0.34);
   pointer-events: none;
 }
@@ -1955,16 +1977,29 @@ select.map-add-field-holds {
   cursor: pointer;
 }
 
+/* Each card a soft wash with its kind's edge, as it reads on the board; a
+   card with no kind of its own falls back to a plain one. */
 .map-overview-block {
   position: absolute;
   border-radius: 2px;
-  opacity: 0.8;
+  background: var(--kw, var(--surface-sunken));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--k, var(--line-edge)) 45%, transparent);
 }
 
+/* a card that holds others, like an open one: its frame, not a slab */
+.map-overview-block--frame {
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--kw, var(--surface-sunken)) 40%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--k, var(--line-edge)) 70%, transparent);
+}
+
+/* what the window shows now, in the accent, since it is where you are */
 .map-overview-box {
   position: absolute;
-  border: var(--stroke-open) solid var(--pick-ring);
+  border: var(--stroke-open) solid var(--accent);
   border-radius: var(--radius-xs);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  pointer-events: none;
 }
 
 /* a box dragged out with the Area tool */
@@ -2417,10 +2452,6 @@ select.map-add-field-holds {
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
-.map-card--selected {
-  outline: var(--stroke-open) solid var(--accent);
-  outline-offset: 2px;
-}
 
 /* the card a wire being drawn would land on */
 .map-card--target {
@@ -3160,6 +3191,12 @@ kbd {
 .map-card--wired:not(.map-card--shaped):not(.map-card--open) {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent), 0 6px 18px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.map-card--selected.map-card--hovered:not(.map-card--shaped),
+.map-card--selected.map-card--wired:not(.map-card--shaped):not(.map-card--open) {
+  border-color: var(--line-card);
+  box-shadow: var(--shadow-float);
 }
 
 .map-card--open.map-card--wired {
@@ -6897,16 +6934,32 @@ button.map-restyle:hover {
 
 /* Nothing has come back yet. The bar keeps moving so the screen never reads
    as stalled, and the seconds show once a person has started to wonder. */
+/* No dashed box: that is how an empty place looks, and this is not empty,
+   only not here yet. On the board it sits in the middle of the room. */
 .ds-waiting {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--space-3);
-  border: var(--stroke-edge) dashed var(--line-edge);
-  border-radius: var(--radius-lg);
   padding: 40px var(--space-6);
   text-align: center;
   color: var(--ink-soft);
+  font-size: var(--text-md);
+  animation: ds-waiting-in 240ms ease-out 200ms both;
+}
+
+.map-body > .ds-waiting,
+.map-body > .ds-empty,
+.map-body > .ds-problem-box {
+  margin: auto;
+  max-width: 440px;
+}
+
+/* A wait that ends at once never shows, so a quick read does not flicker. */
+@keyframes ds-waiting-in {
+  from {
+    opacity: 0;
+  }
 }
 
 .ds-waiting-what {
@@ -6958,11 +7011,47 @@ button.map-restyle:hover {
 
 /* With motion turned down the seconds carry it on their own. */
 @media (prefers-reduced-motion: reduce) {
+  .ds-waiting {
+    animation: none;
+  }
+
   .ds-waiting-bar > span {
     width: 100%;
     opacity: 0.4;
     animation: none;
   }
+}
+
+/* ---- something did not work ------------------------------------------- */
+
+/* Calm, not alarming: the problem colour on a thin edge and the words, a
+   wash behind them, and a way to try again when there is one. */
+.ds-problem-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  border: var(--stroke-edge) solid color-mix(in srgb, var(--state-problem) 35%, transparent);
+  border-radius: var(--radius-lg);
+  background: var(--state-problem-wash);
+  color: var(--ink-000);
+  font-size: var(--text-md);
+  text-align: center;
+}
+
+.ds-problem-words {
+  max-width: 48ch;
+}
+
+.ds-problem-words::before {
+  content: '';
+  display: block;
+  width: 8px;
+  height: 8px;
+  margin: 0 auto var(--space-3);
+  border-radius: 50%;
+  background: var(--state-problem);
 }
 
 /* ---- a click that shows it landed ------------------------------------- */
