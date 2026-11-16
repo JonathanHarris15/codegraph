@@ -1,12 +1,22 @@
 // codegraph: component overview
-import { Glyph, kindClass } from './kind-glyph.js'
+import { lookOf } from './card-looks.js'
+import { Glyph, kindClass, lookClass } from './kind-glyph.js'
 import { boundsOf, type Box, type Placed } from './map-layout.js'
 
 const H = 128
 const PAD = 8
 
+const holds = (outer: Box, inner: Box): boolean =>
+  outer !== inner &&
+  outer.w * outer.h > inner.w * inner.h &&
+  inner.x >= outer.x &&
+  inner.y >= outer.y &&
+  inner.x + inner.w <= outer.x + outer.w &&
+  inner.y + inner.h <= outer.y + outer.h
+
 /** Where you are on the board: every card on it a block in its kind colour,
- *  open ones and what they hold included, the viewport a ring around them. */
+ *  the viewport a ring around them. A card that holds others, like an open
+ *  one, is drawn as an outline under them, so its insides still show. */
 export const Overview = ({
   of: name,
   placed,
@@ -61,13 +71,19 @@ export const Overview = ({
           })
         }}
       >
-        {placed.map((p) => (
-          <span
-            key={p.card.id}
-            className={`map-overview-block ${kindClass(p.card.kind)}`}
-            style={{ ...onto(p.box), background: 'var(--k)' }}
-          />
-        ))}
+        {placed
+          .map((p) => ({ p, frame: placed.some((q) => holds(p.box, q.box)) }))
+          .sort((a, b) => Number(b.frame) - Number(a.frame) || b.p.box.w * b.p.box.h - a.p.box.w * a.p.box.h)
+          .map(({ p, frame }) => {
+            const look = lookOf(p.card)
+            return (
+              <span
+                key={p.card.id}
+                className={`map-overview-block${frame ? ' map-overview-block--frame' : ''} ${kindClass(p.card.kind)}${look ? ` ${lookClass(look)}` : ''}`}
+                style={onto(p.box)}
+              />
+            )
+          })}
         <span className="map-overview-box" style={onto(view)} />
       </div>
     </div>

@@ -47,6 +47,8 @@ export const CardLookEditor = ({
   kind,
   look,
   canSave = false,
+  color = true,
+  typed = true,
   onKind,
   onLook,
   onSave,
@@ -55,21 +57,29 @@ export const CardLookEditor = ({
   look: CardLook
   /** There is something new here worth keeping as a type. */
   canSave?: boolean
+  /** The colour is picked here too; left out where the bar over the card
+   *  already picks it. */
+  color?: boolean
+  /** The type's name is written here too; left out where the card and the
+   *  bar over it already name it. */
+  typed?: boolean
   onKind: (kind: string) => void
   onLook: (look: CardLook) => void
   onSave?: () => void
 }) => (
   <div className="map-look">
-    <label className="ds-field">
-      <span className="ds-label">Type</span>
-      <input
-        className="ds-input"
-        aria-label="Type name"
-        placeholder="e.g. queue, gateway, worker"
-        value={kind === 'card' ? '' : kind}
-        onChange={(event) => onKind(event.target.value)}
-      />
-    </label>
+    {typed ? (
+      <label className="ds-field">
+        <span className="ds-label">Type</span>
+        <input
+          className="ds-input"
+          aria-label="Type name"
+          placeholder="e.g. queue, gateway, worker"
+          value={kind === 'card' ? '' : kind}
+          onChange={(event) => onKind(event.target.value)}
+        />
+      </label>
+    ) : null}
     <div className="map-look-group" role="radiogroup" aria-label="Icon">
       <span className="ds-label">Icon</span>
       <IconPick icon={look.icon} onPick={(icon) => onLook({ ...look, icon })} />
@@ -95,10 +105,12 @@ export const CardLookEditor = ({
         ))}
       </div>
     </div>
-    <div className="map-look-group">
-      <span className="ds-label">Colour</span>
-      <ColorPick color={look.color} onPick={(color) => onLook({ ...look, color })} />
-    </div>
+    {color ? (
+      <div className="map-look-group">
+        <span className="ds-label">Colour</span>
+        <ColorPick color={look.color} onPick={(next) => onLook({ ...look, color: next })} />
+      </div>
+    ) : null}
     {canSave && onSave ? (
       <button type="button" className="ds-button" onClick={onSave}>
         Save as a card type

@@ -104,7 +104,7 @@ describe('two members on one map', () => {
   it('opens on GitHub\'s main line for both, one with no working copy', async () => {
     expect(await web(benPage).count()).toBe(1)
     expect(await benPage.getByRole('button', { name: 'Branch of notes' }).textContent()).toContain('on GitHub')
-    expect(await anaPage.getByRole('button', { name: 'Branch of notes' }).textContent()).toContain('on GitHub')
+    expect(await anaPage.getByRole('button', { name: 'Branch of notes' }).textContent()).toContain('not in your folder')
   })
 
   it('shows one member\'s cursor on the other\'s screen', async () => {
@@ -139,7 +139,10 @@ describe('two members on one map', () => {
   })
 
   it('says who did what in the history', async () => {
-    await anaPage.getByRole('button', { name: 'History' }).click()
+    await anaPage.getByRole('button', { name: 'More' }).click()
+    await anaPage.getByRole('menuitem', { name: 'Members' }).waitFor({ timeout: PATIENCE })
+    await picture(anaPage, 'together-more')
+    await anaPage.getByRole('menuitem', { name: 'History' }).click()
     const panel = anaPage.getByRole('complementary', { name: 'History' })
     await panel.getByText('on the map of notes on main').first().waitFor({ timeout: PATIENCE })
     expect(await panel.textContent()).toContain('Ana')
@@ -149,10 +152,10 @@ describe('two members on one map', () => {
 
 describe('sketches together', () => {
   it('reach both, and a change by one reaches the other', async () => {
-    await anaPage.getByRole('button', { name: /^Sketches/ }).click()
+    await anaPage.getByRole('button', { name: /^Project sketches/ }).click()
     await anaPage.getByText('Plan').first().click()
     await anaPage.getByLabel('Sketch name').waitFor({ timeout: PATIENCE })
-    await benPage.getByRole('button', { name: /^Sketches/ }).click()
+    await benPage.getByRole('button', { name: /^Project sketches/ }).click()
     await benPage.getByText('Plan').first().click()
     await benPage.getByLabel('Sketch name').waitFor({ timeout: PATIENCE })
 

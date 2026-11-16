@@ -13,6 +13,7 @@ import { openTheApp } from './yard.js'
 /** The built app, opened on a blank computer: its own folder for files, so
  *  the real projects on this machine are left alone. */
 const PATIENCE = 15_000
+const pictures = process.env.CODEGRAPH_PICTURES ?? ''
 
 let home = ''
 let app: ElectronApplication
@@ -22,6 +23,10 @@ const open = async (): Promise<void> => {
   app = await openTheApp(home)
   page = await app.firstWindow()
   await page.waitForLoadState('domcontentloaded')
+}
+
+const picture = async (name: string): Promise<void> => {
+  if (pictures) await page.screenshot({ path: join(pictures, `${name}.png`) })
 }
 
 /** Waits for something to show, and hands back what it says. */
@@ -62,6 +67,7 @@ describe('the projects screen in the real app', () => {
     await page.getByRole('button', { name: 'Your agent' }).click()
     const window = page.getByRole('dialog', { name: 'Your agent' })
     expect(await shown(window)).toContain('claude mcp add --scope user codegraph')
+    await picture('projects-2-agent')
     await window.getByRole('button', { name: 'Close' }).click()
     await window.waitFor({ state: 'detached', timeout: PATIENCE })
   })
@@ -72,9 +78,14 @@ describe('the projects screen in the real app', () => {
     await page.getByRole('button', { name: 'Make it' }).click()
 
     expect(await shown(page.getByText('Mosaic Manager'))).toContain('Mosaic Manager')
-    expect(await shown(page.getByText('no software systems yet'))).toContain('repos call it')
+    expect(await shown(page.getByText('no repos yet'))).toContain('short name')
     expect(await shown(page.getByText('mosaic-manager', { exact: true }))).toBe('mosaic-manager')
-    expect(await shown(page.getByRole('button', { name: '+ Link a repo git already tracks' }))).toContain('Link a repo')
+    // With no repo yet, linking the first is the card's one plain ask.
+    const card = page.locator('.project-card').filter({ hasText: 'Mosaic Manager' })
+    expect(await shown(card.locator('.project-repos-empty'))).toContain('Link the git repos this project is made of')
+    expect(await shown(card.getByRole('button', { name: 'Link a repo', exact: true }))).toContain('Link a repo')
+    expect(await card.getByRole('button', { name: '+ Link a repo' }).count()).toBe(0)
+    await picture('projects-1-card')
   }, 30_000)
 
   it('keeps the project when the app is opened again', async () => {
@@ -83,14 +94,12 @@ describe('the projects screen in the real app', () => {
     expect(await shown(page.getByText('Mosaic Manager'))).toContain('Mosaic Manager')
   }, 60_000)
 
-  it('answers one click on a project, and says what the next one does', async () => {
+  it('opens a project on one click of its head, which says so', async () => {
     const card = page.getByRole('button', { name: 'Open Mosaic Manager', exact: true })
-    expect(await shown(card.getByText('Double-click to open'))).toBe('Double-click to open')
-    // One click only. A second would open the project and strand the tests below.
-    await card.click({ position: { x: 10, y: 60 } })
-    expect(await shown(card.getByText('Click again to open'))).toBe('Click again to open')
-    await page.getByRole('heading', { name: 'Projects' }).click()
-    expect(await shown(card.getByText('Double-click to open'))).toBe('Double-click to open')
+    expect(await shown(card.getByText('Open map'))).toContain('Open map')
+    await card.click({ position: { x: 10, y: 20 } })
+    await page.getByRole('button', { name: '← Projects' }).click({ timeout: PATIENCE })
+    expect(await shown(page.getByRole('heading', { name: 'Projects' }))).toBe('Projects')
   }, 30_000)
 
   it('renames a project from its ..., and keeps the name repos call it', async () => {
@@ -118,9 +127,11 @@ describe('the projects screen in the real app', () => {
   }, 30_000)
 
   it('keeps sketches in folders, dragged in, and steps back out by the path at the top', async () => {
-    await page.getByRole('button', { name: 'Sketches tab' }).click()
+    await page.getByRole('tab', { name: 'My sketches' }).click()
+    expect(await shown(page.getByRole('heading', { name: 'My sketches' }))).toBe('My sketches')
+    await picture('projects-3-my-sketches')
     await page.getByRole('button', { name: 'New sketch' }).first().click()
-    await page.getByRole('button', { name: '← Sketches' }).click()
+    await page.getByRole('button', { name: '← My sketches' }).click()
     await page.getByRole('button', { name: 'New folder' }).click()
     await page.getByLabel('Folder name').fill('Ideas')
     await page.getByRole('button', { name: 'Make it' }).click()
@@ -136,16 +147,18 @@ describe('the projects screen in the real app', () => {
   }, 30_000)
 })
 
-describe('the settings screen in the real app', () => {
+describe('the agent instructions screen in the real app', () => {
   const editor = () => page.getByLabel('What your agents are told')
 
-  it('opens from the header, with every topic codegraph tells an agent about', async () => {
-    await page.getByRole('button', { name: 'Settings' }).click()
-    expect(await shown(page.getByRole('heading', { name: 'Settings' }))).toBe('Settings')
+  it('opens from the agent window, with every topic codegraph tells an agent about', async () => {
+    await page.getByRole('button', { name: 'Your agent' }).click()
+    await page.getByRole('dialog', { name: 'Your agent' }).getByRole('button', { name: 'Agent instructions' }).click()
+    expect(await shown(page.getByRole('heading', { name: 'Agent instructions' }))).toBe('Agent instructions')
     const topics = page.getByRole('group', { name: 'Topics' })
     expect(await shown(topics)).toContain('setup')
     expect(await shown(topics)).toContain('working-here')
     expect(await shown(page.getByText('No edits yet'))).toContain('No edits yet')
+    await picture('projects-4-instructions')
   })
 
   it('takes a person own words, and says the topic is theirs now', async () => {
@@ -178,7 +191,7 @@ describe('the settings screen in the real app', () => {
   })
 
   it('goes back to the projects', async () => {
-    await page.getByRole('button', { name: 'Back to projects' }).click()
+    await page.getByRole('button', { name: '← Projects' }).click()
     expect(await shown(page.getByRole('heading', { name: 'Projects' }))).toBe('Projects')
   })
 })

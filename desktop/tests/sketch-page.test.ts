@@ -34,7 +34,7 @@ const spot = async (across: number, down: number): Promise<{ x: number; y: numbe
 /** The sketch drawer, out and ready; clicking the bar again would put it away. */
 const theDrawer = async (): Promise<Locator> => {
   const drawer = page.getByRole('complementary', { name: 'Sketches' })
-  if (!(await drawer.isVisible())) await page.getByRole('button', { name: /^Sketches/ }).first().click()
+  if (!(await drawer.isVisible())) await page.getByRole('button', { name: /^Project sketches/ }).first().click()
   await drawer.waitFor({ state: 'visible', timeout: PATIENCE })
   return drawer
 }
@@ -80,7 +80,7 @@ afterAll(async () => {
 
 describe('drawing a sketch in the real app', () => {
   it('starts a blank sketch, with the cards for its level beside the tools', async () => {
-    await page.getByRole('button', { name: /^Sketches/ }).click()
+    await page.getByRole('button', { name: /^Project sketches/ }).click()
     await page.getByRole('button', { name: 'New sketch' }).click()
     await page.getByRole('button', { name: /^Blank/ }).click()
     expect(await page.getByLabel('Sketch name').inputValue()).toBe('New sketch')
@@ -258,14 +258,16 @@ describe('drawing a sketch in the real app', () => {
   it('takes a card off from the right-click menu', async () => {
     await card('index').click({ button: 'right' })
     await page.getByRole('menu', { name: 'What to do here' }).waitFor({ timeout: PATIENCE })
-    await page.getByRole('menuitem', { name: /Take it off the sketch/ }).click()
-    await page.waitForTimeout(200)
-    expect(await card('index').count()).toBe(0)
+    await page.getByRole('menuitem', { name: /Delete from sketch/ }).click()
+    // It fades as it goes, while the board eases back from under the panel.
+    await expect.poll(() => card('index').count(), { timeout: PATIENCE }).toBe(0)
   })
 
   it('copies a card by dragging it with Alt held', async () => {
     await page.keyboard.press('Escape')
     await page.keyboard.press('0')
+    // The board glides back as the panel goes, so the card is found once still.
+    await settle()
     const from = await middle(card('billing'))
     await page.keyboard.down('Alt')
     await drag(from, { x: from.x + 40, y: from.y + 220 })
@@ -275,6 +277,41 @@ describe('drawing a sketch in the real app', () => {
     await page.keyboard.press('Control+z')
     await page.waitForTimeout(200)
     expect(await card('billing').count()).toBe(1)
+  })
+
+  it('leaves the board still when a picked card is clear of the panel, and slides only one it hides', async () => {
+    const board = page.locator('.map-world')
+    const at = (): Promise<string> => board.evaluate((el) => (el as HTMLElement).style.transform)
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('Control+0')
+    await settle()
+    const before = await at()
+    await card('notes').click()
+    await page.locator('.sketch-panel').waitFor({ timeout: PATIENCE })
+    await settle()
+    expect(await at()).toBe(before)
+
+    // Off with the panel, then the card is pushed under where it comes out.
+    await page.keyboard.press('Escape')
+    await settle()
+    const area = (await page.locator('.map-frame-area').boundingBox())!
+    const there = (await card('notes').boundingBox())!
+    const push = area.x + area.width - 100 - there.x
+    await page.mouse.move(area.x + area.width / 2, area.y + area.height / 2)
+    await page.keyboard.down('Shift')
+    await page.mouse.wheel(0, -push)
+    await page.keyboard.up('Shift')
+    await settle()
+    await card('notes').click()
+    const panel = page.locator('.sketch-panel')
+    await panel.waitFor({ timeout: PATIENCE })
+    await settle()
+    const side = (await panel.boundingBox())!
+    const now = (await card('notes').boundingBox())!
+    expect(now.x + now.width).toBeLessThanOrEqual(side.x)
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('Control+0')
+    await settle()
   })
 
   it('points a wire at another card by dragging its end', async () => {
@@ -295,7 +332,7 @@ describe('drawing a sketch in the real app', () => {
     await page.getByRole('button', { name: '← Map' }).click()
     await page.getByRole('button', { name: 'Open notes' }).waitFor({ timeout: PATIENCE })
 
-    await page.getByRole('button', { name: /^Sketches/ }).click()
+    await page.getByRole('button', { name: /^Project sketches/ }).click()
     await page.getByRole('button', { name: /^Search/ }).click()
     expect(await shown(wire('notes calls search to find notes by their words'))).toContain('notes')
     expect(await shown(page.locator('.map-anno--sticky'))).toBe('Which search service?')
@@ -316,7 +353,7 @@ describe('drawing a sketch in the real app', () => {
     await page.getByRole('button', { name: '← Map' }).click()
     await page.getByRole('button', { name: 'Open notes' }).dblclick()
     await page.getByRole('button', { name: 'Open web' }).waitFor({ timeout: PATIENCE })
-    await page.getByRole('button', { name: /^Sketches/ }).click()
+    await page.getByRole('button', { name: /^Project sketches/ }).click()
     await page.getByRole('button', { name: 'New sketch' }).click()
     await page.getByRole('button', { name: /^From the map/ }).click()
 
@@ -326,13 +363,37 @@ describe('drawing a sketch in the real app', () => {
     const name = `main (sketch ${two(day.getDate())}/${two(day.getMonth() + 1)}/${two(day.getFullYear() % 100)})`
     expect(await page.getByLabel('Sketch name').inputValue()).toBe(name)
     // The bar says a sketch is being worked on, and the branch is put away.
-    expect(await shown(page.getByRole('button', { name: `Sketches: working on ${name}` }))).toContain('Sketching')
+    expect(await shown(page.locator('.map-sketching'))).toContain('Project sketches')
+    expect(await shown(page.locator('.map-mode-chip'))).toBe('Sketch')
     expect(await page.getByRole('button', { name: /^Branch of/ }).count()).toBe(0)
     await card('web').click()
     await page.getByRole('button', { name: 'Draw inside it' }).click()
     expect(await shown(card('write-note'))).toContain('feature')
     await settle()
     await picture('sketch-2-from-map')
+  })
+
+  it('hands the sketch to an agent: the words to paste, ready to copy', async () => {
+    const hand = page.getByRole('button', { name: 'Hand to your agent' })
+    await hand.click()
+    const pop = page.getByRole('dialog', { name: 'Hand to your agent' })
+    expect(await shown(pop.locator('code'))).toContain('make a proposal from the sketch “main (sketch')
+    expect(await pop.getByRole('button', { name: 'Copy' }).count()).toBe(1)
+    await page.waitForTimeout(300)
+    await picture('sketch-3-hand-to-agent')
+    await hand.click()
+    await pop.waitFor({ state: 'detached', timeout: PATIENCE })
+  })
+
+  it('leaves a trace once handed over: the button waits for the agent', async () => {
+    await page.getByRole('button', { name: 'Hand to your agent' }).click()
+    const pop = page.getByRole('dialog', { name: 'Hand to your agent' })
+    await pop.getByRole('button', { name: 'Copy' }).click()
+    const waiting = page.getByRole('button', { name: 'Waiting for your agent…' })
+    await waiting.waitFor({ timeout: PATIENCE })
+    await picture('sketch-4-handed-over')
+    await waiting.click()
+    await pop.waitFor({ state: 'detached', timeout: PATIENCE })
   })
 
   it('asks before it throws a sketch away, and keeps it when the answer is no', async () => {

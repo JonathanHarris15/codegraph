@@ -97,7 +97,7 @@ export type MapShown = {
   suggestions: string[]
 }
 
-const blankMap = (point: Point): SystemMap => ({ point, setUp: false, projects: [], containers: [], components: [], stores: [], wires: [], outside: [], problems: [], proposal: null, design: null, uiBlocks: [], recipes: [], mockups: {} }) as unknown as SystemMap
+const blankMap = (point: Point): SystemMap => ({ point, setUp: false, projects: [], system: '', containers: [], components: [], stores: [], wires: [], outside: [], problems: [], proposal: null, design: null, uiBlocks: [], recipes: [], mockups: {} }) as unknown as SystemMap
 
 /** Reads one software system, if this member can reach it. With no working copy
  *  its history is fetched from GitHub with their own access, and GitHub's answer
@@ -140,10 +140,41 @@ export const showMap = async (projectId: string, points: Record<string, Point> =
   const top = card(project.id, project.name, 'project', { kind: 'project' })
   const systems: SystemShown[] = []
   const answersTo = new Map<string, string>()
-  for (const { system, point, map, reach, folder } of read) {
-    top.children.push(
-      reach === 'open' ? systemCard(system.id, system.name, map) : card(system.id, system.name, 'system', { kind: 'software system', says: WORDS[reach], outOfReach: WORDS[reach] }),
+
+  // Repos that name the same software system are drawn as one, holding all
+  // their containers (ADR 0028). A system only one repo names is that repo.
+  const naming = new Map<string, typeof read>()
+  for (const one of read)
+    if (one.reach === 'open' && one.map.system) {
+      const key = one.map.system.toLowerCase()
+      naming.set(key, [...(naming.get(key) ?? []), one])
+    }
+  /** The card each repo is drawn in at the project level, by the repo's id. */
+  const drawnIn = new Map<string, string>()
+  const joined = new Map<string, Card>()
+  for (const [key, repos] of naming) {
+    if (repos.length < 2) continue
+    const id = `system:${key.replace(/[^a-z0-9]+/g, '-')}`
+    joined.set(
+      id,
+      card(id, repos[0]!.map.system, 'system', {
+        kind: 'software system',
+        says: `${repos.length} repos: ${repos.map((r) => r.system.name).join(', ')}`,
+      }),
     )
+    for (const r of repos) drawnIn.set(r.system.id, id)
+    answersTo.set(key, id)
+  }
+  const cardOf = (repoId: string): string => drawnIn.get(repoId) ?? repoId
+
+  for (const { system, point, map, reach, folder } of read) {
+    const own = reach === 'open' ? systemCard(system.id, system.name, map) : card(system.id, system.name, 'system', { kind: 'software system', says: WORDS[reach], outOfReach: WORDS[reach] })
+    const into = joined.get(cardOf(system.id))
+    if (into) {
+      if (!top.children.includes(into)) top.children.push(into)
+      into.children.push(...own.children.map((c) => ({ ...c, repo: system.id, repoName: system.name })))
+      into.wires.push(...own.wires)
+    } else top.children.push(own)
     const onMain = reach === 'open' && folder && (await mainLineRef(folder)).replace(/^origin\//, '') === ((point.kind === 'branch' ? point.name : point.kind === 'live' ? (point.branch ?? '') : '').replace(/^origin\//, ''))
     const sketch = map.proposal?.sketch ? listSketches(project.id).find((s) => s.name === map.proposal?.sketch) : undefined
     const said = point.kind === 'live' && system.path ? whereIs(system.path) : null
@@ -178,14 +209,40 @@ export const showMap = async (projectId: string, points: Record<string, Point> =
     for (const name of shallow.answersTo) answersTo.set(name.toLowerCase(), shallow.id)
   }
 
+  /** The container a wire to a repo meets: the one named after a slash, or
+   *  else its first. */
+  const containerIn = (repoId: string, named: string): string => {
+    const map = read.find((r) => r.system.id === repoId)?.map
+    const found = map?.containers.find((c) => c.name === named) ?? map?.containers[0]
+    return found ? `${repoId}/${found.id}` : ''
+  }
   const suggestions = new Set<string>()
   for (const { system, map } of read)
     for (const call of map.outside) {
-      const name = call.to.replace(/^outside:/, '')
-      const reached = answersTo.get(name.toLowerCase())
-      if (reached && reached !== system.id)
-        join(top.wires, { ...call, from: system.id, to: reached, ends: [{ from: `${system.id}/${call.from}`, to: reached }] })
-      else if (!reached) suggestions.add(name)
+      const [name = '', named = ''] = call.to.replace(/^outside:/, '').split('/')
+      let reached = answersTo.get(name.toLowerCase())
+      if (!reached) {
+        suggestions.add(name)
+        continue
+      }
+      // A wire to a software system of several repos reaches the repo with
+      // the container it names, or else the first that is not its own.
+      if (joined.has(reached)) {
+        const repos = [...drawnIn].filter(([repo, into]) => into === reached && repo !== system.id).map(([repo]) => repo)
+        reached = repos.find((repo) => read.find((r) => r.system.id === repo)?.map.containers.some((c) => c.name === named)) ?? repos[0] ?? ''
+      }
+      if (!reached || reached === system.id) continue
+      const from = cardOf(system.id)
+      const to = cardOf(reached)
+      const starts = `${system.id}/${call.from}`
+      const meets = containerIn(reached, named)
+      if (from === to) {
+        // Two repos of one software system: the wire joins their containers.
+        const container = map.components.find((c) => c.id === call.from)?.container
+        if (container && meets) join(joined.get(from)!.wires, { ...call, from: `${system.id}/container:${container}`, to: meets, ends: [{ from: starts, to: meets }] })
+        continue
+      }
+      join(top.wires, { ...call, from, to, ends: [{ from: starts, to: joined.has(to) && meets ? meets : reached }] })
     }
 
   const me = whoIsIn()?.id ?? ''

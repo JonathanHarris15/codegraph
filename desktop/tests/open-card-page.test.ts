@@ -37,6 +37,14 @@ const drag = async (from: { x: number; y: number }, to: { x: number; y: number }
   await page.mouse.up()
 }
 const middle = (box: Box): { x: number; y: number } => ({ x: box.x + box.width / 2, y: box.y + box.height / 2 })
+/** The middle of the part of a box the board shows: a card pushed aside can
+ *  hang off the board's edge, under the card library. */
+const seen = async (box: Box): Promise<{ x: number; y: number }> => {
+  const area = await board()
+  const left = Math.max(box.x, area.x)
+  const right = Math.min(box.x + box.width, area.x + area.width)
+  return { x: (left + right) / 2, y: box.y + box.height / 2 }
+}
 
 /** Adds a card by double-clicking the board, picks the first kind offered,
  *  and names it. */
@@ -68,9 +76,12 @@ beforeAll(async () => {
   app = await openTheApp(yard.home)
   page = await app.firstWindow()
   await page.setViewportSize({ width: 1400, height: 860 })
+  // The panel about what is picked is put away, as a person can ask, so it
+  // floats over none of the board these tests press on.
+  await page.evaluate(() => window.localStorage.setItem('codegraph-panel', 'no'))
   await page.getByRole('button', { name: 'Open Notes', exact: true }).dblclick()
   await page.getByRole('button', { name: 'Open notes' }).waitFor({ timeout: PATIENCE })
-  await page.getByRole('button', { name: /^Sketches/ }).click()
+  await page.getByRole('button', { name: /^Project sketches/ }).click()
   await page.getByRole('button', { name: 'New sketch' }).click()
   await page.getByRole('button', { name: /^Blank/ }).click()
   await page.getByLabel('Sketch name').waitFor({ timeout: PATIENCE })
@@ -131,16 +142,18 @@ describe('opening a card in the real app', () => {
     // A card outside is faded, and a press on it neither picks it up nor adds anything.
     const beside = await boxOf(card('Beside'))
     expect(await card('Beside').evaluate((el) => el.classList.contains('map-up'))).toBe(true)
-    await page.mouse.click(middle(beside).x, middle(beside).y)
+    const press = await seen(beside)
+    await page.mouse.click(press.x, press.y)
     expect(await card('Beside').getAttribute('aria-pressed')).toBe(null)
     const k = await worldScale()
-    await drag(middle(beside), { x: middle(beside).x, y: middle(beside).y + 30 })
+    await drag(press, { x: press.x, y: press.y + 30 })
     await settle()
     // That drag moved the board, not the card: the two go together.
     const after = await boxOf(card('Beside'))
     const openAfter = await boxOf(openBox('Main'))
     expect(Math.round(after.y - openAfter.y)).toBe(Math.round(beside.y - open.y))
-    await page.mouse.dblclick(middle(after).x, middle(after).y)
+    const again = await seen(after)
+    await page.mouse.dblclick(again.x, again.y)
     await page.waitForTimeout(100)
     expect(await page.getByRole('dialog', { name: 'Add to the board' }).count()).toBe(0)
     expect(k).toBeGreaterThan(0)

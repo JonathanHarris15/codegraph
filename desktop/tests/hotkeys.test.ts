@@ -1,6 +1,6 @@
 // codegraph: test ui canvas
 import { describe, expect, it } from 'vitest'
-import { hotkeyFor, KEY_GROUPS } from '../src/ui/components/hotkeys.js'
+import { capsOf, hotkeyFor, keysFor, KEY_GROUPS } from '../src/ui/components/hotkeys.js'
 
 const sketch = { drawing: true, annotating: true }
 const map = { drawing: false, annotating: true }
@@ -76,8 +76,33 @@ describe('the list of keys', () => {
     expect(hotkeyFor(press('?', true), map)).toEqual({ do: 'keys' })
   })
 
-  it('never gives one key two jobs', () => {
-    const keys = KEY_GROUPS.flatMap((g) => g.rows.map((r) => r.keys))
+  it('never gives one key two jobs in the same place', () => {
+    const keys = KEY_GROUPS.flatMap((g) => g.rows.map((r) => `${r.keys} on ${r.on ?? 'anything'}`))
     expect(new Set(keys).size).toBe(keys.length)
+  })
+
+  it('draws each key as its own cap, with a plus only between keys pressed together', () => {
+    expect(capsOf('Ctrl + Shift + Z')).toEqual([
+      { cap: 'Ctrl', joins: false },
+      { cap: '+', joins: true },
+      { cap: 'Shift', joins: false },
+      { cap: '+', joins: true },
+      { cap: 'Z', joins: false },
+    ])
+    expect(capsOf('+ −').map((part) => part.joins)).toEqual([false, false])
+  })
+})
+
+describe('the keys as this keyboard says them', () => {
+  it('says ⌘ for Ctrl and ⌥ for Alt on a Mac, and leaves them be elsewhere', () => {
+    expect(keysFor('Ctrl+Shift+Z', true)).toBe('⌘+Shift+Z')
+    expect(keysFor('Alt + Drag', true)).toBe('⌥ + Drag')
+    expect(keysFor('Ctrl+Shift+Z', false)).toBe('Ctrl+Shift+Z')
+  })
+
+  it('says how to draw on a sketch, which the panel once listed', () => {
+    const says = KEY_GROUPS.flatMap((g) => g.rows.map((r) => r.says))
+    expect(says).toContain('Add a card there')
+    expect(says).toContain('Redo')
   })
 })

@@ -1,6 +1,7 @@
 // codegraph: component kind-glyph
 import {
   AlarmClock,
+  SquareDashed,
   Rows3,
   Table2,
   Bell,
@@ -29,7 +30,7 @@ import {
   Pencil,
   Redo2,
   Shapes,
-  SquareArrowOutUpRight,
+  SquareArrowDownRight,
   Trash2,
   Undo2,
   AppWindow,
@@ -56,7 +57,7 @@ import {
   Package,
   Play,
   Plus,
-  Scan,
+  ScanSearch,
   Server,
   Smartphone,
   SquareFunction,
@@ -102,7 +103,7 @@ const GLYPHS: Record<string, LucideIcon> = {
 export const TOOL_GLYPHS = {
   pick: MousePointer2,
   pan: Hand,
-  area: Scan,
+  area: ScanSearch,
   card: SquarePlus,
   wire: ArrowRight,
   note: StickyNote,
@@ -122,7 +123,7 @@ export const TOOL_GLYPHS = {
   undo: Undo2,
   redo: Redo2,
   copy: Copy,
-  inside: SquareArrowOutUpRight,
+  inside: SquareArrowDownRight,
   fields: Table2,
   cards: Shapes,
   keys: Keyboard,
@@ -136,6 +137,7 @@ export const TOOL_GLYPHS = {
   spaceDown: AlignVerticalSpaceAround,
   curvedWires: Spline,
   squareWires: CornerDownRight,
+  pickAll: SquareDashed,
 } as const
 
 export type ToolGlyph = keyof typeof TOOL_GLYPHS

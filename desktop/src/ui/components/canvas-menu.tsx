@@ -1,6 +1,10 @@
 // codegraph: component canvas-menu
-import { useEffect, useRef, type RefObject } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { keysFor } from './hotkeys.js'
 import { Glyph, type ToolGlyph } from './kind-glyph.js'
+
+/** How far a menu keeps from the edge of the window. */
+const EDGE = 8
 
 export type MenuItem = { name: string; keys?: string; glyph?: ToolGlyph; danger?: boolean; act: () => void } | 'rule'
 
@@ -20,6 +24,25 @@ export const CanvasMenu = ({
   opener?: RefObject<HTMLElement | null>
 }) => {
   const box = useRef<HTMLDivElement>(null)
+  // Where it really goes: where it was asked for, turned back in from any
+  // edge it would run past, so it is never squeezed against one.
+  const [spot, setSpot] = useState(at)
+  useLayoutEffect(() => {
+    const menu = box.current
+    const room = menu?.offsetParent
+    if (!menu || !(room instanceof HTMLElement)) return setSpot(at)
+    const w = menu.offsetWidth
+    const h = menu.offsetHeight
+    const inside = room.getBoundingClientRect()
+    // The window is the edge that matters: the menu's parent may be only as
+    // big as the button that opened it.
+    const right = window.innerWidth - inside.left - EDGE
+    const bottom = window.innerHeight - inside.top - EDGE
+    const x = at.x + w > right ? Math.max(EDGE - inside.left, right - w) : at.x
+    // Below where it was asked for, unless there is no room there; then above.
+    const y = at.y + h > bottom ? Math.max(EDGE - inside.top, Math.min(at.y - h, bottom - h)) : at.y
+    setSpot({ x, y })
+  }, [at.x, at.y])
 
   useEffect(() => {
     box.current?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true })
@@ -41,13 +64,17 @@ export const CanvasMenu = ({
     }
   }, [onClose, opener])
 
+  // A menu with no pictures at all leaves no room for them; one with some
+  // keeps the room on every row, so the words line up.
+  const pictured = items.some((item) => item !== 'rule' && item.glyph)
+
   return (
     <div
       ref={box}
-      className="map-menu"
+      className={pictured ? 'map-menu' : 'map-menu map-menu--bare'}
       role="menu"
       aria-label="What to do here"
-      style={{ left: at.x, top: at.y }}
+      style={{ left: spot.x, top: spot.y }}
       onPointerDown={(event) => event.stopPropagation()}
       onContextMenu={(event) => event.preventDefault()}
     >
@@ -65,9 +92,9 @@ export const CanvasMenu = ({
               item.act()
             }}
           >
-            <span className="map-menu-glyph">{item.glyph ? <Glyph of={item.glyph} size={15} /> : null}</span>
+            {pictured ? <span className="map-menu-glyph">{item.glyph ? <Glyph of={item.glyph} size={15} /> : null}</span> : null}
             <span className="map-menu-name">{item.name}</span>
-            {item.keys ? <span className="map-menu-keys">{item.keys}</span> : null}
+            {item.keys ? <span className="map-menu-keys">{keysFor(item.keys)}</span> : null}
           </button>
         ),
       )}

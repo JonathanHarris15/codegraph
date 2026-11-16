@@ -1,4 +1,5 @@
 // codegraph: start page projects at /
+import { RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import type { AgentConnection } from '../../features/connect-agent.js'
 import type { CloudView } from '../../features/list-github-software-systems.js'
@@ -34,8 +35,6 @@ export const ProjectsPage = ({ onOpen, onOpenSketch }: { onOpen: (projectId: str
   const [agent, setAgent] = useState<AgentConnection | null>(null)
   /** Which small window is open over the page, if any. */
   const [open, setOpen] = useState<'' | 'github' | 'agent'>('')
-  /** The project clicked last: the one a second click opens. */
-  const [picked, setPicked] = useState('')
 
   const load = useCallback(async (fetchFirst = false): Promise<void> => {
     setProjects(await window.codegraph.listProjects(fetchFirst))
@@ -60,6 +59,14 @@ export const ProjectsPage = ({ onOpen, onOpenSketch }: { onOpen: (projectId: str
 
   // A change made by someone else reaches this page.
   useEffect(() => window.codegraph.heardChange(() => void load()), [load])
+
+  // Coming back from an agent's window, the repos are read again: setup
+  // handed to an agent shows here once it is done.
+  useEffect(() => {
+    const back = (): void => void load()
+    window.addEventListener('focus', back)
+    return () => window.removeEventListener('focus', back)
+  }, [load])
 
   const signedIn = async (): Promise<void> => {
     await loadSession()
@@ -139,17 +146,43 @@ export const ProjectsPage = ({ onOpen, onOpenSketch }: { onOpen: (projectId: str
   const needsSignIn = Boolean(session?.online && !session.member)
   const onlyHere = session?.online && session.member ? (projects ?? []).filter((p) => !p.online) : []
 
+  const tabs = [
+    { id: 'projects' as const, name: 'Projects' },
+    { id: 'sketches' as const, name: 'My sketches' },
+  ]
+  const goTab = (next: 'projects' | 'sketches'): void => {
+    setTab(next)
+    // Kept in the address, so coming back from a sketch lands here again.
+    window.history.replaceState(null, '', next === 'sketches' ? '#/sketches' : '#')
+  }
+
   return (
-    <div className="ds-page" onMouseDown={() => setPicked('')}>
+    <div className="ds-page">
       <div className="ds-head">
         <div>
-          <h1 className="ds-title">Projects</h1>
+          <div className="projects-title">
+            <h1 className="ds-title">{tab === 'projects' ? 'Projects' : 'My sketches'}</h1>
+            <div className="design-tabs projects-tabs" role="tablist" aria-label="What to show">
+              {tabs.map((each) => (
+                <button
+                  key={each.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === each.id}
+                  onClick={() => goTab(each.id)}
+                >
+                  {each.name}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="ds-sub">
-            A project holds the software systems you work on together, each one a git repo.
-            Double-click a project to see its map.
+            {tab === 'projects'
+              ? 'A project holds the software systems you work on together, each kept in one git repo or more. Click a project to open its map.'
+              : 'Drawings of anything, outside any project. Yours alone until you share them, and they work offline.'}
           </div>
         </div>
-        <div className="ds-row">
+        <div className="ds-row projects-actions">
           {session?.online ? (
             session.member ? (
               <>
@@ -176,28 +209,27 @@ export const ProjectsPage = ({ onOpen, onOpenSketch }: { onOpen: (projectId: str
           <Button look="bare" onClick={() => setOpen('agent')}>
             Your agent
           </Button>
-          <Button look="bare" onClick={() => (window.location.hash = '#/settings')}>
-            Settings
-          </Button>
           <ThemeSwitch />
-          <Button onClick={() => void refresh()} disabled={refreshing}>
-            {refreshing ? 'Checking GitHub…' : 'Refresh'}
-          </Button>
-          {needsSignIn ? null : (
-            <Button look="loud" onClick={() => setNaming(true)}>
-              New project
-            </Button>
-          )}
+          {tab === 'projects' ? (
+            <>
+              <Button
+                look="bare"
+                onClick={() => void refresh()}
+                disabled={refreshing}
+                label="Check GitHub again"
+                title="Check GitHub again for new commits and branches"
+              >
+                <RefreshCw size={15} aria-hidden="true" className={refreshing ? 'projects-refreshing' : undefined} />
+                {refreshing ? 'Checking GitHub…' : null}
+              </Button>
+              {needsSignIn ? null : (
+                <Button look="loud" onClick={() => setNaming(true)}>
+                  New project
+                </Button>
+              )}
+            </>
+          ) : null}
         </div>
-      </div>
-
-      <div className="gallery-tabs" role="tablist">
-        <Button look="bare" onClick={() => setTab('projects')} label="Projects tab">
-          <span className={tab === 'projects' ? 'gallery-tab--on' : ''}>Projects</span>
-        </Button>
-        <Button look="bare" onClick={() => setTab('sketches')} label="Sketches tab">
-          <span className={tab === 'sketches' ? 'gallery-tab--on' : ''}>Sketches</span>
-        </Button>
       </div>
 
       {signInProblem ? (
@@ -225,7 +257,7 @@ export const ProjectsPage = ({ onOpen, onOpenSketch }: { onOpen: (projectId: str
         <div className="ds-empty">
           <div style={{ fontSize: 16, color: 'var(--ink)', marginBottom: 6 }}>Sign in to see your projects</div>
           {session?.signedOutBecause ? <div style={{ marginBottom: 6 }}>{session.signedOutBecause}</div> : null}
-          <div>Your own sketches still open from the Sketches tab.</div>
+          <div>Your own sketches still open from My sketches.</div>
           <div style={{ marginTop: 16 }}>
             <Button look="loud" onClick={() => void signIn()}>
               Sign in with GitHub
@@ -259,8 +291,6 @@ export const ProjectsPage = ({ onOpen, onOpenSketch }: { onOpen: (projectId: str
                 if (named) void window.codegraph.chooseBranch(project.id, systemId, named).then(() => load())
               }}
               linking={linking === project.id}
-              picked={picked === project.id}
-              onPick={() => setPicked(project.id)}
               {...(session?.online && session.member && !project.online ? { onPutOnline: () => void window.codegraph.putProjectOnline(project.id).then(() => load()) } : {})}
               {...(project.online ? { onMembers: () => setMembersOf(project.id) } : {})}
               {...(!project.online || (project.role && project.role !== 'viewer') ? { onRename: () => setRenaming(project.id) } : {})}
@@ -326,7 +356,9 @@ export const ProjectsPage = ({ onOpen, onOpenSketch }: { onOpen: (projectId: str
         </Sheet>
       ) : null}
 
-      {open === 'agent' ? <AgentWindow connection={agent} onClose={() => setOpen('')} /> : null}
+      {open === 'agent' ? (
+        <AgentWindow connection={agent} onClose={() => setOpen('')} onInstructions={() => (window.location.hash = '#/settings')} />
+      ) : null}
 
       {naming ? (
         <Sheet

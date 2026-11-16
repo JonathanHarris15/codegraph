@@ -44,7 +44,7 @@ const PickedRecipe = ({ recipe }: { recipe: RecipeShown }) => {
       <div className="ds-row" style={{ justifyContent: 'space-between' }}>
         <span className="ds-label">Reference page{recipe.referenceName ? `: ${recipe.referenceName}` : ''}</span>
         {recipe.live ? (
-          <Button look="bare" onClick={() => setLive(!live)}>
+          <Button onClick={() => setLive(!live)}>
             {live ? 'Back to the screenshot' : 'See it live'}
           </Button>
         ) : null}

@@ -84,7 +84,7 @@ export const choicesAt = (level: Level, types: CardType[] = []): { name: string;
 export const kindHints: Record<string, string> = {
   card: 'Pick its type and look',
   person: 'Someone who uses the software',
-  'software system': 'One repo, seen whole',
+  'software system': 'One thing people use, in one repo or more',
   'shallow software system': 'Run by someone else; no repo here',
   'web app': 'A site served to a browser',
   'browser app': 'Runs in the browser',
@@ -174,6 +174,7 @@ export const placeCard = (
   from = '',
   hub?: { into: boolean; kind: string },
   look?: CardLook,
+  shape?: 'curved' | 'square',
 ): [SketchCard, string] => {
   const level = levelIn(focus)
   const type = kind || choicesIn(focus)[0]?.choices[0]?.kind || kindsAt[level][0] || ''
@@ -185,11 +186,11 @@ export const placeCard = (
   const placed: SketchCard = { ...card, x: Math.round(at.x - w / 2), y: Math.round(at.y - h / 2) }
   const next = { ...focus, children: [...focus.children, placed] }
   if (from && isHub(from) && hub) {
-    const [wired] = hub.into ? addWire(next, from, card.id, hub.kind) : addWire(next, card.id, from, hub.kind)
+    const [wired] = hub.into ? addWire(next, from, card.id, hub.kind, undefined, shape) : addWire(next, card.id, from, hub.kind, undefined, shape)
     return [wired, card.id]
   }
   if (!from || !focus.children.some((c) => c.id === from)) return [next, card.id]
-  const [wired] = addWire(next, from, card.id)
+  const [wired] = addWire(next, from, card.id, undefined, undefined, shape)
   return [wired, card.id]
 }
 
@@ -243,7 +244,14 @@ export const nudge = (focus: SketchCard, ids: string[], dx: number, dy: number):
       .map((thing) => ({ id: thing.id, x: thing.x! + dx, y: thing.y! + dy })),
   )
 
-export const addWire = (focus: SketchCard, from: string, to: string, kind?: string, sides?: WireSides): [SketchCard, string] => {
+export const addWire = (
+  focus: SketchCard,
+  from: string,
+  to: string,
+  kind?: string,
+  sides?: WireSides,
+  shape?: 'curved' | 'square',
+): [SketchCard, string] => {
   const plugged = sides && (sides.from || sides.to) ? { sides: { ...(sides.from ? { from: sides.from } : {}), ...(sides.to ? { to: sides.to } : {}) } } : {}
   // One wire between the same two cards is enough; drawing it again picks it,
   // and plugs it in where it was drawn this time.
@@ -259,6 +267,7 @@ export const addWire = (focus: SketchCard, from: string, to: string, kind?: stri
     kind: kind ?? kindBetween(focus.children.find((c) => c.id === from), focus.children.find((c) => c.id === to)),
     words: '',
     ...plugged,
+    ...(shape ? { shape } : {}),
   }
   return [{ ...focus, wires: [...focus.wires, wire] }, wire.id]
 }
@@ -318,6 +327,12 @@ export const bendWire = (focus: SketchCard, id: string, bends: { x: number; y: n
     const { bends: _was, ...bare } = w
     return bends?.length ? { ...bare, bends: bends.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })) } : bare
   }),
+})
+
+/** Draws a wire curved or at right angles, whatever the board draws the rest. */
+export const shapeWire = (focus: SketchCard, id: string, shape: 'curved' | 'square'): SketchCard => ({
+  ...focus,
+  wires: focus.wires.map((w) => (w.id === id ? { ...w, shape } : w)),
 })
 
 export type Picked =
@@ -556,4 +571,105 @@ export const align = (focus: SketchCard, ids: string[], how: Alignment): SketchC
         y: how === 'top' ? top : how === 'bottom' ? bottom - b.h : how === 'middle' ? (top + bottom) / 2 - b.h / 2 : b.y,
       })
   return moveThings(focus, moves)
+}
+
+/** A card's kinds that only mean something at its own level, which it lets go
+ *  of when it moves down one; a type a person named stays. */
+const kindAfterMoving = (card: SketchCard, to: Level): string => {
+  const known = (level: Level) => [...kindsAt[level], ...(kindsInCode[level] ?? [])]
+  return known(card.level).includes(card.kind) && !known(to).includes(card.kind) ? 'card' : card.kind
+}
+
+/** The card, and everything drawn inside it, a level further in. */
+const oneLevelIn = (card: SketchCard): SketchCard => {
+  const level = levelInside[card.level]
+  return { ...card, level, kind: kindAfterMoving(card, level), children: card.children.map(oneLevelIn) }
+}
+
+const deepest = (card: SketchCard): Level =>
+  card.children.length ? card.children.map(deepest).reduce((a, b) => (order.indexOf(b) > order.indexOf(a) ? b : a)) : card.level
+const order: Level[] = ['project', 'system', 'container', 'component', 'code']
+
+/** Whether a card can be put inside another on its level: into a software
+ *  system, or a container that is not a database, as long as nothing drawn
+ *  inside the card would end up in code, where nothing is drawn. */
+export const canGoInside = (card: SketchCard | undefined, into: SketchCard | undefined): boolean => {
+  if (!card || !into || card.id === into.id || card.level !== into.level) return false
+  if (card.kind === 'person') return false
+  const holds = into.level === 'system' ? into.kind === 'software system' : into.level === 'container' && !keepsThings(into.kind) && !isStore(into.kind)
+  if (!holds) return false
+  return levelInside[deepest(card)] !== 'code'
+}
+
+/** Puts a card inside another on the same level, a level further in. Each wire
+ *  it had to another card now meets the card it went into, and runs on from
+ *  that card's border to it, by a hub (ADR 0014). A wire it had to the card it
+ *  went into is now drawn inside, to whatever that wire reached there. */
+export const moveInside = (focus: SketchCard, id: string, intoId: string): SketchCard => {
+  const card = focus.children.find((c) => c.id === id)
+  const into = focus.children.find((c) => c.id === intoId)
+  if (!card || !into || !canGoInside(card, into)) return focus
+  const touching = focus.wires.filter((w) => w.from === id || w.to === id)
+  const between = touching.filter((w) => w.from === intoId || w.to === intoId)
+  const outward = touching.filter((w) => !between.includes(w))
+  const kept = focus.wires.filter((w) => !touching.includes(w))
+  /** For each wire the card had, the wire its own hub now belongs to. */
+  const hubNow = new Map<string, string>()
+
+  const outer: SketchWire[] = [...kept]
+  const inner: SketchWire[] = []
+  for (const w of outward) {
+    const from = w.from === id ? intoId : w.from
+    const to = w.to === id ? intoId : w.to
+    // Laid out afresh between its new ends, where a person put it no longer fits.
+    const { sides: _s, along: _a, bends: _b, x: _x, y: _y, ...plain } = w
+    const at = outer.findIndex((o) => o.from === from && o.to === to && o.kind === w.kind)
+    const same = outer[at]
+    const meets = same ?? { ...plain, from, to }
+    if (!same) outer.push(meets)
+    else if (w.words && !same.words.split('; ').includes(w.words)) outer[at] = { ...same, words: same.words ? `${same.words}; ${w.words}` : w.words }
+    const runOn: SketchWire = { id: newId(), from: w.from === id ? id : hubOf(meets.id), to: w.to === id ? id : hubOf(meets.id), kind: w.kind, words: '' }
+    inner.push(runOn)
+    hubNow.set(w.id, runOn.id)
+  }
+
+  // What a wire to the card it went into reached inside, it now reaches itself.
+  const reached = new Set<string>()
+  const direct: SketchWire[] = []
+  for (const w of between) {
+    const hub = hubOf(w.id)
+    const at = into.wires.filter((x) => x.from === hub || x.to === hub)
+    for (const x of at) {
+      reached.add(x.id)
+      direct.push({ ...x, from: x.from === hub ? id : x.from, to: x.to === hub ? id : x.to, words: x.words || w.words })
+    }
+    hubNow.set(w.id, direct.find((d) => at.some((x) => x.id === d.id))?.id ?? '')
+  }
+
+  // The card's own hubs follow its wires to where they run now.
+  const rehub = (end: string): string => {
+    const was = wireOfHub(end)
+    if (!was || !hubNow.has(was)) return end
+    const now = hubNow.get(was)!
+    return now ? hubOf(now) : ''
+  }
+  const wiresInside = card.wires.flatMap((w) => {
+    const from = rehub(w.from)
+    const to = rehub(w.to)
+    return from && to ? [{ ...w, from, to }] : []
+  })
+  const lost = new Set(card.wires.filter((w) => !wiresInside.some((x) => x.id === w.id)).map((w) => w.id))
+  const { x: _cx, y: _cy, ...unplaced } = card
+  const moved = oneLevelIn({ ...unplaced, wires: wiresInside, children: card.children.map((c) => withoutHubs(c, lost)) })
+
+  const holder: SketchCard = {
+    ...into,
+    children: [...into.children, moved],
+    wires: [...into.wires.filter((x) => !reached.has(x.id)), ...direct, ...inner],
+  }
+  return {
+    ...focus,
+    children: focus.children.filter((c) => c.id !== id).map((c) => (c.id === intoId ? holder : c)),
+    wires: outer,
+  }
 }

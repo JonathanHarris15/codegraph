@@ -69,12 +69,14 @@ beforeAll(async () => {
   app = await openTheApp(yard.home)
   page = await app.firstWindow()
   await page.setViewportSize({ width: 1400, height: 860 })
+  // The panel about what is picked is put away, as a person can ask, so it
+  // covers nothing these tests reach for.
+  await page.evaluate(() => window.localStorage.setItem('codegraph-panel', 'no'))
   await page.getByRole('button', { name: 'Open Notes', exact: true }).dblclick()
   await page.getByRole('button', { name: 'Open notes' }).waitFor({ timeout: PATIENCE })
-  await page.getByRole('button', { name: /^Sketches/ }).click()
+  await page.getByRole('button', { name: /^Project sketches/ }).click()
   await page.getByRole('button', { name: /^Wires/ }).click()
   await card('Reader').waitFor({ timeout: PATIENCE })
-  await page.getByRole('button', { name: 'Hide this panel' }).click().catch(() => undefined)
   await settle()
 }, 60_000)
 
@@ -83,15 +85,82 @@ afterAll(async () => {
   closeYard(yard)
 })
 
+/** The board's own menu, opened with a right-click on empty board. */
+const boardMenu = async () => {
+  const board = (await page.locator('.map-frame-area').boundingBox())!
+  await page.mouse.click(board.x + board.width - 120, board.y + 80, { button: 'right' })
+  const menu = page.getByRole('menu', { name: 'What to do here' })
+  await menu.waitFor({ timeout: PATIENCE })
+  return menu
+}
+
+const shapeKept = (id: string) => kept().root.wires.find((w) => w.id === id)?.shape
+
+describe('a wire of its own shape', () => {
+  it('draws one wire at right angles from its bar, and leaves the rest curved', async () => {
+    await page.locator('.map-sentence', { hasText: 'to send a reminder' }).click()
+    const shape = page.getByRole('group', { name: 'How the wire is drawn' })
+    await shape.waitFor({ timeout: PATIENCE })
+    expect(await shape.getByRole('button', { name: 'Curved' }).getAttribute('aria-pressed')).toBe('true')
+    await shape.getByRole('button', { name: 'Right angles' }).click()
+    await settle()
+    expect(shapeKept('sends')).toBe('square')
+    expect(await shape.getByRole('button', { name: 'Right angles' }).getAttribute('aria-pressed')).toBe('true')
+    const paths = await wirePaths()
+    expect(paths.filter((d) => d.includes('C')).length).toBe(1)
+    await picture('square-0-one-wire')
+  })
+
+  it('switches the picked wire back with Tab', async () => {
+    await page.keyboard.press('Tab')
+    await settle()
+    expect(shapeKept('sends')).toBe('curved')
+    expect((await wirePaths()).every((d) => d.includes('C'))).toBe(true)
+  })
+
+  it('switches a wire being drawn with Tab, and says how it will be drawn', async () => {
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('w')
+    const hint = page.getByRole('status').filter({ hasText: 'Drag from one card to another' })
+    expect(await hint.textContent({ timeout: PATIENCE })).toContain('Curved.')
+    const from = middle((await card('Mail').boundingBox())!)
+    const to = middle((await card('Reader').boundingBox())!)
+    await page.mouse.move(from.x, from.y)
+    await page.mouse.down()
+    await page.mouse.move((from.x + to.x) / 2, (from.y + to.y) / 2, { steps: 8 })
+    await page.keyboard.press('Tab')
+    expect(await page.getByRole('status').filter({ hasText: 'Let go on a card' }).textContent()).toContain('At right angles.')
+    await page.mouse.move(to.x, to.y, { steps: 8 })
+    await page.mouse.up()
+    await settle()
+    const made = kept().root.wires.find((w) => w.from === 'mail' && w.to === 'reader')
+    expect(made?.shape).toBe('square')
+    // Put back as it was, for what follows.
+    for (let i = 0; i < 3; i++) await page.keyboard.press('Control+z')
+    await settle()
+    expect(kept().root.wires.map((w) => [w.id, w.shape])).toEqual([
+      ['reads', undefined],
+      ['sends', undefined],
+    ])
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('v')
+  })
+})
+
 describe('choosing how wires are drawn', () => {
   it('draws curved wires until told otherwise', async () => {
-    expect(await page.getByRole('button', { name: 'Curved wires' }).getAttribute('aria-pressed')).toBe('true')
+    // The choice is kept off the zoom bar: it is on the board's right-click menu.
+    const menu = await boardMenu()
+    expect(await menu.getByRole('menuitem', { name: /^Draw wires at right angles/ }).count()).toBe(1)
+    await page.keyboard.press('Escape')
     expect((await wirePaths()).every((d) => d.includes('C'))).toBe(true)
     await picture('square-1-curved')
   })
 
   it('draws every wire in straight pieces and right angles once asked', async () => {
-    await page.getByRole('button', { name: 'Right-angle wires' }).click()
+    const menu = await boardMenu()
+    await menu.getByRole('menuitem', { name: /^Draw wires at right angles/ }).click()
+    expect(await page.getByRole('menu', { name: 'What to do here' }).count()).toBe(0)
     await settle()
     const paths = await wirePaths()
     expect(paths.length).toBe(2)
@@ -139,11 +208,41 @@ describe('moving the pieces of a right-angle wire', () => {
     await settle()
     expect(kept().root.wires.find((w) => w.id === 'reads')!.bends).toBeUndefined()
   })
+
+  it('takes a piece out, and the turn at each end of it, with a double-click on its handle', async () => {
+    await page.locator('.map-sentence', { hasText: 'to read notes' }).click()
+    const pieces = page.locator('.map-wire-piece')
+    await pieces.first().waitFor({ timeout: PATIENCE })
+    const handle = (await pieces.nth(Math.floor((await pieces.count()) / 2)).boundingBox())!
+    const down = (await pieces.nth(Math.floor((await pieces.count()) / 2)).getAttribute('class'))!.includes('down')
+    await drag(middle(handle), { x: middle(handle).x + (down ? 90 : 0), y: middle(handle).y + (down ? 0 : 90) })
+    await settle()
+    const turns = (): number => kept().root.wires.find((w) => w.id === 'reads')!.bends?.length ?? 0
+    const before = turns()
+    const pieceCount = await pieces.count()
+    await picture('square-6-before-taking-out')
+    const removable = page.locator('.map-wire-piece[aria-label$="double-click to take it out"]')
+    expect(await removable.count()).toBeGreaterThan(0)
+    // A piece that leaves or reaches a card cannot go: the wire would come loose.
+    expect(await removable.count()).toBeLessThan(pieceCount)
+    await removable.first().dblclick()
+    await settle()
+    expect(turns()).toBeLessThan(before)
+    expect(await pieces.count()).toBe(pieceCount - 2)
+    await picture('square-7-taken-out')
+    await page.keyboard.press('Control+z')
+    await settle()
+    expect(turns()).toBe(before)
+  })
 })
 
 describe('stores whose fields point at each other', () => {
   it('are wired as soon as the sketch is open, though no one drew the wire', async () => {
     await page.keyboard.press('Escape')
+    // Let the wire go, so the panel about it is put away and the card is clear.
+    const board = (await page.locator('.map-frame-area').boundingBox())!
+    await page.mouse.click(board.x + board.width * 0.6, board.y + board.height * 0.97)
+    await page.getByRole('complementary', { name: 'What is picked' }).waitFor({ state: 'detached', timeout: PATIENCE })
     await card('Notes app').dblclick()
     await settle()
     await card('Data').dblclick()

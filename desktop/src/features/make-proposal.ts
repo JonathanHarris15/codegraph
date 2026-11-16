@@ -21,12 +21,48 @@ import { headOf, readSoftwareSystem, writeProposal, type Picture } from '../modu
 import { looksDrawn, listSketches, mockupFile, readSketch, type Sketch, type SketchCard } from '../modules/sketches/index.js'
 
 /** The system card a sketch draws for one software system: by the id a
- *  snapshot of the map kept, or else by name. */
-const drawnFor = (sketch: Sketch, system: SoftwareSystem): SketchCard | undefined => {
+ *  snapshot of the map kept, or else by name. A repo that is part of a
+ *  software system kept in several is drawn in that system's card, by the
+ *  name its config gives (ADR 0028). */
+const drawnFor = (sketch: Sketch, system: SoftwareSystem, partOf: string): SketchCard | undefined => {
   const systems = sketch.root.children.filter((c) => c.level === 'system')
+  const named = (name: string) => systems.find((c) => c.name.trim().toLowerCase() === name.toLowerCase())
   return (
-    systems.find((c) => c.id === system.id) ?? systems.find((c) => c.name.trim().toLowerCase() === system.name.toLowerCase())
+    systems.find((c) => c.id === system.id) ??
+    (partOf ? (systems.find((c) => c.id === `system:${partOf.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`) ?? named(partOf)) : undefined) ??
+    named(system.name)
   )
+}
+
+type Sibling = { id: string; name: string; path: string; map: SystemMap | null }
+
+/** The repos a software system is kept in besides this one: each that names
+ *  the same system, with its map where it is on this computer to read. A
+ *  repo that is not cannot say, so only the cards a snapshot kept tell
+ *  which are its. */
+const siblingsOf = async (project: Project, here: SoftwareSystem, partOf: string): Promise<Sibling[]> => {
+  if (!partOf) return []
+  const found: Sibling[] = []
+  for (const s of project.systems) {
+    if (s.id === here.id) continue
+    const map = s.path ? await readMap(s.path, live) : null
+    if (!map || map.system.toLowerCase() === partOf.toLowerCase()) found.push({ id: s.id, name: s.name, path: s.path, map })
+  }
+  return found
+}
+
+/** What a sketch draws in a software system of several repos that is one
+ *  repo's: the containers a snapshot kept for it or its map has by name, and,
+ *  where asked, those no repo of the system has yet. A wire between two
+ *  repos' containers is left to the code that makes it. */
+const partFor = (card: SketchCard, repoId: string, map: SystemMap, siblings: Sibling[], withNew: boolean): SketchCard => {
+  if (!siblings.length) return card
+  const theirs = (c: SketchCard) =>
+    siblings.some((o) => c.id.startsWith(`${o.id}/`) || (!c.id.startsWith(`${repoId}/`) && o.map?.containers.some((m) => m.name === c.name.trim())))
+  const mine = (c: SketchCard) => c.id.startsWith(`${repoId}/`) || map.containers.some((m) => m.name === c.name.trim())
+  const children = card.children.filter((c) => !theirs(c) && (mine(c) || withNew))
+  const kept = new Set(children.map((c) => c.id))
+  return { ...card, children, wires: card.wires.filter((w) => kept.has(w.from) && kept.has(w.to)) }
 }
 
 const counted = (proposal: Proposal): string => {
@@ -80,7 +116,12 @@ export const makeProposal = async (repo: string, name: string, shortName = '', r
 
   const system = project.systems.find((s) => s.path && sameFolder(s.path, repo))
   if (!system) return `This repo is not one of the software systems of ${project.name} on this computer. Link it in the app first.`
-  const drawn = drawnFor(sketch, system)
+  const partOf = (await readMap(repo, live)).system
+  const named = await siblingsOf(project, system, partOf)
+  const drawn = drawnFor(sketch, system, named.some((o) => o.map) ? partOf : '')
+  // A repo not on this computer is only known to be part of it by a card a
+  // snapshot kept for it.
+  const siblings = named.filter((o) => o.map || drawn?.children.some((c) => c.id.startsWith(`${o.id}/`)))
   if (!drawn)
     return `The sketch "${sketch.name}" draws nothing for ${system.name}. It draws: ${sketch.root.children.filter((c) => c.level === 'system').map((c) => c.name || '(unnamed)').join(', ') || 'no software systems'}.`
 
@@ -104,8 +145,21 @@ export const makeProposal = async (repo: string, name: string, shortName = '', r
       },
     })
 
-  const proposal = { ...make(drawn, map, pictures), says: sketch.name, sketch: sketch.name, sketchAt: sketch.updatedAt, base: await headOf(repo) }
+  const mine = partFor(drawn, system.id, map, siblings, true)
+  const proposal = { ...make(mine, map, pictures), says: sketch.name, sketch: sketch.name, sketchAt: sketch.updatedAt, base: await headOf(repo) }
   const others: string[] = []
+  // The other repos of this software system, each with its own containers.
+  for (const sibling of siblings) {
+    if (!sibling.path || !sibling.map) {
+      others.push(`- ${sibling.name} is not on this computer. Clone it, then propose there.`)
+      continue
+    }
+    const changes = make(partFor(drawn, sibling.id, sibling.map, [...siblings.filter((o) => o !== sibling), { id: system.id, name: system.name, path: repo, map }], false), sibling.map, [])
+    if (changesAnything(changes)) others.push(`- ${sibling.name}, at ${sibling.path}: ${counted(changes)}. Propose there on a branch of its own.`)
+  }
+  const fresh = siblings.length ? mine.children.filter((c) => !c.id.startsWith(`${system.id}/`) && !map.containers.some((m) => m.name === c.name.trim())) : []
+  for (const c of fresh)
+    others.push(`- ${c.name || '(unnamed)'} is new to ${drawn.name}, so it is in this repo's proposal. If it belongs in another of its repos, or a new one, take it out here and propose there.`)
   for (const card of sketch.root.children.filter((c) => c.level === 'system' && c !== drawn)) {
     if (card.kind === 'person' || card.kind === 'shallow software system') continue
     const theirs = project.systems.find((s) => s.id === card.id || s.name.toLowerCase() === card.name.trim().toLowerCase())
@@ -120,12 +174,12 @@ export const makeProposal = async (repo: string, name: string, shortName = '', r
     const changes = make(card, await readMap(theirs.path, live), [])
     if (changesAnything(changes)) others.push(`- ${theirs.name}, at ${theirs.path}: ${counted(changes)}. Propose there on a branch of its own.`)
   }
-  const elsewhere = others.length ? ['', 'The sketch changes other software systems too:', ...others] : []
+  const elsewhere = others.length ? ['', 'The sketch changes other repos too:', ...others] : []
 
   if (!changesAnything(proposal))
     return [`The sketch "${sketch.name}" changes nothing in ${system.name}; no proposal was written.`, ...elsewhere].join('\n')
 
-  rememberLooks(looksDrawn(drawn))
+  rememberLooks(looksDrawn(mine))
   writeProposal(repo, proposal, pictures)
   return [
     `Wrote the proposal to ${PROPOSAL} on ${facts.branch}: ${counted(proposal)}.`,

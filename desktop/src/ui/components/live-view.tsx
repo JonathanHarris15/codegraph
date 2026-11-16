@@ -1,6 +1,6 @@
 // codegraph: component live-view
 import { useEffect, useState } from 'react'
-import { Button } from '../design-system/kit.js'
+import { Button, Problem } from '../design-system/kit.js'
 
 type Reached = { state: 'checking' } | { state: 'up' } | { state: 'down'; problem: string }
 
@@ -62,10 +62,7 @@ export const LiveFrame = ({ address, title }: { address: string; title: string }
           {reached.state === 'checking' ? (
             'Looking for the dev server…'
           ) : (
-            <>
-              <span>{reached.problem}</span>
-              <Button onClick={() => setRound(round + 1)}>Try again</Button>
-            </>
+            <Problem onRetry={() => setRound(round + 1)}>{reached.problem}</Problem>
           )}
         </div>
       )}

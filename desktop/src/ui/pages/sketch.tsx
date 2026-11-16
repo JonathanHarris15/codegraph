@@ -1,16 +1,23 @@
 // codegraph: page sketch at /sketches/:library/:id
+import { levelInside, showLevel } from '../components/levels-help.js'
+import { Pencil } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { AgentConnection } from '../../features/connect-agent.js'
+import type { ProjectView } from '../../features/list-projects.js'
 import type { Session } from '../../features/show-session.js'
 import { LOOSE } from '../../modules/sketches/schema.js'
 import type { Sketch } from '../../modules/sketches/index.js'
 import { sameDoc } from '../../modules/together/index.js'
-import { Button, ThemeSwitch } from '../design-system/kit.js'
+import { Button, Problem, ThemeSwitch, Waiting } from '../design-system/kit.js'
 import { MapCanvas } from '../components/map-canvas.js'
 import { walk } from '../components/map-layout.js'
 import { SketchEditor } from '../components/sketch-editor.js'
 import { togetherOn, useRoom } from '../components/together.js'
-import { AGENT_COLOR, agentsAsOthers, pathTo, useAgents, useFollowAgent, useLooking } from '../components/agents.js'
+import { agentsAsOthers, pathTo, useAgents, useFollowAgent, useLooking } from '../components/agents.js'
+import { AgentFace } from '../components/together-layer.js'
 import { Trail } from '../components/trail.js'
+import { AgentWindow } from '../components/agent-window.js'
+import { HandToAgent } from '../components/hand-to-agent.js'
 
 const SAVE_AFTER_MS = 500
 
@@ -115,6 +122,10 @@ export const SketchPage = ({ library, sketchId, onLeave }: { library: string; sk
   const myRole = sketch?.members?.find((m) => m.id === me)?.role
   const canDraw = library === LOOSE || myRole === 'owner' || myRole === 'collaborator'
   const trail = sketch ? walk(sketch.root, path) : []
+  // The ? in the corner marks the level on the board.
+  const level = levelInside(trail.at(-1)?.level)
+  useEffect(() => showLevel(level), [level])
+  useEffect(() => () => showLevel(-1), [])
   const onLooking = useLooking(sketch ? { library, id: sketch.id, name: sketch.name, trail: trail.map((c) => c.name) } : null)
   const together = {
     ...togetherOn({
@@ -134,18 +145,42 @@ export const SketchPage = ({ library, sketchId, onLeave }: { library: string; sk
     onLooking,
   }
 
+  // An agent builds from a project's sketches, so one of a person's own goes
+  // into a project first.
+  const mine = library === LOOSE
+  const [projects, setProjects] = useState<ProjectView[]>([])
+  useEffect(() => {
+    if (mine) void window.codegraph.listProjects().then((all) => setProjects(all.filter((p) => p.role !== 'viewer')))
+  }, [mine])
+  const [moveProblem, setMoveProblem] = useState('')
+  const moveTo = async (projectId: string): Promise<void> => {
+    if (saving.current) {
+      clearTimeout(saving.current)
+      saving.current = null
+      await saveNow().catch(() => undefined)
+    }
+    const done = await window.codegraph.moveSketch(sketchId, projectId)
+    if (!done.ok) setMoveProblem(done.problem ?? 'That did not work.')
+    else window.location.hash = `#/projects/${projectId}`
+  }
+  const [agentSetUp, setAgentSetUp] = useState<AgentConnection | null | false>(false)
+
   return (
-    <div className="map-page">
+    <div className="map-page map-page--sketch">
       <div className="map-bar">
         <Button look="bare" onClick={() => void leave()}>
-          ← Sketches
+          ← My sketches
         </Button>
+        <span className="map-mode-chip" title="A drawing of anything you like. Nothing on it is read from code.">
+          <Pencil size={12} aria-hidden="true" />
+          Sketch
+        </span>
         {sketch ? (
           <input
-            className="ds-input map-sketch-name"
+            className="map-sketch-name"
             aria-label="Sketch name"
             readOnly={!canDraw}
-            style={{ width: `${Math.min(Math.max(sketch.name.length + 3, 14), 44)}ch` }}
+            style={{ width: `${Math.min(Math.max(sketch.name.length + 2, 12), 44)}ch` }}
             value={sketch.name}
             onChange={(e) => changed({ ...sketch, name: e.target.value })}
           />
@@ -157,25 +192,51 @@ export const SketchPage = ({ library, sketchId, onLeave }: { library: string; sk
               {p.name}
             </span>
           ))}
-          {agentHere ? (
-            <span className="together-face" style={{ background: AGENT_COLOR }} title={`${agentHere.who} is drawing here`}>
-              {agentHere.who} is drawing
-            </span>
+          {agentHere ? <AgentFace who={agentHere.who} /> : null}
+          {canDraw ? (
+            <HandToAgent
+              prompt=""
+              onSetUp={() => {
+                setAgentSetUp(null)
+                void window.codegraph.connectAgent().then(setAgentSetUp)
+              }}
+            >
+              <div className="ds-hint">
+                Your agent builds from a project&rsquo;s sketches, in that project&rsquo;s repos.
+                {mine ? ' Move this one into a project, then hand it over from there.' : ' Ask its owner to move it into a project.'}
+              </div>
+              {mine && projects.length ? (
+                <div className="hand-agent-projects" role="group" aria-label="Move it to a project">
+                  {projects.map((project) => (
+                    <Button key={project.id} onClick={() => void moveTo(project.id)}>
+                      Move to {project.name}
+                    </Button>
+                  ))}
+                </div>
+              ) : null}
+              {mine && !projects.length ? <div className="ds-hint">You have no project to move it to yet.</div> : null}
+              {moveProblem ? (
+                <div className="ds-hint" role="alert">
+                  {moveProblem}
+                </div>
+              ) : null}
+            </HandToAgent>
           ) : null}
           <ThemeSwitch />
         </div>
       </div>
       <div className="map-body">
         {missing ? (
-          <div className="ds-empty">That sketch is not on this computer.</div>
+          <Problem>That sketch is not on this computer.</Problem>
         ) : !sketch ? (
-          <div className="ds-empty">Opening the sketch…</div>
+          <Waiting what="Opening the sketch…" />
         ) : canDraw ? (
           <SketchEditor key={sketch.id} sketch={sketch} mockups={mockups} path={path} onPath={setPath} onChange={changed} onAddMockup={(id) => void addMockup(id)} together={together} />
         ) : (
           <MapCanvas key={sketch.id} root={sketch.root as never} path={path} onPath={setPath} annotating={{ layers: sketch.layers ?? [], onChange: () => undefined, frozen: true }} together={together} />
         )}
       </div>
+      {agentSetUp !== false ? <AgentWindow connection={agentSetUp} onClose={() => setAgentSetUp(false)} /> : null}
     </div>
   )
 }

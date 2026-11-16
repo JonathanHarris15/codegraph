@@ -1,5 +1,17 @@
 // codegraph: component together-layer
+import { AGENT_COLOR } from './agents.js'
 import type { DrawnCard } from './map-layout.js'
+
+/** An agent drawing here, in the bar, the way a member who is here shows:
+ *  its face, then what it is doing. */
+export const AgentFace = ({ who }: { who: string }) => (
+  <span className="together-here" title={`${who} is drawing here`}>
+    <span className="together-face" style={{ background: AGENT_COLOR }}>
+      {who}
+    </span>
+    <span className="together-here-words">is drawing</span>
+  </span>
+)
 
 type Box = { x: number; y: number; w: number; h: number }
 

@@ -1,7 +1,7 @@
 // codegraph: page settings at /settings
 import { useEffect, useState } from 'react'
 import type { InstructionsView } from '../../features/show-instructions.js'
-import { Badge, Button, Card, Lines } from '../design-system/kit.js'
+import { Badge, Button, Card, Lines, Waiting } from '../design-system/kit.js'
 
 const when = (at: string): string => {
   const moment = new Date(at)
@@ -10,7 +10,7 @@ const when = (at: string): string => {
 
 const howItWent = (how: string): string => (how === 'reset' ? 'Default put back' : 'Edited')
 
-/** Settings: the words codegraph tells a person's agents, theirs to change.
+/** Agent instructions: the words codegraph tells a person's agents, theirs to change.
  *  Every edit is kept, so nothing they write is ever lost and the words
  *  codegraph ships with are always one click away (ADR 0022). */
 export const SettingsPage = ({ onLeave }: { onLeave: () => void }) => {
@@ -66,23 +66,23 @@ export const SettingsPage = ({ onLeave }: { onLeave: () => void }) => {
 
   return (
     <div className="ds-page">
+      <div className="page-back">
+        <Button look="bare" onClick={onLeave}>
+          ← Projects
+        </Button>
+      </div>
       <div className="ds-head">
         <div>
-          <h1 className="ds-title">Settings</h1>
+          <h1 className="ds-title">Agent instructions</h1>
           <div className="ds-sub">
             What codegraph tells your agents, by topic. They read these through the codegraph MCP,
             so a change here changes how every agent works in your repos.
           </div>
         </div>
-        <div className="ds-row">
-          <Button look="bare" onClick={onLeave}>
-            Back to projects
-          </Button>
-        </div>
       </div>
 
       {all === null ? (
-        <div className="ds-empty">Reading your instructions…</div>
+        <Waiting what="Reading your instructions…" />
       ) : (
         <div className="settings">
           <div className="settings-topics" role="group" aria-label="Topics">

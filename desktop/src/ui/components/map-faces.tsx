@@ -1,9 +1,10 @@
 // codegraph: component map-canvas
+import { FolderGit2 } from 'lucide-react'
 import { useState, type PointerEvent, type ReactNode } from 'react'
 import type { Said } from '../../modules/wording/index.js'
 import { CARD_SHAPES, drawnShape, lookOf } from './card-looks.js'
 import { Glyph, KindGlyph, LookGlyph, isStore, keeps, kindClass, lookClass } from './kind-glyph.js'
-import { FIELDS_SHOWN, isFrame, type DrawnCard, type Placed, type Side, type Spot } from './map-layout.js'
+import { FIELDS_SHOWN, isFrame, nameFit, type DrawnCard, type Placed, type Side, type Spot } from './map-layout.js'
 import { seamOf, textAreaOf } from './shape-outline.js'
 
 /** How the faces on the board are drawn: a card, and a wire's sentence. They
@@ -118,13 +119,25 @@ const AddField = ({ store, onAdd }: { store: string; onAdd: (field: { name: stri
   )
 }
 
+/** What is inside a card, by name, each with its kind's glyph in its kind's
+ *  colour, so a page and a module of one name read as two things. */
 const Chips = ({ card }: { card: DrawnCard }) => (
   <div className="map-chips">
-    {card.children.slice(0, 6).map((child) => (
-      <span key={child.id} className={`map-chip${isStore(child.kind) ? ' map-chip--store' : ''}`}>
-        {child.name}
-      </span>
-    ))}
+    {card.children.slice(0, 6).map((child) => {
+      const look = lookOf(child)
+      return (
+        <span
+          key={child.id}
+          className={`map-chip ${kindClass(child.kind)}${look ? ` ${lookClass(look)}` : ''}${isStore(child.kind) ? ' map-chip--store' : ''}`}
+          title={`${kindWords(child)}: ${child.name}`}
+        >
+          <span className="map-chip-glyph" aria-hidden="true">
+            {look ? <LookGlyph icon={look.icon} size={10} /> : <KindGlyph kind={child.kind} size={10} />}
+          </span>
+          {child.name}
+        </span>
+      )
+    })}
     {card.children.length > 6 ? <span className="map-chip map-more">+{card.children.length - 6}</span> : null}
   </div>
 )
@@ -170,6 +183,7 @@ export const CardFace = ({
   drawing,
   agent,
   extra,
+  glimpsed,
   onIcon,
   onType,
   onOpen,
@@ -185,6 +199,8 @@ export const CardFace = ({
   extra?: ReactNode
   /** The agent says it is working here, or inside here: its words. */
   agent?: string
+  /** Mostly out of sight, at the edge of the board or under a panel. */
+  glimpsed?: boolean
   opens: boolean
   selected: boolean
   /** How many levels out from the one in hand it is. Past none, it cannot be
@@ -227,6 +243,8 @@ export const CardFace = ({
   if (!card.setUp || card.kind === 'shallow software system') classes.push('map-card--bare')
   if (card.kind === 'person') classes.push('map-card--person')
   if (isFrame(card)) classes.push('map-frame')
+  // A page with no picture to show: zoomed out to names, it is only its name.
+  if (isFrame(card) && !picture && !(drawing ? '' : card.mockup)) classes.push('map-frame--unseen')
   if (card.outOfReach) classes.push('map-card--out-of-reach')
   if (selected) classes.push('map-card--selected')
   if (locked) classes.push('map-up', `map-up--${Math.min(up, 3)}`)
@@ -235,6 +253,7 @@ export const CardFace = ({
   if (movable && !locked) classes.push('map-card--movable')
   if (card.state) classes.push(`map-card--${card.state}`)
   if (agent !== undefined) classes.push('map-card--agent')
+  if (glimpsed) classes.push('map-card--glimpsed')
   const mockup = drawing ? '' : (card.mockup ?? '')
   const onField = (says: boolean) =>
     drawing && onEdit && !locked
@@ -284,6 +303,12 @@ export const CardFace = ({
       <div className="map-name" onDoubleClick={onField(false)}>
         {card.name || <span className="map-more">Unnamed</span>}
       </div>
+      {card.repoName ? (
+        <div className="map-repo" title={`Kept in the repo ${card.repoName}`}>
+          <FolderGit2 size={12} aria-hidden="true" />
+          {card.repoName}
+        </div>
+      ) : null}
       {card.says ? (
         <div className="map-says" onDoubleClick={onField(true)}>
           {card.says}
@@ -296,7 +321,9 @@ export const CardFace = ({
     <div
       className={classes.join(' ')}
       data-card={card.id}
-      style={{ left: box.x, top: box.y, width: box.w, height: box.h }}
+      // How big its name is drawn when the board is so far out that the card
+      // is only a block of its colour.
+      style={{ left: box.x, top: box.y, width: box.w, height: box.h, ['--name-fit' as string]: `${nameFit(card.name, box)}px` }}
       role={reachable ? 'button' : undefined}
       aria-label={drawing ? card.name || 'Unnamed card' : opens ? `Open ${card.name}` : card.name}
       aria-pressed={drawing && !locked ? selected : undefined}
@@ -427,6 +454,7 @@ export const Sentence = ({
   at,
   state,
   small,
+  widest,
   missing,
   unfinished,
   selected,
@@ -445,6 +473,9 @@ export const Sentence = ({
   /** How the wire stands against a proposal. */
   state?: string
   small: boolean
+  /** Wrapped to this width to fit somewhere clear, as between two cards
+   *  close together. */
+  widest?: number
   /** On the map, the code gave this wire no words: a problem to show. */
   missing: boolean
   /** On a sketch, nobody has said what this wire is for yet. */
@@ -476,7 +507,8 @@ export const Sentence = ({
     <div
       ref={measure}
       className={classes.join(' ')}
-      style={{ left: at.x, top: at.y, visibility: hidden ? 'hidden' : undefined }}
+      style={{ left: at.x, top: at.y, visibility: hidden ? 'hidden' : undefined, ...(widest ? { maxWidth: widest } : {}) }}
+      data-narrow={widest ? 'yes' : undefined}
       role={pickable ? 'button' : undefined}
       aria-label={`Wire: ${words}`}
       title={small ? words : undefined}

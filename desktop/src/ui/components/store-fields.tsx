@@ -36,8 +36,8 @@ const holdsFor = (type: string, was: { of: string; choices: string[] }): string 
 const ChoicesInput = ({ label, choices, onChoices }: { label: string; choices: string[]; onChoices: (choices: string[]) => void }) => {
   const [typed, setTyped] = useState(choices.join(', '))
   return (
-    <label className="ds-field">
-      <span className="ds-label">{label}</span>
+    <label className="store-field-more">
+      <span>Choices</span>
       <input
         className="ds-input"
         aria-label={label}
@@ -53,8 +53,33 @@ const ChoicesInput = ({ label, choices, onChoices }: { label: string; choices: s
   )
 }
 
-/** A store's shape, edited beside the board or in the panel: its fields, a row
- *  each, and whether a record may have others (ADR 0023). A new store is fixed. */
+/** A small select for one cell of a field's row, named for whoever cannot see
+ *  the column it sits under. */
+const Cell = ({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  value: string
+  options: { value: string; says: string }[]
+  onChange: (value: string) => void
+}) => (
+  <select className="ds-input store-field-cell" aria-label={label} title={label} value={value} onChange={(event) => onChange(event.target.value)}>
+    {options.map((option) => (
+      <option key={option.value} value={option.value}>
+        {option.says}
+      </option>
+    ))}
+  </select>
+)
+
+const said = (values: string[]): { value: string; says: string }[] => values.map((value) => ({ value, says: value }))
+
+/** A store's shape, edited in the panel or beside the board: its fields, one
+ *  row each under one set of column names, and whether a record may have
+ *  others (ADR 0023). A new store is fixed. */
 export const StoreFields = ({
   card,
   stores,
@@ -78,65 +103,85 @@ export const StoreFields = ({
   return (
     <div className="store-fields" aria-label={`The shape of ${card.name || 'this store'}`}>
       <div className="ds-label">Fields</div>
-      {fields.length === 0 ? <div className="ds-hint">None yet. Every record of it will hold the fields you add.</div> : null}
-      {fields.map((field, i) => {
-        const is = typeOf(field.holds)
-        return (
-          <fieldset key={i} className="store-field" aria-label={`Field ${i + 1}`}>
-            <div className="store-field-head">
-              <input
-                className="ds-input store-field-name"
-                aria-label={`Name of field ${i + 1}`}
-                placeholder="fieldName"
-                value={field.name}
-                onChange={(event) => put(i, { name: event.target.value })}
-              />
-              <button
-                type="button"
-                className="store-field-drop"
-                aria-label={`Take off field ${field.name || i + 1}`}
-                title="Take this field off"
-                onClick={() => onChange({ fields: fields.filter((_, at) => at !== i) })}
-              >
-                <Glyph of="close" size={12} />
-              </button>
-            </div>
-            <Select
-              label={`What field ${i + 1} holds`}
-              value={is.type}
-              options={TYPES}
-              onChange={(type) => put(i, { holds: holdsFor(type, is) })}
-            />
-            {is.type === 'a list' ? (
-              <Select
-                label={`Each item of field ${i + 1} is`}
-                value={is.of}
-                options={[...new Set([is.of, ...PLAIN])].filter(Boolean)}
-                onChange={(of) => put(i, { holds: `a list of ${of}` })}
-              />
-            ) : null}
-            {is.type === 'choices' ? (
-              <ChoicesInput
-                // Choices changed anywhere else start this box afresh.
-                key={field.holds}
-                label={`Choices for field ${i + 1}, split by commas`}
-                choices={is.choices}
-                onChoices={(choices) => put(i, { holds: choiceWords(choices) })}
-              />
-            ) : null}
-            <Select
-              label={`What field ${i + 1} points at`}
-              value={field.pointsAt || 'nothing'}
-              options={[...new Set(['nothing', field.pointsAt, ...stores])].filter(Boolean)}
-              onChange={(store) => put(i, { pointsAt: store === 'nothing' ? '' : store })}
-            />
-            <label className="store-field-needed">
-              <input type="checkbox" checked={field.needed} onChange={(event) => put(i, { needed: event.target.checked })} />
-              Every record has it
-            </label>
-          </fieldset>
-        )
-      })}
+      {fields.length === 0 ? (
+        <div className="ds-hint">None yet. Every record of it will hold the fields you add.</div>
+      ) : (
+        <div className="store-field-table" role="group" aria-label="Fields">
+          {fields.map((field, i) => {
+            const is = typeOf(field.holds)
+            return (
+              <fieldset key={i} className="store-field" aria-label={`Field ${i + 1}`}>
+                {/* Its name has the row's width, with whether every record
+                    has it and a way to delete it; what it holds and points at
+                    read under it as a sentence. */}
+                <input
+                  className="ds-input store-field-name"
+                  aria-label={`Name of field ${i + 1}`}
+                  placeholder="fieldName"
+                  value={field.name}
+                  onChange={(event) => put(i, { name: event.target.value })}
+                />
+                <label className="store-field-needed" title="Every record has it">
+                  <input
+                    type="checkbox"
+                    aria-label={`Every record has field ${i + 1}`}
+                    checked={field.needed}
+                    onChange={(event) => put(i, { needed: event.target.checked })}
+                  />
+                  <span>Required</span>
+                </label>
+                <button
+                  type="button"
+                  className="store-field-drop store-field-drop--danger"
+                  aria-label={`Delete field ${field.name || i + 1}`}
+                  title="Delete this field"
+                  onClick={() => onChange({ fields: fields.filter((_, at) => at !== i) })}
+                >
+                  <Glyph of="bin" size={14} />
+                </button>
+                <div className="store-field-type">
+                  <span aria-hidden="true">holds</span>
+                  <Cell
+                    label={`What field ${i + 1} holds`}
+                    value={is.type}
+                    options={said(TYPES)}
+                    onChange={(type) => put(i, { holds: holdsFor(type, is) })}
+                  />
+                  <span aria-hidden="true">points at</span>
+                  <Cell
+                    label={`What field ${i + 1} points at`}
+                    value={field.pointsAt || 'nothing'}
+                    options={[...new Set(['nothing', field.pointsAt, ...stores])]
+                      .filter(Boolean)
+                      .map((store) => ({ value: store, says: store === 'nothing' ? 'nothing' : store }))}
+                    onChange={(store) => put(i, { pointsAt: store === 'nothing' ? '' : store })}
+                  />
+                </div>
+                {is.type === 'a list' ? (
+                  <label className="store-field-more">
+                    <span>Each item is</span>
+                    <Cell
+                      label={`Each item of field ${i + 1} is`}
+                      value={is.of}
+                      options={said([...new Set([is.of, ...PLAIN])].filter(Boolean))}
+                      onChange={(of) => put(i, { holds: `a list of ${of}` })}
+                    />
+                  </label>
+                ) : null}
+                {is.type === 'choices' ? (
+                  <ChoicesInput
+                    // Choices changed anywhere else start this box afresh.
+                    key={field.holds}
+                    label={`Choices for field ${i + 1}, split by commas`}
+                    choices={is.choices}
+                    onChoices={(choices) => put(i, { holds: choiceWords(choices) })}
+                  />
+                ) : null}
+              </fieldset>
+            )
+          })}
+        </div>
+      )}
       <Button onClick={() => onChange({ fields: [...fields, { name: '', holds: 'text', needed: false, pointsAt: '' }] })}>
         Add a field
       </Button>
@@ -164,7 +209,7 @@ export const StoreFields = ({
 
 /** The stores a card holds, by name, and a way to add one: a database's stores,
  *  or the inner stores that live inside each record of a store. */
-const StoresInside = ({ card, onAdd }: { card: SketchCard; onAdd: (name: string) => void }) => {
+export const StoresInside = ({ card, onAdd }: { card: SketchCard; onAdd: (name: string) => void }) => {
   const [name, setName] = useState('')
   const inner = isStore(card.kind)
   const held = card.children.filter((c) => isStore(c.kind))
@@ -178,7 +223,7 @@ const StoresInside = ({ card, onAdd }: { card: SketchCard; onAdd: (name: string)
       <div className="ds-label">{inner ? 'Inner stores' : 'Stores'}</div>
       <div className="ds-hint">
         {inner
-          ? 'A store that lives inside each record of this one, and goes with it, like a sub-collection.'
+          ? 'A store that lives inside each record of this one, and goes when its record goes.'
           : 'Each kind of record this database keeps.'}
       </div>
       {held.length ? (

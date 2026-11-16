@@ -3,14 +3,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Sketch, SketchCard, SketchField } from '../../modules/sketches/index.js'
 import { undoStep } from '../../modules/together/index.js'
 import { sentenceOf } from '../../modules/wording/index.js'
-import { Button, Field, Select } from '../design-system/kit.js'
+import { Button, Field } from '../design-system/kit.js'
 import type { CardType } from '../../modules/card-types/schema.js'
 import { isStore, wireOfHub, type CardLook } from '../../modules/sketches/schema.js'
 import { CardLookEditor } from './card-look-editor.js'
 import { BLANK_LOOK, TEMPLATES, lookOf } from './card-looks.js'
 import { Glyph } from './kind-glyph.js'
 import { MapCanvas, remember, remembered, type Together } from './map-canvas.js'
-import { StoreEditor, StoreFields } from './store-fields.js'
+import { StoreEditor, StoreFields, StoresInside } from './store-fields.js'
 import { walk } from './map-layout.js'
 import {
   addWire,
@@ -20,11 +20,13 @@ import {
   changeNote,
   changeWire,
   bendWire,
-  choicesAt,
   copyOf,
   ownTypesAt,
   makeRoom,
   moveThings,
+  moveInside,
+  shapeWire,
+  canGoInside,
   nudge,
   paste,
   pick,
@@ -37,7 +39,6 @@ import {
   setFields,
   wireAllStores,
   addStoreInside,
-  wireKinds,
   type Clip,
 } from './sketch-edits.js'
 
@@ -54,6 +55,10 @@ let clipboard: Clip | null = null
  *  counts as one step to undo. */
 const ONE_STEP_MS = 900
 const HISTORY = 200
+/** How far the floating panel keeps from the board's edges. */
+/** How much of the board's right the panel covers: its width, its gap from the
+ *  edge, and room to breathe. */
+const PANEL_COVERS = 320 + 12 + 16
 
 /** Draws on a sketch: the canvas with its tools, and a panel for whatever is
  *  picked. Every change goes straight back to the page, which keeps it, and
@@ -290,6 +295,10 @@ export const SketchEditor = ({
 
   const picked = selected.length === 1 ? pick(focus, selected[0]!) : null
 
+  /** The panel floats at the board's right edge, always in the same place; the
+   *  board slides what is picked, and what it is wired to, out from under it. */
+  const area = useRef<HTMLDivElement>(null)
+
   /** Changes a store's fields, wiring it to any store a field now points at, or
    *  whether it is fixed or open. Typing in one store's fields is one undo. */
   const changeStore = (id: string, { fields, others }: { fields?: SketchField[] | null; others?: string }): void =>
@@ -312,8 +321,9 @@ export const SketchEditor = ({
   }
 
   return (
-    <div className="sketch-area">
+    <div ref={area} className="sketch-area">
       <MapCanvas
+        {...(picked && panel ? { cover: { right: PANEL_COVERS } } : {})}
         root={sketch.root}
         path={path}
         onPath={onPath}
@@ -331,10 +341,10 @@ export const SketchEditor = ({
             keep({ ...now.current, root: changeAt(now.current.root, to, (card) => ({ ...card, room })) }, join ? 'join' : ''),
           onSelect: setSelected,
           onPin: (arrangement) => change((f) => pinAll(f, arrangement), '', true),
-          onPlace: (at, kind, from, hub, look) => {
+          onPlace: (at, kind, from, hub, look, shape) => {
             let id = ''
             change((f) => {
-              const [next, made] = placeCard(f, at, kind, from, hub, look)
+              const [next, made] = placeCard(f, at, kind, from, hub, look, shape)
               id = made
               return next
             })
@@ -350,10 +360,16 @@ export const SketchEditor = ({
             return id
           },
           onMove: (moves, join) => change((f) => moveThings(f, moves), join ? 'join' : ''),
-          onWire: (from, to, kind, sides) => {
+          canInside: (id, into) => canGoInside(focus.children.find((c) => c.id === id), focus.children.find((c) => c.id === into)),
+          onInside: (id, into) => {
+            change((f) => moveInside(f, id, into))
+            // What it went into is picked, so the person sees where it went.
+            setSelected([into])
+          },
+          onWire: (from, to, kind, sides, shape) => {
             let id = ''
             change((f) => {
-              const [next, made] = addWire(f, from, to, kind, sides)
+              const [next, made] = addWire(f, from, to, kind, sides, shape)
               id = made
               return next
             })
@@ -361,6 +377,7 @@ export const SketchEditor = ({
           },
           onRewire: (id, end, card, side, share) => change((f) => rewire(f, id, end, card, side, share)),
           onBend: (id, bends, join) => change((f) => bendWire(f, id, bends), join ? 'join' : ''),
+          onWireShape: (id, shape, join) => change((f) => shapeWire(f, id, shape), join ? 'join' : ''),
           onText: (id, text, first, field) =>
             change(
               (f) => (field === 'says' ? changeCard(f, id, { says: text }) : retext(f, id, text)),
@@ -387,91 +404,41 @@ export const SketchEditor = ({
               const card = f.children.find((c) => c.id === id)
               return setFields(f, id, [...(card?.fields ?? []), { ...field, needed: false, pointsAt: '' }])
             }),
-          storeEditor: (id, onClose) => {
-            const card = focus.children.find((c) => c.id === id)
-            if (!card) return null
-            return (
-              <StoreEditor
-                card={card}
-                stores={storesIn(sketch.root).filter((name) => name !== card.name)}
-                onChange={(shape) => changeStore(id, shape)}
-                onAdd={(name) => change((f) => addStoreInside(f, id, name)[0])}
-                onClose={onClose}
-              />
-            )
-          },
+          // While the panel shows a store's fields, they are not opened again
+          // beside it on the board; with the panel put away, they are.
+          ...(panel
+            ? {}
+            : {
+                storeEditor: (id: string, onClose: () => void) => {
+                  const card = focus.children.find((c) => c.id === id)
+                  if (!card) return null
+                  return (
+                    <StoreEditor
+                      card={card}
+                      stores={storesIn(sketch.root).filter((name) => name !== card.name)}
+                      onChange={(shape) => changeStore(id, shape)}
+                      onAdd={(name) => change((f) => addStoreInside(f, id, name)[0])}
+                      onClose={onClose}
+                    />
+                  )
+                },
+              }),
           onRemove: (ids) => change((f) => remove(f, ids)),
           onAlign: (ids, how) => change((f) => align(f, ids, how)),
         }}
       />
 
-      {panel ? (
-      <aside className="sketch-panel" aria-label="What is picked">
+      {/* The panel comes out only for one thing picked, floating over the
+          board's edge so the board never shifts under it. How to draw is in
+          the Keys list, not here. */}
+      {picked && panel ? (
+        <aside className="sketch-panel" aria-label="What is picked">
           <button type="button" className="sketch-panel-hide" aria-label="Hide this panel" title="Hide this panel" onClick={() => setPanel(false)}>
             <Glyph of="close" size={14} />
           </button>
-          {selected.length === 0 ? (
-            <>
-              <div className="sketch-panel-head">Nothing picked</div>
-              <div className="ds-hint">Pick a card, a wire or a note to change it here.</div>
-              <dl className="sketch-keys" aria-label="Ways to draw">
-                <dt>Add a card</dt>
-                <dd>Drag one in from the left, or double-click the board</dd>
-                <dt>Wire two cards</dt>
-                <dd>Drag from a dot on a card's side onto another</dd>
-                <dt>Wire to a new card</dt>
-                <dd>Drag from a dot and let go on empty board</dd>
-                <dt>Write on it</dt>
-                <dd>
-                  Double-click its name, or pick it and start typing; <kbd>Enter</kbd> to finish
-                </dd>
-                <dt>Move things</dt>
-                <dd>Drag a card, a note, or a wire's words out from under each other</dd>
-                <dt>Pick many</dt>
-                <dd>
-                  <kbd>Shift</kbd> and drag a box on the board, or <kbd>Shift</kbd>-click. Out around an open card, this
-                  picks annotations
-                </dd>
-                <dt>Draw inside a card</dt>
-                <dd>
-                  Double-click it, and it grows to give you room. Drag its corners to resize it; carry a card past its edge
-                  and it grows. The arrow by its name, or <kbd>Esc</kbd>, backs out
-                </dd>
-                <dt>Fill the screen with one card</dt>
-                <dd>
-                  Point at it and press <kbd>F</kbd>
-                </dd>
-                <dt>Move the board</dt>
-                <dd>
-                  Drag the empty board, or two fingers on a trackpad. With a mouse wheel, <kbd>Ctrl</kbd> scrolls up
-                  and down and <kbd>Shift</kbd> across
-                </dd>
-                <dt>Zoom</dt>
-                <dd>
-                  The mouse wheel, or <kbd>Ctrl</kbd> and two fingers on a trackpad; <kbd>0</kbd> fits
-                </dd>
-                <dt>Undo, redo</dt>
-                <dd>
-                  <kbd>Ctrl</kbd>+<kbd>Z</kbd>, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd>
-                </dd>
-                <dt>Copy, paste, duplicate</dt>
-                <dd>
-                  <kbd>Ctrl</kbd>+<kbd>C</kbd>, <kbd>V</kbd>, <kbd>D</kbd>
-                </dd>
-                <dt>Tools</dt>
-                <dd>
-                  <kbd>V</kbd> pick, <kbd>H</kbd> pan, <kbd>W</kbd> wire, <kbd>N</kbd> note, <kbd>C</kbd> cards
-                </dd>
-              </dl>
-            </>
-          ) : selected.length > 1 ? (
-            <>
-              <div className="sketch-panel-head">{selected.length} picked</div>
-              <div className="ds-hint">
-                Drag any of them to move them together. The bar over them lines them up or spaces them out.
-              </div>
-            </>
-          ) : picked?.kind === 'card' ? (
+          {/* Only this scrolls, so the panel's name and its close stay put. */}
+          <div className="sketch-panel-body">
+          {picked.kind === 'card' ? (
             <>
               <div className="sketch-panel-head">
                 {/^[aeiou]/.test(picked.card.kind) ? 'An' : 'A'} {picked.card.kind || picked.card.level}
@@ -481,50 +448,11 @@ export const SketchEditor = ({
                 value={picked.card.name}
                 onChange={(name) => change((f) => changeCard(f, picked.card.id, { name }), `name:${picked.card.id}`)}
               />
-              {isStore(picked.card.kind) ? (
-                <>
-                  <div className="ds-hint">A store is its own kind of card: its fields say what it keeps.</div>
-                  <StoreFields
-                    card={picked.card}
-                    stores={storesIn(sketch.root).filter((name) => name !== picked.card.name)}
-                    onChange={(shape) => changeStore(picked.card.id, shape)}
-                  />
-                </>
-              ) : ownTypesAt(picked.card.level) ? (
-                picked.card.kind === 'database' || picked.card.kind === 'page' ? (
-                  <div className="ds-hint">
-                    {picked.card.kind === 'database' ? 'A database is its own kind of card, not a look.' : 'A page holds a mockup, so it is its own kind of card.'}
-                  </div>
-                ) : (
-                  <CardLookEditor
-                    kind={picked.card.kind}
-                    look={lookOf(picked.card) ?? BLANK_LOOK}
-                    canSave={Boolean(picked.card.kind.trim()) && picked.card.kind !== 'card' && !TEMPLATES[picked.card.kind] && !cardTypes.some((type) => type.name === picked.card.kind)}
-                    onKind={(kind) => change((f) => changeCard(f, picked.card.id, { kind, look: lookOf(picked.card) ?? BLANK_LOOK }), `kind:${picked.card.id}`)}
-                    onLook={(look: CardLook) => change((f) => changeCard(f, picked.card.id, { look }))}
-                    onSave={() =>
-                      keepCardTypes([...cardTypes, { id: crypto.randomUUID(), name: picked.card.kind.trim(), ...(lookOf(picked.card) ?? BLANK_LOOK) }])
-                    }
-                  />
-                )
-              ) : (
-                <Select
-                  label="Kind"
-                  value={picked.card.kind}
-                  options={[
-                    ...new Set([
-                      picked.card.kind,
-                      ...choicesAt(picked.card.level).flatMap((group) => group.choices.map((choice) => choice.kind)),
-                    ]),
-                  ].filter(Boolean)}
-                  onChange={(kind) => change((f) => changeCard(f, picked.card.id, { kind, look: undefined }))}
-                />
-              )}
               <label className="ds-field">
                 <span className="ds-label">What it is for</span>
                 <textarea
                   className="ds-input sketch-says"
-                  rows={3}
+                  rows={2}
                   placeholder="One line on the job it does"
                   value={picked.card.says}
                   onChange={(event) =>
@@ -532,6 +460,33 @@ export const SketchEditor = ({
                   }
                 />
               </label>
+              {isStore(picked.card.kind) ? (
+                <>
+                  <StoreFields
+                    card={picked.card}
+                    stores={storesIn(sketch.root).filter((name) => name !== picked.card.name)}
+                    onChange={(shape) => changeStore(picked.card.id, shape)}
+                  />
+                  <StoresInside card={picked.card} onAdd={(name) => change((f) => addStoreInside(f, picked.card.id, name)[0])} />
+                </>
+              ) : picked.card.kind === 'database' ? (
+                <StoresInside card={picked.card} onAdd={(name) => change((f) => addStoreInside(f, picked.card.id, name)[0])} />
+              ) : ownTypesAt(picked.card.level) && picked.card.kind !== 'page' ? (
+                /* Its type and colour are on the card and the bar over it;
+                   its type's icon and shape are here. */
+                <CardLookEditor
+                  kind={picked.card.kind}
+                  look={lookOf(picked.card) ?? BLANK_LOOK}
+                  color={false}
+                  typed={false}
+                  canSave={Boolean(picked.card.kind.trim()) && picked.card.kind !== 'card' && !TEMPLATES[picked.card.kind] && !cardTypes.some((type) => type.name === picked.card.kind)}
+                  onKind={(kind) => change((f) => changeCard(f, picked.card.id, { kind, look: lookOf(picked.card) ?? BLANK_LOOK }), `kind:${picked.card.id}`)}
+                  onLook={(look: CardLook) => change((f) => changeCard(f, picked.card.id, { look }))}
+                  onSave={() =>
+                    keepCardTypes([...cardTypes, { id: crypto.randomUUID(), name: picked.card.kind.trim(), ...(lookOf(picked.card) ?? BLANK_LOOK) }])
+                  }
+                />
+              ) : null}
               {picked.card.kind === 'page' ? (
                 <>
                   <Field
@@ -545,13 +500,8 @@ export const SketchEditor = ({
                   </Button>
                 </>
               ) : null}
-              {picked.card.level !== 'code' ? (
-                <div className="ds-hint">
-                  To draw what is inside it, double-click it, or use the bar over the card.
-                </div>
-              ) : null}
             </>
-          ) : picked?.kind === 'wire' ? (
+          ) : picked.kind === 'wire' ? (
             <>
               <div className="sketch-panel-head">A wire</div>
               <div className="sketch-sentence">
@@ -563,12 +513,6 @@ export const SketchEditor = ({
                   ),
                 )}
               </div>
-              <Select
-                label="Kind"
-                value={picked.wire.kind}
-                options={[...new Set([picked.wire.kind, ...wireKinds])]}
-                onChange={(kind) => change((f) => changeWire(f, picked.wire.id, { kind }))}
-              />
               <Field
                 label="What it is for"
                 placeholder="saves the note"
@@ -577,7 +521,7 @@ export const SketchEditor = ({
               />
               <div className="ds-hint">Write it as the code would: “saves the note”, “sends a receipt”.</div>
             </>
-          ) : picked?.kind === 'note' ? (
+          ) : picked.kind === 'note' ? (
             <>
               <div className="sketch-panel-head">A note</div>
               <textarea
@@ -591,26 +535,15 @@ export const SketchEditor = ({
               />
             </>
           ) : null}
-          {selected.length > 0 ? (
-            <>
-              <hr className="sketch-rule" />
-              <Button
-                look="bare"
-                onClick={() => {
-                  change((f) => remove(f, selected))
-                  setSelected([])
-                }}
-              >
-                {selected.length > 1 ? `Take these ${selected.length} off the sketch` : 'Take it off the sketch'}
-              </Button>
-            </>
-          ) : null}
+          {/* Taking it away is on the bar over it, the Delete key and the
+              board's menu, so the panel keeps to what it is. */}
+          </div>
         </aside>
-      ) : (
+      ) : picked ? (
         <button type="button" className="sketch-panel-tab" aria-label="Show the panel" title="Show the panel" onClick={() => setPanel(true)}>
           <Glyph of="more" size={16} />
         </button>
-      )}
+      ) : null}
     </div>
   )
 }

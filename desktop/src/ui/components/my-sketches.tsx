@@ -129,14 +129,6 @@ export const MySketches = ({
 
   return (
     <div>
-      <div className="ds-row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
-        <div className="ds-sub">Any diagram at all. These are yours alone until you share them, and they open with no connection.</div>
-        <Button look="loud" onClick={() => void start()}>
-          New sketch
-        </Button>
-      </div>
-      {sketches === null ? <div className="ds-empty">Reading your sketches…</div> : null}
-      {sketches?.length === 0 && !folders.length ? <div className="ds-empty">No sketches yet.</div> : null}
       <FolderBrowser
         library={LOOSE}
         folders={folders}
@@ -146,7 +138,19 @@ export const MySketches = ({
         canEdit
         sketchFolders={Object.fromEntries(allMine.map((s) => [s.id, shownIn(s.folderId, folders)]))}
         onFiled={() => void load()}
+        actions={
+          <Button look="loud" onClick={() => void start()}>
+            New sketch
+          </Button>
+        }
       >
+        {sketches === null ? <div className="ds-empty">Reading your sketches…</div> : null}
+        {sketches?.length === 0 && !folders.length ? (
+          <div className="ds-empty">
+            <div style={{ fontSize: 16, color: 'var(--ink-000)', marginBottom: 6 }}>No sketches yet</div>
+            <div>Draw anything here: an idea, a flow, a system you have not built.</div>
+          </div>
+        ) : null}
         <div style={{ display: 'grid', gap: 8 }}>{mine.map(row)}</div>
       </FolderBrowser>
       {theirs.length && !here ? (

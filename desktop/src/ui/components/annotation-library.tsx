@@ -3,6 +3,8 @@ import { ChevronDown, ChevronRight, Eye, EyeOff, Magnet, Plus, Search, Trash2, X
 import { useState } from 'react'
 import type { Layer } from '../../modules/annotations/index.js'
 import { SHAPE_GROUPS, type AnnotationShape } from './annotation-shapes.js'
+import { Glyph } from './kind-glyph.js'
+import type { WireStyle } from './square-wires.js'
 
 /** A shape as its library button draws it. It draws what the board draws —
  *  the outline, the strip and the strokes inside it, the dashed edge and
@@ -65,7 +67,7 @@ export const AnnotationLibrary = ({
   })).filter((g) => g.shapes.length)
 
   return (
-    <aside className="map-palette map-anno-library" aria-label="Annotations">
+    <aside className="map-palette map-anno-library" aria-label="Shapes">
       <svg width="0" height="0" style={{ position: 'absolute' }}>
         <defs>
           <marker id="map-anno-icon-head" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
@@ -74,15 +76,15 @@ export const AnnotationLibrary = ({
         </defs>
       </svg>
       <div className="map-palette-head">
-        <span>Annotations</span>
-        <button type="button" className="map-palette-close" aria-label="Close the annotations" onClick={onClose}>
+        <span>Shapes</span>
+        <button type="button" className="map-palette-close" aria-label="Close the shapes" onClick={onClose}>
           <X size={14} />
         </button>
       </div>
-      <div className="map-palette-hint">Notes for people and agents, drawn over the diagram. They never change the code.</div>
+      <div className="map-palette-hint">Annotations for people and agents, drawn over the diagram. They never change the code.</div>
       <label className="map-anno-search">
         <Search size={14} aria-hidden="true" />
-        <input aria-label="Search shapes" placeholder="Search shapes" value={find} onChange={(e) => setFind(e.target.value)} />
+        <input className="ds-input" aria-label="Search shapes" placeholder="Search shapes" value={find} onChange={(e) => setFind(e.target.value)} />
       </label>
       <div className="map-anno-groups">
         {groups.map((g) => {
@@ -143,8 +145,13 @@ export const LayersPanel = ({
   onAdd,
   onRemove,
   onClose,
+  wires,
+  onWires,
 }: {
   layers: Layer[]
+  /** How the diagram's wires are drawn, and changing it, where it can be. */
+  wires?: WireStyle
+  onWires?: (style: WireStyle) => void
   active: string
   onActive: (id: string) => void
   onToggle: (id: string) => void
@@ -166,6 +173,26 @@ export const LayersPanel = ({
       <span className="map-layers-name">Diagram</span>
       <span className="ds-hint">always shown</span>
     </div>
+    {wires && onWires ? (
+      /* How the diagram's wires are drawn belongs to the diagram's layer. */
+      <div className="map-layers-wires" role="radiogroup" aria-label="How wires are drawn">
+        <span className="ds-hint">Wires</span>
+        {(['curved', 'square'] as const).map((style) => (
+          <button
+            key={style}
+            type="button"
+            role="radio"
+            aria-checked={wires === style}
+            className={wires === style ? 'map-layers-wire map-layers-wire--on' : 'map-layers-wire'}
+            title={style === 'curved' ? 'Curved wires' : 'Right-angle wires: pick one to move its pieces'}
+            onClick={() => onWires(style)}
+          >
+            <Glyph of={style === 'curved' ? 'curvedWires' : 'squareWires'} size={14} />
+            {style === 'curved' ? 'Curved' : 'Right-angle'}
+          </button>
+        ))}
+      </div>
+    ) : null}
     {[...layers].reverse().map((layer) => (
       <div key={layer.id} className={layer.id === active ? 'map-layers-row map-layers-row--on' : 'map-layers-row'}>
         <button

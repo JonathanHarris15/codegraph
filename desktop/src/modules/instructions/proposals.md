@@ -107,9 +107,13 @@ the app before you make a proposal from it.
    named after the change. A proposal can never start on the main line.
 3. Call `propose` with the sketch's name. It compares the sketch with this
    repo's map and writes the proposal: only what is new, and what the
-   sketch took away. It says which other software systems the sketch also
-   changes. Each needs a proposal of its own, made in its own repo on its
-   own branch. A system with no repo yet needs the repo made first.
+   sketch took away. It says which other repos the sketch also changes:
+   other software systems, and the other repos of this one where it is kept
+   in several. Each needs a proposal of its own, made in its own repo on its
+   own branch. A system with no repo yet needs the repo made first. A
+   container new to a system kept in several repos lands in the repo you
+   propose from; if it belongs in another, or a repo of its own, say so to
+   the person before building.
 4. Read what it wrote back to the person in a line or two before building.
 5. Commit the proposal and push the branch. Other members only see what has
    reached GitHub, so this is when the outline appears for them.

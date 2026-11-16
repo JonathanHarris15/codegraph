@@ -137,6 +137,9 @@ export type SystemMap = {
   /** It has a codegraph config to read. */
   setUp: boolean
   projects: string[]
+  /** The software system its config says it is part of; '' for none
+   *  (ADR 0028). */
+  system: string
   containers: Container[]
   components: Component[]
   /** What each database or folder on disk keeps, inner stores too. */

@@ -165,6 +165,9 @@ describe('looking at a design system', () => {
     await view().waitFor({ timeout: PATIENCE })
     expect(await view().textContent()).toContain('Calm neutrals and one accent.')
     expect(await view().textContent()).toContain('Quiet, so the work stands out.')
+    // The bar says it is open: its button is pressed, and the trail ends there.
+    expect(await page.getByRole('button', { name: 'Design system' }).getAttribute('aria-pressed')).toBe('true')
+    expect(await page.getByRole('navigation', { name: 'Where you are' }).locator('[aria-current="page"]').textContent()).toContain('Design system')
   })
 
   it('lets the branch list open over it, not behind it', async () => {
@@ -339,9 +342,15 @@ describe('looking at a design system', () => {
     await view().getByRole('tab', { name: /Tokens/ }).click()
   })
 
-  it('closes back to the map', async () => {
+  it('closes back to the map, by its X or by Escape, staying on the same level', async () => {
     await view().getByRole('button', { name: 'Close' }).click()
     expect(await view().count()).toBe(0)
+    await page.getByRole('button', { name: 'Design system' }).click()
+    await view().waitFor({ timeout: PATIENCE })
+    await page.keyboard.press('Escape')
+    await view().waitFor({ state: 'detached', timeout: PATIENCE })
+    const here = page.getByRole('navigation', { name: 'Where you are' }).locator('[aria-current="page"]')
+    expect(await here.textContent()).toContain('software system')
   })
 
   it('marks each page on the map with the recipe it follows', async () => {

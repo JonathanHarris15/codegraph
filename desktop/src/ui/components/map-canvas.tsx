@@ -13,20 +13,20 @@ import {
   type SetStateAction,
 } from 'react'
 import { sentenceOf } from '../../modules/wording/index.js'
-import { ArrowLeft, Copy as CopyIcon, Trash2 } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { roomKey } from '../../modules/arrangements/schema.js'
 import type { Layer } from '../../modules/annotations/index.js'
 import type { CardType } from '../../modules/card-types/schema.js'
 import type { CardLook } from '../../modules/sketches/schema.js'
-import { addLayer, changeAnnotation, changeLayer, duplicateAnnotations, layerOf, placeAnnotation, removeAnnotations, removeLayer } from './annotation-edits.js'
-import { AnnotationLayer, AnnotationPlacer, aroundBox, caughtBy, drawnAmong, drawnOn } from './annotation-layer.js'
+import { addLayer, changeLayer, layerOf, placeAnnotation, removeLayer } from './annotation-edits.js'
+import { AnnotationBar, AnnotationLayer, AnnotationPlacer, aroundBox, caughtBy, drawnAmong, drawnOn } from './annotation-layer.js'
 import type { Seen } from '../../features/say-looking.js'
 import { AnnotationLibrary, LayersPanel } from './annotation-library.js'
-import { COLOR_NAMES, COLORS, shapeOf } from './annotation-shapes.js'
+import { shapeOf } from './annotation-shapes.js'
 import { IconPick } from './card-look-editor.js'
 import { BLANK_LOOK, CARD_SHAPES, drawnShape, lookOf } from './card-looks.js'
 import { meetOutline, textAreaOf } from './shape-outline.js'
-import { addBend, dragPiece, nearestOn, pathOf, pieceOf, pointAlong, spotOn, squareBetween, squareRoute, toOutlines, type WireStyle } from './square-wires.js'
+import { addBend, dragPiece, nearestOn, pathOf, pieceOf, pointAlong, spotOn, squareBetween, squareRoute, takePieceOut, toOutlines, type EndRoom, type WireStyle } from './square-wires.js'
 import { CanvasMenu, type MenuItem } from './canvas-menu.js'
 import { SidePanel } from './side-panel.js'
 import { CardPalette } from './card-palette.js'
@@ -39,7 +39,9 @@ import {
   boundsOf,
   curve,
   deeper,
+  endSlots,
   facing,
+  headerHeight,
   holds,
   inBox,
   isFrame,
@@ -66,6 +68,7 @@ import {
   type DrawnNote,
   type DrawnWire,
   type Grip,
+  type Keep,
   type OpenLevel,
   type Placed,
   type Side,
@@ -105,19 +108,26 @@ export type Drawing = {
   onPin: (arrangement: Arrangement) => void
   /** A card of a kind, centred on a spot, wired from another card if given,
    *  or to a hub the way the hub's wire runs. Hands back the new card's id. */
-  onPlace: (at: Spot, kind: string, from?: string, hub?: { into: boolean; kind: string }, look?: CardLook) => string
+  onPlace: (at: Spot, kind: string, from?: string, hub?: { into: boolean; kind: string }, look?: CardLook, shape?: WireStyle) => string
   onNote: (at: Spot) => string
   /** Puts things down where they were dragged. Joining makes the move one
    *  step with the one before, as when Alt and drag copied what it carries. */
   onMove: (moves: Arrangement, join?: boolean) => void
+  /** Whether one card can be put inside another on this level, and putting it
+   *  there: a card dragged and let go over another that can hold it goes in. */
+  canInside?: (id: string, into: string) => boolean
+  onInside?: (id: string, into: string) => void
   /** A wire between two cards, plugged into the sides given, if any. */
-  onWire: (from: string, to: string, kind?: string, sides?: { from?: Side; to?: Side }) => string
+  onWire: (from: string, to: string, kind?: string, sides?: { from?: Side; to?: Side }, shape?: WireStyle) => string
   /** Points one end of a wire at a card, plugged into a side if given, and
    *  where along it as a share of it. */
   onRewire: (id: string, end: 'from' | 'to', card: string, side?: Side, share?: number) => void
   /** Where a right-angle wire turns, in the level's own space; none, and it
    *  finds its own way. Joining makes it one step with the one before. */
   onBend: (id: string, bends: Spot[] | undefined, join?: boolean) => void
+  /** Draws one wire curved or at right angles, whatever the board draws the
+   *  rest (ADR 0029). Joining makes it one step with the one before. */
+  onWireShape?: (id: string, shape: WireStyle, join?: boolean) => void
   /** A card's name, a wire's words, or a note's words; or, for a card,
    *  what it is for. Writing the first words of something just made joins
    *  the step that made it, so one undo takes the whole thing away. */
@@ -165,6 +175,37 @@ const SETTLE_MS = 420
 /** How much of the board's visible space a newly opened card takes. */
 const ROOM_ACROSS = 0.7
 const ROOM_DOWN = 0.78
+/** A sketch is never fitted further out than this: its cards' words stay big
+ *  enough to read, and any empty room runs on past the window. */
+const SKETCH_LEAST_K = 0.85
+/** The least room a card opened on the map gets, and the air it keeps
+ *  around what is inside it, beyond the usual, for wires that loop round. */
+const MAP_ROOM = { w: 480, h: 320 }
+const MAP_AIR = 40
+
+/** The air kept around what is fitted on screen, clear of the zoom bar along
+ *  the foot and of the tool rail on the left. */
+const FIT_PAD = { left: 24, right: 48, top: 48, bottom: 96 }
+/** How far clear of a panel a picked card is brought, when the panel would
+ *  hide it. */
+const PICK_CLEAR = 16
+
+/** Zoomed out past this, a card shows only its glyph and name and a wire only
+ *  its verb, each drawn big enough to read: the rest is too small. On the map
+ *  the card shrinks to its name. Nearer than this, the small words grow as
+ *  the board shrinks, so a database fitted on screen still lists its fields. */
+const NAMES_AT = { map: 0.6, sketch: 0.5 }
+/** Further out still, a card is a block of its colour with its name across
+ *  it, and an open card a tinted area with one big name. */
+const BLOCKS_AT = 0.3
+
+/** How the board is drawn at a zoom: everything, names only, or blocks. */
+type Band = 'near' | 'names' | 'blocks'
+
+/** How near the edge of what can be seen of the board a name tab is kept. */
+const TAB_EDGE = 8
+/** How tall an open card's name tab is, unscaled. */
+const TAB_HIGH = 26
 
 const GRIPS: Grip[] = ['n', 'e', 's', 'w', 'nw', 'ne', 'sw', 'se']
 
@@ -191,6 +232,8 @@ export type Annotating = {
   layers: Layer[]
   onChange: (layers: Layer[], step?: string) => void
   frozen?: boolean
+  /** Undo and redo for annotations where nothing else keeps a history: the map. */
+  history?: { canUndo: boolean; canRedo: boolean; onUndo: () => void; onRedo: () => void }
 }
 
 /** Who else is on this board, and how this member's hands reach them. */
@@ -302,6 +345,8 @@ type Live = {
   room?: { id: string; box: Box }
   /** A right-angle wire whose piece is being dragged, as it now runs. */
   bend?: { key: string; route: Spot[] }
+  /** The card a card being dragged would go inside, let go now. */
+  into?: string
 }
 
 /** The outline of a card that is not a plain box, if it is one. */
@@ -348,6 +393,29 @@ const STORE_EDITOR_ROOM = 560
 /** How wide a hub is on the board. */
 const HUB_SIZE = 16
 
+/** How wide an open card's name tab is, near enough, unscaled. Far out, the
+ *  tab gives its type's word up to make room for the name. */
+const lipWidth = (card: DrawnCard, band: Band = 'near'): number =>
+  (band === 'blocks' ? 40 : 52 + kindWords(card).length * 7.5) + (card.name || 'Unnamed').length * 8.5
+
+/** How much an open card's name tab is scaled, so its name stays readable
+ *  however far out the board is, but never wider than the card. Far out it
+ *  grows to the size of a name a person reads at a glance; zoomed in, it
+ *  keeps its size on the screen rather than growing with the board. */
+const lipScale = (card: DrawnCard, box: Box, k: number, band: Band): number => {
+  const widest = Math.max(1, (box.w * 0.95) / lipWidth(card, band))
+  return Math.min(Math.max(Math.min(1, 1 / k), (band === 'blocks' ? 1 : 0.8) / k), band === 'blocks' ? widest : Math.min(2.5, widest))
+}
+
+/** Near enough where an open card's name tab sits, above its top left
+ *  corner, for wire sentences to keep off it. */
+const lipBox = (card: DrawnCard, box: Box, scale = 1): Box => ({
+  x: box.x,
+  y: box.y - 30 * scale,
+  w: lipWidth(card) * scale,
+  h: 30 * scale,
+})
+
 /** How far a level is from the one in hand: how faded it is. */
 const upClass = (up: number): string => (up > 0 ? ` map-up map-up--${Math.min(up, 3)}` : '')
 
@@ -366,6 +434,7 @@ export const MapCanvas = ({
   cardExtra,
   onStartSketch,
   together,
+  cover,
 }: {
   /** What the page puts on a card, if anything, by the card. */
   cardExtra?: (card: DrawnCard) => ReactNode
@@ -383,6 +452,10 @@ export const MapCanvas = ({
   onStartSketch?: () => void
   /** Others working here, if anyone. */
   together?: Together
+  /** How much of the board a panel floating over it covers, in pixels, on
+   *  either side. Fitting keeps clear of it, and what is picked, or what is
+   *  inside the open card, is brought out from under it. */
+  cover?: { right?: number; left?: number }
 }) => {
   const frame = useRef<HTMLDivElement>(null)
   const [view, showView] = useState<View>({ x: 0, y: 0, k: 1 })
@@ -413,6 +486,12 @@ export const MapCanvas = ({
     setWireStyleNow(style)
   }
   const square = wireStyle === 'square'
+  /** The shape a wire being drawn now takes: the board's, until Tab switches
+   *  it, and then that, for the wires after it too. */
+  const [drawAs, setDrawAs] = useState<WireStyle>(wireStyle)
+  useEffect(() => setDrawAs(wireStyle), [wireStyle])
+  /** How one wire is drawn: as a person chose for it, or as the board draws. */
+  const wireShapeOf = (wire: { shape?: WireStyle }): WireStyle => wire.shape ?? wireStyle
   /** Something from the library waiting to be placed with a click, by its key. */
   const [armed, setArmed] = useState('')
   // Annotations: the library and the layers list, a shape waiting to be put
@@ -459,6 +538,8 @@ export const MapCanvas = ({
   const [lifting, setLifting] = useState<{ kind: string; x: number; y: number; moved: boolean } | null>(null)
   const [shutOverview, setShutOverview] = useState(true)
   const [hover, setHover] = useState('')
+  /** The dot under the pointer where a wire from outside crosses into the open card. */
+  const [portHover, setPortHover] = useState('')
   /** What is picked on a map that is only shown. A sketch keeps its own. */
   const [held, setHeld] = useState<string[]>([])
   const [live, setLive] = useState<Live>({})
@@ -497,6 +578,16 @@ export const MapCanvas = ({
   const dragged = useRef(false)
   const seen = useRef(view)
   seen.current = view
+  const coverLeft = cover?.left ?? 0
+  const coverRight = cover?.right ?? 0
+  const coverNow = useRef({ left: coverLeft, right: coverRight })
+  coverNow.current = { left: coverLeft, right: coverRight }
+  /** How the board is drawn at this zoom, and the zoom in steps, for working
+   *  out how tall a card is that hugs its name. */
+  const band: Band = view.k < BLOCKS_AT ? 'blocks' : view.k < (drawing ? NAMES_AT.sketch : NAMES_AT.map) ? 'names' : 'near'
+  const stepK = Math.max(BLOCKS_AT, Math.floor(view.k * 20) / 20)
+  /** On the map, zoomed out to names, a card shrinks to its glyph and name. */
+  const hugK = band === 'names' && !drawing ? stepK : 0
 
   /** Moves the board to a view in a straight line, a little at a time. A new
    *  aim while one is under way sets off from wherever the board has got to. */
@@ -597,17 +688,20 @@ export const MapCanvas = ({
       trail.map((card, depth) => {
         const put = asPut(card)
         const moves = depth === workAt ? live.moves : undefined
+        // On the map a card is read, not drawn in, so it is only as tall as
+        // what it says. On a sketch it keeps a little body to double-click into.
+        const kids = drawing ? put.children : put.children.map((child) => ({ ...child, snug: true }))
         return {
           card,
           wires: put.wires,
           // Everything else holds still under the drag, even a card nobody
           // has put anywhere yet, which would otherwise be laid out afresh.
           children: moves
-            ? layOut(put.children, put.wires).map(({ card: child, box }) => {
+            ? layOut(kids, put.wires).map(({ card: child, box }) => {
                 const to = moves.get(child.id)
                 return { ...child, x: to?.x ?? box.x, y: to?.y ?? box.y }
               })
-            : put.children,
+            : kids,
           notes: (card.notes ?? []).map((note) => {
             const to = moves?.get(note.id)
             return to ? { ...note, x: to.x, y: to.y } : note
@@ -615,7 +709,7 @@ export const MapCanvas = ({
           annos: annosOf(card.id),
         }
       }),
-    [trail, workAt, asPut, live.moves, annosOf],
+    [trail, workAt, asPut, live.moves, annosOf, drawing ? 1 : 0],
   )
 
   const anchors = useRef(new Map<string, Spot>())
@@ -645,6 +739,17 @@ export const MapCanvas = ({
           if (given) return given
           const made = defaults.current.get(card.id)
           if (made) return made
+          // On the map, nothing is drawn inside, so the room fits what is
+          // there with air for wires that loop round, rather than a screen
+          // around one small card. A sketch gets room to draw in.
+          if (!drawing) {
+            const room = roomAround(
+              inside ? { x: inside.x - MAP_AIR, y: inside.y - MAP_AIR, w: inside.w + MAP_AIR * 2, h: inside.h + MAP_AIR * 2 } : null,
+              { w: Math.max(sizeOf(card).w, MAP_ROOM.w), h: Math.max(sizeOf(card).h, MAP_ROOM.h) },
+            )
+            defaults.current.set(card.id, room)
+            return room
+          }
           const el = frame.current
           const k = seen.current.k
           const room = roomAround(inside, {
@@ -655,27 +760,36 @@ export const MapCanvas = ({
           return room
         },
       }),
-    [contents, live.moves, live.room, roomGiven],
+    [contents, live.moves, live.room, roomGiven, drawing ? 1 : 0],
   )
 
   // As a card opens or closes, everything on the board slides from where it
   // was to where it now belongs, and the wires go with it.
   const [settling, setSettling] = useState<{ from: Map<string, Box>; t: number } | null>(null)
   const shown = useMemo((): OpenLevel[] => {
-    if (!settling) return levels
+    // Zoomed out to names on the map, a card is only as tall as its glyph and
+    // name, about its own middle, and its wires meet it there.
+    const hug = (p: Placed): Placed => {
+      // A page keeps its picture, if it has a real one.
+      if (!hugK || (isFrame(p.card) && (p.card.shot || p.card.mockup)) || drawnShape(p.card)) return p
+      const h = headerHeight(p.card, p.box, hugK)
+      return h >= p.box.h ? p : { card: p.card, box: { ...p.box, y: p.box.y + (p.box.h - h) / 2, h } }
+    }
+    const hugged = hugK ? levels.map((level) => ({ ...level, placed: level.placed.map(hug) })) : levels
+    if (!settling) return hugged
     const by = springy(settling.t)
     const slide = (id: string, box: Box): Box => {
       const was = settling.from.get(id)
       return was ? between(was, box, by) : box
     }
-    return levels.map((level) => ({
+    return hugged.map((level) => ({
       ...level,
       placed: level.placed.map((p) => ({ card: p.card, box: slide(p.card.id, p.box) })),
       noteBoxes: level.noteBoxes.map((n) => ({ note: n.note, box: slide(n.note.id, n.box) })),
       open: level.open ? { card: level.open.card, box: slide(level.open.card.id, level.open.box) } : null,
       annoBoxes: new Map([...level.annoBoxes].map(([id, box]) => [id, slide(id, box)])),
     }))
-  }, [levels, settling])
+  }, [levels, settling, hugK])
 
   const working = shown[workAt]!
   const children = working.children
@@ -737,6 +851,37 @@ export const MapCanvas = ({
     return all
   }, [everyCard])
 
+  /** What a wire's sentence keeps off besides the cards: the annotations
+   *  drawn on every level, each by its outline; a frame only by its name, at
+   *  its top left, since a sentence may sit anywhere inside it. Lines are left
+   *  out: a sentence may sit on a line. */
+  const annoKeeps = useMemo((): Keep[] => {
+    if (!annotating) return []
+    return shown.flatMap((level) => {
+      const cards = [
+        ...level.placed.map((p) => ({ id: p.card.id, box: p.box, d: outlineOf(p.card) })),
+        ...(level.open ? [{ id: level.open.card.id, box: level.open.box, d: '' }] : []),
+      ]
+      return drawnAmong(annotating.layers, level.card.id, level.shift, cards, level.annoBoxes, notDrawn).flatMap((one): Keep[] => {
+        if (one.ends) return []
+        const shape = shapeOf(one.a.kind)
+        // A frame drawn round things keeps sentences off its name and its
+        // edges, but one may sit inside it.
+        if (shape.behind) {
+          const { x, y, w, h } = one.box
+          return [
+            { x, y, w: Math.min(w, 140), h: 26 },
+            { x, y: y - 1, w, h: 2 },
+            { x, y: y + h - 1, w, h: 2 },
+            { x: x - 1, y, w: 2, h },
+            { x: x + w - 1, y, w: 2, h },
+          ]
+        }
+        return [{ ...one.box, ...(shape.d ? { d: shape.d } : {}) }]
+      })
+    })
+  }, [annotating?.layers, shown, notDrawn])
+
   /** Every wire on screen, with its curve, its sentence, and where that sits,
    *  and the hubs where those wires meet the border of an open card. A level's
    *  hubs are worked out before the level inside it, whose wires end there. */
@@ -745,19 +890,12 @@ export const MapCanvas = ({
     const names = new Map(nameOf)
     const hubs: Hub[] = []
     const draw = (level: OpenLevel, depth: number) => {
-      const outs = new Map<string, string[]>()
       const ins = new Map<string, string[]>()
-      const height = (id: string): number => boxes.get(id)?.y ?? 0
-      for (const wire of level.wires) {
-        outs.set(wire.from, [...(outs.get(wire.from) ?? []), wire.to])
-        ins.set(wire.to, [...(ins.get(wire.to) ?? []), wire.from])
-      }
-      for (const list of [...outs.values(), ...ins.values()]) list.sort((a, b) => height(a) - height(b))
-      const share = (ends: Map<string, string[]>, id: string, other: string): number => {
-        const list = ends.get(id) ?? []
-        return (list.indexOf(other) + 1) / (list.length + 1)
-      }
-      const slots = (from: string, to: string): Slots => ({ from: share(outs, from, to), to: share(ins, to, from) })
+      for (const wire of level.wires) ins.set(wire.to, [...(ins.get(wire.to) ?? []), wire.from])
+      // Each end has a place of its own on its card's side, so two wires
+      // between the same two cards are drawn apart.
+      const slotted = endSlots(level.wires, boxes, keyOf)
+      const slotsOf = (wire: DrawnWire): Slots => slotted.get(wire) ?? { from: 0.5, to: 0.5 }
       const fitTo = (id: string, box: Box): ((at: Spot) => Spot) | undefined => {
         const d = shapedAt.get(id)
         return d ? (at) => meetOutline(d, box, at) : undefined
@@ -778,7 +916,7 @@ export const MapCanvas = ({
                 to,
                 sides: wire.sides,
                 along: wire.along,
-                slots: slots(wire.from, wire.to),
+                slots: slotsOf(wire),
                 bends: wire.bends?.map((p) => ({ x: p.x + level.shift.x, y: p.y + level.shift.y })),
               }), { from: outlineAt(wire.from, from), to: outlineAt(wire.to, to) })
         return { d: pathOf(route), at: pointAlong(route, 0.5), tail: route[0]!, head: route.at(-1)!, c1: route[1] ?? route[0]!, c2: route.at(-2) ?? route[0]!, route }
@@ -799,10 +937,13 @@ export const MapCanvas = ({
             wire,
             key,
             depth,
-            shape: (square
+            shape: ((wire.shape ?? wireStyle) === 'square'
               ? squared(wire, key, from, to)
-              : wirePath(from, to, slots(wire.from, wire.to), cardBoxes, { from: fitTo(wire.from, from), to: fitTo(wire.to, to) }, loops.get(wire), wire.sides, wire.along)) as WireShape & { route?: Spot[] },
-            small: (ins.get(wire.to) ?? []).length > BUSY,
+              : wirePath(from, to, slotsOf(wire), cardBoxes, { from: fitTo(wire.from, from), to: fitTo(wire.to, to) }, loops.get(wire), wire.sides, wire.along)) as WireShape & { route?: Spot[] },
+            // Further out than the level in hand, the verb alone, so the faded
+            // levels around do not crowd the edges with words; and the same
+            // when the board is zoomed out to names.
+            small: (ins.get(wire.to) ?? []).length > BUSY || depth !== workAt || band !== 'near',
             said: sentenceOf(names.get(wire.from) ?? '', wire.kind, names.get(wire.to) ?? '', wire.words),
           },
         ]
@@ -822,10 +963,40 @@ export const MapCanvas = ({
       return rows
     }
     const all = shown.flatMap(draw)
+    // What every sentence keeps off besides the cards: the name tab on each
+    // open card, and the dots where wires cross into one.
+    const tabs = shown.flatMap((level) => (level.open ? [lipBox(level.open.card, level.open.box, lipScale(level.open.card, level.open.box, stepK, band))] : []))
+    const crossings = all.flatMap((one) => {
+      const open = shown[one.depth]!.open?.card.id
+      if (!open || (one.wire.to !== open && one.wire.from !== open)) return []
+      const at = one.wire.to === open ? one.shape.head : one.shape.tail
+      return [{ x: at.x - 8, y: at.y - 8, w: 16, h: 16 }]
+    })
+    // Where nowhere is clear at its own width, a sentence may wrap narrower:
+    // between two cards side by side, to the gap less a little air; else to
+    // a narrow column.
+    const narrowOf = all.map((one) => {
+      const a = boxes.get(one.wire.from)
+      const b = boxes.get(one.wire.to)
+      if (one.small || !a || !b) return 0
+      const gap = Math.max(b.x - (a.x + a.w), a.x - (b.x + b.w))
+      const beside = gap > 0 && Math.min(a.y + a.h, b.y + b.h) > Math.max(a.y, b.y)
+      return beside ? Math.min(200, gap - 16) : 112
+    })
     // Each sentence keeps clear of every card and of every other sentence,
-    // at the size it was really drawn.
-    const chipsNow = all.map((one) => {
+    // at the size it was really drawn. Inside an open card it stays inside;
+    // around one, it keeps off it.
+    const chipsNow = all.map((one, i) => {
         const size = sizes[one.key]
+        const w = size?.w ?? (one.small ? 60 : sentenceWidth(one.wire))
+        const narrowW = narrowOf[i]!
+        const wrapped = sizes[`${one.key}|narrow`]
+        const narrow =
+          narrowW >= 72 && narrowW < w - 8
+            ? wrapped && wrapped.w <= narrowW + 1
+              ? wrapped
+              : { w: narrowW, h: Math.ceil(w / (narrowW - 16)) * 15 + 8 }
+            : undefined
         const level = shown[one.depth]!
         // A sentence under the hand goes where the hand has it. One a person
         // has moved stays put, unless a card it joins is moving, in the hand
@@ -851,28 +1022,36 @@ export const MapCanvas = ({
                 ? nearestOn(route, putAt)
                 : putAt
               : one.shape.at,
-          w: size?.w ?? (one.small ? 60 : sentenceWidth(one.wire)),
+          w,
           h: size?.h ?? 24,
+          ...(narrow ? { narrow } : {}),
           tail: one.shape.tail,
           c1: one.shape.c1,
           c2: one.shape.c2,
           head: one.shape.head,
           fixed: Boolean(held) || put,
           ...(route ? { on: (t: number) => pointAlong(route, t) } : {}),
+          within: one.depth > 0 ? shown[one.depth - 1]!.open?.box : undefined,
+          avoid: [...tabs, ...crossings, ...(level.open ? [level.open.box] : [])],
         }
       })
-    const spots = spread(
-      chipsNow,
-      [...everyCard.filter((p) => !notDrawn.has(p.card.id)).map((p) => p.box), ...everyNote.map((n) => n.box)],
-    )
+    const spots = spread(chipsNow, [
+      ...everyCard.filter((p) => !notDrawn.has(p.card.id)).map((p): Keep => {
+        const d = shapedAt.get(p.card.id)
+        return d ? { ...p.box, d } : p.box
+      }),
+      ...everyNote.map((n) => n.box),
+      ...annoKeeps,
+    ])
     // Only a sentence a person has moved bends its wire; the rest sit on it.
     const at = all.map((one, i) => ({
       ...one,
       at: spots[i]!,
+      widest: spots[i]!.narrow ? narrowOf[i]! : undefined,
       shape: { ...one.shape, d: chipsNow[i]!.fixed && !one.shape.route ? wireThrough(one.shape, spots[i]!) : one.shape.d },
     }))
     return { all: at, outer: at.filter((one) => one.depth !== workAt), inner: at.filter((one) => one.depth === workAt), hubs, boxes }
-  }, [shown, where, cardBoxes, shapedAt, canDraw, nameOf, sizes, everyCard, everyNote, workAt, live.moves, live.bend, notDrawn, passing, reaching, square])
+  }, [shown, where, cardBoxes, shapedAt, canDraw, nameOf, sizes, everyCard, everyNote, workAt, live.moves, live.bend, notDrawn, passing, reaching, wireStyle, band, stepK, annoKeeps])
 
   /** The hubs on the border of the card open now: the only ones in reach. */
   const hubsHere = useMemo(() => shapes.hubs.filter((hub) => hub.depth + 1 === workAt), [shapes.hubs, workAt])
@@ -882,13 +1061,17 @@ export const MapCanvas = ({
   useLayoutEffect(() => {
     let changed = false
     const next: Record<string, { w: number; h: number }> = {}
-    for (const [key, element] of chips.current) {
+    for (const [drawn, element] of chips.current) {
+      // A wrapped one is measured apart from how it is unwrapped.
+      const key = element.dataset.narrow ? `${drawn}|narrow` : drawn
       const w = element.offsetWidth
       const h = element.offsetHeight
       next[key] = { w, h }
       const was = sizes[key]
       if (!was || Math.abs(was.w - w) > 1 || Math.abs(was.h - h) > 1) changed = true
     }
+    // Keep how each was last measured the other way, wrapped or not.
+    for (const [key, size] of Object.entries(sizes)) if (!(key in next)) next[key] = size
     if (changed) setSizes(next)
   })
 
@@ -982,21 +1165,44 @@ export const MapCanvas = ({
     const open = level?.open ?? null
     const bounds = level && open
       ? boundsOf([
-          open.box,
+          // with its name tab above it
+          { ...open.box, y: open.box.y - 28, h: open.box.h + 28 },
           ...level.placed
             .filter((p) => level.wires.some((wire) => (wire.from === open.card.id && wire.to === p.card.id) || (wire.to === open.card.id && wire.from === p.card.id)))
             .map((p) => p.box),
         ])
-      : boundsOf([...levels[0]!.placed.map((p) => p.box), ...levels[0]!.noteBoxes.map((n) => n.box)])
+      : boundsOf([
+          ...levels[0]!.placed.map((p) => p.box),
+          ...levels[0]!.noteBoxes.map((n) => n.box),
+          // and what is drawn over it, a sticky note above the cards as much as the cards
+          ...[...levels[0]!.annoBoxes.values()].filter((box) => box.w > 0 && box.h > 0),
+        ])
     if (!el || bounds.w === 0) return { x: (el?.clientWidth ?? 0) / 2, y: (el?.clientHeight ?? 0) / 2, k: 1 }
-    const pad = 120
-    const k = Math.min((el.clientWidth - pad) / bounds.w, (el.clientHeight - pad) / bounds.h, 1.3)
+    // Fitted into what the floating controls, and any panel over the board,
+    // leave clear.
+    const left = FIT_PAD.left + coverNow.current.left
+    const across = el.clientWidth - left - FIT_PAD.right - coverNow.current.right
+    const down = el.clientHeight - FIT_PAD.top - FIT_PAD.bottom
+    const k = Math.max(0.05, Math.min(across / bounds.w, down / bounds.h, 1.3))
+    // A sketch's words stay readable: rather than fit far out, it fits what
+    // is drawn on the level in hand and lets the empty room run past the edge.
+    const drawn = levels.at(-1)!
+    const inner = [...drawn.placed.map((p) => p.box), ...drawn.noteBoxes.map((n) => n.box)]
+    if (drawing && k < SKETCH_LEAST_K && inner.length) {
+      const what = boundsOf(inner)
+      const near = Math.max(k, Math.min(SKETCH_LEAST_K, across / what.w, down / what.h))
+      return {
+        x: left + across / 2 - (what.x + what.w / 2) * near,
+        y: FIT_PAD.top + down / 2 - (what.y + what.h / 2) * near,
+        k: near,
+      }
+    }
     return {
-      x: el.clientWidth / 2 - (bounds.x + bounds.w / 2) * k,
-      y: el.clientHeight / 2 - (bounds.y + bounds.h / 2) * k,
+      x: left + across / 2 - (bounds.x + bounds.w / 2) * k,
+      y: FIT_PAD.top + down / 2 - (bounds.y + bounds.h / 2) * k,
       k,
     }
-  }, [levels])
+  }, [levels, drawing ? 1 : 0])
   const fittedNow = useRef(fitted)
   fittedNow.current = fitted
 
@@ -1008,6 +1214,103 @@ export const MapCanvas = ({
     setView(to)
     setTimeout(() => setMoving(false), STEP_MS)
   }, [])
+
+  // A panel coming out over the board brings what it is about out from under
+  // it. One that came out for a pick moves the board only if it hides part
+  // of what was picked, and only as far as brings it out; one that came out
+  // on its own, like a proposal's list, slides the level clear, or fits it
+  // into what is left where a slide is not enough.
+  const coverKey = `${coverLeft},${coverRight}`
+  const coverWas = useRef(coverKey)
+  /** How far the board was slid to clear a panel, so it slides back the same
+   *  way once the panel goes. */
+  const slidFor = useRef(0)
+  const clearOfCover = useCallback((ownOnly = false): void => {
+    const el = frame.current
+    if (!el) return
+    if (!coverNow.current.left && !coverNow.current.right) {
+      const back = slidFor.current
+      slidFor.current = 0
+      // A moment later, once whatever closed the panel (a card taken off,
+      // say) has settled on the board.
+      // If the person moves the board in that moment, it stays where they put it.
+      const from = seen.current
+      if (back)
+        setTimeout(() => {
+          const now = seen.current
+          if (now.x === from.x && now.y === from.y && now.k === from.k) glide({ ...now, x: now.x - back })
+        }, STEP_MS)
+      return
+    }
+    const v = seen.current
+    const slide = (dx: number): void => {
+      if (!dx) return
+      slidFor.current += dx
+      glide({ ...v, x: v.x + dx })
+    }
+    const clear = {
+      x: coverNow.current.left + FIT_PAD.left,
+      y: FIT_PAD.top,
+      w: el.clientWidth - coverNow.current.left - coverNow.current.right - FIT_PAD.left * 2,
+      h: el.clientHeight - FIT_PAD.top - FIT_PAD.bottom,
+    }
+    if (clear.w <= 0 || clear.h <= 0) return
+    if (ownOnly) {
+      const own = selected.flatMap((id) => {
+        const box = where.get(id)
+        return box ? [box] : []
+      })
+      // A picked wire's panel already keeps to the side away from it.
+      if (!own.length) return
+      const target = boundsOf(own)
+      const left = v.x + target.x * v.k
+      const right = left + target.w * v.k
+      const edge = el.clientWidth - coverNow.current.right - PICK_CLEAR
+      // Its left edge first, where it is wider than what the panel leaves.
+      if (right > edge) slide(Math.max(edge - right, clear.x - left))
+      return
+    }
+    const level = [...placed.map((p) => p.box), ...noteBoxes.map((n) => n.box)]
+    if (!level.length) return
+    const whole = boundsOf(level)
+    if (whole.w * v.k <= clear.w) {
+      const left = v.x + whole.x * v.k
+      const right = left + whole.w * v.k
+      let dx = 0
+      if (right > clear.x + clear.w) dx = clear.x + clear.w - right
+      if (left + dx < clear.x) dx = clear.x - left
+      slide(dx)
+      return
+    }
+    const k = Math.min(v.k, clear.w / whole.w, clear.h / whole.h)
+    slidFor.current = 0
+    glide({ k, x: clear.x + clear.w / 2 - (whole.x + whole.w / 2) * k, y: clear.y + clear.h / 2 - (whole.y + whole.h / 2) * k })
+  }, [selected, where, placed, noteBoxes, glide])
+  const clearOfCoverNow = useRef(clearOfCover)
+  clearOfCoverNow.current = clearOfCover
+  /** The board never slides under a hand that is still pressing: a slide asked
+   *  for then waits until the pointer is let go. */
+  const clearWaits = useRef<'all' | 'own' | ''>('')
+  const clearSoon = (ownOnly = false): void => {
+    if (gesture.current || pending.current !== null) clearWaits.current = clearWaits.current === 'all' || !ownOnly ? 'all' : 'own'
+    else clearOfCoverNow.current(ownOnly)
+  }
+  useEffect(() => {
+    if (coverWas.current === coverKey) return
+    coverWas.current = coverKey
+    // A panel that came out for a pick only clears the pick; one that came
+    // out on its own clears the level.
+    clearSoon(selected.length > 0)
+  }, [coverKey])
+  // Picking something else while a panel is out brings it out from under the
+  // panel, if it is there; the board stays put otherwise.
+  const pickKey = selected.join(',')
+  const pickWas = useRef(pickKey)
+  useEffect(() => {
+    if (pickWas.current === pickKey) return
+    pickWas.current = pickKey
+    if (pickKey && (coverNow.current.left || coverNow.current.right)) clearSoon(true)
+  }, [pickKey])
 
   // The board opens fitted to what is there. Drawing on a level leaves the
   // view where the person has it.
@@ -1047,26 +1350,41 @@ export const MapCanvas = ({
       setQuick(null)
       const around = levels.at(-2)
       const deepest = around?.open
-      if (opened.length && around && deepest && el) {
+      if (opened.length && around && deepest && el && !drawing) {
+        // On the map the room fits what is inside, so the board fits the room
+        // and the cards wired to it, nearer or further.
+        glide(fittedNow.current())
+      } else if (opened.length && around && deepest && el) {
         const pad = 36
         const lip = 40
-        const k = Math.min(now.k, (el.clientWidth - pad * 2) / deepest.box.w, (el.clientHeight - pad * 2 - lip) / deepest.box.h)
+        const k = Math.min(now.k, (el.clientWidth - pad * 2 - coverLeft - coverRight) / deepest.box.w, (el.clientHeight - pad * 2 - lip) / deepest.box.h)
         // In the middle, or as far towards the cards wired to it as it can go
         // with the whole card still on screen, so they stay in sight.
         const wired = around.placed.filter((p) =>
           around.wires.some((w) => (w.from === deepest.card.id && w.to === p.card.id) || (w.to === deepest.card.id && w.from === p.card.id)),
         )
         const middle = boundsOf([deepest.box, ...wired.map((p) => p.box)])
-        const onto = (size: number, at: number, length: number, centre: number, before: number): number =>
-          Math.max(before - at * k, Math.min(size - pad - (at + length) * k, size / 2 - centre * k))
+        // The name tab of the card it was opened in stays in sight too, where
+        // there is room for it, so a person sees what they are inside.
+        const parent = levels.at(-3)?.open
+        const withTab = parent ? boundsOf([deepest.box, lipBox(parent.card, parent.box)]) : deepest.box
+        const must =
+          (withTab.w * k <= el.clientWidth - FIT_PAD.left - coverLeft - pad - coverRight && withTab.h * k <= el.clientHeight - pad - FIT_PAD.bottom)
+            ? withTab
+            : deepest.box
+        // Kept clear of the zoom bar at the foot where there is room to.
+        const onto = (size: number, at: number, length: number, centre: number, before: number, after: number): number =>
+          Math.max(before - at * k, Math.min(size - after - (at + length) * k, size / 2 - centre * k))
         glide({
           k,
-          x: onto(el.clientWidth, deepest.box.x, deepest.box.w, middle.x + middle.w / 2, pad),
-          y: onto(el.clientHeight, deepest.box.y, deepest.box.h, middle.y + middle.h / 2, pad + lip),
+          x: onto(el.clientWidth, must.x, must.w, middle.x + middle.w / 2, FIT_PAD.left + coverLeft, pad + coverRight),
+          y: onto(el.clientHeight, must.y, must.h, middle.y + middle.h / 2, must === deepest.box ? pad + lip : pad, FIT_PAD.bottom),
         })
       } else if (closed.length) {
+        // Back to how the board was when that card was opened; or, for a card
+        // that came open with the board (a sketch started inside it), fitted.
         const back = viewsAt.current.get(closed[0]!)
-        if (back) glide(back)
+        glide(back ?? fittedNow.current())
       }
       for (const id of closed) {
         viewsAt.current.delete(id)
@@ -1281,12 +1599,14 @@ export const MapCanvas = ({
     const bottom = top + box.h * v.k
     let dx = 0
     let dy = 0
-    if (right > el.clientWidth - MARGIN) dx = el.clientWidth - MARGIN - right
-    if (left + dx < MARGIN) dx = MARGIN - left
+    const clearRight = el.clientWidth - MARGIN - coverRight
+    const clearLeft = MARGIN + coverLeft
+    if (right > clearRight) dx = clearRight - right
+    if (left + dx < clearLeft) dx = clearLeft - left
     if (bottom > el.clientHeight - MARGIN) dy = el.clientHeight - MARGIN - bottom
     if (top + dy < MARGIN) dy = MARGIN - top
     if (dx || dy) setView((now) => ({ ...now, x: now.x + dx, y: now.y + dy }))
-  }, [editing?.id, where, noteBoxes])
+  }, [editing?.id, where, noteBoxes, coverLeft, coverRight])
 
   const finishEditing = useCallback(
     (keep: boolean): void => {
@@ -1323,11 +1643,11 @@ export const MapCanvas = ({
       if (!drawing) return
       const choice = choices.find((one) => one.key === key)
       const hub = shapes.hubs.find((one) => one.id === from)
-      const id = drawing.onPlace(at, choice?.kind ?? key, from, hub ? { into: hub.into, kind: hub.kind } : undefined, look ?? choice?.look)
+      const id = drawing.onPlace(at, choice?.kind ?? key, from, hub ? { into: hub.into, kind: hub.kind } : undefined, look ?? choice?.look, from && drawAs !== wireStyle ? drawAs : undefined)
       drawing.onSelect([id])
       writeSoon(id)
     },
-    [drawing, choices, shapes.hubs],
+    [drawing, choices, shapes.hubs, drawAs, wireStyle],
   )
 
   /** A note is a sticky note: an annotation, put on the layer in use and
@@ -1388,6 +1708,22 @@ export const MapCanvas = ({
       }
       if (typing(event.target)) return
       const plain = !event.ctrlKey && !event.metaKey && !event.altKey
+      // Tab switches a wire between curved and right angles: the one being
+      // drawn, and the ones after it; or else the one wire picked.
+      if (event.key === 'Tab' && plain && !event.shiftKey && drawing) {
+        const drawingOne = gesture.current?.type === 'connect' || tool === 'wire'
+        const wire = !drawingOne && selected.length === 1 ? shapes.inner.find((x) => x.wire.id === selected[0])?.wire : undefined
+        if (drawingOne) {
+          event.preventDefault()
+          setDrawAs((was) => (was === 'square' ? 'curved' : 'square'))
+          return
+        }
+        if (wire?.id && drawing.onWireShape) {
+          event.preventDefault()
+          drawing.onWireShape(wire.id, wireShapeOf(wire) === 'square' ? 'curved' : 'square')
+          return
+        }
+      }
       if (event.key === 'Escape') {
         if (iconsFor) setIconsFor('')
         else if (keysOpen) setKeysOpen(false)
@@ -1451,7 +1787,7 @@ export const MapCanvas = ({
       window.removeEventListener('keydown', down)
       window.removeEventListener('keyup', up)
     }
-  }, [backOut, drawing, fit, zoomBy, quick, armed, tool, selected, startEditing, hover, frameOn, frameBox, view, palette, annoOpen, annotating, annoArmed, annoPicked, select, keysOpen, focus.level, ready, choices, iconsFor])
+  }, [backOut, drawing, fit, zoomBy, quick, armed, tool, selected, startEditing, hover, frameOn, frameBox, view, palette, annoOpen, annotating, annoArmed, annoPicked, select, keysOpen, focus.level, ready, choices, iconsFor, shapes, wireStyle])
 
   useEffect(() => {
     if (!layerSaid) return
@@ -1562,8 +1898,9 @@ export const MapCanvas = ({
     if (together) picked = picked.filter((one) => !together.heldBy.has(one))
     select(picked)
     if (!picked.includes(id)) return
+    // Where each card really sits, not shrunk to its name when zoomed out.
     const starts = new Map<string, Box>()
-    for (const p of laid) if (picked.includes(p.card.id)) starts.set(p.card.id, { ...p.box, x: p.box.x - shift.x, y: p.box.y - shift.y })
+    for (const p of levels[workAt]!.placed) if (picked.includes(p.card.id)) starts.set(p.card.id, { ...p.box, x: p.box.x - shift.x, y: p.box.y - shift.y })
     for (const n of notes) if (picked.includes(n.id)) starts.set(n.id, { x: n.x, y: n.y, w: 180, h: 60 })
     // Alt and drag leaves the originals where they are and carries copies,
     // the way a diagram tool does.
@@ -1690,15 +2027,57 @@ export const MapCanvas = ({
     if (split !== route) drawing.onBend(wireId, split.slice(1, -1).map((p) => ({ x: p.x - shift.x, y: p.y - shift.y })))
   }
 
+  /** How far each end of a picked right-angle wire may slide along the side of
+   *  the card it meets, kept a little in from the corners. */
+  const endRoom = (wire: { from: string; to: string }, route: Spot[]): EndRoom => {
+    const span = (id: string, a: Spot, b: Spot): [number, number] | undefined => {
+      const box = shapes.boxes.get(id)
+      if (!box || endsAtHub(id)) return undefined
+      // Clear of a card's rounded corners.
+      const inset = 16
+      // An end piece running across meets a side that runs down, and slides down it.
+      return a.y === b.y ? [box.y + inset, box.y + box.h - inset] : [box.x + inset, box.x + box.w - inset]
+    }
+    const from = span(wire.from, route[0]!, route[1]!)
+    const to = span(wire.to, route.at(-2)!, route.at(-1)!)
+    return { ...(from ? { from } : {}), ...(to ? { to } : {}) }
+  }
+
+  /** Takes one piece of a right-angle wire out where its handle is
+   *  double-clicked, and the turn at each end of it, where the wire still runs
+   *  true without it, sliding an end along its side if it must. A wire left
+   *  with no turns of its own finds its own way. One undo puts it back. */
+  const takeOut = (wire: { id?: string; from: string; to: string }, route: Spot[], piece: number): void => {
+    if (!drawing || !wire.id) return
+    const fewer = takePieceOut(route, piece, endRoom(wire, route))
+    if (!fewer) return
+    const id = wire.id
+    let joined = false
+    for (const end of ['from', 'to'] as const) {
+      const was = end === 'from' ? route[0]! : route.at(-1)!
+      const now = end === 'from' ? fewer[0]! : fewer.at(-1)!
+      const box = shapes.boxes.get(wire[end])
+      if (!box || (was.x === now.x && was.y === now.y)) continue
+      // The side the end meets, from the way its piece runs.
+      const [p, q] = end === 'from' ? [fewer[0]!, fewer[1]!] : [fewer.at(-1)!, fewer.at(-2)!]
+      const side: Side = p.y === q.y ? (q.x > p.x ? 'e' : 'w') : q.y > p.y ? 's' : 'n'
+      const flat = side === 'n' || side === 's'
+      drawing.onRewire(id, end, wire[end], side, (flat ? now.x - box.x : now.y - box.y) / (flat ? box.w : box.h))
+      joined = true
+    }
+    const bends = fewer.slice(1, -1).map((p) => ({ x: p.x - shift.x, y: p.y - shift.y }))
+    drawing.onBend(id, bends.length ? bends : undefined, joined)
+  }
+
   /** Where along a side of a card a wire's end was let go, as a share of the
-   *  side, on the grid of the level when the board draws square. */
+   *  side, on the grid of the level when the wire is drawn square. */
   const shareAlong = (target: string, side: Side, at: Spot): number | undefined => {
     const box = shapes.boxes.get(target)
     if (!box) return undefined
     const flat = side === 'n' || side === 's'
     const raw = flat ? at.x : at.y
     const by = flat ? shift.x : shift.y
-    const spot = square ? Math.round((raw - by) / GRID) * GRID + by : raw
+    const spot = drawAs === 'square' ? Math.round((raw - by) / GRID) * GRID + by : raw
     const share = (spot - (flat ? box.x : box.y)) / (flat ? box.w : box.h)
     // Near the middle is the middle, so a wire put back there runs as before.
     if (Math.abs(share - 0.5) < 0.04) return undefined
@@ -2032,7 +2411,11 @@ export const MapCanvas = ({
       } else dy = Math.round((first.y + dy) / GRID) * GRID - first.y
       const moves = new Map<string, Spot>()
       for (const [id, box] of now.starts) moves.set(id, { x: box.x + dx, y: box.y + dy })
-      setLive({ moves, guides: lines })
+      // One card held over another that can hold it goes in when let go.
+      const lone = now.ids.length === 1 && !now.copied ? now.ids[0]! : ''
+      const over = lone && drawing?.onInside ? cardUnder(at, lone) : ''
+      const into = over && !drawing?.locked?.some((one) => one === lone || one === over) && drawing?.canInside?.(lone, over) ? over : undefined
+      setLive({ moves, guides: into ? { x: [], y: [] } : lines, ...(into ? { into } : {}) })
       together?.onDragging([...moves].map(([id, spot]) => ({ id, ...spot })))
       return
     }
@@ -2140,13 +2523,26 @@ export const MapCanvas = ({
     const now = gesture.current
     gesture.current = null
     pending.current = null
+    if (clearWaits.current) {
+      const ownOnly = clearWaits.current === 'own'
+      clearWaits.current = ''
+      setTimeout(() => clearOfCoverNow.current(ownOnly), 0)
+    }
     const shown = live
     setLive({})
     if (!now) return
     const at = worldOf(event)
     if (now.type === 'pan') {
       dragged.current = now.moved
-      if (!now.moved && now.button === 2 && canMove && levelAt(at) === workAt) openMenu(event, at)
+      // A right-click on the board inside the level in hand opens its menu: on a
+      // map that is only shown, only on the board itself, where it says how
+      // to look rather than what to change.
+      // Read where it was pressed, as the board was then: a panel coming out
+      // for what the press picked may have slid the board since.
+      const rect = frame.current!.getBoundingClientRect()
+      const pressed = { x: (now.x - rect.left - now.vx) / seen.current.k, y: (now.y - rect.top - now.vy) / seen.current.k }
+      if (!now.moved && now.button === 2 && levelAt(pressed) === workAt && (canMove || !cardUnder(pressed)))
+        openMenu({ clientX: now.x, clientY: now.y }, pressed)
       // A click on the empty board, not a drag, lets go of what is picked.
       else if (!now.moved && now.button === 0 && canMove && tool === 'pick') select([])
       return
@@ -2199,6 +2595,11 @@ export const MapCanvas = ({
         together?.onDragging([])
         together?.onLetGo(now.ids)
       }
+      if (now.moved && shown.into && drawing?.onInside) {
+        drawing.onInside(now.ids[0]!, shown.into)
+        dragged.current = true
+        return
+      }
       if (now.moved && shown.moves) {
         // Whatever was carried past the edge of the card it is in has made
         // that card bigger, and it stays that way when the thing comes back.
@@ -2227,7 +2628,12 @@ export const MapCanvas = ({
       const target = landing(at, now.from, now.rewire?.end)
       const plugged = target ? pluggedInto(target, at) : undefined
       if (now.rewire) {
-        if (target) drawing.onRewire(now.rewire.id, now.rewire.end, target, plugged, plugged ? shareAlong(target, plugged, at) : undefined)
+        if (target) {
+          drawing.onRewire(now.rewire.id, now.rewire.end, target, plugged, plugged ? shareAlong(target, plugged, at) : undefined)
+          // Tab while it was in hand switched its shape.
+          const was = shapes.inner.find((x) => x.wire.id === now.rewire!.id)?.wire
+          if (was && wireShapeOf(was) !== drawAs) drawing.onWireShape?.(now.rewire.id, drawAs, true)
+        }
         return
       }
       if (target) {
@@ -2241,7 +2647,7 @@ export const MapCanvas = ({
           [now.from, now.side ?? undefined],
           [target, plugged],
         ])
-        const id = drawing.onWire(from, to, hub?.kind, { from: sideAt.get(from), to: sideAt.get(to) })
+        const id = drawing.onWire(from, to, hub?.kind, { from: sideAt.get(from), to: sideAt.get(to) }, drawAs === wireStyle ? undefined : drawAs)
         drawing.onSelect([id])
         return
       }
@@ -2326,7 +2732,7 @@ export const MapCanvas = ({
     const wire = shapes.inner.find((one) => one.wire.id === id)
     if (wire) {
       const size = sizes[wire.key] ?? { w: 160, h: 24 }
-      return { what: { what: 'wire', id, kind: wire.wire.kind }, box: { x: wire.at.x - size.w / 2, y: wire.at.y - size.h / 2, ...size } }
+      return { what: { what: 'wire', id, kind: wire.wire.kind, shape: wireShapeOf(wire.wire) }, box: { x: wire.at.x - size.w / 2, y: wire.at.y - size.h / 2, ...size } }
     }
     const note = noteBoxes.find((n) => n.note.id === id)
     return note ? { what: { what: 'note', id }, box: note.box } : null
@@ -2338,10 +2744,32 @@ export const MapCanvas = ({
       .map((spot) => spot.id)
       .filter((id) => children.some((c) => c.id === id) || shapes.inner.some((one) => one.key === id))
 
+  /** Zooms to a scale about a spot on the board's screen, its middle if none. */
+  const zoomTo = (k: number, at?: Spot): void => {
+    const el = frame.current
+    if (!el) return
+    const cx = at?.x ?? el.clientWidth / 2
+    const cy = at?.y ?? el.clientHeight / 2
+    glide({ k, x: cx - ((cx - view.x) / view.k) * k, y: cy - ((cy - view.y) / view.k) * k })
+  }
+
+  /** How to look at the board, at the foot of the menu on the empty board:
+   *  fit, true size, out a level, and how wires are drawn, a rare choice for
+   *  the whole board. */
+  const lookItems = (at: Spot): MenuItem[] => [
+    { name: 'Fit it all on screen', glyph: 'fit', keys: '0', act: fit },
+    { name: 'Zoom to 100%', glyph: 'in', act: () => zoomTo(1, at) },
+    ...(workAt > 0 ? [{ name: 'Out a level', glyph: 'up' as const, keys: 'Esc', act: backOut }] : []),
+    'rule',
+    square
+      ? { name: 'Draw wires curved', glyph: 'curvedWires', act: () => setWireStyle('curved') }
+      : { name: 'Draw wires at right angles', glyph: 'squareWires', act: () => setWireStyle('square') },
+  ]
+
   /** What the right-click menu offers, for what was under the pointer. */
   const menuItems = (ids: string[], inside: Spot): MenuItem[] => {
     if (!drawing) {
-      if (!rearranging) return []
+      if (!rearranging || rearranging.frozen) return lookItems(menu!.screen)
       const moved = movedHere()
       const mine = ids.filter((id) => moved.includes(id))
       return [
@@ -2369,11 +2797,13 @@ export const MapCanvas = ({
               },
             ]
           : []),
-        { name: 'Fit it all on screen', glyph: 'keys' as const, keys: '0', act: fit },
+        ...(mine.length || moved.length ? (['rule'] as MenuItem[]) : []),
+        ...lookItems(menu!.screen),
       ]
     }
     const one = ids.length === 1 ? ids[0]! : ''
     const card = one ? children.find((c) => c.id === one) : undefined
+    const pickedWire = one && !card ? shapes.inner.find((x) => x.wire.id === one)?.wire : undefined
     if (ids.length === 0)
       return [
         { name: 'Add a card here…', glyph: 'card', keys: 'Double-click', act: () => setQuick({ screen: menu!.screen, inside, from: '' }) },
@@ -2382,7 +2812,9 @@ export const MapCanvas = ({
         ...(drawing.canPaste
           ? [{ name: 'Paste here', glyph: 'copy' as const, keys: 'Ctrl+V', act: () => drawing.onSelect(drawing.onPaste(inside)) }]
           : []),
-        { name: 'Pick everything', keys: 'Ctrl+A', act: () => drawing.onSelectAll() },
+        { name: 'Pick everything', glyph: 'pickAll', keys: 'Ctrl+A', act: () => drawing.onSelectAll() },
+        'rule',
+        ...lookItems(menu!.screen).filter((item) => item !== 'rule'),
       ]
     return [
       ...(one ? [{ name: card ? 'Rename' : 'Edit the words', glyph: 'edit' as const, act: () => startEditing(one) }] : []),
@@ -2394,7 +2826,14 @@ export const MapCanvas = ({
           } }]
         : []),
       ...(card?.kind === 'page' ? [{ name: 'Add a mockup', glyph: 'mockup' as const, act: () => drawing.onMockup(one) }] : []),
-      ...(square && !card && shapes.inner.find((x) => x.wire.id === one)?.wire.bends?.length
+      ...(pickedWire && drawing.onWireShape
+        ? [
+            wireShapeOf(pickedWire) === 'square'
+              ? { name: 'Draw it curved', glyph: 'curvedWires' as const, keys: 'Tab', act: () => drawing.onWireShape!(one, 'curved') }
+              : { name: 'Draw it at right angles', glyph: 'squareWires' as const, keys: 'Tab', act: () => drawing.onWireShape!(one, 'square') },
+          ]
+        : []),
+      ...(pickedWire && wireShapeOf(pickedWire) === 'square' && pickedWire.bends?.length
         ? [{ name: 'Let it find its own way', glyph: 'undo' as const, act: () => drawing.onBend(one, undefined) }]
         : []),
       'rule',
@@ -2402,7 +2841,7 @@ export const MapCanvas = ({
       { name: 'Copy', glyph: 'copy', keys: 'Ctrl+C', act: () => drawing.onCopy(ids) },
       { name: 'Duplicate', keys: 'Ctrl+D', act: () => drawing.onSelect(drawing.onDuplicate(ids)) },
       'rule',
-      { name: drawing.removeName ?? (ids.length > 1 ? `Take these ${ids.length} off` : 'Take it off the sketch'), glyph: 'bin', keys: 'Delete', danger: true, act: () => {
+      { name: drawing.removeName ?? (ids.length > 1 ? `Delete these ${ids.length} from sketch` : 'Delete from sketch'), glyph: 'bin', keys: 'Delete', danger: true, act: () => {
         drawing.onRemove(ids)
         drawing.onSelect([])
       } },
@@ -2410,16 +2849,19 @@ export const MapCanvas = ({
   }
 
   const wireGroup = (list: typeof shapes.inner): ReactElement[] =>
-    list.map(({ wire, key, shape, depth }) => (
+    list.map(({ wire, key, shape, depth }) => {
+      const picked = Boolean(drawing && wire.id && selected.includes(wire.id))
+      const tone = picked ? 'picked' : lit.has(key) ? 'lit' : wire.state === 'proposed' || wire.state === 'gone' ? wire.state : ''
+      return (
       <g
         key={key}
         className={`map-wire map-wire--${wire.kind.replace(/\s+/g, '-')}${
-          drawing && wire.id && selected.includes(wire.id) ? ' map-wire--selected' : ''
+          picked ? ' map-wire--selected' : ''
         }${upClass(workAt - depth)}${wire.state ? ` map-wire--${wire.state}` : ''}${
           lit.has(key) ? ' map-wire--lit' : ''
         }`}
       >
-        <path d={shape.d} markerEnd="url(#map-head)" />
+        <path d={shape.d} markerEnd={`url(#map-head${tone ? `-${tone}` : ''})`} />
         {lit.has(key) ? <path d={shape.d} className="map-wire-flow" /> : null}
         {drawing && wire.id && depth === workAt ? (
           <path
@@ -2439,7 +2881,8 @@ export const MapCanvas = ({
           />
         ) : null}
       </g>
-    ))
+      )
+    })
 
   const editingBox = editing ? where.get(editing.id) : undefined
   /** On a shaped card, the words are written where its words go. */
@@ -2450,6 +2893,65 @@ export const MapCanvas = ({
   const editingWire = editing ? shapes.inner.find((one) => one.wire.id === editing.id) : undefined
   const pickedWire = drawing && selected.length === 1 ? shapes.inner.find((one) => one.wire.id === selected[0]) : undefined
   const childLevel = levelIn(focus)
+  /** Where each open card's name tab sits: scaled so its name stays readable,
+   *  and kept inside what can be seen of the board, clear of any panel over
+   *  it, below any tab further out kept there too, so a person always sees
+   *  what they are inside and has the way back out. A card further out than
+   *  the one in hand loses its border once none of its corners is in sight,
+   *  rather than crossing the screen as a bare line. */
+  const tabsAt = new Map<string, { scale: number; dx: number; dy: number; edgeless: boolean }>()
+  {
+    const width = frame.current?.clientWidth ?? 0
+    const height = frame.current?.clientHeight ?? 0
+    const seenBox = { x: coverLeft, y: 0, w: width - coverLeft - coverRight, h: height }
+    const taken: Box[] = []
+    shown.forEach((level, depth) => {
+      if (!level.open) return
+      const { card, box } = level.open
+      const k = view.k
+      const scale = lipScale(card, box, k, band)
+      const left = view.x + box.x * k
+      const top = view.y + box.y * k
+      const tabW = lipWidth(card, band) * scale * k
+      const tabH = TAB_HIGH * scale * k
+      const room = { w: Math.max(0, box.w * k - tabW), h: Math.max(0, box.h * k - tabH) }
+      // A tab leaves its corner only once that corner is out of sight: past
+      // the board's edge or under a panel, not merely near it.
+      let dx = left < coverLeft ? Math.max(0, Math.min(coverLeft + TAB_EDGE - left, room.w)) : 0
+      let dy = top - tabH < 0 ? Math.max(0, Math.min(TAB_EDGE + tabH - top, room.h)) : 0
+      // Each tab sits on its own card's corner; the layout leaves room above
+      // a card open inside another for its tab to sit below the outer one's.
+      // Only where both are kept at the top of the screen, or the board is so
+      // far out that the room is too little, does one stack below the other.
+      for (const other of taken) {
+        if (!overlaps({ x: left + dx, y: top + dy - tabH, w: tabW, h: tabH }, other)) continue
+        dy = Math.min(other.y + other.h + 4 + tabH - top, room.h)
+      }
+      taken.push({ x: left + dx, y: top + dy - tabH, w: tabW, h: tabH })
+      const right = left + box.w * k
+      const bottom = top + box.h * k
+      const corners = [{ x: left, y: top }, { x: right, y: top }, { x: left, y: bottom }, { x: right, y: bottom }]
+      const edgeless = workAt - depth - 1 > 0 && width > 0 && !corners.some((at) => inBox(at, seenBox))
+      tabsAt.set(card.id, { scale, dx: dx / k, dy: dy / k, edgeless })
+    })
+  }
+  /** Far out, a card mostly out of sight, past the board's edge or under a
+   *  panel, drops its name rather than show a cut piece of it. */
+  const glimpsed = new Set<string>()
+  if (band === 'blocks' && frame.current) {
+    const seenFrom = coverLeft
+    const seenTo = frame.current.clientWidth - coverRight
+    const seenBottom = frame.current.clientHeight
+    for (const p of everyCard) {
+      const left = view.x + p.box.x * view.k
+      const top = view.y + p.box.y * view.k
+      const w = p.box.w * view.k
+      const h = p.box.h * view.k
+      const across = Math.max(0, Math.min(left + w, seenTo) - Math.max(left, seenFrom))
+      const down = Math.max(0, Math.min(top + h, seenBottom) - Math.max(top, 0))
+      if (w > 0 && h > 0 && (across < w * 0.6 || down < h * 0.6)) glimpsed.add(p.card.id)
+    }
+  }
   const liftedChoice = lifting ? choices.find((one) => one.key === lifting.kind) : undefined
   const armedChoice = armed ? choices.find((one) => one.key === armed) : undefined
 
@@ -2459,19 +2961,20 @@ export const MapCanvas = ({
         tool={annoArmed === 'sticky' ? 'note' : tool}
         sketch={Boolean(drawing)}
         palette={palette}
-        canUndo={drawing?.canUndo ?? false}
-        canRedo={drawing?.canRedo ?? false}
+        shape={annoArmed}
+        onShape={armShape}
+        canUndo={drawing?.canUndo ?? annotating?.history?.canUndo ?? false}
+        canRedo={drawing?.canRedo ?? annotating?.history?.canRedo ?? false}
         onTool={(next) => {
           // A note is a sticky note wherever annotations can be drawn.
           if (next === 'note' && annotating) armShape('sticky')
           else pickTool(next)
         }}
         onPalette={() => openPalette(!palette)}
-        onUndo={() => drawing?.onUndo()}
-        onRedo={() => drawing?.onRedo()}
+        onUndo={() => (drawing ? drawing.onUndo() : annotating?.history?.onUndo())}
+        onRedo={() => (drawing ? drawing.onRedo() : annotating?.history?.onRedo())}
         onStartSketch={() => onStartSketch?.()}
-        onFit={fit}
-        onOverview={() => setShutOverview(!shutOverview)}
+        annotating={Boolean(annotating && !annotating.frozen)}
         annotations={annoOpen}
         layers={layersOpen}
         onAnnotations={() => openAnnotations(!annoOpen)}
@@ -2553,13 +3056,23 @@ export const MapCanvas = ({
             Drawing on {layerSaid}
           </div>
         ) : null}
-        {drawing && !annoArmed && (armed || tool === 'wire' || tool === 'note') ? (
+        {drawing && !annoArmed && (live.line || tool === 'wire') ? (
+          // A wire in hand says how it will be drawn, and how to change that.
           <div className="map-hint" role="status">
-            {armed
-              ? `Click to place a ${armedChoice?.kind ?? armed}. Hold Shift to place more.`
-              : tool === 'wire'
-                ? 'Drag from one card to another.'
-                : 'Click to leave a note.'}
+            {drawAs === 'square' ? 'At right angles.' : 'Curved.'} {live.line ? 'Let go on a card.' : 'Drag from one card to another.'}
+            <span className="map-hint-keys">
+              <kbd>Tab</kbd> {drawAs === 'square' ? 'for curved' : 'for right angles'}
+              {live.line ? null : (
+                <>
+                  {' · '}
+                  <kbd>Esc</kbd> to stop
+                </>
+              )}
+            </span>
+          </div>
+        ) : drawing && !annoArmed && (armed || tool === 'note') ? (
+          <div className="map-hint" role="status">
+            {armed ? `Click to place a ${armedChoice?.kind ?? armed}. Hold Shift to place more.` : 'Click to leave a note.'}
             <span className="map-hint-keys">
               <kbd>Esc</kbd> to stop
             </span>
@@ -2575,8 +3088,12 @@ export const MapCanvas = ({
           </div>
         ) : null}
         <div
-          className={`map-world${moving ? ' map-world--moving' : ''}${linked.size ? ' map-world--lit' : ''}`}
-          style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})` }}
+          className={`map-world${moving ? ' map-world--moving' : ''}${linked.size ? ' map-world--lit' : ''}${
+            band === 'near' ? '' : ` map-world--${band}`
+          }${hugK ? ' map-world--hugged' : ''}`}
+          // The zoom, for names that keep a size a person can read however
+          // far out the board is.
+          style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})`, ['--zoom' as string]: view.k }}
         >
           {/* Open cards first, outermost first, so what is drawn inside each,
               wires included, is on top of its tint. */}
@@ -2585,15 +3102,17 @@ export const MapCanvas = ({
             const { card, box } = level.open
             const name = card.name || 'Unnamed'
             const here = depth + 1 === workAt
+            const tab = tabsAt.get(card.id)
             return (
               <div
                 key={card.id}
-                className={`map-card map-card--open ${kindClass(card.kind)}${lookOf(card) ? ` ${lookClass(lookOf(card)!)}` : ''}${here ? ' map-card--here' : ''}${upClass(workAt - depth - 1)}${linked.has(card.id) ? ' map-card--wired' : ''}`}
+                className={`map-card map-card--open ${kindClass(card.kind)}${lookOf(card) ? ` ${lookClass(lookOf(card)!)}` : ''}${here ? ' map-card--here' : ''}${upClass(workAt - depth - 1)}${linked.has(card.id) ? ' map-card--wired' : ''}${live.room?.id === card.id ? ' map-card--resizing' : ''}${tab?.edgeless ? ' map-card--edgeless' : ''}`}
                 style={{ left: box.x, top: box.y, width: box.w, height: box.h }}
                 data-open={card.id}
               >
                 <span
-                  className="map-lip"
+                  className={`map-lip${tab && (tab.dx > 0 || tab.dy > 0) ? ' map-lip--kept' : ''}`}
+                  style={tab ? { scale: String(tab.scale), translate: `${tab.dx}px ${tab.dy}px` } : undefined}
                   onClick={(event) => event.stopPropagation()}
                   onDoubleClick={(event) => event.stopPropagation()}
                 >
@@ -2624,6 +3143,8 @@ export const MapCanvas = ({
                       className="map-port"
                       title={port.verb}
                       style={{ left: port.x - box.x, top: port.y - box.y }}
+                      onPointerEnter={() => setPortHover(port.key)}
+                      onPointerLeave={() => setPortHover((was) => (was === port.key ? '' : was))}
                     />
                   ))}
                 {here
@@ -2644,27 +3165,37 @@ export const MapCanvas = ({
 
           <svg className="map-wires" width="1" height="1">
             <defs>
-              <marker id="map-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 0 L 10 5 L 0 10 z" className="map-head" />
-              </marker>
+              {/* An arrowhead for each colour a wire is drawn in, so the head
+                  always matches its line. */}
+              {['', 'lit', 'picked', 'proposed', 'gone'].map((tone) => (
+                <marker key={tone} id={tone ? `map-head-${tone}` : 'map-head'} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M 0 0 L 10 5 L 0 10 z" className={`map-head${tone ? ` map-head--${tone}` : ''}`} />
+                </marker>
+              ))}
               <marker id="map-head-live" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                 <path d="M 0 0 L 10 5 L 0 10 z" className="map-head-live" />
               </marker>
             </defs>
             {wireGroup(shapes.outer)}
+            {/* A wire from outside stops at the open card's border. Where it goes on
+                to inside shows only while the card it reaches, or the dot where it
+                crosses, is under the pointer or picked: drawn always, several
+                wires fanning from one dot only tangle. */}
             {ports.flatMap((port) =>
-              port.through.map((one) => (
-                <path
-                  key={`${port.key}>${one.id}`}
-                  d={one.d}
-                  className="map-through"
-                  markerEnd={one.into ? 'url(#map-head)' : undefined}
-                />
-              )),
+              port.through
+                .filter((one) => portHover === port.key || hover === one.id || selected.includes(one.id))
+                .map((one) => (
+                  <path
+                    key={`${port.key}>${one.id}`}
+                    d={one.d}
+                    className="map-through"
+                    markerEnd={one.into ? 'url(#map-head)' : undefined}
+                  />
+                )),
             )}
             {wireGroup(shapes.inner)}
             {live.line ? (
-              <path d={square ? squareBetween(live.line.from, live.line.to) : curve(live.line.from, live.line.to)} className="map-wire-live" markerEnd="url(#map-head-live)" />
+              <path d={drawAs === 'square' ? squareBetween(live.line.from, live.line.to) : curve(live.line.from, live.line.to)} className="map-wire-live" markerEnd="url(#map-head-live)" />
             ) : null}
             {live.guides
               ? [
@@ -2720,6 +3251,7 @@ export const MapCanvas = ({
               key={p.card.id}
               placed={p}
               picture={drawing?.mockups[p.card.id] ?? p.card.shot}
+              glimpsed={glimpsed.has(p.card.id)}
               opens={canOpen(p.card)}
               selected={false}
               up={workAt - p.depth}
@@ -2741,6 +3273,7 @@ export const MapCanvas = ({
                 key={p.card.id}
                 placed={p}
                 picture={drawing?.mockups[p.card.id] ?? p.card.shot}
+                glimpsed={glimpsed.has(p.card.id)}
                 opens={canOpen(p.card)}
                 selected={picked}
                 up={0}
@@ -2748,7 +3281,7 @@ export const MapCanvas = ({
                 passing={passingOf(p.card.id)}
                 onIcon={drawing && restyles(p.card) && !drawing.locked?.includes(p.card.id) ? () => setIconsFor(p.card.id) : undefined}
                 onType={drawing && restyles(p.card) && !drawing.locked?.includes(p.card.id) ? () => startTyping(p.card) : undefined}
-                target={live.line?.target === p.card.id}
+                target={live.line?.target === p.card.id || live.into === p.card.id}
                 handles={Boolean(drawing) && (tool === 'pick' || tool === 'wire') && !armed && (hover === p.card.id || (picked && selected.length === 1)) && !live.moves}
                 movable={canMove}
                 drawing={Boolean(drawing)}
@@ -2766,6 +3299,17 @@ export const MapCanvas = ({
               />
             )
           })}
+
+          {(() => {
+            // Says what letting go will do, over the card it would go into, at
+            // a size that reads however far out the board is.
+            const target = live.into ? placed.find((p) => p.card.id === live.into) : undefined
+            return target ? (
+              <div className="map-into-hint" style={{ left: target.box.x, top: target.box.y, transform: `scale(${1 / view.k}) translateY(calc(-100% - 8px))` }} role="status">
+                Let go to put it inside {target.card.name || 'this card'}
+              </div>
+            ) : null
+          })()}
 
           {/* A hub is where a wire from outside meets the open card's border.
               A part inside wires to it to say which part the wire really
@@ -2820,7 +3364,7 @@ export const MapCanvas = ({
 
           {/* Sentences go over the cards, so a wire that passes behind one
               still says what it is for. */}
-          {shapes.all.map(({ wire, key, at, small, said, depth }) => {
+          {shapes.all.map(({ wire, key, at, small, said, depth, widest }) => {
             const own = depth === workAt
             const spot = at
             return (
@@ -2831,6 +3375,7 @@ export const MapCanvas = ({
                 at={spot}
                 state={wire.state}
                 small={small}
+                {...(widest ? { widest } : {})}
                 missing={!drawing && !wire.words && wire.kind !== 'leads to' && wire.kind !== 'keeps'}
                 unfinished={Boolean(drawing) && !wire.words && wire.kind !== 'leads to' && Boolean(wire.id)}
                 selected={Boolean(drawing && own && wire.id && selected.includes(wire.id))}
@@ -2890,20 +3435,42 @@ export const MapCanvas = ({
               {pickedWire.shape.route?.slice(1).flatMap((q, i) => {
                 const route = pickedWire.shape.route!
                 const p = route[i]!
-                if (Math.hypot(q.x - p.x, q.y - p.y) < 20) return []
+                const length = Math.hypot(q.x - p.x, q.y - p.y)
+                if (length < 20) return []
                 const across = p.y === q.y
+                // Each handle keeps out from under the wire's sentence: along
+                // its piece to the nearest spot clear of it, if there is one.
+                const size = sizes[pickedWire.key] ?? { w: sentenceWidth(pickedWire.wire), h: 24 }
+                const said = { x: pickedWire.at.x - size.w / 2 - 6, y: pickedWire.at.y - size.h / 2 - 6, w: size.w + 12, h: size.h + 12 }
+                const handleAt = (t: number): Spot => ({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t })
+                const clearOf = (t: number): boolean => {
+                  const at = handleAt(t)
+                  return length * Math.min(t, 1 - t) >= 10 && !overlaps({ x: at.x - 7, y: at.y - 7, w: 14, h: 14 }, said)
+                }
+                // Or just past either end of the sentence, the nearer the middle the better.
+                const pastSaid = (across
+                  ? [said.x - 8, said.x + said.w + 8].map((x) => (x - p.x) / (q.x - p.x))
+                  : [said.y - 8, said.y + said.h + 8].map((y) => (y - p.y) / (q.y - p.y))
+                ).sort((a, b) => Math.abs(a - 0.5) - Math.abs(b - 0.5))
+                const mid = handleAt([0.5, 0.35, 0.65, 0.22, 0.78, ...pastSaid].find((t) => t > 0 && t < 1 && clearOf(t)) ?? 0.5)
                 return [
                   <rect
                     key={i}
-                    x={(p.x + q.x) / 2 - (across ? 7 : 4)}
-                    y={(p.y + q.y) / 2 - (across ? 4 : 7)}
+                    x={mid.x - (across ? 7 : 4)}
+                    y={mid.y - (across ? 4 : 7)}
                     width={across ? 14 : 8}
                     height={across ? 8 : 14}
                     rx={2}
                     className={`map-wire-piece map-wire-piece--${across ? 'across' : 'down'}`}
-                    aria-label="Move this piece of the wire"
+                    aria-label={takePieceOut(route, i, endRoom(pickedWire.wire, route)) ? 'Move this piece of the wire; double-click to take it out' : 'Move this piece of the wire'}
                     onPointerDown={pressPiece(pickedWire.wire.id!, pickedWire.key, route, i)}
-                  />,
+                    onDoubleClick={(event) => {
+                      event.stopPropagation()
+                      takeOut(pickedWire.wire, route, i)
+                    }}
+                  >
+                    <title>{takePieceOut(route, i, endRoom(pickedWire.wire, route)) ? 'Drag to move it; double-click to take this turn out' : 'Drag to move it'}</title>
+                  </rect>,
                 ]
               })}
               <circle
@@ -3173,66 +3740,22 @@ export const MapCanvas = ({
           const left = Math.min(...onBar.map((d) => d.box.x))
           const right = Math.max(...onBar.map((d) => d.box.x + d.box.w))
           const at = { x: view.x + ((left + right) / 2) * view.k, y: view.y + top * view.k - 12 }
-          const one = onBar.length === 1 ? onBar[0]! : null
           return (
-            <div
-              className="map-context map-anno-bar"
-              style={{ left: Math.max(160, at.x), top: Math.max(44, at.y) }}
-              role="toolbar"
-              aria-label="What to do with the annotation"
-              onPointerDown={(event) => event.stopPropagation()}
-            >
-              {COLORS.map((color) => (
-                <button
-                  key={color || 'none'}
-                  type="button"
-                  className={`map-anno-swatch map-anno-fill--${color || 'none'}${one?.a.color === color ? ' map-anno-swatch--on' : ''}`}
-                  aria-label={`Colour: ${COLOR_NAMES[color]}`}
-                  title={COLOR_NAMES[color]}
-                  onClick={() => {
-                    let next = annotating.layers
-                    for (const d of onBar) next = changeAnnotation(next, d.a.id, { color })
-                    annotating.onChange(next)
-                  }}
-                />
-              ))}
-              <span className="map-context-rule" />
-              {one ? (
-                <span className="map-anno-bar-layer" title="The layer it is on">
-                  {one.layer.name}
-                </span>
-              ) : null}
-              <button
-                type="button"
-                className="map-act"
-                aria-label="Duplicate (Ctrl+D)"
-                title="Duplicate (Ctrl+D)"
-                onClick={() => {
-                  const [next, made] = duplicateAnnotations(annotating.layers, annoPicked)
-                  annotating.onChange(next)
-                  setAnnoPicked(made)
-                }}
-              >
-                <CopyIcon size={15} />
-              </button>
-              <button
-                type="button"
-                className="map-act map-act--danger"
-                aria-label="Delete (Delete)"
-                title="Delete (Delete)"
-                onClick={() => {
-                  annotating.onChange(removeAnnotations(annotating.layers, annoPicked))
-                  setAnnoPicked([])
-                }}
-              >
-                <Trash2 size={15} />
-              </button>
-            </div>
+            <AnnotationBar
+              at={at}
+              picked={onBar}
+              layers={annotating.layers}
+              onChange={(next) => annotating.onChange(next)}
+              onPicked={setAnnoPicked}
+              onLayers={() => setLayersOpen(true)}
+            />
           )
         })() : null}
 
         {annotating && layersOpen ? (
           <LayersPanel
+            wires={wireStyle}
+            onWires={setWireStyle}
             layers={annotating.layers}
             active={layerFor(annotating.layers)[1]}
             onActive={setActiveLayer}
@@ -3284,6 +3807,7 @@ export const MapCanvas = ({
             onMockup={(id) => drawing?.onMockup(id)}
             onStore={(id) => setStoreFor(storeFor === id ? '' : id)}
             onAlign={(ids, how) => drawing?.onAlign(ids, how)}
+            {...(drawing?.onWireShape ? { onShape: (id: string, shape: WireStyle) => drawing.onWireShape!(id, shape) } : {})}
             locked={selected.length === 1 && Boolean(drawing?.locked?.includes(selected[0]!))}
             removeName={drawing?.removeName}
             onRemove={(ids) => {
@@ -3301,7 +3825,7 @@ export const MapCanvas = ({
           const right = view.x + (box.x + box.w) * view.k + 12
           // Beside the card, on whichever side has room for it, and level with
           // its top unless that leaves too little of the board below to work in.
-          const left = right + STORE_EDITOR_WIDTH < width ? right : Math.max(8, view.x + box.x * view.k - STORE_EDITOR_WIDTH - 12)
+          const left = right + STORE_EDITOR_WIDTH < width - coverRight ? right : Math.max(8 + coverLeft, view.x + box.x * view.k - STORE_EDITOR_WIDTH - 12)
           const top = Math.max(8, Math.min(view.y + box.y * view.k, height - Math.min(STORE_EDITOR_ROOM, height - 16) - 8))
           return (
             <div
@@ -3344,7 +3868,7 @@ export const MapCanvas = ({
           )
         })() : null}
 
-        {menu && canMove ? (
+        {menu ? (
           <CanvasMenu
             at={menu.screen}
             onClose={() => setMenu(null)}
@@ -3372,12 +3896,12 @@ export const MapCanvas = ({
         <ZoomBar
           scale={view.k}
           atTop={trail.length < 2}
+          {...(trail.length >= 2 ? { parent: trail[trail.length - 2]!.name } : {})}
           onIn={() => zoomBy(1.25)}
           onOut={() => zoomBy(0.8)}
           onFit={fit}
+          onScale={(k) => zoomTo(k)}
           onUp={backOut}
-          wires={wireStyle}
-          onWires={setWireStyle}
         />
         <Overview
           of={focus.name || 'This level'}

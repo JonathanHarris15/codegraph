@@ -81,13 +81,15 @@ beforeAll(async () => {
   app = await openTheApp(yard.home)
   page = await app.firstWindow()
   await page.setViewportSize({ width: 1400, height: 860 })
+  // The panel about what is picked is put away, as a person can ask, so it
+  // covers nothing these tests reach for.
+  await page.evaluate(() => window.localStorage.setItem('codegraph-panel', 'no'))
   await page.getByRole('button', { name: 'Open Notes', exact: true }).dblclick()
   await page.getByRole('button', { name: 'Open notes' }).waitFor({ timeout: PATIENCE })
-  await page.getByRole('button', { name: /^Sketches/ }).click()
+  await page.getByRole('button', { name: /^Project sketches/ }).click()
   await page.getByRole('button', { name: 'New sketch' }).click()
   await page.getByRole('button', { name: /^Blank/ }).click()
   await page.getByLabel('Sketch name').waitFor({ timeout: PATIENCE })
-  await page.getByRole('button', { name: 'Hide this panel' }).click().catch(() => undefined)
 }, 60_000)
 
 afterAll(async () => {
@@ -281,7 +283,7 @@ describe('hubs on an open card’s border', () => {
 
 describe('annotations', () => {
   it('keeps a diamond’s words inside it, cut short, and shows more as it grows', async () => {
-    await page.getByRole('button', { name: 'Annotate' }).click()
+    await page.getByRole('button', { name: 'Shapes' }).click()
     await page.getByRole('button', { name: 'Add diamond' }).click()
     const open = await boxOf(openBox('Notes app'))
     await page.mouse.click(open.x + open.width * 0.5, open.y + open.height * 0.8)
