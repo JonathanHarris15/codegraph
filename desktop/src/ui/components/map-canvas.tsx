@@ -1378,8 +1378,10 @@ export const MapCanvas = ({
           y: onto(el.clientHeight, must.y, must.h, middle.y + middle.h / 2, must === deepest.box ? pad + lip : pad, FIT_PAD.bottom),
         })
       } else if (closed.length) {
+        // Back to how the board was when that card was opened; or, for a card
+        // that came open with the board (a sketch started inside it), fitted.
         const back = viewsAt.current.get(closed[0]!)
-        if (back) glide(back)
+        glide(back ?? fittedNow.current())
       }
       for (const id of closed) {
         viewsAt.current.delete(id)
