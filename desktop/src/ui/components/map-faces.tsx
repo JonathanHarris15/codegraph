@@ -460,6 +460,7 @@ export const Sentence = ({
   selected,
   pickable,
   lit,
+  quiet,
   up,
   movable,
   hidden,
@@ -484,6 +485,8 @@ export const Sentence = ({
   pickable: boolean
   /** The card at one end of its wire is under the pointer. */
   lit: boolean
+  /** Its wire is not in focus, so it is laid out but not shown (ADR 0031). */
+  quiet: boolean
   /** How many levels out from the one in hand it is. */
   up: number
   /** It can be dragged out of the way. */
@@ -501,6 +504,7 @@ export const Sentence = ({
   if (pickable) classes.push('map-sentence--pickable')
   if (movable) classes.push('map-sentence--movable')
   if (lit) classes.push('map-sentence--lit')
+  if (quiet) classes.push('map-sentence--quiet')
   if (up > 0) classes.push('map-up', `map-up--${Math.min(up, 3)}`)
   const words = said.map((part) => part.text).join('')
   return (
@@ -511,6 +515,7 @@ export const Sentence = ({
       data-narrow={widest ? 'yes' : undefined}
       role={pickable ? 'button' : undefined}
       aria-label={`Wire: ${words}`}
+      aria-hidden={quiet || undefined}
       title={small ? words : undefined}
       onPointerDown={(event) => {
         if (!pickable && !movable) return

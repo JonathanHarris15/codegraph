@@ -88,14 +88,18 @@ const sentenceWidth = (wire: SketchWire): number =>
 // wire runs from one rank to a later one, through a gap between ranks, where
 // it may turn once to cross over to where it is going.
 
+// The level is laid out with room to spare, so what is wired to what reads
+// at a glance: a still level shows no sentences (ADR 0031), so the gaps are
+// for air and for the wires' tracks.
+
 /** The air between cards side by side in a rank. */
-const CARD_GAP = { down: 80, right: 44 }
+const CARD_GAP = { down: 150, right: 90 }
 /** The air beside a wire passing through a rank, where no card is. */
-const PASS_GAP = 18
+const PASS_GAP = 32
 /** The space between two wires running side by side in a gap. */
-const TRACK = 14
-/** The least gap between ranks: room for a wire's sentence. */
-const RANK_GAP = { down: 110, right: 120 }
+const TRACK = 24
+/** The least gap between ranks: room for a wire's sentence when it shows. */
+const RANK_GAP = { down: 200, right: 220 }
 /** The air between a card and its notes. */
 const NOTE_AIR = 20
 /** The room a frame keeps round the cards it holds, and for its name. */
@@ -579,7 +583,7 @@ export const tidyLevel = (
   })
   const widestSentence = piecesIn.map((pieces) => Math.max(0, ...pieces.map((p) => sentenceWidth(p.link.chain.wire))))
   const gaps = tracksIn.map((tracks, r) =>
-    down ? Math.max(RANK_GAP.down, 70 + tracks * TRACK) : Math.min(Math.max(RANK_GAP.right, widestSentence[r]! + 40 + tracks * TRACK), 360 + tracks * TRACK),
+    down ? Math.max(RANK_GAP.down, 120 + tracks * TRACK) : Math.min(Math.max(RANK_GAP.right, widestSentence[r]! + 80 + tracks * TRACK), 440 + tracks * TRACK),
   )
 
   // 7. Where each rank starts along main, each node centred in its rank.

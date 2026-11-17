@@ -41,6 +41,12 @@ const theDrawer = async (): Promise<Locator> => {
 
 const card = (name: string): Locator => page.locator('.map-world').getByRole('button', { name, exact: true })
 const wire = (said: string): Locator => page.getByRole('button', { name: `Wire: ${said}` })
+/** A still level shows no sentences, so a test reads a wire's once its card
+ *  is picked and holds the focus there. */
+const focusOn = async (name: string): Promise<void> => {
+  await card(name).click()
+  await page.waitForTimeout(500)
+}
 
 /** Drags with the mouse from one place to another, the way a hand does. */
 const drag = async (from: { x: number; y: number }, to: { x: number; y: number }): Promise<void> => {
@@ -317,12 +323,14 @@ describe('drawing a sketch in the real app', () => {
   it('points a wire at another card by dragging its end', async () => {
     await page.keyboard.press('Escape')
     await page.keyboard.press('0')
+    await focusOn('notes')
     await wire('notes calls search to find notes by their words').click()
     const end = page.locator('.map-wire-end').nth(1)
     await end.waitFor({ timeout: PATIENCE })
     await drag(await middle(end), await middle(card('billing')))
     expect(await shown(wire('notes calls billing to find notes by their words'))).toContain('billing')
     await page.keyboard.press('Control+z')
+    await focusOn('notes')
     expect(await shown(wire('notes calls search to find notes by their words'))).toContain('search')
   })
 
@@ -334,6 +342,8 @@ describe('drawing a sketch in the real app', () => {
 
     await page.getByRole('button', { name: /^Project sketches/ }).click()
     await page.getByRole('button', { name: /^Search/ }).click()
+    await card('notes').waitFor({ timeout: PATIENCE })
+    await focusOn('notes')
     expect(await shown(wire('notes calls search to find notes by their words'))).toContain('notes')
     expect(await shown(page.locator('.map-anno--sticky'))).toBe('Which search service?')
   })
