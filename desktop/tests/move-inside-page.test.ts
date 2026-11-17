@@ -107,6 +107,8 @@ describe('putting a software system inside another on a sketch', () => {
     await page.waitForTimeout(600)
     await page.keyboard.press('Control+z')
     await card('phone').waitFor({ timeout: PATIENCE })
+    // A still level shows no sentences: the wire's shows with its card in focus.
+    await card('ana').hover()
     await page.getByRole('button', { name: /^Wire: ana .* phone/ }).waitFor({ timeout: PATIENCE })
   })
 })

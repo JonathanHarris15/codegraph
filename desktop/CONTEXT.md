@@ -144,7 +144,8 @@ A one-way line between two cards. It shows the kind of relationship, read
 from the code, and a phrase saying what it is for, written in the code beside
 the call. It reads as a sentence: who acts, how, on what, and what for —
 write-note uses notes to keep the note. The wire runs through its sentence, so
-the two cannot come apart. It is drawn curved or square, as the person looking
+the two cannot come apart. The sentence shows only while the wire is in focus:
+its card is under the pointer or picked, or the wire itself is picked. It is drawn curved or square, as the person looking
 chooses. Curved, it is a smooth line from card to card, and only moving the
 sentence itself bends it; moving a card it joins lets go of that again. Square,
 it runs in straight pieces that turn at right angles, at its bends.

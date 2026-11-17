@@ -1129,15 +1129,31 @@ export const MapCanvas = ({
     return { at, name: card.name, rows: rows.slice(0, 6), more: rows.length - 6 }
   }, [selected, hover, children, wires, where])
 
-  /** The wires of the card under the pointer, which light up so a person can
-   *  see at a glance what reaches it and what it reaches, and the cards at
-   *  their other ends. A wire to a hub carries on along the hub's own wire. */
-  const { lit, linked, litHubs } = useMemo(() => {
+  /** How a wire is picked: on a sketch by its own id, and on the map, where
+   *  the code gives wires none, by the key it is drawn under. */
+  const onSketch = Boolean(drawing)
+  const wireRef = useCallback(
+    (one: { wire: { id?: string }; key: string }): string => (onSketch ? (one.wire.id ?? '') : (one.wire.id ?? one.key)),
+    [onSketch],
+  )
+
+  /** What is in focus: the cards and wires picked, which hold the focus until
+   *  they are let go, or else the card under the pointer (ADR 0031). */
+  const inFocus = useMemo(() => {
+    const picked = selected.filter((id) => children.some((c) => c.id === id) || shapes.all.some((one) => wireRef(one) === id))
+    return picked.length ? picked : hover ? [hover] : []
+  }, [selected, hover, children, shapes, wireRef])
+
+  /** The wires of the cards in focus, which light up so a person can see at
+   *  a glance what reaches them and what they reach, and the cards at their
+   *  other ends. A wire to a hub carries on along the hub's own wire. A wire
+   *  picked by itself lights with the cards at its ends. */
+  const { lit, linked, litHubs, focused } = useMemo(() => {
     const keys = new Set<string>()
     const cards = new Set<string>()
     const hubIds = new Set<string>()
-    if (!hover || live.moves) return { lit: keys, linked: cards, litHubs: hubIds }
-    cards.add(hover)
+    const focused = new Set<string>()
+    if (!inFocus.length || live.moves) return { lit: keys, linked: cards, litHubs: hubIds, focused }
     const follow = (one: (typeof shapes.all)[number]): void => {
       keys.add(one.key)
       for (const end of [one.wire.from, one.wire.to]) {
@@ -1151,9 +1167,18 @@ export const MapCanvas = ({
         if (outer && !keys.has(outer.key)) follow(outer)
       }
     }
-    for (const one of shapes.all) if (one.wire.from === hover || one.wire.to === hover) follow(one)
-    return { lit: keys, linked: cards, litHubs: hubIds }
-  }, [hover, shapes, live.moves])
+    for (const id of inFocus) {
+      const wire = shapes.all.find((one) => wireRef(one) === id)
+      if (wire) {
+        follow(wire)
+        continue
+      }
+      cards.add(id)
+      focused.add(id)
+      for (const one of shapes.all) if (one.wire.from === id || one.wire.to === id) follow(one)
+    }
+    return { lit: keys, linked: cards, litHubs: hubIds, focused }
+  }, [inFocus, shapes, live.moves, wireRef])
 
   const fitted = useCallback((): View => {
     const el = frame.current
@@ -1946,12 +1971,22 @@ export const MapCanvas = ({
    *  so an explainer sitting on top of something can be moved off it. Its
    *  spot is its middle, which is how it is drawn. */
   const pressSaid = (key: string, at: Spot) => (event: PointerEvent<HTMLDivElement>): void => {
-    if (!canMove || event.button !== 0 || space.current || tool === 'pan') return
+    if (event.button !== 0 || space.current || tool === 'pan') return
+    const one = shapes.inner.find((each) => each.key === key)
+    const ref = one ? wireRef(one) : ''
+    const pick = (): void => {
+      if (ref) select(event.shiftKey ? [...selected, ref] : [ref])
+    }
+    if (!canMove) {
+      // On a map that is only shown, pressing a sentence just picks its wire.
+      event.stopPropagation()
+      pick()
+      return
+    }
     event.stopPropagation()
     setQuick(null)
     if (editing && editing.id !== key) finishEditing(true)
-    const wire = shapes.inner.find((one) => one.key === key)?.wire
-    if (drawing && wire?.id) select(event.shiftKey ? [...selected, wire.id] : [wire.id])
+    pick()
     const starts = new Map<string, Box>([[key, { x: at.x - shift.x, y: at.y - shift.y, w: 0, h: 0 }]])
     gesture.current = {
       type: 'move',
@@ -2543,8 +2578,9 @@ export const MapCanvas = ({
       const pressed = { x: (now.x - rect.left - now.vx) / seen.current.k, y: (now.y - rect.top - now.vy) / seen.current.k }
       if (!now.moved && now.button === 2 && levelAt(pressed) === workAt && (canMove || !cardUnder(pressed)))
         openMenu({ clientX: now.x, clientY: now.y }, pressed)
-      // A click on the empty board, not a drag, lets go of what is picked.
-      else if (!now.moved && now.button === 0 && canMove && tool === 'pick') select([])
+      // A click on the empty board, not a drag, lets go of what is picked,
+      // and with it the focus a pick holds.
+      else if (!now.moved && now.button === 0 && (!canMove || tool === 'pick')) select([])
       return
     }
     if (now.type === 'zoombox') {
@@ -2850,7 +2886,8 @@ export const MapCanvas = ({
 
   const wireGroup = (list: typeof shapes.inner): ReactElement[] =>
     list.map(({ wire, key, shape, depth }) => {
-      const picked = Boolean(drawing && wire.id && selected.includes(wire.id))
+      const ref = wireRef({ wire, key })
+      const picked = Boolean(ref && selected.includes(ref))
       const tone = picked ? 'picked' : lit.has(key) ? 'lit' : wire.state === 'proposed' || wire.state === 'gone' ? wire.state : ''
       return (
       <g
@@ -2862,21 +2899,26 @@ export const MapCanvas = ({
         }`}
       >
         <path d={shape.d} markerEnd={`url(#map-head${tone ? `-${tone}` : ''})`} />
+        {/* Coming into focus, a wire draws itself in from where it starts to
+            its arrow, then the light runs along it. */}
+        {lit.has(key) && !picked ? <path d={shape.d} pathLength={1} className="map-wire-draw" /> : null}
         {lit.has(key) ? <path d={shape.d} className="map-wire-flow" /> : null}
-        {drawing && wire.id && depth === workAt ? (
+        {ref && depth === workAt ? (
           <path
             d={shape.d}
             className="map-wire-hit"
             onPointerDown={(event) => {
               event.stopPropagation()
-              drawing.onSelect(event.shiftKey ? [...selected, wire.id!] : [wire.id!])
+              setQuick(null)
+              select(event.shiftKey ? [...selected, ref] : [ref])
             }}
             onDoubleClick={(event) => {
+              if (!drawing || !wire.id) return
               event.stopPropagation()
               // On a right-angle wire, the line itself is for bending; its
               // sentence is still where its words are written.
-              if (shape.route) splitAt(wire.id!, shape.route, worldOf(event))
-              else startEditing(wire.id!)
+              if (shape.route) splitAt(wire.id, shape.route, worldOf(event))
+              else startEditing(wire.id)
             }}
           />
         ) : null}
@@ -3277,7 +3319,7 @@ export const MapCanvas = ({
                 opens={canOpen(p.card)}
                 selected={picked}
                 up={0}
-                linked={p.card.id === hover ? 'self' : linked.has(p.card.id) ? 'wired' : undefined}
+                linked={focused.has(p.card.id) ? 'self' : linked.has(p.card.id) ? 'wired' : undefined}
                 passing={passingOf(p.card.id)}
                 onIcon={drawing && restyles(p.card) && !drawing.locked?.includes(p.card.id) ? () => setIconsFor(p.card.id) : undefined}
                 onType={drawing && restyles(p.card) && !drawing.locked?.includes(p.card.id) ? () => startTyping(p.card) : undefined}
@@ -3367,6 +3409,8 @@ export const MapCanvas = ({
           {shapes.all.map(({ wire, key, at, small, said, depth, widest }) => {
             const own = depth === workAt
             const spot = at
+            const ref = wireRef({ wire, key })
+            const picked = Boolean(own && ref && selected.includes(ref))
             return (
               <Sentence
                 key={key}
@@ -3378,9 +3422,10 @@ export const MapCanvas = ({
                 {...(widest ? { widest } : {})}
                 missing={!drawing && !wire.words && wire.kind !== 'leads to' && wire.kind !== 'keeps'}
                 unfinished={Boolean(drawing) && !wire.words && wire.kind !== 'leads to' && Boolean(wire.id)}
-                selected={Boolean(drawing && own && wire.id && selected.includes(wire.id))}
-                pickable={Boolean(drawing && wire.id && own)}
+                selected={picked}
+                pickable={Boolean(own && ref)}
                 lit={lit.has(key)}
+                quiet={!picked && !lit.has(key) && !live.moves?.has(key)}
                 up={workAt - depth}
                 movable={canMove && own}
                 hidden={Boolean(editing && wire.id && editing.id === wire.id)}

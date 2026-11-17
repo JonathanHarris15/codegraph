@@ -3506,9 +3506,26 @@ kbd {
 }
 
 .map-wire--lit:not(.map-wire--selected) path:first-child {
+  opacity: 1;
+}
+
+/* the strong line of a wire in focus draws itself in, from where the wire
+   starts to its arrow, so a person sees which way each one runs */
+.map-wire .map-wire-draw {
+  fill: none;
   stroke: var(--wire-strong);
   stroke-width: 3;
-  opacity: 1;
+  stroke-linecap: round;
+  stroke-dasharray: 1 1;
+  stroke-dashoffset: 1;
+  animation: map-wire-draw 420ms cubic-bezier(0.3, 0.7, 0.4, 1) forwards;
+  pointer-events: none;
+}
+
+@keyframes map-wire-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
 }
 
 /* the dash runs along it as light on the dark line, so a lit wire never
@@ -3519,7 +3536,7 @@ kbd {
   stroke-width: var(--stroke-wire-strong);
   stroke-linecap: round;
   stroke-dasharray: 2 16;
-  animation: map-wire-flow 900ms linear infinite, map-wire-glow 240ms ease-out;
+  animation: map-wire-flow 900ms linear infinite, map-wire-glow 240ms ease-out 360ms backwards;
   pointer-events: none;
 }
 
@@ -3549,6 +3566,31 @@ kbd {
   opacity: 1;
   filter: none;
   z-index: 2;
+  animation: map-sentence-in 220ms ease-out 260ms backwards;
+}
+
+/* a still level shows no sentences: each is laid out where it would sit, so
+   nothing jumps when it shows, but only a wire in focus has its sentence
+   drawn (ADR 0031) */
+.map-world .map-sentence--quiet {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* a wire picked by a click answers at once, without waiting for its line */
+.map-world .map-sentence--selected {
+  animation: map-sentence-in 140ms ease-out;
+}
+
+@keyframes map-sentence-in {
+  from {
+    opacity: 0;
+    scale: 0.85;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
 }
 
 /* Under the pointer, a card and what it is wired to come forward and the rest
@@ -3609,8 +3651,15 @@ kbd {
 
 /* nothing animates for a person who asked for less movement */
 @media (prefers-reduced-motion: reduce) {
-  .map-wire .map-wire-flow {
+  .map-wire .map-wire-flow,
+  .map-sentence--lit,
+  .map-sentence--selected {
     animation: none;
+  }
+
+  .map-wire .map-wire-draw {
+    animation: none;
+    stroke-dashoffset: 0;
   }
 
   .map-wire path:first-child {

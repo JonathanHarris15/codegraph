@@ -126,11 +126,16 @@ describe('a wire and its sentence', () => {
   it('runs the wire through the sentence, wherever the sentence is dragged', async () => {
     await wire('Reader', 'Notes app')
     await settle()
+    // A still level shows no sentences: picking the card holds its wires' in view.
+    await card('Reader').click()
+    await settle()
     const chip = await boxOf(page.locator('.map-sentence'))
     await drag(middle(chip), { x: middle(chip).x + 10, y: middle(chip).y + 170 })
     await away()
     await settle()
     await picture('draw-2-sentence-moved')
+    await card('Reader').click()
+    await settle()
     const moved = await boxOf(page.locator('.map-sentence'))
     const [d] = await wirePaths()
     // Two runs, and the point they meet at is the sentence's middle on screen.

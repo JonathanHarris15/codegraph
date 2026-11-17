@@ -98,6 +98,8 @@ const shapeKept = (id: string) => kept().root.wires.find((w) => w.id === id)?.sh
 
 describe('a wire of its own shape', () => {
   it('draws one wire at right angles from its bar, and leaves the rest curved', async () => {
+    // A still level shows no sentences: picking Mail holds its wire's in view.
+    await card('Mail').click()
     await page.locator('.map-sentence', { hasText: 'to send a reminder' }).click()
     const shape = page.getByRole('group', { name: 'How the wire is drawn' })
     await shape.waitFor({ timeout: PATIENCE })
@@ -247,6 +249,7 @@ describe('stores whose fields point at each other', () => {
     await settle()
     await card('Data').dblclick()
     await settle()
+    await card('people').hover()
     const said = page.locator('.map-sentence', { hasText: 'personId' })
     await said.waitFor({ timeout: PATIENCE })
     expect(await said.textContent()).toContain('points at')
