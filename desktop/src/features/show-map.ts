@@ -206,8 +206,10 @@ export const showMap = async (projectId: string, points: Record<string, Point> =
         says: 'Run by someone else; no repo here',
       }),
     )
-    for (const name of shallow.answersTo) answersTo.set(name.toLowerCase(), shallow.id)
+    for (const name of [shallow.name, ...shallow.answersTo]) answersTo.set(name.toLowerCase(), shallow.id)
   }
+  for (const person of project.people)
+    top.children.push(card(person.id, person.name, 'system', { kind: 'person', says: 'Uses the software' }))
 
   /** The container a wire to a repo meets: the one named after a slash, or
    *  else its first. */

@@ -1,11 +1,11 @@
 // codegraph: module projects
-// codegraph: front door useFolder, listProjects, findProject, addProject, putOnline, renameProject, keepProject, removeProject, addSoftwareSystem, removeSoftwareSystem, chooseBranch, knownRemotes, addShallowSystem, Project, SoftwareSystem, ShallowSystem, ProjectMember, Workspace
+// codegraph: front door useFolder, listProjects, findProject, addProject, putOnline, renameProject, keepProject, removeProject, addSoftwareSystem, removeSoftwareSystem, chooseBranch, knownRemotes, addShallowSystem, newShallowSystem, addPerson, renameDrawn, removeDrawn, Project, SoftwareSystem, ShallowSystem, Person, ProjectMember, Workspace
 import { sameFolder } from '../machine/index.js'
-import { shortNameOf, type Project, type ProjectMember, type ShallowSystem, type SoftwareSystem } from './schema.js'
+import { shortNameOf, type Person, type Project, type ProjectMember, type ShallowSystem, type SoftwareSystem } from './schema.js'
 import { newId, read, useFolder, write } from './store.js'
 
 export { useFolder }
-export type { Project, ProjectMember, ShallowSystem, SoftwareSystem, Workspace } from './schema.js'
+export type { Person, Project, ProjectMember, ShallowSystem, SoftwareSystem, Workspace } from './schema.js'
 
 export const listProjects = (): Project[] => read().projects
 
@@ -28,6 +28,7 @@ export const addProject = (name: string, shortName = ''): Project => {
     createdAt: new Date().toISOString(),
     systems: [],
     shallow: [],
+    people: [],
   }
   workspace.projects.push(project)
   write(workspace)
@@ -130,4 +131,53 @@ export const addShallowSystem = (projectId: string, name: string, sameAs = ''): 
   project.shallow.push(added)
   write(workspace)
   return added
+}
+
+/** A shallow software system a person put on the map themselves: always a new
+ *  one, even beside another of the same name. It answers to its name, so the
+ *  code reaches it once it is called what the code calls it. */
+export const newShallowSystem = (projectId: string, name: string): ShallowSystem => {
+  const workspace = read()
+  const project = workspace.projects.find((p) => p.id === projectId)
+  if (!project) throw new Error('no project with that id')
+  const added: ShallowSystem = { id: newId(), name: name.trim() || 'Software system', answersTo: [] }
+  project.shallow.push(added)
+  write(workspace)
+  return added
+}
+
+/** Draws someone who uses the project's software. */
+export const addPerson = (projectId: string, name: string): Person => {
+  const workspace = read()
+  const project = workspace.projects.find((p) => p.id === projectId)
+  if (!project) throw new Error('no project with that id')
+  const added: Person = { id: newId(), name: name.trim() || 'Person' }
+  project.people.push(added)
+  write(workspace)
+  return added
+}
+
+/** Renames a person or a shallow software system. A shallow one keeps every
+ *  name the code already calls it by. A blank name changes nothing. */
+export const renameDrawn = (projectId: string, id: string, name: string): void => {
+  const workspace = read()
+  const project = workspace.projects.find((p) => p.id === projectId)
+  const drawn = project?.people.find((p) => p.id === id) ?? project?.shallow.find((s) => s.id === id)
+  if (!drawn || !name.trim() || drawn.name === name.trim()) return
+  drawn.name = name.trim()
+  write(workspace)
+}
+
+/** Takes a person or a shallow software system off the project. A software
+ *  system with a repo is not one of these, and stays. */
+export const removeDrawn = (projectId: string, id: string): boolean => {
+  const workspace = read()
+  const project = workspace.projects.find((p) => p.id === projectId)
+  if (!project) return false
+  const before = project.people.length + project.shallow.length
+  project.people = project.people.filter((p) => p.id !== id)
+  project.shallow = project.shallow.filter((s) => s.id !== id)
+  if (project.people.length + project.shallow.length === before) return false
+  write(workspace)
+  return true
 }

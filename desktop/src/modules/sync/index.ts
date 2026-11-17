@@ -106,6 +106,7 @@ const projectDoc = (project: Project): Doc => ({
   roles: Object.fromEntries((project.members ?? []).map((m) => [m.id, m.role])),
   systems: project.systems.map(({ id, name, remote }) => ({ id, name, remote })),
   shallow: project.shallow,
+  people: project.people,
 })
 
 const projectFromDoc = (doc: Doc): Project => {
@@ -120,6 +121,7 @@ const projectFromDoc = (doc: Doc): Project => {
     ownerId: String(doc['ownerId']),
     members: doc['members'] as Project['members'],
     shallow: doc['shallow'] as Project['shallow'],
+    people: (doc['people'] as Project['people'] | undefined) ?? [],
     systems: systems.map((s) => {
       const mine = here?.systems.find((o) => o.id === s.id)
       return { ...s, path: mine?.path ?? '', ...(mine?.branch ? { branch: mine.branch } : {}) }

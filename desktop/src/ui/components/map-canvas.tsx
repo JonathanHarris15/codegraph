@@ -228,6 +228,16 @@ export type Rearranging = {
 
 /** What a map or a sketch hands the canvas so annotations can be drawn over
  *  it: its layers, and where changes to them go. A viewer sees them frozen. */
+/** People and shallow software systems: no code says they are there, so a
+ *  person adds, renames and takes them away on the map's project level. */
+export type HandDrawn = {
+  /** Adds one, hands back its id once it is on the map. `spots` says where
+   *  the level's cards go now that it is there. */
+  onAdd: (kind: 'person' | 'shallow software system', spots: (id: string) => Arrangement) => Promise<string>
+  onRename: (id: string, name: string) => void
+  onRemove: (ids: string[]) => void
+}
+
 export type Annotating = {
   layers: Layer[]
   onChange: (layers: Layer[], step?: string) => void
@@ -435,6 +445,7 @@ export const MapCanvas = ({
   onStartSketch,
   together,
   cover,
+  handDrawn,
 }: {
   /** What the page puts on a card, if anything, by the card. */
   cardExtra?: (card: DrawnCard) => ReactNode
@@ -456,6 +467,8 @@ export const MapCanvas = ({
    *  either side. Fitting keeps clear of it, and what is picked, or what is
    *  inside the open card, is brought out from under it. */
   cover?: { right?: number; left?: number }
+  /** Left out, the map's people and shallow software systems stay as they are. */
+  handDrawn?: HandDrawn
 }) => {
   const frame = useRef<HTMLDivElement>(null)
   const [view, showView] = useState<View>({ x: 0, y: 0, k: 1 })
@@ -793,6 +806,19 @@ export const MapCanvas = ({
 
   const working = shown[workAt]!
   const children = working.children
+  /** The cards on this level a person drew here by hand, and so may rename
+   *  and take away: people and shallow software systems, on the project level. */
+  const drawnIds = useMemo(
+    () =>
+      new Set(
+        handDrawn && !drawing && focus.level === 'project'
+          ? children.filter((c) => c.kind === 'person' || c.kind === 'shallow software system').map((c) => c.id)
+          : [],
+      ),
+    [handDrawn, drawing, focus.level, children],
+  )
+  /** A card just added, to start naming once it is drawn. */
+  const [nameSoon, setNameSoon] = useState('')
   const wires = working.wires
   const notes: DrawnNote[] = working.notes
   const shift = working.shift
@@ -1597,16 +1623,17 @@ export const MapCanvas = ({
 
   const startEditing = useCallback(
     (id: string, says = false): void => {
-      if (!drawing || drawing.locked?.includes(id)) return
+      // On a map, only the name of a card drawn there by hand can be written.
+      if (drawing ? drawing.locked?.includes(id) : says || !drawnIds.has(id)) return
       const card = children.find((c) => c.id === id)
       const wire = wires.find((w) => w.id === id)
       const note = notes.find((n) => n.id === id)
       const was = card ? (says ? card.says : card.name) : wire ? wire.words : note ? note.text : null
       if (was === null) return
-      drawing.onSelect([id])
+      select([id])
       setEditing({ id, text: was, was, says: Boolean(card && says), since: Date.now() })
     },
-    [drawing, focus, notes],
+    [drawing, focus, notes, drawnIds, select],
   )
 
   // Something being written on is always in sight: a card made off the edge
@@ -1635,17 +1662,40 @@ export const MapCanvas = ({
 
   const finishEditing = useCallback(
     (keep: boolean): void => {
-      if (!editing || !drawing) return
+      if (!editing || (!drawing && !handDrawn)) return
       if (keep && editing.text !== editing.was) {
-        if (editing.type) {
+        if (!drawing) handDrawn!.onRename(editing.id, editing.text)
+        else if (editing.type) {
           const card = children.find((c) => c.id === editing.id)
           if (card) drawing.onKind(editing.id, editing.text.trim() || 'card', lookOf(card) ?? BLANK_LOOK)
         } else drawing.onText(editing.id, editing.text, editing.first, editing.says ? 'says' : undefined)
       }
       setEditing(null)
     },
-    [editing, drawing, children],
+    [editing, drawing, children, handDrawn],
   )
+
+  useEffect(() => {
+    if (!nameSoon || !where.has(nameSoon)) return
+    setNameSoon('')
+    startEditing(nameSoon)
+  }, [nameSoon, where, startEditing])
+
+  /** Adds a person or a shallow software system where the board was
+   *  right-clicked, keeping the rest of the level where it is drawn now, and
+   *  opens its name for writing. */
+  const addHere = async (kind: 'person' | 'shallow software system', at: Spot): Promise<void> => {
+    if (!handDrawn) return
+    const level = rearranging && !rearranging.frozen ? levelNow(new Map()) : []
+    const id = await handDrawn.onAdd(kind, (made) => {
+      if (!rearranging || rearranging.frozen) return []
+      const { w, h } = sizeOf({ ...root, id: made, name: '', says: '', kind, level: 'system', children: [], wires: [] })
+      return [...level, { id: made, x: Math.round(at.x - w / 2), y: Math.round(at.y - h / 2) }]
+    })
+    if (!id) return
+    select([id])
+    setNameSoon(id)
+  }
 
   /** Starts writing a card's type where it is shown. A blank card has none yet,
    *  so the box starts empty rather than saying "card". */
@@ -1761,6 +1811,13 @@ export const MapCanvas = ({
         else backOut()
         return
       }
+      // Delete takes people and shallow software systems drawn by hand off a map.
+      if (!drawing && event.key === 'Delete' && handDrawn && !annoPicked.length && selected.length && selected.every((id) => drawnIds.has(id))) {
+        event.preventDefault()
+        handDrawn.onRemove(selected)
+        select([])
+        return
+      }
       // Backspace on a picked annotation takes it away, not the level.
       if (!drawing && event.key === 'Backspace' && !annoPicked.length) backOut()
       if (!event.altKey && (event.key === '0' || event.key === '+' || event.key === '=' || event.key === '-')) {
@@ -1812,7 +1869,7 @@ export const MapCanvas = ({
       window.removeEventListener('keydown', down)
       window.removeEventListener('keyup', up)
     }
-  }, [backOut, drawing, fit, zoomBy, quick, armed, tool, selected, startEditing, hover, frameOn, frameBox, view, palette, annoOpen, annotating, annoArmed, annoPicked, select, keysOpen, focus.level, ready, choices, iconsFor, shapes, wireStyle])
+  }, [backOut, drawing, fit, zoomBy, quick, armed, tool, selected, startEditing, hover, frameOn, frameBox, view, palette, annoOpen, annotating, annoArmed, annoPicked, select, keysOpen, focus.level, ready, choices, iconsFor, shapes, wireStyle, handDrawn, drawnIds])
 
   useEffect(() => {
     if (!layerSaid) return
@@ -2802,10 +2859,39 @@ export const MapCanvas = ({
       : { name: 'Draw wires at right angles', glyph: 'squareWires', act: () => setWireStyle('square') },
   ]
 
+  /** On a map's project level, what the right-click menu offers for the
+   *  people and shallow software systems drawn there by hand, or for the
+   *  board itself: adding one where it was pressed. */
+  const drawnItems = (ids: string[], inside: Spot): MenuItem[] => {
+    if (!handDrawn || drawing || focus.level !== 'project') return []
+    if (ids.length === 0)
+      return [
+        { name: 'Add a person here', glyph: 'person', act: () => void addHere('person', inside) },
+        { name: 'Add a shallow software system here', glyph: 'shallow', act: () => void addHere('shallow software system', inside) },
+        'rule',
+      ]
+    if (!ids.every((id) => drawnIds.has(id))) return []
+    return [
+      ...(ids.length === 1 ? [{ name: 'Rename', glyph: 'edit' as const, act: () => startEditing(ids[0]!) }] : []),
+      {
+        name: ids.length > 1 ? `Take these ${ids.length} off the map` : 'Take it off the map',
+        glyph: 'bin',
+        keys: 'Delete',
+        danger: true,
+        act: () => {
+          handDrawn.onRemove(ids)
+          select([])
+        },
+      },
+      'rule',
+    ]
+  }
+
   /** What the right-click menu offers, for what was under the pointer. */
   const menuItems = (ids: string[], inside: Spot): MenuItem[] => {
     if (!drawing) {
-      if (!rearranging || rearranging.frozen) return lookItems(menu!.screen)
+      const hand = drawnItems(ids, inside)
+      if (!rearranging || rearranging.frozen) return [...hand, ...lookItems(menu!.screen)]
       const moved = movedHere()
       const mine = ids.filter((id) => moved.includes(id))
       return [
@@ -2833,6 +2919,7 @@ export const MapCanvas = ({
               },
             ]
           : []),
+        ...hand,
         ...(mine.length || moved.length ? (['rule'] as MenuItem[]) : []),
         ...lookItems(menu!.screen),
       ]
@@ -3535,7 +3622,7 @@ export const MapCanvas = ({
             </svg>
           ) : null}
 
-          {editing && drawing ? (
+          {editing && (drawing || handDrawn) ? (
             editingNote ? (
               <textarea
                 ref={focusQuietly}

@@ -1,7 +1,10 @@
 // codegraph: shell
 import { ipcMain } from 'electron'
 import { addMockup } from '../features/add-mockup.js'
+import { addToMap } from '../features/add-to-map.js'
 import { agreeShallowSystem } from '../features/agree-shallow-system.js'
+import { removeFromMap } from '../features/remove-from-map.js'
+import { renameOnMap } from '../features/rename-on-map.js'
 import { changeRole } from '../features/change-role.js'
 import { changeToken } from '../features/change-token.js'
 import { checkForUpdate } from '../features/check-for-update.js'
@@ -72,6 +75,9 @@ export const FEATURES = {
   connectGithub,
   connectAgent,
   agreeShallowSystem,
+  addToMap,
+  renameOnMap,
+  removeFromMap,
   signOutGithub,
   listGithubSoftwareSystems,
   showMap,

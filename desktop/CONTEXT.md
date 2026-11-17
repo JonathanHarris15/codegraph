@@ -30,8 +30,10 @@ _Avoid_: codebase, app, service, repo (say repo for the git folder itself)
 **Shallow software system**:
 A software system a project refers to but has no repo for, usually because
 someone else runs it. Codegraph may suggest one when the code calls out to
-it, but it is only on the map once a person agrees. Linking a repo to it later
-makes it an ordinary software system.
+it, but it is only on the map once a person agrees, or puts one there
+themselves. A person can rename one or take it off; one the code still calls
+is suggested again. Linking a repo to it later makes it an ordinary software
+system.
 _Avoid_: external, third party, integration, dependency
 
 **Container**:

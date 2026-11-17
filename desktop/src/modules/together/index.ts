@@ -84,7 +84,7 @@ export type Tally = {
   removed: Record<string, number>
 }
 
-const NOUNS: Record<string, string> = { children: 'card', wires: 'wire', items: 'note', notes: 'note', systems: 'software system', members: 'member', shallow: 'shallow software system' }
+const NOUNS: Record<string, string> = { children: 'card', wires: 'wire', items: 'note', notes: 'note', systems: 'software system', members: 'member', shallow: 'shallow software system', people: 'person' }
 const WHERE = new Set(['x', 'y', 'w', 'h', 'room', 'near', 'from', 'to'])
 
 const bump = (into: Record<string, number>, noun: string): void => {

@@ -24,6 +24,13 @@ export type ShallowSystem = {
   answersTo: string[]
 }
 
+/** Someone who uses the project's software, drawn beside its software systems.
+ *  No code says who they are, so a member draws them (CONTEXT.md, Person). */
+export type Person = {
+  id: string
+  name: string
+}
+
 /** Someone on a project: known by GitHub, with what they may do here. */
 export type ProjectMember = { id: string; login: string; name: string; avatar: string; role: Role }
 
@@ -37,6 +44,7 @@ export type Project = {
   createdAt: string
   systems: SoftwareSystem[]
   shallow: ShallowSystem[]
+  people: Person[]
   /** Online, for its members, not just on this computer. It points at its owner
    *  and members, and does not sit under any of them (ADR 0016). */
   online?: boolean
