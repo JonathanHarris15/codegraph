@@ -926,6 +926,23 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
             }}
             agent={working?.agent ? { card: working.agent.card, words: working.agent.words } : null}
             {...(canDraw ? { onStartSketch: () => void startOne(true) } : {})}
+            {...(canDraw
+              ? {
+                  handDrawn: {
+                    onAdd: async (kind, spots) => {
+                      const { id } = await window.codegraph.addToMap(projectId, kind, kind === 'person' ? 'New person' : 'New software system')
+                      if (!id) return ''
+                      const moves = spots(id)
+                      if (moves.length) rearrange(moves)
+                      await load(pointsNow.current)
+                      return id
+                    },
+                    onRename: (id, name) => void window.codegraph.renameOnMap(projectId, id, name).then(() => load(pointsNow.current)),
+                    onRemove: (ids) =>
+                      void Promise.all(ids.map((id) => window.codegraph.removeFromMap(projectId, id))).then(() => load(pointsNow.current)),
+                  },
+                }
+              : {})}
             {...proposalCover}
           />
         )}

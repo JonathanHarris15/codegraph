@@ -158,6 +158,13 @@ export const readFacts = (point: Point, files: Map<string, string>): Facts => {
     },
   )
   const containerNamed = new Map(map.containers.map((c) => [c.name, c]))
+  /** The container of this repo a call names, by its name alone or after the
+   *  software system the repo says it is part of, in any case. */
+  const containerCalled = (to: string): Container | undefined => {
+    const [first = '', ...rest] = to.split('/')
+    const name = rest.length && config.system && first.trim().toLowerCase() === config.system.toLowerCase() ? rest.join('/') : to
+    return map.containers.find((c) => c.name.toLowerCase() === name.trim().toLowerCase())
+  }
   const aliases = readAliases(files.get('tsconfig.json') ?? files.get('jsconfig.json'))
 
   const tagsOf = facts.tagsOf
@@ -304,7 +311,17 @@ export const readFacts = (point: Point, files: Map<string, string>): Facts => {
     for (const [line, aimed] of tags.wires) {
       if (!aimed.to) continue
       facts.calls.push({ path, line, from: component, to: aimed.to })
-      map.outside.push({ from: component.id, to: outsideId(aimed.to), kind: 'calls', words: aimed.words })
+      // A call to another container of this repo is a wire to it; anything
+      // else leaves the repo, for the project to say what it reaches.
+      const container = containerCalled(aimed.to)
+      if (container?.name === component.container)
+        problems.push({
+          file: path,
+          line,
+          says: `${component.kind} ${component.name} calls ${container.name}, the container it is in; a wire inside a container is read from its imports.`,
+        })
+      else if (container) map.wires.push({ from: component.id, to: container.id, kind: 'calls', words: aimed.words })
+      else map.outside.push({ from: component.id, to: outsideId(aimed.to), kind: 'calls', words: aimed.words })
     }
   }
   for (const wire of found.values()) {

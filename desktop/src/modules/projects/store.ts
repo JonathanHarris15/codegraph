@@ -19,18 +19,20 @@ const file = (): string => {
 
 /** A project as an older app may have written it: before version 2 its
  *  software systems were kept under `codebases`, and it had no short name. */
-type Stored = Omit<Project, 'systems' | 'shallow' | 'shortName'> & {
+type Stored = Omit<Project, 'systems' | 'shallow' | 'people' | 'shortName'> & {
   systems?: Project['systems']
   codebases?: Project['systems']
   shallow?: Project['shallow']
+  people?: Project['people']
   shortName?: string
 }
 
-const upgrade = ({ codebases, systems, shallow, shortName, ...project }: Stored): Project => ({
+const upgrade = ({ codebases, systems, shallow, people, shortName, ...project }: Stored): Project => ({
   ...project,
   shortName: shortName || shortNameOf(project.name),
   systems: systems ?? codebases ?? [],
   shallow: shallow ?? [],
+  people: people ?? [],
 })
 
 export const read = (): Workspace => {

@@ -178,6 +178,12 @@ A call to another repo of the same software system names that repo, and the
 map joins the two containers: `to billing-api:`. Where that repo has more
 than one container, `to billing-api/api:` says which.
 
+A call to another container of the same repo, such as a browser app calling
+its own server over the network, names that container as the config does:
+`to api:`. The map draws it as a wire between the two containers, and never
+offers it as a shallow software system. Only a call no import can show needs
+this; a container never names itself.
+
 **The kinds of wire.** The reader works these out; you never write a kind in
 a tag. It helps to know what it will read:
 

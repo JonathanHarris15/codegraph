@@ -138,6 +138,8 @@ export const TOOL_GLYPHS = {
   curvedWires: Spline,
   squareWires: CornerDownRight,
   pickAll: SquareDashed,
+  person: UserRound,
+  shallow: Cloud,
 } as const
 
 export type ToolGlyph = keyof typeof TOOL_GLYPHS
