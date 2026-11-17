@@ -233,7 +233,18 @@ export const showMap = async (projectId: string, points: Record<string, Point> =
         const repos = [...drawnIn].filter(([repo, into]) => into === reached && repo !== system.id).map(([repo]) => repo)
         reached = repos.find((repo) => read.find((r) => r.system.id === repo)?.map.containers.some((c) => c.name === named)) ?? repos[0] ?? ''
       }
-      if (!reached || reached === system.id) continue
+      if (reached === system.id) {
+        // The repo names itself and then one of its own containers: a call
+        // between two containers of one repo, which the reader cannot tell
+        // from a call out, since a repo does not know what it is called.
+        const into = top.children.find((c) => c.id === cardOf(system.id))
+        const container = map.components.find((c) => c.id === call.from)?.container
+        const target = map.containers.find((c) => c.name.toLowerCase() === named.trim().toLowerCase())
+        if (into && container && target && target.name !== container)
+          join(into.wires, { ...call, from: `${system.id}/container:${container}`, to: `${system.id}/${target.id}`, ends: [{ from: `${system.id}/${call.from}`, to: `${system.id}/${target.id}` }] })
+        continue
+      }
+      if (!reached) continue
       const from = cardOf(system.id)
       const to = cardOf(reached)
       const starts = `${system.id}/${call.from}`
