@@ -25,6 +25,11 @@ export const ProjectCard = ({
   onMembers,
   onRename,
   onDelete,
+  rowBusy,
+  onLinkHere,
+  onClone,
+  onForget,
+  onUnlink,
 }: {
   project: ProjectView
   onLink: (projectId: string) => void
@@ -39,10 +44,36 @@ export const ProjectCard = ({
   /** Each only for those who may. */
   onRename?: () => void
   onDelete?: () => void
+  /** The repo row busy linking or cloning, if any. */
+  rowBusy: { systemId: string; what: 'link' | 'clone' } | null
+  /** Link a folder as a repo's working copy here: the one given, or one picked. */
+  onLinkHere: (systemId: string, path?: string) => void
+  onClone: (systemId: string) => void
+  /** Unlink this computer's folder; the repo stays on the project. */
+  onForget: (systemId: string) => void
+  /** Take a repo off the project for everyone; only for those who may. */
+  onUnlink?: (systemId: string) => void
 }) => {
   const card = useRef<HTMLDivElement>(null)
   const more = useRef<HTMLButtonElement>(null)
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null)
+  const [rowMenu, setRowMenu] = useState<{ systemId: string; x: number; y: number; opener: HTMLButtonElement } | null>(null)
+  const rowItems = (systemId: string): MenuItem[] => {
+    const system = project.systems.find((s) => s.id === systemId)
+    if (!system) return []
+    const own: MenuItem[] = [
+      ...(system.path ? [{ name: 'Unlink this folder', act: () => onForget(systemId) }] : []),
+      ...(system.present ? [{ name: 'Link a different folder…', act: () => onLinkHere(systemId) }] : []),
+    ]
+    if (!onUnlink) return own
+    return [...own, ...(own.length ? ['rule' as const] : []), { name: 'Take off the project…', danger: true, act: () => onUnlink(systemId) }]
+  }
+  const openRowMenu = (systemId: string, opener: HTMLButtonElement): void => {
+    const box = card.current?.getBoundingClientRect()
+    const at = opener.getBoundingClientRect()
+    if (!box) return
+    setRowMenu(rowMenu?.systemId === systemId ? null : { systemId, x: at.right - box.left - 200, y: at.bottom - box.top + 4, opener })
+  }
   const canInvite = project.role === 'owner' || project.role === 'co-owner'
   const items: MenuItem[] = [
     ...(onRename ? [{ name: 'Rename', act: onRename }] : []),
@@ -126,6 +157,17 @@ export const ProjectCard = ({
       </div>
     ) : null}
 
+    {rowMenu ? (
+      <div onKeyDown={(event) => event.stopPropagation()}>
+        <CanvasMenu
+          at={{ x: rowMenu.x, y: rowMenu.y }}
+          items={rowItems(rowMenu.systemId)}
+          opener={{ current: rowMenu.opener }}
+          onClose={() => setRowMenu(null)}
+        />
+      </div>
+    ) : null}
+
     <div className="project-repos" aria-label={`Repos in ${project.name}`}>
       {project.systems.map((system) => (
         <SoftwareSystemRow
@@ -133,6 +175,10 @@ export const ProjectCard = ({
           system={system}
           project={project.shortName}
           onChoose={(point) => onChoose(system.id, point)}
+          busy={rowBusy?.systemId === system.id ? rowBusy.what : ''}
+          onLink={(path) => onLinkHere(system.id, path)}
+          onClone={() => onClone(system.id)}
+          {...(rowItems(system.id).length ? { onMore: (button: HTMLButtonElement) => openRowMenu(system.id, button) } : {})}
         />
       ))}
       {project.systems.length === 0 ? (

@@ -1,11 +1,34 @@
 // codegraph: feature describe-map in agent
-// codegraph: uses reader, wording, projects, annotations, machine
+// codegraph: uses reader, wording, projects, annotations, machine, repo
 // codegraph: command map
+import { existsSync } from 'node:fs'
 import { annotationWords, readAnnotations } from '../modules/annotations/index.js'
 import { sameFolder } from '../modules/machine/index.js'
 import { listProjects } from '../modules/projects/index.js'
 import { DESIGN, holdsWords, live, readMap, RECIPES, type DesignSystem, type Point, type Store, type SystemMap } from '../modules/reader/index.js'
+import { remoteOf, sameRemote } from '../modules/repo/index.js'
 import { sentenceOf } from '../modules/wording/index.js'
+
+/** Whether this folder is the working copy a project on this computer has for
+ *  its repo: reading a folder works on any folder, so the map says plainly. */
+const linkWords = async (repo: string, serves: string[]): Promise<string> => {
+  const projects = listProjects()
+  const linked = projects.flatMap((p) => p.systems.filter((s) => s.path && sameFolder(s.path, repo)).map((s) => `${s.name} in ${p.name}`))
+  if (linked.length) return `Linked on this computer as ${linked.join(', and as ')}.`
+  const remote = await remoteOf(repo)
+  const listing = projects.flatMap((p) =>
+    p.systems.filter((s) => sameRemote(s.remote, remote)).map((s) => ({ p, s, here: Boolean(s.path && existsSync(s.path)) })),
+  )
+  if (listing.length) {
+    const words = listing.map(({ p, s, here }) => `${p.name} has ${s.remote}, with ${here ? `its working copy at ${s.path}` : 'no working copy here'}`)
+    const free = listing.some((l) => !l.here)
+    return `Not linked on this computer: ${words.join('; ')}.${free ? ' To make this folder its working copy, call `link`.' : ''}`
+  }
+  const named = projects.filter((p) => serves.includes(p.shortName))
+  if (named.length)
+    return `Not linked on this computer: ${named.map((p) => p.name).join(' and ')} has no repo ${remote ? `at ${remote}` : 'for this folder'}. A person adds it in the app with + Link a repo.`
+  return serves.length ? `No project on this computer is called ${serves.join(' or ')}.` : 'Not linked to any project on this computer.'
+}
 
 const pointWords = (point: Point): string =>
   point.kind === 'live' ? 'the live folder' : point.kind === 'branch' ? `branch ${point.name}` : `commit ${point.sha.slice(0, 7)}`
@@ -72,6 +95,7 @@ export const describeMap = async (repo: string, point: Point = live): Promise<st
   if (!map.setUp)
     return [
       `This repo has no codegraph.config.json, so it is not set up for codegraph yet. Read at ${pointWords(point)}.`,
+      await linkWords(repo, []),
       ...(map.design ? ['', ...designWords(map.design)] : []),
     ]
       .join('\n')
@@ -84,6 +108,7 @@ export const describeMap = async (repo: string, point: Point = live): Promise<st
   ])
   const out: string[] = [
     `Serves ${map.projects.join(', ') || 'no project yet'}. Read at ${pointWords(point)}.`,
+    await linkWords(repo, map.projects),
     '',
   ]
   for (const container of map.containers) {

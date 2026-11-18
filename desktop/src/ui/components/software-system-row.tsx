@@ -1,8 +1,9 @@
 // codegraph: component software-system-row
 import type { SoftwareSystemView } from '../../features/list-projects.js'
 import type { Point } from '../../modules/reader/index.js'
-import { useEffect, useState } from 'react'
-import { Badge } from '../design-system/kit.js'
+import { MoreHorizontal } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Badge, Button } from '../design-system/kit.js'
 import { BranchPicker } from './branch-picker.js'
 import { CopyButton, setupPrompt, WaitingButton } from './hand-to-agent.js'
 
@@ -35,7 +36,7 @@ const missingBits = (system: SoftwareSystemView): string =>
   `${system.mainLine || 'The main line'} has no codegraph.config.json yet. Ask your agent to set this repo up with codegraph.`
 
 const SetupBadge = ({ system, project }: { system: SoftwareSystemView; project: string }) => {
-  if (!system.path) return null
+  if (!system.present) return null
   if (system.setUp && !system.namesThisProject)
     return (
       <span
@@ -69,7 +70,7 @@ const SetupBadge = ({ system, project }: { system: SoftwareSystemView; project: 
 
 /** What is left before the repo is set up for this project, if anything. */
 const leftToDo = (system: SoftwareSystemView): 'setup' | 'name' | 'merge' | '' =>
-  !system.path ? '' : system.setUp ? (system.namesThisProject ? '' : 'name') : system.setUpHere ? 'merge' : 'setup'
+  !system.present ? '' : system.setUp ? (system.namesThisProject ? '' : 'name') : system.setUpHere ? 'merge' : 'setup'
 
 /** The hand-off for setup: the words for the person's agent, and once they
  *  are copied, a wait that lasts until the row's state moves on. */
@@ -102,31 +103,107 @@ const shortPath = (path: string): string => {
   return parts.length > 2 ? `…/${parts.slice(-2).join('/')}` : path
 }
 
+/** What a row with no working copy here asks for: link the one found beside
+ *  the project's other repos, or pick one, or clone one. */
+const NoWorkingCopy = ({
+  system,
+  busy,
+  onLink,
+  onClone,
+}: {
+  system: SoftwareSystemView
+  busy: '' | 'link' | 'clone'
+  onLink: (path?: string) => void
+  onClone: () => void
+}) => (
+  <>
+    <span className="project-repo-hint">
+      {system.found ? (
+        <>
+          Found a working copy beside the project's other repos, at{' '}
+          <span className="ds-mono" title={system.found}>
+            {shortPath(system.found)}
+          </span>
+          .
+        </>
+      ) : system.path ? (
+        <>Its folder is not where it was. Pick where it is now, or clone it again.</>
+      ) : (
+        <>Linked on another computer. Pick its folder here, or clone it.</>
+      )}
+    </span>
+    <div className="project-repo-handoff ds-row" style={{ gap: 6 }}>
+      {system.found ? (
+        <Button look="loud" disabled={busy !== ''} onClick={() => onLink(system.found)}>
+          {busy === 'link' ? 'Linking…' : 'Link it'}
+        </Button>
+      ) : null}
+      <Button disabled={busy !== ''} onClick={() => onLink()}>
+        {busy === 'link' && !system.found ? 'Linking…' : system.found ? 'Pick another…' : 'Link folder…'}
+      </Button>
+      {system.remote ? (
+        <Button disabled={busy !== ''} onClick={onClone}>
+          {busy === 'clone' ? 'Cloning…' : 'Clone here…'}
+        </Button>
+      ) : null}
+    </div>
+  </>
+)
+
 export const SoftwareSystemRow = ({
   system,
   project,
   onChoose,
+  busy = '',
+  onLink,
+  onClone,
+  onMore,
 }: {
   system: SoftwareSystemView
   project: string
   /** A person picked the branch the map opens on. */
   onChoose: (point: Point) => void
+  /** What the row is doing for the person right now. */
+  busy?: '' | 'link' | 'clone'
+  /** Link a folder as its working copy: the one given, or one picked. */
+  onLink: (path?: string) => void
+  onClone: () => void
+  /** Opens what is done to this repo, under the button given; left out when
+   *  there is nothing. */
+  onMore?: (button: HTMLButtonElement) => void
 }) => {
   const cloud = cloudWords(system)
+  const more = useRef<HTMLButtonElement>(null)
   return (
     <div className="project-repo">
       <div className="ds-row" style={{ justifyContent: 'space-between' }}>
         <span style={{ fontWeight: 500 }}>{system.name}</span>
-        {system.tracked ? (
-          <BranchPicker system={system.name} points={system.branches} point={system.point} onPick={onChoose} compact />
-        ) : null}
+        <div className="ds-row" style={{ gap: 4 }}>
+          {system.tracked ? (
+            <BranchPicker system={system.name} points={system.branches} point={system.point} onPick={onChoose} compact />
+          ) : null}
+          {onMore ? (
+            <button
+              ref={more}
+              type="button"
+              className="project-repo-more"
+              aria-label={`More for ${system.name}`}
+              aria-haspopup="menu"
+              onClick={() => more.current && onMore(more.current)}
+            >
+              <MoreHorizontal size={15} />
+            </button>
+          ) : null}
+        </div>
       </div>
       <div className="ds-row" style={{ flexWrap: 'wrap', gap: 6 }}>
         <SetupBadge system={system} project={project} />
         <Badge tone={cloud.tone}>{cloud.words}</Badge>
         {system.dirty ? <Badge>uncommitted changes</Badge> : null}
       </div>
-      {system.path && system.setUp && !system.namesThisProject ? (
+      {!system.present ? (
+        <NoWorkingCopy system={system} busy={busy} onLink={onLink} onClone={onClone} />
+      ) : system.path && system.setUp && !system.namesThisProject ? (
         <span className="project-repo-hint">
           Add <span className="ds-mono">{project}</span> to the projects in its codegraph.config.json, or hand it to your agent.
         </span>
@@ -140,7 +217,7 @@ export const SoftwareSystemRow = ({
           agent sets it up: copy the words below and paste them into it.
         </span>
       ) : null}
-      <SetupHandOff system={system} project={project} />
+      {system.present ? <SetupHandOff system={system} project={project} /> : null}
       {system.path ? (
         <span className="project-repo-path" title={system.path}>
           {shortPath(system.path)}

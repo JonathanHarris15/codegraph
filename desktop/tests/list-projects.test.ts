@@ -7,7 +7,7 @@ import { listProjects } from '../src/features/list-projects.js'
 import { linkSoftwareSystem } from '../src/features/link-software-system.js'
 import { useFolder as useGithubFolder } from '../src/modules/github/index.js'
 import { useChooser } from '../src/modules/machine/index.js'
-import { useFolder as useProjectsFolder } from '../src/modules/projects/index.js'
+import { addSoftwareSystem, useFolder as useProjectsFolder } from '../src/modules/projects/index.js'
 import { aSoftwareSystem, closeYard, openYard, type Yard } from './yard.js'
 
 let yard: Yard
@@ -89,6 +89,26 @@ describe('the grid of projects', () => {
     await linkSoftwareSystem(two.id, aSoftwareSystem(yard, 'api'))
     const shown = await listProjects()
     expect(shown.map((p) => p.systems.map((c) => c.name))).toEqual([['web'], ['api']])
+  })
+
+  it('offers a working copy found beside the project\'s other repos, without linking it', async () => {
+    const { id } = await createProject('Wardrobe')
+    await linkSoftwareSystem(id, aSoftwareSystem(yard, 'wardrobe/frontend', { remote: 'me/frontend' }))
+    addSoftwareSystem(id, { name: 'wardrobe-backend', path: '', remote: 'me/wardrobe-backend' })
+    aSoftwareSystem(yard, 'wardrobe/other', { remote: 'me/other' })
+    const backend = aSoftwareSystem(yard, 'wardrobe/backend', { remote: 'Me/Wardrobe-Backend' })
+
+    const row = (await listProjects())[0]?.systems.find((s) => s.name === 'wardrobe-backend')
+    expect(row?.found).toBe(backend)
+    expect(row?.path).toBe('')
+  })
+
+  it('offers nothing when no folder nearby is the repo', async () => {
+    const { id } = await createProject('Wardrobe')
+    await linkSoftwareSystem(id, aSoftwareSystem(yard, 'wardrobe/frontend', { remote: 'me/frontend' }))
+    addSoftwareSystem(id, { name: 'wardrobe-backend', path: '', remote: 'me/wardrobe-backend' })
+    aSoftwareSystem(yard, 'wardrobe/other', { remote: 'me/other' })
+    expect((await listProjects())[0]?.systems.find((s) => s.name === 'wardrobe-backend')?.found).toBe('')
   })
 
   it('counts nothing for a project whose folder was never a repo', async () => {

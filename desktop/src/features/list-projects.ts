@@ -4,7 +4,7 @@ import { isConnected } from '../modules/cloud/index.js'
 import { roleOf, whoIsIn, type Role } from '../modules/members/index.js'
 import { chooseBranch, listProjects as stored, type ProjectMember } from '../modules/projects/index.js'
 import { listPoints, pointFor, type Point } from '../modules/reader/index.js'
-import { isSetUp, readSoftwareSystem, type RepoFacts } from '../modules/repo/index.js'
+import { findWorkingCopy, isSetUp, readSoftwareSystem, type RepoFacts } from '../modules/repo/index.js'
 
 /** How a working copy stands against the copy on GitHub. */
 export type Cloud =
@@ -49,6 +49,9 @@ export type SoftwareSystemView = {
   namesThisProject: boolean
   taggedFiles: number
   sourceFiles: number
+  /** With no working copy here, or its folder gone: a folder beside the
+   *  project's other repos that is this repo, offered for linking. */
+  found: string
 }
 
 export type ProjectView = {
@@ -96,6 +99,8 @@ export const listProjects = async (fetchFirst = false): Promise<ProjectView[]> =
           const facts = await readSoftwareSystem(system.path, fetchFirst)
           const [chosen, points] = await Promise.all([pointFor(system.path, system.branch), listPoints(system.path)])
           if (chosen.moved) chooseBranch(project.id, system.id, chosen.branch)
+          const beside = project.systems.map((s) => s.path).filter((p) => p && p !== system.path)
+          const found = !facts.present ? await findWorkingCopy(system.remote, beside) : ''
           return {
             id: system.id,
             name: system.name,
@@ -118,6 +123,7 @@ export const listProjects = async (fetchFirst = false): Promise<ProjectView[]> =
             namesThisProject: facts.projects.includes(project.shortName),
             taggedFiles: facts.taggedFiles,
             sourceFiles: facts.sourceFiles,
+            found,
           }
         }),
       ),
