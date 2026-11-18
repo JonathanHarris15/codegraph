@@ -79,3 +79,55 @@ export const DeleteProjectSheet = ({ project, onClose, onDone }: { project: Proj
     </Sheet>
   )
 }
+
+/** Asks before a repo comes off a project. On a project online it goes for
+ *  everyone on it; the repo's folder and code stay as they are. */
+export const UnlinkRepoSheet = ({
+  project,
+  systemId,
+  onClose,
+  onDone,
+}: {
+  project: ProjectView
+  systemId: string
+  onClose: () => void
+  onDone: () => void
+}) => {
+  const [problem, setProblem] = useState('')
+  const [busy, setBusy] = useState(false)
+  const system = project.systems.find((s) => s.id === systemId)
+  const others = project.members.length - 1
+  const remove = async (): Promise<void> => {
+    if (busy) return
+    setBusy(true)
+    const done = await window.codegraph.unlinkSoftwareSystem(project.id, systemId)
+    setBusy(false)
+    if (!done.ok) return setProblem(done.problem ?? '')
+    onDone()
+    onClose()
+  }
+  return (
+    <Sheet title={`Take ${system?.name ?? 'this repo'} off ${project.name}?`} onClose={onClose}>
+      <div className="ds-hint">
+        {project.online && others > 0
+          ? `It goes from the project for everyone on it, including the ${others === 1 ? 'other person' : `${others} other people`}.`
+          : 'It goes from the project.'}{' '}
+        Its folder and its code are not touched, and linking it again puts it back.
+        {system?.path ? ' To unlink only this computer’s folder, use Unlink this folder instead.' : ''}
+      </div>
+      {problem ? (
+        <div className="ds-hint" role="alert">
+          {problem}
+        </div>
+      ) : null}
+      <div className="ds-sheet-actions">
+        <Button look="bare" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button look="danger" disabled={busy} onClick={() => void remove()}>
+          Take it off
+        </Button>
+      </div>
+    </Sheet>
+  )
+}

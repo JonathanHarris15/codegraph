@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import designSystem from './design-system.md?raw'
+import newComputer from './new-computer.md?raw'
 import proposals from './proposals.md?raw'
 import setup from './setup.md?raw'
 import sketches from './sketches.md?raw'
@@ -19,6 +20,10 @@ export type { Edit } from './schema.js'
  *  their own words for any topic, and those are served instead (ADR 0022). */
 const texts = {
   setup: { about: 'How to set a repo up for codegraph, in one sweep', text: setup },
+  'new-computer': {
+    about: 'Getting a repo that is already set up onto another computer: linking or cloning its working copy',
+    text: newComputer,
+  },
   tags: { about: 'The config, the tags and the words on wires, and what the check holds code to', text: tags },
   'design-system': {
     about: "How to set up and keep a repo's design system: DESIGN.md, the theme, UI blocks and their states, recipes, and the live view's page",

@@ -1,5 +1,5 @@
 // codegraph: module repo
-// codegraph: front door isRepo, remoteName, mainLineRef, isSetUp, readSoftwareSystem, folderName, readWorkingFile, writeWorkingFile, writeProposal, removeProposal, proposalPicture, headOf, makeBranch, switchBranch, useMirrors, mirrorFolder, fetchMirror, tipOf, isAncestor, mergeBase, fetchWorkingCopy, proposalsOnBranches, RepoFacts, SetupFacts, Picture, Reach
+// codegraph: front door isRepo, remoteName, mainLineRef, isSetUp, readSoftwareSystem, folderName, readWorkingFile, writeWorkingFile, writeProposal, removeProposal, proposalPicture, headOf, makeBranch, switchBranch, useMirrors, mirrorFolder, fetchMirror, cloneWorkingCopy, findWorkingCopy, remoteOf, sameRemote, tipOf, isAncestor, mergeBase, fetchWorkingCopy, proposalsOnBranches, RepoFacts, SetupFacts, Picture, Reach
 import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
 import { isRepo, mainLineRef, readGit, remoteName, type GitFacts } from './git.js'
@@ -12,7 +12,8 @@ export { readWorkingFile, writeWorkingFile } from './files.js'
 export type { Picture } from './proposal.js'
 export { switchBranch } from './switch.js'
 export type { SetupFacts } from './setup.js'
-export { fetchMirror, mirrorFolder, useMirrors } from './mirror.js'
+export { cloneWorkingCopy, fetchMirror, mirrorFolder, useMirrors } from './mirror.js'
+export { findWorkingCopy, remoteOf, sameRemote } from './find.js'
 export type { Reach } from './mirror.js'
 
 /** Everything one working copy on this computer says about itself. The setup

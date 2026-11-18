@@ -8171,3 +8171,22 @@ button.map-restyle:hover {
   gap: var(--space-2);
   flex: none;
 }
+
+/* A repo row's own ..., quieter than the project's. */
+.project-repo-more {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+
+.project-repo-more:hover,
+.project-repo-more:focus-visible {
+  background: var(--surface-sunken);
+  color: var(--ink-000);
+}

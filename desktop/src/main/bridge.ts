@@ -25,7 +25,11 @@ import { handOverProject } from '../features/hand-over-project.js'
 import { holdThings, letGoOfThings } from '../features/hold-thing.js'
 import { inviteMember } from '../features/invite-member.js'
 import { joinRoom } from '../features/join-room.js'
+import { cloneWorkingCopy } from '../features/clone-working-copy.js'
+import { forgetWorkingCopy } from '../features/forget-working-copy.js'
 import { linkSoftwareSystem } from '../features/link-software-system.js'
+import { linkWorkingCopy } from '../features/link-working-copy.js'
+import { unlinkSoftwareSystem } from '../features/unlink-software-system.js'
 import { listFolders } from '../features/list-folders.js'
 import { listGithubSoftwareSystems } from '../features/list-github-software-systems.js'
 import { listMySketches } from '../features/list-my-sketches.js'
@@ -72,6 +76,10 @@ export const FEATURES = {
   listProjects,
   createProject,
   linkSoftwareSystem,
+  linkWorkingCopy,
+  cloneWorkingCopy,
+  forgetWorkingCopy,
+  unlinkSoftwareSystem,
   connectGithub,
   connectAgent,
   agreeShallowSystem,

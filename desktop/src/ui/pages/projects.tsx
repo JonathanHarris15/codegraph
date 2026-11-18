@@ -10,7 +10,7 @@ import { Button, Card, Field, Sheet, ThemeSwitch, Waiting } from '../design-syst
 import { AgentWindow } from '../components/agent-window.js'
 import { GithubWindow } from '../components/github-window.js'
 import { MembersSheet } from '../components/members-sheet.js'
-import { DeleteProjectSheet, RenameProjectSheet } from '../components/project-sheets.js'
+import { DeleteProjectSheet, RenameProjectSheet, UnlinkRepoSheet } from '../components/project-sheets.js'
 import { MySketches } from '../components/my-sketches.js'
 import { ProjectCard } from '../components/project-card.js'
 import { UpdateNotice } from '../components/update-notice.js'
@@ -24,6 +24,8 @@ export const ProjectsPage = ({ onOpen, onOpenSketch }: { onOpen: (projectId: str
   const [membersOf, setMembersOf] = useState('')
   const [renaming, setRenaming] = useState('')
   const [deleting, setDeleting] = useState('')
+  const [unlinking, setUnlinking] = useState<{ projectId: string; systemId: string } | null>(null)
+  const [rowBusy, setRowBusy] = useState<{ systemId: string; what: 'link' | 'clone' } | null>(null)
   const [projects, setProjects] = useState<ProjectView[] | null>(null)
   const [cloud, setCloud] = useState<CloudView | null>(null)
   const [naming, setNaming] = useState(false)
@@ -59,6 +61,13 @@ export const ProjectsPage = ({ onOpen, onOpenSketch }: { onOpen: (projectId: str
 
   // A change made by someone else reaches this page.
   useEffect(() => window.codegraph.heardChange(() => void load()), [load])
+  // An agent may have linked a working copy while the person was in its
+  // window: coming back reads the projects again.
+  useEffect(() => {
+    const again = (): void => void load()
+    window.addEventListener('focus', again)
+    return () => window.removeEventListener('focus', again)
+  }, [load])
 
   // Coming back from an agent's window, the repos are read again: setup
   // handed to an agent shows here once it is done.
@@ -113,6 +122,28 @@ export const ProjectsPage = ({ onOpen, onOpenSketch }: { onOpen: (projectId: str
       await loadCloud()
     }
     setLinking('')
+  }
+
+  /** Gives a repo on a project its working copy here: a folder picked or
+   *  found, or a fresh clone. */
+  const placeCopy = async (projectId: string, systemId: string, what: 'link' | 'clone', path?: string): Promise<void> => {
+    setRowBusy({ systemId, what })
+    setNote('')
+    const done =
+      what === 'clone'
+        ? await window.codegraph.cloneWorkingCopy(projectId, systemId)
+        : await window.codegraph.linkWorkingCopy(projectId, systemId, path)
+    if (done.problem) setNote(done.problem)
+    else if (done.ok && done.needsSetup)
+      setNote(`${done.name ?? 'That repo'} is linked, but it is not set up for codegraph yet. Ask your agent to set it up; the codegraph MCP tells it how.`)
+    if (done.ok) await load()
+    setRowBusy(null)
+  }
+
+  const forget = async (projectId: string, systemId: string): Promise<void> => {
+    const done = await window.codegraph.forgetWorkingCopy(projectId, systemId)
+    if (!done.ok) setNote(done.problem ?? '')
+    await load()
   }
 
   const refresh = async (): Promise<void> => {
@@ -291,6 +322,11 @@ export const ProjectsPage = ({ onOpen, onOpenSketch }: { onOpen: (projectId: str
                 if (named) void window.codegraph.chooseBranch(project.id, systemId, named).then(() => load())
               }}
               linking={linking === project.id}
+              rowBusy={rowBusy}
+              onLinkHere={(systemId, path) => void placeCopy(project.id, systemId, 'link', path)}
+              onClone={(systemId) => void placeCopy(project.id, systemId, 'clone')}
+              onForget={(systemId) => void forget(project.id, systemId)}
+              {...(!project.online || (project.role && project.role !== 'viewer') ? { onUnlink: (systemId: string) => setUnlinking({ projectId: project.id, systemId }) } : {})}
               {...(session?.online && session.member && !project.online ? { onPutOnline: () => void window.codegraph.putProjectOnline(project.id).then(() => load()) } : {})}
               {...(project.online ? { onMembers: () => setMembersOf(project.id) } : {})}
               {...(!project.online || (project.role && project.role !== 'viewer') ? { onRename: () => setRenaming(project.id) } : {})}
@@ -325,6 +361,12 @@ export const ProjectsPage = ({ onOpen, onOpenSketch }: { onOpen: (projectId: str
       {(() => {
         const project = projects?.find((p) => p.id === renaming)
         return project ? <RenameProjectSheet project={project} onClose={() => setRenaming('')} onDone={() => void load()} /> : null
+      })()}
+      {(() => {
+        const project = projects?.find((p) => p.id === unlinking?.projectId)
+        return project && unlinking ? (
+          <UnlinkRepoSheet project={project} systemId={unlinking.systemId} onClose={() => setUnlinking(null)} onDone={() => void load().then(loadCloud)} />
+        ) : null
       })()}
       {(() => {
         const project = projects?.find((p) => p.id === deleting)
