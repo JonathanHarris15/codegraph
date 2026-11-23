@@ -10,6 +10,7 @@ import { drawSketch } from '../features/draw-sketch.js'
 import { editSketch, type Step } from '../features/edit-sketch.js'
 import { findSketches } from '../features/find-sketches.js'
 import { giveInstructions } from '../features/give-instructions.js'
+import { linkThisFolder } from '../features/link-this-folder.js'
 import { makeProposal } from '../features/make-proposal.js'
 import { reportWork } from '../features/report-work.js'
 import { showLooking } from '../features/show-looking.js'
@@ -53,6 +54,13 @@ const serve = async (): Promise<void> => {
   )
 
   server.tool(
+    'link',
+    "Links the repo folder as this computer's working copy of a repo a project here already has, matched by its GitHub address. Use it when `map` says the folder is not linked. It never adds a repo to a project, and leaves a repo already linked to a folder that is still there.",
+    { repo: z.string().optional().describe('The repo folder; the folder the agent works in if left out.') },
+    async ({ repo }) => text(await linkThisFolder(here(repo))),
+  )
+
+  server.tool(
     'check',
     "Holds the repo's code to its codegraph tags and config, and lists everything that does not fit. Call it before finishing any change.",
     { repo: z.string().optional().describe('The repo folder; the folder the agent works in if left out.') },
@@ -61,8 +69,8 @@ const serve = async (): Promise<void> => {
 
   server.tool(
     'instructions',
-    'What codegraph asks of an agent, by topic: setup (how to set a repo up), tags (the rules), design-system, proposals (making and building a proposal), sketches (drawing one with `draw`), working-here (the block for CLAUDE.md or AGENTS.md).',
-    { topic: z.string().describe('setup, tags, design-system, proposals, sketches or working-here') },
+    'What codegraph asks of an agent, by topic: setup (how to set a repo up), new-computer (getting a repo that is already set up working on another computer), tags (the rules), design-system, proposals (making and building a proposal), sketches (drawing one with `draw`), working-here (the block for CLAUDE.md or AGENTS.md).',
+    { topic: z.string().describe('setup, new-computer, tags, design-system, proposals, sketches or working-here') },
     async ({ topic }) => text(giveInstructions(topic)),
   )
 

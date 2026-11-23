@@ -72,3 +72,22 @@ export const fetchMirror = async (remote: string, token: string, force = false):
   lastAsked.set(remote, { at: Date.now(), reach })
   return reach
 }
+
+/** Clones a repo from GitHub into a new folder, as a working copy a person
+ *  works in. The token is used for the clone and is not kept in the copy. A
+ *  folder left half made by a failed clone is taken away again. */
+export const cloneWorkingCopy = async (remote: string, into: string, token: string): Promise<Reach> => {
+  if (existsSync(into)) return 'no-access'
+  try {
+    await started('git', ['clone', '--quiet', `${host}/${remote}.git`, into], {
+      env: withToken(token),
+      windowsHide: true,
+      timeout: 600_000,
+      maxBuffer: 16 * 1024 * 1024,
+    })
+    return 'open'
+  } catch (problem) {
+    rmSync(into, { recursive: true, force: true })
+    return reachOf(problem)
+  }
+}

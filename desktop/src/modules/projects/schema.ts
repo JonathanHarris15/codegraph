@@ -16,6 +16,18 @@ export type SoftwareSystem = {
   branch?: string
 }
 
+/** What came of linking a repo, or a working copy of one: linked, or why not. */
+export type Linked = {
+  ok: boolean
+  /** The person closed the folder picker. */
+  cancelled?: boolean
+  /** Why it could not be linked, in words for the person. */
+  problem?: string
+  /** Linked, but codegraph is not turned on in it yet. */
+  needsSetup?: boolean
+  name?: string
+}
+
 /** A software system the project refers to but has no repo for, which a
  *  person agreed to. The code may call it by more than one name. */
 export type ShallowSystem = {

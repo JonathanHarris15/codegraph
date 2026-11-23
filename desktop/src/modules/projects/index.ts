@@ -1,11 +1,11 @@
 // codegraph: module projects
-// codegraph: front door useFolder, listProjects, findProject, addProject, putOnline, renameProject, keepProject, removeProject, addSoftwareSystem, removeSoftwareSystem, chooseBranch, knownRemotes, addShallowSystem, newShallowSystem, addPerson, renameDrawn, removeDrawn, Project, SoftwareSystem, ShallowSystem, Person, ProjectMember, Workspace
+// codegraph: front door useFolder, listProjects, findProject, addProject, putOnline, renameProject, keepProject, removeProject, addSoftwareSystem, placeWorkingCopy, removeSoftwareSystem, chooseBranch, knownRemotes, addShallowSystem, newShallowSystem, addPerson, renameDrawn, removeDrawn, Linked, Project, SoftwareSystem, ShallowSystem, Person, ProjectMember, Workspace
 import { sameFolder } from '../machine/index.js'
 import { shortNameOf, type Person, type Project, type ProjectMember, type ShallowSystem, type SoftwareSystem } from './schema.js'
 import { newId, read, useFolder, write } from './store.js'
 
 export { useFolder }
-export type { Person, Project, ProjectMember, ShallowSystem, SoftwareSystem, Workspace } from './schema.js'
+export type { Linked, Person, Project, ProjectMember, ShallowSystem, SoftwareSystem, Workspace } from './schema.js'
 
 export const listProjects = (): Project[] => read().projects
 
@@ -89,6 +89,18 @@ export const addSoftwareSystem = (
   project.systems.push(added)
   write(workspace)
   return added
+}
+
+/** Says where a repo on the project sits on this computer, or, given '',
+ *  that it has no working copy here. Only this computer's: a path never goes
+ *  online. False when the project has no such repo. */
+export const placeWorkingCopy = (projectId: string, systemId: string, path: string): boolean => {
+  const workspace = read()
+  const system = workspace.projects.find((p) => p.id === projectId)?.systems.find((s) => s.id === systemId)
+  if (!system) return false
+  system.path = path
+  write(workspace)
+  return true
 }
 
 export const removeSoftwareSystem = (projectId: string, systemId: string): void => {

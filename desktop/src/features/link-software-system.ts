@@ -2,20 +2,9 @@
 // codegraph: uses projects, repo, machine, members, sync
 import { askForFolder } from '../modules/machine/index.js'
 import { iMay } from '../modules/members/index.js'
-import { addSoftwareSystem, findProject } from '../modules/projects/index.js'
+import { addSoftwareSystem, findProject, type Linked } from '../modules/projects/index.js'
 import { sendProject } from '../modules/sync/index.js'
 import { folderName, isRepo, isSetUp, readSoftwareSystem } from '../modules/repo/index.js'
-
-export type Linked = {
-  ok: boolean
-  /** The person closed the folder picker. */
-  cancelled?: boolean
-  /** Why it could not be linked, in words for the person. */
-  problem?: string
-  /** Linked, but codegraph is not turned on in it yet. */
-  needsSetup?: boolean
-  name?: string
-}
 
 /** Puts a repo already on this computer into a project. A folder git does
  *  not track is refused: a software system in a project is a tracked repo. */

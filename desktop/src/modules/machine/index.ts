@@ -1,5 +1,5 @@
 // codegraph: module machine
-// codegraph: front door keepWhole, appFolder, devRendererUrl, keystore, askForFolder, useChooser, askForPicture, usePicturePicker, mcpServerFile, dataFolder, windowFolder, bringOldFiles, watchFolders, realFolder, sameFolder, githubClientId, githubHost, cloudFolder, firebaseSettings, appVersion, releasesUrl, thisComputer, Keystore
+// codegraph: front door keepWhole, appFolder, devRendererUrl, keystore, askForFolder, useChooser, FolderAsk, askForPicture, usePicturePicker, mcpServerFile, dataFolder, windowFolder, bringOldFiles, watchFolders, realFolder, sameFolder, githubClientId, githubHost, cloudFolder, firebaseSettings, appVersion, releasesUrl, thisComputer, Keystore
 
 /** This computer and the window around the app: where files are kept, the
  *  operating system's keystore, the folder picker, and what the build says.
@@ -154,23 +154,24 @@ export const keystore = async (): Promise<Keystore | null> => {
   }
 }
 
-type Chooser = () => Promise<string>
+/** What a folder picker asks: its title, its button, and where it opens. */
+export type FolderAsk = { title: string; button: string; startAt?: string }
 
-const theWindowsPicker: Chooser = async () => {
+type Chooser = (ask?: FolderAsk) => Promise<string>
+
+const LINKING: FolderAsk = { title: 'Pick a software system', button: 'Link this repo' }
+
+const theWindowsPicker: Chooser = async (ask = LINKING) => {
   const desk = await electron()
   if (!desk) return ''
   const window = desk.BrowserWindow.getFocusedWindow()
-  const picked = window
-    ? await desk.dialog.showOpenDialog(window, {
-        title: 'Pick a software system',
-        properties: ['openDirectory'],
-        buttonLabel: 'Link this repo',
-      })
-    : await desk.dialog.showOpenDialog({
-        title: 'Pick a software system',
-        properties: ['openDirectory'],
-        buttonLabel: 'Link this repo',
-      })
+  const options = {
+    title: ask.title,
+    properties: ['openDirectory' as const, 'createDirectory' as const],
+    buttonLabel: ask.button,
+    ...(ask.startAt ? { defaultPath: ask.startAt } : {}),
+  }
+  const picked = window ? await desk.dialog.showOpenDialog(window, options) : await desk.dialog.showOpenDialog(options)
   return picked.canceled ? '' : (picked.filePaths[0] ?? '')
 }
 
@@ -181,8 +182,9 @@ export const useChooser = (which: Chooser): void => {
   chooser = which
 }
 
-/** The folder the person picked, or '' if they backed out. */
-export const askForFolder = (): Promise<string> => chooser()
+/** The folder the person picked, or '' if they backed out. Asked nothing, it
+ *  asks for a repo to link. */
+export const askForFolder = (ask?: FolderAsk): Promise<string> => chooser(ask)
 
 const thePicturePicker: Chooser = async () => {
   const desk = await electron()

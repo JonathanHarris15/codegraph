@@ -419,6 +419,13 @@ _Avoid_: creator, admin
 A repo's folder on one member's computer.
 _Avoid_: local repo, clone, checkout
 
+**Linked**:
+What a working copy is once a project on this computer knows its folder,
+matched to the repo by its GitHub address. Only that computer knows the
+folder. Unlinking forgets the folder and leaves the repo on the project;
+taking a repo off the project is for every member, and touches no folder.
+_Avoid_: attached, connected, registered, mounted
+
 **GitHub copy**:
 A repo as GitHub holds it, which a working copy is compared against.
 _Avoid_: cloud repo, remote, origin, upstream
