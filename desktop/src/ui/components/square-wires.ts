@@ -138,6 +138,23 @@ export const squareRoute = ({
   return tidy([a, ...turn(a, first, across(leaves)), ...middle, ...turn(last, b, !across(arrives)), b])
 }
 
+/** The joins among right-angle wires into one card: the first place each
+ *  wire meets the line of another reaching the same spot, from where the two
+ *  run on as one line to one arrow (ADR 0034). A dot is drawn at each. */
+export const joinsOf = (routes: Point[][]): Point[] => {
+  const joins: Point[] = []
+  const onRoute = (route: Point[], at: Point): boolean => route.slice(1).some((q, i) => same(onPiece(route[i]!, q, at), at))
+  for (const route of routes) {
+    if (route.length < 2) continue
+    const head = route.at(-1)!
+    const others = routes.filter((other) => other !== route && other.length >= 2 && same(other.at(-1)!, head))
+    // Its turns, leaving out where it starts and the spot they all reach.
+    const at = route.slice(1, -1).find((turn) => others.some((other) => onRoute(other, turn)))
+    if (at && !joins.some((one) => same(one, at))) joins.push(at)
+  }
+  return joins
+}
+
 /** Whether a piece of a route runs across. */
 const flat = (p: Point, q: Point): boolean => Math.abs(p.y - q.y) < 0.01 && Math.abs(p.x - q.x) >= 0.01
 

@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type PointerEvent,
   type ReactElement,
   type ReactNode,
@@ -26,7 +27,7 @@ import { shapeOf } from './annotation-shapes.js'
 import { IconPick } from './card-look-editor.js'
 import { BLANK_LOOK, CARD_SHAPES, drawnShape, lookOf } from './card-looks.js'
 import { meetOutline, textAreaOf } from './shape-outline.js'
-import { addBend, dragPiece, nearestOn, pathOf, pieceOf, pointAlong, spotOn, squareBetween, squareRoute, takePieceOut, toOutlines, type EndRoom, type WireStyle } from './square-wires.js'
+import { addBend, dragPiece, joinsOf, nearestOn, pathOf, pieceOf, pointAlong, spotOn, squareBetween, squareRoute, takePieceOut, toOutlines, type EndRoom, type WireStyle } from './square-wires.js'
 import { CanvasMenu, type MenuItem } from './canvas-menu.js'
 import { SidePanel } from './side-panel.js'
 import { CardPalette } from './card-palette.js'
@@ -292,6 +293,16 @@ const isTrackpad = (event: WheelEvent, until: { current: number }): boolean => {
 
 /** A small thing this window remembers about how a person likes it, such as
  *  whether the card library is open. Never anything that matters. */
+/** The grid's squares as the board is drawn now: as many 24px squares of the
+ *  board as are 12 to 60px on screen, every fifth line stronger, lined up
+ *  with the board wherever it has been moved. */
+const gridOf = (view: View): CSSProperties => {
+  let step = 24
+  while (step * view.k < 12) step *= 5
+  while (step * view.k > 60) step /= 5
+  return { ['--grid-at' as string]: `${view.x}px ${view.y}px`, ['--grid-step' as string]: `${step * view.k}px` }
+}
+
 export const remembered = (key: string, otherwise: boolean): boolean => {
   try {
     const kept = window.localStorage.getItem(key)
@@ -918,9 +929,10 @@ export const MapCanvas = ({
     const draw = (level: OpenLevel, depth: number) => {
       const ins = new Map<string, string[]>()
       for (const wire of level.wires) ins.set(wire.to, [...(ins.get(wire.to) ?? []), wire.from])
-      // Each end has a place of its own on its card's side, so two wires
-      // between the same two cards are drawn apart.
-      const slotted = endSlots(level.wires, boxes, keyOf)
+      // The wires arriving on one side of a card meet it at one place and
+      // join (ADR 0034); each leaving one has a place of its own. Around the
+      // open card each arriving one has its own too, for its hub.
+      const slotted = endSlots(level.wires, boxes, keyOf, new Set(level.open ? [level.open.card.id] : []))
       const slotsOf = (wire: DrawnWire): Slots => slotted.get(wire) ?? { from: 0.5, to: 0.5 }
       const fitTo = (id: string, box: Box): ((at: Spot) => Spot) | undefined => {
         const d = shapedAt.get(id)
@@ -989,6 +1001,10 @@ export const MapCanvas = ({
       return rows
     }
     const all = shown.flatMap(draw)
+    // The dots where right-angle wires into one card join, level by level.
+    const joins = shown.flatMap((_, depth) =>
+      joinsOf(all.flatMap((one) => (one.depth === depth && one.shape.route ? [one.shape.route] : []))).map((at) => ({ at, depth })),
+    )
     // What every sentence keeps off besides the cards: the name tab on each
     // open card, and the dots where wires cross into one.
     const tabs = shown.flatMap((level) => (level.open ? [lipBox(level.open.card, level.open.box, lipScale(level.open.card, level.open.box, stepK, band))] : []))
@@ -1076,7 +1092,7 @@ export const MapCanvas = ({
       widest: spots[i]!.narrow ? narrowOf[i]! : undefined,
       shape: { ...one.shape, d: chipsNow[i]!.fixed && !one.shape.route ? wireThrough(one.shape, spots[i]!) : one.shape.d },
     }))
-    return { all: at, outer: at.filter((one) => one.depth !== workAt), inner: at.filter((one) => one.depth === workAt), hubs, boxes }
+    return { all: at, outer: at.filter((one) => one.depth !== workAt), inner: at.filter((one) => one.depth === workAt), hubs, boxes, joins }
   }, [shown, where, cardBoxes, shapedAt, canDraw, nameOf, sizes, everyCard, everyNote, workAt, live.moves, live.bend, notDrawn, passing, reaching, wireStyle, band, stepK, annoKeeps])
 
   /** The hubs on the border of the card open now: the only ones in reach. */
@@ -3145,7 +3161,11 @@ export const MapCanvas = ({
       ) : null}
       <div
         ref={frame}
-        className={`map-frame-area map-frame-area--${armed ? 'card' : tool}${space.current ? ' map-frame-area--pan' : ''}`}
+        className={`map-frame-area map-frame-area--${armed ? 'card' : tool}${space.current ? ' map-frame-area--pan' : ''}${
+          moving ? ' map-frame-area--moving' : ''
+        }`}
+        // The grid is the board's own paper: it moves and zooms with it.
+        style={gridOf(view)}
         onPointerDown={down}
         onPointerMove={move}
         onPointerUp={up}
@@ -3323,6 +3343,9 @@ export const MapCanvas = ({
                 )),
             )}
             {wireGroup(shapes.inner)}
+            {shapes.joins.map(({ at, depth }) => (
+              <circle key={`join:${depth}:${at.x},${at.y}`} cx={at.x} cy={at.y} r={4} className={`map-join${upClass(workAt - depth)}`} />
+            ))}
             {live.line ? (
               <path d={drawAs === 'square' ? squareBetween(live.line.from, live.line.to) : curve(live.line.from, live.line.to)} className="map-wire-live" markerEnd="url(#map-head-live)" />
             ) : null}

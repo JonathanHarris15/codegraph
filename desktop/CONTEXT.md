@@ -153,6 +153,11 @@ sentence itself bends it; moving a card it joins lets go of that again. Square,
 it runs in straight pieces that turn at right angles, at its bends.
 _Avoid_: edge, arrow, link, connection, dependency
 
+**Join**:
+Where wires reaching the same side of one card meet, from where they run on
+as one line to one arrow. On square wires it is drawn as a dot.
+_Avoid_: junction, bundle, merge point, hub (a hub is on an open card's border)
+
 **Bend**:
 Where a square wire turns, once a person has moved one of its pieces. A wire
 with none finds its own way. Its bends stay put when one card moves, and move

@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { blankCard, type SketchCard } from '../src/modules/sketches/index.js'
 import { bendWire, moveThings, rewire } from '../src/ui/components/sketch-edits.js'
-import { addBend, dragPiece, nearestOn, pieceOf, pointAlong, squareRoute, takePieceOut, type Point } from '../src/ui/components/square-wires.js'
+import { addBend, dragPiece, joinsOf, nearestOn, pieceOf, pointAlong, squareRoute, takePieceOut, type Point } from '../src/ui/components/square-wires.js'
 
 const left = { x: 0, y: 0, w: 100, h: 60 }
 const right = { x: 300, y: 100, w: 100, h: 60 }
@@ -10,6 +10,33 @@ const below = { x: 0, y: 300, w: 100, h: 60 }
 
 /** Every piece of a route runs straight across or straight down. */
 const square = (route: Point[]): boolean => route.slice(1).every((p, i) => p.x === route[i]!.x || p.y === route[i]!.y)
+
+describe('where right-angle wires into one card join', () => {
+  const into = { x: 600, y: 160, w: 200, h: 100 }
+  const from = (row: number) => ({ x: 0, y: row * 160, w: 200, h: 100 })
+  const routes = [0, 1, 2].map((row) => squareRoute({ from: from(row), to: into, slots: { from: 0.5, to: 0.5 } }))
+
+  it('puts a dot where one wire runs into another that is already on its way in', () => {
+    expect(joinsOf(routes)).toEqual([{ x: 400, y: 210 }])
+  })
+
+  it('puts a dot where a wire meets the line of others before they reach the card', () => {
+    const above = squareRoute({ from: from(-1), to: into, slots: { from: 0.5, to: 0.5 } })
+    const dots = joinsOf([above, ...routes])
+    expect(dots).toHaveLength(2)
+    expect(dots).toContainEqual({ x: 400, y: 50 })
+    expect(dots).toContainEqual({ x: 400, y: 210 })
+  })
+
+  it('puts none where a wire only turns', () => {
+    expect(joinsOf([routes[0]!])).toEqual([])
+  })
+
+  it('puts none where two wires never share a piece', () => {
+    const elsewhere = squareRoute({ from: from(0), to: { x: 600, y: 600, w: 200, h: 100 } })
+    expect(joinsOf([routes[0]!, elsewhere])).toEqual([])
+  })
+})
 
 describe('a right-angle wire finds its own way', () => {
   it('runs out of the facing sides and turns halfway across', () => {

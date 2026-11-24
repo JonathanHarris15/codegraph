@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { blankProposal, proposalFrom, type DrawnCard as ReadCard } from '../src/modules/reader/index.js'
 import { blankCard, hubOf, type SketchCard } from '../src/modules/sketches/schema.js'
-import { annotationsClear, flowOf, layOut, loopSides, openLevels, reachingOpen, roomAround, spread, wirePath, wireThrough, type Box, type DrawnCard, type DrawnWire } from '../src/ui/components/map-layout.js'
+import { annotationsClear, endSlots, flowOf, layOut, loopSides, openLevels, reachingOpen, roomAround, spread, wirePath, wireThrough, type Box, type DrawnCard, type DrawnWire } from '../src/ui/components/map-layout.js'
 import { TEMPLATES, lookOf } from '../src/ui/components/card-looks.js'
 import { addWire, choicesAt, copyOf, moveThings, nudge, paste, placeCard, remove, rewire } from '../src/ui/components/sketch-edits.js'
 
@@ -108,6 +108,42 @@ describe('wires between cards stacked in a column', () => {
     expect(shape.tail).toEqual({ x: 0, y: 50 })
     expect(shape.head).toEqual({ x: 0, y: 630 })
     expect(shape.c1.x).toBeLessThan(0)
+  })
+})
+
+describe('wires into one card meet before it', () => {
+  const column = (row: number): Box => ({ x: 0, y: row * 160, w: 200, h: 100 })
+  const boxes = new Map<string, Box>([
+    ['one', column(0)],
+    ['two', column(1)],
+    ['three', column(2)],
+    ['shared', { x: 600, y: 160, w: 200, h: 100 }],
+  ])
+  const keyOf = (wire: DrawnWire): string => `${wire.from}>${wire.to}`
+
+  it('lands every wire arriving on one side of a card at one spot', () => {
+    const wires = [link('one', 'shared'), link('two', 'shared'), link('three', 'shared')]
+    const slots = endSlots(wires, boxes, keyOf)
+    expect(new Set(wires.map((wire) => slots.get(wire)!.to)).size).toBe(1)
+  })
+
+  it('still sends the wires leaving a card from places of their own', () => {
+    const wires = [link('shared', 'one'), link('shared', 'two'), link('shared', 'three')]
+    const slots = endSlots(wires, boxes, keyOf)
+    expect(new Set(wires.map((wire) => slots.get(wire)!.from)).size).toBe(3)
+  })
+
+  it('keeps a wire leaving apart from the ones arriving on the same side', () => {
+    const into = [link('one', 'shared'), link('three', 'shared')]
+    const back = link('shared', 'two')
+    const slots = endSlots([...into, back], boxes, keyOf)
+    expect(slots.get(back)!.from).not.toBe(slots.get(into[0]!)!.to)
+  })
+
+  it('keeps them apart on a card that is open, where each wire has a hub of its own', () => {
+    const wires = [link('one', 'shared'), link('two', 'shared'), link('three', 'shared')]
+    const slots = endSlots(wires, boxes, keyOf, new Set(['shared']))
+    expect(new Set(wires.map((wire) => slots.get(wire)!.to)).size).toBe(3)
   })
 })
 
