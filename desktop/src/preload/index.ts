@@ -32,6 +32,7 @@ const NAMES: Record<keyof Features, true> = {
   unlinkSoftwareSystem: true,
   connectGithub: true,
   connectAgent: true,
+  cleanUpAgent: true,
   agreeShallowSystem: true,
   addToMap: true,
   renameOnMap: true,

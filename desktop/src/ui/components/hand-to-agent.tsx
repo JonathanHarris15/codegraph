@@ -19,13 +19,15 @@ export const setupPrompt = (
   repo: string,
   folder: string,
   project: string,
-  left: 'setup' | 'name' | 'merge' = 'setup',
+  left: 'setup' | 'name' | 'merge' | 'again' = 'setup',
   branch = '',
 ): string => {
   const where = folder ? `the repo ${repo} at ${folder}` : `the repo ${repo}`
   if (left === 'name') return `Use codegraph: add project ${project} to the projects in the codegraph.config.json of ${where}.`
   if (left === 'merge')
     return `Use codegraph: ${where} is set up on ${branch || 'a branch'} but not on its main line. Check it with \`check\`, then merge it.`
+  if (left === 'again')
+    return `Use codegraph: ${where} was set up by an older codegraph. Set it up again for project ${project}, which brings it up to date (call instructions with topic setup first).`
   return `Use codegraph: set up ${where} for project ${project} (call instructions with topic setup first).`
 }
 

@@ -16,6 +16,10 @@ export type SetupFacts = {
   /** Its committed .claude/settings.json turns codegraph's skills on for
    *  everyone on the repo (ADR 0037). */
   skillsOn: boolean
+  /** The setup its config says it got, '' where it names none (ADR 0039). */
+  setup: string
+  /** What an older codegraph left on its main line that setup now clears out. */
+  leftOver: string[]
 }
 
 export const CONFIG = 'codegraph.config.json'
@@ -28,6 +32,8 @@ export const noSetup: SetupFacts = {
   taggedFiles: 0,
   sourceFiles: 0,
   skillsOn: false,
+  setup: '',
+  leftOver: [],
 }
 
 const lines = (text: string): string[] => (text ? text.split(/\r?\n/) : [])
@@ -42,8 +48,39 @@ export const projectsIn = (config: string): string[] => {
   }
 }
 
+/** The setup a config says it got. */
+const setupIn = (config: string): string => {
+  try {
+    const setup = (JSON.parse(config) as { setup?: unknown }).setup
+    return typeof setup === 'string' ? setup.trim() : ''
+  } catch {
+    return ''
+  }
+}
+
 /** codegraph's plugin, as a repo's settings and Claude Code name it. */
 export const SKILLS_PLUGIN = 'codegraph-app@codegraph'
+/** The legacy codegraph's plugin, which setup turns off in a repo. */
+const LEGACY_PLUGIN = 'codegraph@codegraph'
+
+/** What an older codegraph leaves in a repo that setup now clears out: the
+ *  glossary and ADRs it moves into codegraph/ (ADR 0035), the legacy plugin
+ *  turned on for everyone, and an MCP committed for everyone. */
+const leftOverIn = (files: string[], settings: string, mcps: string): string[] => {
+  const plugins = (text: string): Record<string, unknown> => {
+    try {
+      return (JSON.parse(text) as { enabledPlugins?: Record<string, unknown> }).enabledPlugins ?? {}
+    } catch {
+      return {}
+    }
+  }
+  return [
+    files.includes('CONTEXT.md') ? 'CONTEXT.md' : '',
+    files.some((f) => f.startsWith('docs/adr/')) ? 'docs/adr/' : '',
+    plugins(settings)[LEGACY_PLUGIN] === true ? 'the legacy codegraph plugin, turned on in .claude/settings.json' : '',
+    /codegraph[^"]*out[\\/]+main[\\/]+mcp\.js/i.test(mcps) ? 'a codegraph MCP in .mcp.json' : '',
+  ].filter(Boolean)
+}
 
 /** A repo's Claude Code settings turn codegraph's skills on. */
 const turnsSkillsOn = (settings: string): boolean => {
@@ -64,10 +101,11 @@ export const readSetupAt = async (path: string, ref: string): Promise<SetupFacts
   // and tells nothing about a repo with no config.
   if (!config) return noSetup
 
-  const [tagged, listed, settings] = await Promise.all([
+  const [tagged, listed, settings, mcps] = await Promise.all([
     git(path, ['grep', '--files-with-matches', '-I', 'codegraph:', ref]),
     git(path, ['ls-tree', '-r', '--name-only', ref]),
     git(path, ['show', `${ref}:.claude/settings.json`]),
+    git(path, ['show', `${ref}:.mcp.json`]),
   ])
 
   return {
@@ -78,6 +116,8 @@ export const readSetupAt = async (path: string, ref: string): Promise<SetupFacts
       .filter((file) => SOURCE.test(file)).length,
     sourceFiles: lines(listed).filter((file) => SOURCE.test(file)).length,
     skillsOn: turnsSkillsOn(settings),
+    setup: setupIn(config),
+    leftOver: leftOverIn(lines(listed), settings, mcps),
   }
 }
 

@@ -390,8 +390,12 @@ code to them, and the app shows them as a graph and a dictionary (ADRs 0035,
   starts the installed app's MCP; the MCP says when the skills are older than
   the app, and a repo's row says when they are missing or old. Setup moves a
   repo's `CONTEXT.md` and `docs/adr/` into `codegraph/` and turns the plugin on.
-- **CG-10.6** (ask) Say on a repo's row when its setup has fallen behind what
-  setup asks now, and hand over a prompt to bring it up to date.
+- **CG-10.6** (done) Say on a repo's row when its setup has fallen behind what
+  setup asks now, and hand over a prompt to bring it up to date (ADR 0039).
+  Setup writes `"setup"` into the config; the app compares it with its own.
+- **CG-10.7** (done) Clean up an older codegraph in Claude Code (ADR 0039): the
+  app finds a hand-added MCP, the legacy plugin, and missing or old skills, and
+  one click fixes them with Claude Code's own `claude` command.
 
 **Try it:** open a project's ontology map, write a term in the dictionary, wire
 it to another in the graph, and commit both from the changes drawer.

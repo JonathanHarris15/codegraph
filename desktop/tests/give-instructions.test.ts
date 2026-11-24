@@ -1,6 +1,7 @@
 // codegraph: test feature give-instructions
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { giveInstructions } from '../src/features/give-instructions.js'
+import { SETUP } from '../src/modules/instructions/index.js'
 import { anAgentIn, closeYard, openYard, type Yard } from './yard.js'
 
 let yard: Yard
@@ -24,6 +25,13 @@ describe('instructions, called straight', () => {
   it('says first when the skills asking are older than the app', () => {
     const said = giveInstructions('tags', { skills: '0.5.2', app: '0.5.10' })
     expect(said.split('\n')[0]).toContain('Your codegraph skills are 0.5.2, older than the codegraph app, which is 0.5.10.')
+  })
+
+  it('ends the setup instructions with the setup to write into the config, whatever words the person gave it', () => {
+    expect(giveInstructions('setup').trim().split('\n').pop()).toBe(
+      `This is setup ${SETUP}. Write \`"setup": "${SETUP}"\` into codegraph.config.json, so the app knows which setup this repo got.`,
+    )
+    expect(giveInstructions('tags')).not.toContain(`This is setup ${SETUP}`)
   })
 
   it('says nothing extra for skills as new as the app, or when either is not known', () => {

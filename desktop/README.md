@@ -29,8 +29,13 @@ claude plugin marketplace add JonathanHarris15/codegraph && claude plugin instal
 ```
 
 Open the app once afterwards, so it can tell the plugin where it is, then start
-a new session and ask your agent to set a repo up (`/codegraph-app:setup`). An
-MCP added by hand with `claude mcp add` can go.
+a new session and ask your agent to set a repo up (`/codegraph-app:setup`).
+
+When Claude Code still has an older codegraph (an MCP added by hand with
+`claude mcp add`, the legacy plugin, or skills older than the app), a note in
+the corner of the projects page says so, and **Clean up** fixes it with
+Claude Code's own command. A repo set up by an older codegraph says so on its
+row, with a prompt for your agent to set it up again.
 
 ## The ontology map
 
@@ -58,9 +63,10 @@ npm run dev
 
 ## Making the installers
 
-`npm run package` builds the app and writes installers into `release/`: a
-`.dmg` for each kind of Mac, a setup `.exe` for Windows and an `.AppImage` for
-Linux. The icon is drawn in `build/icon.svg`; `build/icon.png` is that drawing
+`npm run package` builds the app and writes installers into `release/` for
+the computer it runs on: on a Mac, a `.dmg` for each kind of Mac. Then
+`npx electron-builder --win --linux --publish never` makes the setup `.exe` for
+Windows and the `.AppImage` for Linux from the same build. The icon is drawn in `build/icon.svg`; `build/icon.png` is that drawing
 at 1024 pixels, which the builder turns into each system's icon.
 
 The app is kept as plain files inside the install, not packed into one

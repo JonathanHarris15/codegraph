@@ -408,6 +408,12 @@ conventions, carries tags throughout, names its projects, and keeps its ADRs
 and terms in its `codegraph/` folder.
 _Avoid_: installed, configured, onboarded, initialised
 
+**Set up by an older codegraph**:
+A set-up software system whose config names an older setup than the one the
+app gives, or none. Setting it up again brings it up to date: setup is the
+update.
+_Avoid_: outdated, stale, legacy repo, needs migration
+
 ## Decisions and terms
 
 **Ontology map**:
@@ -578,3 +584,9 @@ the skills and connects the agent to codegraph. It is installed for a person,
 or turned on for everyone on a repo by the repo's own settings. Its version is
 the app's.
 _Avoid_: extension, add-on, package, integration
+
+**Clean up**:
+Bringing a person's Claude Code up to what the app expects, in one click: the
+plugin at the app's version, and the legacy plugin and any codegraph MCP added
+by hand taken out. The app does it with Claude Code's own command.
+_Avoid_: repair, migrate, reset, uninstall

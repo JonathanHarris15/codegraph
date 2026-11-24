@@ -7,6 +7,7 @@ import type { ProjectView } from '../../features/list-projects.js'
 import type { Session } from '../../features/show-session.js'
 import type { DeviceSignIn } from '../../modules/github/index.js'
 import { Button, Card, Field, Sheet, ThemeSwitch, Waiting } from '../design-system/kit.js'
+import { AgentNotice } from '../components/agent-notice.js'
 import { AgentWindow } from '../components/agent-window.js'
 import { GithubWindow } from '../components/github-window.js'
 import { MembersSheet } from '../components/members-sheet.js'
@@ -399,7 +400,12 @@ export const ProjectsPage = ({ onOpen, onOpenSketch }: { onOpen: (projectId: str
       ) : null}
 
       {open === 'agent' ? (
-        <AgentWindow connection={agent} onClose={() => setOpen('')} onInstructions={() => (window.location.hash = '#/settings')} />
+        <AgentWindow
+          connection={agent}
+          onClose={() => setOpen('')}
+          onInstructions={() => (window.location.hash = '#/settings')}
+          onChanged={setAgent}
+        />
       ) : null}
 
       {naming ? (
@@ -433,7 +439,10 @@ export const ProjectsPage = ({ onOpen, onOpenSketch }: { onOpen: (projectId: str
           </div>
         </Sheet>
       ) : null}
-      <UpdateNotice />
+      <div className="corner-notices">
+        <AgentNotice connection={agent} onChanged={setAgent} onShowMe={() => setOpen('agent')} />
+        <UpdateNotice />
+      </div>
     </div>
   )
 }
