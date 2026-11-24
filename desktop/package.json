@@ -1,6 +1,6 @@
 {
   "name": "codegraph-desktop",
-  "version": "0.5.5",
+  "version": "0.6.0",
   "description": "The codegraph app: your projects, their software systems, and a map of each read from its code.",
   "author": "Jonathan Harris",
   "main": "./out/main/index.js",
@@ -12,6 +12,7 @@
     "start": "electron-vite preview",
     "test": "electron-vite build && vitest run",
     "typecheck": "tsc --noEmit",
+    "version": "node scripts/plugin-version.mjs && git add plugin/.claude-plugin/plugin.json",
     "together": "electron-vite build && node scripts/try-together.mjs",
     "test:quick": "vitest run --exclude \"tests/projects-page.test.ts\"",
     "package": "npm run build && electron-builder --publish never"
