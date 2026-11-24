@@ -1,7 +1,9 @@
 // codegraph: feature list-projects in workspace
-// codegraph: uses projects, repo, reader, cloud, members, machine
+// codegraph: uses projects, repo, reader, cloud, members, machine, claude-code, instructions
 import { isConnected } from '../modules/cloud/index.js'
-import { appVersion, installedSkills, olderVersion } from '../modules/machine/index.js'
+import { installedSkills } from '../modules/claude-code/index.js'
+import { SETUP } from '../modules/instructions/index.js'
+import { appVersion, olderVersion } from '../modules/machine/index.js'
 import { roleOf, whoIsIn, type Role } from '../modules/members/index.js'
 import { chooseBranch, listProjects as stored, type ProjectMember } from '../modules/projects/index.js'
 import { listPoints, pointFor, type Point } from '../modules/reader/index.js'
@@ -57,6 +59,10 @@ export type SoftwareSystemView = {
    *  everyone on it, the version installed on this computer for it ('' for
    *  none), and whether that is older than this app. */
   skills: { on: boolean; installed: string; behind: boolean }
+  /** The setup its config says it got ('' for none), whether that is older
+   *  than the setup this app gives, and what the older one left on its main
+   *  line (ADR 0039). */
+  setup: { version: string; behind: boolean; leftOver: string[] }
 }
 
 export type ProjectView = {
@@ -134,6 +140,11 @@ export const listProjects = async (fetchFirst = false): Promise<ProjectView[]> =
               const installed = system.path ? installedSkills(system.path) : ''
               return { on: facts.skillsOn, installed, behind: olderVersion(installed, app) }
             })(),
+            setup: {
+              version: facts.setup,
+              behind: isSetUp(facts) && (!facts.setup || olderVersion(facts.setup, SETUP)),
+              leftOver: facts.leftOver,
+            },
           }
         }),
       ),

@@ -74,11 +74,12 @@ describe('the instructions a person can make their own', () => {
     await editInstructions('setup', 'Set it up the way we do it here.')
     const agent = await anAgentIn(yard.home, yard.home)
     try {
-      expect(await agent.call('instructions', { topic: 'setup' })).toBe('Set it up the way we do it here.')
+      // Setup still ends with which setup it is, so the repo records it (ADR 0039).
+      expect(await agent.call('instructions', { topic: 'setup' })).toMatch(/^Set it up the way we do it here\.\n\nThis is setup /)
       expect(await agent.call('instructions', { topic: 'proposals' })).toMatch(/^# Proposals/)
       const prompt = await agent.client.getPrompt({ name: 'setup' })
       const first = prompt.messages[0]?.content
-      expect(first && 'text' in first ? first.text : '').toBe('Set it up the way we do it here.')
+      expect(first && 'text' in first ? first.text : '').toMatch(/^Set it up the way we do it here\.\n\nThis is setup /)
     } finally {
       await agent.close()
     }

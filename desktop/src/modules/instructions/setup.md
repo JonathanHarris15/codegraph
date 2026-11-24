@@ -8,6 +8,10 @@ sweep, on one branch, and leave nothing of the old setup behind.
 Read the rules first: call `instructions` with topic `tags`. Everything
 below assumes them.
 
+A repo set up before, by an older codegraph, is set up again the same way:
+setup is the update. Its config's `setup` says which setup it got, or nothing
+before 0.6.0; keep what still holds, and do only what it lacks.
+
 ## 0. Before you touch anything
 
 - Make sure the working tree is clean, and cut a branch:
@@ -56,7 +60,8 @@ Read the whole repo before changing any of it. Decide:
     module.
   - a helper used by many pages. Make it a module with a front door.
   - a module that imports a feature or a page. Turn the import around.
-- Write `codegraph.config.json`.
+- Write `codegraph.config.json`, with `setup` set to the setup these
+  instructions end by naming.
 
 ## 2. The sweep, in parallel
 
@@ -143,6 +148,8 @@ Delete everything the legacy codegraph plugin left behind:
 - the legacy plugin in `.claude/settings.json`: `codegraph@codegraph` in
   `enabledPlugins`, keeping everything else in the file, the `codegraph`
   marketplace entry included, which step 4c may need,
+- a codegraph MCP committed in `.mcp.json`: an entry that runs codegraph's
+  `out/main/mcp.js`. The plugin in step 4c starts it instead,
 - the `plans/` and `.codegraph/` folders, and an old `codegraph.json`.
 
 Carry over legacy tags whose meaning holds, rather than writing them again:

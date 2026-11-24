@@ -13,6 +13,7 @@ import { showOntology } from '../features/show-ontology.js'
 import { checkForUpdate } from '../features/check-for-update.js'
 import { reachDevServer } from '../features/reach-dev-server.js'
 import { chooseBranch } from '../features/choose-branch.js'
+import { cleanUpAgent } from '../features/clean-up-agent.js'
 import { connectAgent } from '../features/connect-agent.js'
 import { connectGithub } from '../features/connect-github.js'
 import { copySketch } from '../features/copy-sketch.js'
@@ -85,6 +86,7 @@ export const FEATURES = {
   unlinkSoftwareSystem,
   connectGithub,
   connectAgent,
+  cleanUpAgent,
   agreeShallowSystem,
   addToMap,
   renameOnMap,

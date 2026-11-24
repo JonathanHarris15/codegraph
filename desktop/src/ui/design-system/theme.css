@@ -8317,11 +8317,26 @@ button.map-restyle:hover {
 
 /* In the corner of the projects page, over the ?, under a sheet's veil (90),
    so it never covers a question being asked. */
-.update-notice {
+/* The projects page's notes in the corner, stacked, newest news nearest the
+   corner. */
+.corner-notices {
   position: fixed;
   right: var(--space-6);
   bottom: calc(var(--space-6) + 34px + var(--space-3));
   z-index: 85;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-3);
+  max-width: calc(100vw - 2 * var(--space-4));
+  pointer-events: none;
+}
+
+.corner-notices > * {
+  pointer-events: auto;
+}
+
+.update-notice {
   display: flex;
   align-items: center;
   gap: var(--space-4);
@@ -8365,6 +8380,20 @@ button.map-restyle:hover {
   display: flex;
   gap: var(--space-2);
   flex: none;
+}
+
+.update-notice-words span {
+  max-width: 46ch;
+}
+
+/* The Your agent window's commands for clearing out an older codegraph. */
+.agent-steps {
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.agent-problem {
+  color: var(--state-problem);
 }
 
 /* A repo row's own ..., quieter than the project's. */

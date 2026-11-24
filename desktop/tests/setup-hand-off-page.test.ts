@@ -3,6 +3,7 @@ import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ElectronApplication, Locator, Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { SETUP } from '../src/modules/instructions/index.js'
 import { aSoftwareSystem, closeYard, git, openTheApp, openYard, type Yard } from './yard.js'
 
 /** The projects page handing setup to a person's agent: a project whose one
@@ -72,9 +73,10 @@ describe('a repo that needs setup', () => {
   })
 
   it('stops waiting once the repo is set up', async () => {
+    // Setup writes which setup it is, as the setup instructions say (ADR 0039).
     writeFileSync(
       join(old, 'codegraph.config.json'),
-      JSON.stringify({ projects: ['billing'], containers: { app: { kind: 'command-line tool', folders: [''] } } }),
+      JSON.stringify({ projects: ['billing'], setup: SETUP, containers: { app: { kind: 'command-line tool', folders: [''] } } }),
     )
     writeFileSync(join(old, 'thing.ts'), '// codegraph: module thing\nexport const a = 1\n')
     git(old, 'add', '-A')

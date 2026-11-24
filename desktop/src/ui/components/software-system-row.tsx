@@ -63,6 +63,12 @@ const SetupBadge = ({ system, project }: { system: SoftwareSystemView; project: 
         <Badge tone="warn">does not name this project</Badge>
       </span>
     )
+  if (system.setUp && system.setup.behind)
+    return (
+      <span title={olderSetup(system)}>
+        <Badge tone="warn">set up by an older codegraph</Badge>
+      </span>
+    )
   if (system.setUp)
     return (
       <Badge tone="good">
@@ -86,9 +92,29 @@ const SetupBadge = ({ system, project }: { system: SoftwareSystemView; project: 
   )
 }
 
+/** What hovering a repo set up by an older codegraph says (ADR 0039). */
+const olderSetup = (system: SoftwareSystemView): string =>
+  [
+    system.setup.version ? `Set up by codegraph's setup ${system.setup.version}, and this app's is newer.` : 'Set up before codegraph said which setup a repo got.',
+    system.setup.leftOver.length ? `Still has ${system.setup.leftOver.join(', ')}.` : '',
+    'Copy the setup prompt for your agent to set it up again.',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
 /** What is left before the repo is set up for this project, if anything. */
-const leftToDo = (system: SoftwareSystemView): 'setup' | 'name' | 'merge' | '' =>
-  !system.present ? '' : system.setUp ? (system.namesThisProject ? '' : 'name') : system.setUpHere ? 'merge' : 'setup'
+const leftToDo = (system: SoftwareSystemView): 'setup' | 'name' | 'merge' | 'again' | '' =>
+  !system.present
+    ? ''
+    : system.setUp
+      ? !system.namesThisProject
+        ? 'name'
+        : system.setup.behind
+          ? 'again'
+          : ''
+      : system.setUpHere
+        ? 'merge'
+        : 'setup'
 
 /** The hand-off for setup: the words for the person's agent, and once they
  *  are copied, a wait that lasts until the row's state moves on. */

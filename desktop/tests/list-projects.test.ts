@@ -6,6 +6,7 @@ import { createProject } from '../src/features/create-project.js'
 import { listProjects } from '../src/features/list-projects.js'
 import { linkSoftwareSystem } from '../src/features/link-software-system.js'
 import { useFolder as useGithubFolder } from '../src/modules/github/index.js'
+import { SETUP } from '../src/modules/instructions/index.js'
 import { useChooser } from '../src/modules/machine/index.js'
 import { addSoftwareSystem, useFolder as useProjectsFolder } from '../src/modules/projects/index.js'
 import { aSoftwareSystem, closeYard, git, openYard, type Yard } from './yard.js'
@@ -168,5 +169,57 @@ describe("codegraph's skills in each repo (ADR 0037)", () => {
     const [web, api] = (await listProjects())[0]!.systems
     expect(web?.skills).toEqual({ on: true, installed: '999.0.0', behind: false })
     expect(api?.skills).toEqual({ on: false, installed: '', behind: false })
+  })
+})
+
+describe('a repo set up by an older codegraph (ADR 0039)', () => {
+  /** A set-up repo whose config says which setup it got, with more files committed beside it. */
+  const setUpWith = (name: string, setup: string | null, files: Record<string, string> = {}): string => {
+    const repo = aSoftwareSystem(yard, name, { setUp: true })
+    const config = { projects: [name], containers: { app: { kind: 'command-line tool', folders: [''] } }, ...(setup === null ? {} : { setup }) }
+    writeFileSync(join(repo, 'codegraph.config.json'), JSON.stringify(config))
+    for (const [file, text] of Object.entries(files)) {
+      mkdirSync(join(repo, file, '..'), { recursive: true })
+      writeFileSync(join(repo, file), text)
+    }
+    git(repo, 'add', '-A')
+    git(repo, 'commit', '-m', 'setup')
+    return repo
+  }
+
+  it('says a repo whose config names no setup was set up by an older one, and what it left behind', async () => {
+    const { id } = await createProject('Mosaic')
+    await linkSoftwareSystem(
+      id,
+      setUpWith('api', null, {
+        'CONTEXT.md': '# Words\n',
+        'docs/adr/0001-one.md': '# 1. One\n',
+        '.claude/settings.json': JSON.stringify({ enabledPlugins: { 'codegraph@codegraph': true } }),
+      }),
+    )
+    expect((await listProjects())[0]?.systems[0]?.setup).toEqual({
+      version: '',
+      behind: true,
+      leftOver: ['CONTEXT.md', 'docs/adr/', 'the legacy codegraph plugin, turned on in .claude/settings.json'],
+    })
+  })
+
+  it('says a repo set up by an older setup is behind, and one set up by this one is not', async () => {
+    const { id } = await createProject('Mosaic')
+    await linkSoftwareSystem(id, setUpWith('api', '0.5.0'))
+    await linkSoftwareSystem(id, setUpWith('web', SETUP))
+    const [api, web] = (await listProjects())[0]!.systems
+    expect(api?.setup).toEqual({ version: '0.5.0', behind: true, leftOver: [] })
+    expect(web?.setup).toEqual({ version: SETUP, behind: false, leftOver: [] })
+  })
+
+  it('reads the setup from the main line, not the branch checked out', async () => {
+    const repo = setUpWith('api', '0.5.0')
+    git(repo, 'switch', '-q', '-c', 'codegraph-setup')
+    writeFileSync(join(repo, 'codegraph.config.json'), JSON.stringify({ projects: ['api'], setup: SETUP }))
+    git(repo, 'commit', '-qam', 'setup again')
+    const { id } = await createProject('Mosaic')
+    await linkSoftwareSystem(id, repo)
+    expect((await listProjects())[0]?.systems[0]?.setup.behind).toBe(true)
   })
 })

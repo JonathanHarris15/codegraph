@@ -57,6 +57,9 @@ Codegraph follows C4, from the outside in.
   its code lives in. A container with no code here, like a database, has no
   folders. Every component file sits under exactly one container's folders.
   Tests and tooling may sit anywhere.
+- `setup`: which setup the repo got, as `"setup": "0.6.0"`. Setup writes it;
+  leave it alone otherwise. The app says when it is older than the setup it
+  gives now.
 - `"dev"` on a container, where it has a dev server: the address it answers
   at on this computer, as `"dev": "http://localhost:5173"`. The live view
   shows UI blocks from it. Only an address on this computer is taken.

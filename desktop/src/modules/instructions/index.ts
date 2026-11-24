@@ -1,5 +1,5 @@
 // codegraph: module instructions
-// codegraph: front door instructionsFor, defaultFor, topics, editsOf, keepEdit, putBackDefault, useFolder, Topic, Edit
+// codegraph: front door SETUP, instructionsFor, defaultFor, topics, editsOf, keepEdit, putBackDefault, useFolder, Topic, Edit
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -16,6 +16,12 @@ import type { Edit, Instructions } from './schema.js'
 import { keepWhole } from '../machine/index.js'
 
 export type { Edit } from './schema.js'
+
+/** The setup these instructions give, written into a repo's config as
+ *  `"setup"` when it is set up. It moves only when what setup asks of a repo
+ *  changes, so the app can say which repos an older setup left behind
+ *  (ADR 0039). */
+export const SETUP = '0.6.0'
 
 /** Everything codegraph tells an agent lives here, and only here, so it is
  *  served the same way to whichever agent asks (ADR 0004). A person may write
