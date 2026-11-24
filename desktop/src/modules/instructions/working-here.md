@@ -43,4 +43,11 @@ How to work here:
    they watch your cursor. When they say "this" or "here", the `looking` tool
    says which sketch they have open and what they are pointing at. Call the
    `instructions` tool with topic `sketches` for how.
+8. **Words and decisions live in `codegraph/`.** The project's terms are in
+   `codegraph/terms/` and its decisions in `codegraph/adr/`, read together as
+   its ontology map, and the check holds the code to them. Name things with
+   their terms, never their avoid words. Use codegraph's skills to write a
+   term or record a decision, or call the `instructions` tool with topic
+   `terms` or `decisions`. Any other skill that writes a glossary or ADRs,
+   such as to `CONTEXT.md` or `docs/adr/`, does not do so in this repo.
 <!-- codegraph:end -->

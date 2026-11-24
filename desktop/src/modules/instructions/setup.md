@@ -20,7 +20,10 @@ below assumes them.
   one question worth stopping for. Ask in the same breath whether this repo is
   the whole of what people use, or one part kept beside other repos, like a
   phone app whose server lives elsewhere; if it is a part, the software
-  system's name goes in `system`.
+  system's name goes in `system`. And ask where codegraph's skills should
+  go: **for them**, in every repo on their computer, or **for everyone on
+  this repo**, turned on in its settings so every member gets them. Step 4c
+  does what they choose.
 
 ## 1. Survey, on your own
 
@@ -137,8 +140,9 @@ Delete everything the legacy codegraph plugin left behind:
 
 - the block between `<!-- codegraph:start -->` and `<!-- codegraph:end -->`
   in `CLAUDE.md` or `AGENTS.md` (the new block replaces it),
-- `codegraph` in `.claude/settings.json` (`enabledPlugins` and any
-  marketplace entry), keeping everything else in the file,
+- the legacy plugin in `.claude/settings.json`: `codegraph@codegraph` in
+  `enabledPlugins`, keeping everything else in the file, the `codegraph`
+  marketplace entry included, which step 4c may need,
 - the `plans/` and `.codegraph/` folders, and an old `codegraph.json`.
 
 Carry over legacy tags whose meaning holds, rather than writing them again:
@@ -163,6 +167,53 @@ or `AGENTS.md`, whichever it uses (make `CLAUDE.md` if it has neither). Call
 `instructions` with topic `working-here` for the block, and paste it in
 whole. This changes the instructions you and every later agent work under
 in this repo; that is the point.
+
+## 4b. Terms and decisions
+
+A set-up repo keeps its glossary and its ADRs in `codegraph/`: one term to a
+file in `codegraph/terms/`, one ADR to a file in `codegraph/adr/`. Call
+`instructions` with topics `terms` and `decisions` for their layout.
+
+- If the repo has a `CONTEXT.md` or a glossary, write each term into its own
+  file, with its store and what its records point at where it names records,
+  and its words to avoid. Then delete the old file, so there is one copy.
+- If it has ADRs, in `docs/adr/` or elsewhere, move each into `codegraph/adr/`
+  on the template's six sections. Keep every word they said. Where an old ADR
+  never said something the template asks for, write that it was not recorded
+  when the decision was made, rather than inventing it. Give an ADR rules
+  only where its words plainly say what may reach what, or who alone writes a
+  store. Then delete the old folder.
+- A term another repo of the same project defines is borrowed, not written
+  again: say so to the person, and leave it for codegraph to copy.
+
+## 4c. Codegraph's skills
+
+Codegraph's skills come in the `codegraph-app` plugin, from the `codegraph`
+marketplace on GitHub, `JonathanHarris15/codegraph`. They are how you and later
+agents know when to write a term, record a decision or check a plan.
+
+- **For everyone on this repo**: in `.claude/settings.json`, keeping
+  everything else in it, add
+
+  ```json
+  {
+    "extraKnownMarketplaces": {
+      "codegraph": { "source": { "source": "github", "repo": "JonathanHarris15/codegraph" } }
+    },
+    "enabledPlugins": { "codegraph-app@codegraph": true }
+  }
+  ```
+
+  Turning it on installs nothing: tell the person that every member, them
+  included, runs this once in the repo:
+  `claude plugin install codegraph-app@codegraph --scope project`.
+- **For them**: change no file. Tell them to run, once, in a terminal:
+  `claude plugin marketplace add JonathanHarris15/codegraph`, then
+  `claude plugin install codegraph-app@codegraph`.
+
+Either way, tell them to start a new session afterwards, and that the plugin
+also connects their agent to codegraph, so an MCP they added by hand with
+`claude mcp add` can go.
 
 ## 5. Screenshots for the page map
 

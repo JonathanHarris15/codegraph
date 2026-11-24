@@ -20,6 +20,26 @@ describe('instructions, called straight', () => {
   it('lists the topics when asked for none', () => {
     expect(giveInstructions('')).toMatch(/^These are the topics:\n- setup: /)
   })
+
+  it('says first when the skills asking are older than the app', () => {
+    const said = giveInstructions('tags', { skills: '0.5.2', app: '0.5.10' })
+    expect(said.split('\n')[0]).toContain('Your codegraph skills are 0.5.2, older than the codegraph app, which is 0.5.10.')
+  })
+
+  it('says nothing extra for skills as new as the app, or when either is not known', () => {
+    for (const versions of [{ skills: '0.5.10', app: '0.5.10' }, { skills: '', app: '0.5.10' }, { skills: '0.5.2', app: '' }])
+      expect(giveInstructions('tags', versions)).toBe(giveInstructions('tags'))
+  })
+})
+
+describe('the topics codegraph’s skills ask for', () => {
+  it('has terms and decisions, laid out as ADRs 0035 and 0036 say', () => {
+    expect(giveInstructions('terms')).toMatch(/^# Terms/)
+    expect(giveInstructions('terms')).toContain('borrowed from')
+    expect(giveInstructions('decisions')).toMatch(/^# Decisions/)
+    for (const section of ['## Context', '## Decision', '## Alternatives', '## Evidence', '## Consequences', '## Revisit when'])
+      expect(giveInstructions('decisions')).toContain(section)
+  })
 })
 
 describe('an agent asking how codegraph works', () => {

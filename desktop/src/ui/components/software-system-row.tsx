@@ -35,6 +35,24 @@ const cloudWords = (
 const missingBits = (system: SoftwareSystemView): string =>
   `${system.mainLine || 'The main line'} has no codegraph.config.json yet. Ask your agent to set this repo up with codegraph.`
 
+/** codegraph's skills in this repo (ADR 0037), said only when something needs doing. */
+const SkillsBadge = ({ system }: { system: SoftwareSystemView }) => {
+  if (!system.present || !system.setUp) return null
+  if (system.skills.behind)
+    return (
+      <span title="The codegraph skills installed on this computer are older than this app. Run claude plugin update codegraph-app@codegraph in a terminal, then start a new session.">
+        <Badge tone="warn">skills {system.skills.installed} · update</Badge>
+      </span>
+    )
+  if (system.skills.on && !system.skills.installed)
+    return (
+      <span title="This repo turns codegraph's skills on for everyone on it, but they are not installed on this computer. Run claude plugin install codegraph-app@codegraph --scope project in the repo once.">
+        <Badge tone="warn">skills not installed here</Badge>
+      </span>
+    )
+  return null
+}
+
 const SetupBadge = ({ system, project }: { system: SoftwareSystemView; project: string }) => {
   if (!system.present) return null
   if (system.setUp && !system.namesThisProject)
@@ -198,6 +216,7 @@ export const SoftwareSystemRow = ({
       </div>
       <div className="ds-row" style={{ flexWrap: 'wrap', gap: 6 }}>
         <SetupBadge system={system} project={project} />
+        <SkillsBadge system={system} />
         <Badge tone={cloud.tone}>{cloud.words}</Badge>
         {system.dirty ? <Badge>uncommitted changes</Badge> : null}
       </div>

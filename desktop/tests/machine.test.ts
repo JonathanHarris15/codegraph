@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { bringOldFiles, dataFolder, realFolder, sameFolder } from '../src/modules/machine/index.js'
+import { bringOldFiles, dataFolder, realFolder, sameFolder, sayWhereMcpIs, versionIn, whereMcpIs } from '../src/modules/machine/index.js'
 import { aLinkTo, closeYard, openYard, type Yard } from './yard.js'
 
 let yard: Yard
@@ -110,5 +110,27 @@ describe('bringing the files from where an older codegraph kept them', () => {
     expect(bringOldFiles(join(yard.path, 'never'), join(yard.path, 'new-c'))).toEqual([])
     const from = oldPlace('old-d')
     expect(bringOldFiles(from, from)).toEqual([])
+  })
+})
+
+describe('telling the plugin where the MCP is', () => {
+  // The plugin's launcher starts whatever MCP the installed app says is its
+  // own, so an agent never talks to an older one (ADR 0037).
+  it('keeps where the app’s MCP is, and its version, in codegraph’s folder', () => {
+    const home = join(yard.path, 'mcp-home')
+    sayWhereMcpIs(home, '/Applications/Codegraph.app/out/main/mcp.js', '0.6.0')
+    expect(whereMcpIs(home)).toEqual({ file: '/Applications/Codegraph.app/out/main/mcp.js', version: '0.6.0' })
+  })
+
+  it('knows nowhere before the app has said', () => {
+    expect(whereMcpIs(join(yard.path, 'never-opened'))).toBeNull()
+  })
+
+  it('reads a version from the package.json in a folder, or none', () => {
+    const app = join(yard.path, 'an-app')
+    mkdirSync(app, { recursive: true })
+    writeFileSync(join(app, 'package.json'), JSON.stringify({ name: 'x', version: '1.2.3' }))
+    expect(versionIn(app)).toBe('1.2.3')
+    expect(versionIn(join(yard.path, 'nothing-here'))).toBe('')
   })
 })
