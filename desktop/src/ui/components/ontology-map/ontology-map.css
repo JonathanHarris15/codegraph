@@ -1,0 +1,459 @@
+/* The ontology map's two views, in the drawing look (ADR 0033): drafting
+   paper, square corners, corner marks, labels in the code face (ADR 0038). */
+
+.op {
+  position: absolute;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  background: var(--canvas-000);
+  color: var(--ink-000);
+  font-size: var(--text-md);
+}
+
+.op-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-5);
+  border-bottom: var(--stroke-edge) solid var(--line-hair);
+  background: var(--surface-000);
+}
+.op-title {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.op-views {
+  display: inline-flex;
+  border: var(--stroke-edge) solid var(--line-card);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.op-views button {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+.op-views button + button { border-left: var(--stroke-edge) solid var(--line-card); }
+.op-views [aria-selected='true'] { background: var(--ink-000); color: var(--ink-inverse); }
+.op-views button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+.op-bar-end { margin-left: auto; display: flex; gap: var(--space-2); align-items: center; }
+.op-body { position: relative; flex: 1; min-height: 0; display: flex; }
+
+.op-drawer.ds-sheet {
+  position: absolute;
+  overflow-x: hidden;
+  top: var(--space-4);
+  right: var(--space-4);
+  bottom: var(--space-4);
+  width: 520px;
+  overflow: auto;
+  z-index: 10;
+}
+.op-drawer-head { display: flex; align-items: center; justify-content: space-between; }
+
+/* The diff. */
+.op-diff { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.op-diff-file { min-width: 0; }
+.op-diff-file { border: var(--stroke-edge) solid var(--line-hair); border-radius: var(--radius-xs); overflow: hidden; background: var(--surface-000); }
+.op-diff-name { display: flex; align-items: center; gap: var(--space-2); padding: 6px 10px; border-bottom: var(--stroke-edge) solid var(--line-hair); background: var(--surface-sunken); }
+.op-diff-name code, .op-diff pre { font-family: var(--font-mono); font-size: var(--text-xs); }
+.op-diff pre { margin: 0; padding: 4px 0; line-height: 1.6; overflow-x: auto; }
+.op-line { display: block; padding: 0 10px; white-space: pre; }
+.op-line--added { background: var(--state-good-wash); color: var(--state-good); }
+.op-line--removed { background: var(--state-problem-wash); color: var(--state-problem); }
+.op-line--same { color: var(--ink-faint); }
+
+/* ── The graph ─────────────────────────────────────────────── */
+
+.og { position: relative; flex: 1; min-width: 0; overflow: hidden; }
+.og-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+.og-canvas:active { cursor: grabbing; }
+.og-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.og-find {
+  position: absolute;
+  top: var(--space-4);
+  left: var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  height: 34px;
+  width: 260px;
+  background: var(--surface-000);
+  border: var(--stroke-edge) solid var(--line-card);
+  border-radius: var(--radius-sm);
+  color: var(--ink-faint);
+}
+.og-find input { all: unset; flex: 1; color: var(--ink-000); font-size: var(--text-md); }
+.og-controls {
+  position: absolute;
+  left: var(--space-4);
+  bottom: var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px 10px;
+  background: var(--surface-000);
+  border: var(--stroke-edge) solid var(--line-card);
+  border-radius: var(--radius-sm);
+}
+.og-controls .og-label:not(:first-child) { margin-left: var(--space-2); padding-left: var(--space-3); border-left: var(--stroke-edge) solid var(--line-hair); }
+.og-controls input[type='range'] { width: 90px; accent-color: var(--accent); }
+.og-toggle {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: var(--radius-xs);
+  font-size: var(--text-sm);
+  color: var(--ink-faint);
+}
+.og-toggle[aria-pressed='true'] { color: var(--ink-000); background: var(--surface-sunken); }
+.og-toggle:focus-visible { outline: 2px solid var(--focus-ring); }
+.og-hint {
+  position: absolute;
+  left: var(--space-4);
+  bottom: 62px;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--ink-faint);
+}
+
+/* The graph's glyphs, used in its legend and the dictionary's index. */
+.og-glyph { display: inline-block; flex: none; width: 9px; height: 9px; box-sizing: border-box; }
+.og-glyph--terms { border-radius: 50%; background: var(--kind-keep); }
+.og-glyph--word { border-radius: 50%; border: 1.5px solid var(--kind-keep); }
+.og-glyph--borrowed { border-radius: 50%; border: 1.5px dashed var(--kind-outside); }
+.og-glyph--decisions { background: var(--accent); }
+.og-glyph--proposed { background: transparent; border: 1.5px dashed var(--accent); }
+.og-glyph--replaced { background: transparent; border: 1.5px solid var(--ink-faint); }
+
+.og-card.ds-card {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  box-shadow: var(--shadow-float);
+  animation: og-in 180ms ease-out;
+}
+.og-card h3 { margin: 0; font-size: var(--text-xl); font-weight: 600; line-height: 1.2; }
+.og-card p { margin: 0; color: var(--ink-soft); line-height: 1.45; }
+.og-card .ds-badge { white-space: normal; }
+.og-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.og-tile {
+  all: unset;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: var(--radius-xs);
+  background: var(--surface-sunken);
+  font-weight: 600;
+}
+.og-tile:hover { background: var(--accent-wash); color: var(--accent); }
+@keyframes og-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+/* ── The dictionary ────────────────────────────────────────── */
+
+.od { flex: 1; display: flex; min-width: 0; min-height: 0; }
+.od-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 500;
+  color: var(--ink-faint);
+}
+.od-quiet { color: var(--ink-faint); }
+.od-mono { font-family: var(--font-mono); font-size: var(--text-sm); }
+
+.od-index {
+  width: 272px;
+  flex: none;
+  overflow: auto;
+  padding: var(--space-4);
+  background: var(--surface-000);
+  border-right: var(--stroke-edge) solid var(--line-hair);
+}
+.od-search { position: relative; display: flex; align-items: center; color: var(--ink-faint); }
+.od-search svg { position: absolute; left: 10px; }
+.od-search .ds-input { padding-left: 30px; }
+/* Each software system is a block of its own, in the colour of its bubble on
+   the graph, so where one ends and the next begins reads at a glance. */
+.od-repo {
+  margin-top: var(--space-4);
+  padding: 0 var(--space-2) var(--space-2);
+  border: var(--stroke-edge) solid color-mix(in srgb, var(--kind-structure) 30%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--kind-structure-wash) 55%, transparent);
+}
+.od-repo-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 calc(-1 * var(--space-2)) var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: var(--stroke-edge) solid color-mix(in srgb, var(--kind-structure) 30%, transparent);
+  background: var(--kind-structure-wash);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+.od-repo-head .od-label { color: var(--kind-structure); font-weight: 600; }
+.od-repo-mark { width: 10px; height: 10px; flex: none; border-radius: 3px; border: 1.5px solid var(--kind-structure); }
+.od-repo-head .od-label { white-space: nowrap; }
+.od-repo-count { margin-left: auto; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-faint); white-space: nowrap; }
+.od-sections { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-faint); }
+.od-group { display: flex; align-items: center; justify-content: space-between; margin: var(--space-3) 0 2px; padding-bottom: 3px; border-bottom: var(--stroke-edge) solid var(--line-hair); }
+.od-group button { all: unset; cursor: pointer; display: grid; place-items: center; width: 18px; height: 18px; border-radius: var(--radius-xs); color: var(--ink-soft); }
+.od-group button:hover { background: var(--surface-sunken); color: var(--ink-000); }
+.od-item {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 5px 8px;
+  border-radius: var(--radius-xs);
+  border-left: 2px solid transparent;
+}
+.od-item:hover { background: var(--surface-sunken); }
+.od-item[aria-current='true'] { background: var(--accent-wash); border-left-color: var(--accent); color: var(--accent); font-weight: 600; }
+.od-item:focus-visible { outline: 2px solid var(--focus-ring); }
+.od-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.od-num { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-faint); }
+.od-struck { text-decoration: line-through; color: var(--ink-faint); }
+.od-edited { color: var(--state-waiting); }
+.od-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.od-dot--problem { background: var(--state-problem); }
+.od-dot--waiting { background: var(--state-waiting); }
+
+/* The page the entry sits on is drafting paper, like the board. */
+.od-paper {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: var(--space-8) var(--space-8) 96px;
+  background-image:
+    linear-gradient(var(--grid-major) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
+    linear-gradient(var(--grid-minor) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-minor) 1px, transparent 1px);
+  background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px;
+}
+.od-empty { color: var(--ink-faint); text-align: center; margin-top: 20vh; }
+
+.od-entry.ds-card {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-8) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.od-entry-head { display: flex; align-items: center; justify-content: space-between; }
+.od-kind--term { color: var(--kind-keep); }
+.od-kind--adr { color: var(--accent); }
+.od-name { margin: 0; font-size: 34px; line-height: 1.1; font-weight: 600; letter-spacing: -0.01em; }
+.od-name-input {
+  all: unset;
+  font-size: 28px;
+  line-height: 1.2;
+  font-weight: 600;
+  border-bottom: var(--stroke-edge) dashed transparent;
+}
+.od-name-input:hover, .od-name-input:focus { border-bottom-color: var(--line-edge); }
+.od-lock {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: var(--stroke-edge) dashed var(--line-edge);
+  border-radius: var(--radius-xs);
+  color: var(--ink-soft);
+}
+.od-finding { margin: 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius-xs); border-left: var(--stroke-rule) solid; }
+.od-finding .od-label { color: inherit; margin-right: var(--space-2); }
+.od-finding--problem { background: var(--state-problem-wash); color: var(--state-problem); }
+.od-finding--waiting { background: var(--state-waiting-wash); color: var(--state-waiting); }
+.od-prose { font-size: var(--text-lg); line-height: 1.55; resize: none; min-height: 3.5em; }
+.od-means .ds-input { padding: var(--space-3) var(--space-4); }
+
+/* What is inside the entry is tiles, two to a row (ADR 0033). */
+.od-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+.od-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-xs);
+  background: var(--surface-sunken);
+  min-width: 0;
+}
+.od-tile .ds-input { background-color: var(--surface-000); }
+.od-section { display: flex; flex-direction: column; gap: var(--space-2); }
+
+.od-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.od-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 8px;
+  border-radius: var(--radius-xs);
+  border: var(--stroke-edge) solid color-mix(in srgb, var(--state-problem) 35%, transparent);
+  color: var(--state-problem);
+  background: var(--surface-000);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  text-decoration: line-through;
+}
+.od-chip--term { color: var(--kind-keep); border-color: color-mix(in srgb, var(--kind-keep) 35%, transparent); text-decoration: none; }
+.od-chip-x { all: unset; flex: none; cursor: pointer; display: grid; place-items: center; width: 16px; height: 16px; border-radius: var(--radius-xs); }
+.od-chip-x:hover { background: var(--surface-sunken); }
+.od-chip--plain { color: var(--ink-000); border-color: var(--line-card); text-decoration: none; font-family: var(--font-sans); }
+.od-chip-input.ds-input { width: 110px; padding: 2px 8px; font-family: var(--font-mono); font-size: var(--text-sm); }
+
+.od-ref {
+  all: unset;
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  text-underline-offset: 3px;
+}
+.od-ref:hover { text-decoration-color: var(--accent); }
+.od-ref:focus-visible { outline: 2px solid var(--focus-ring); }
+
+/* A table with every other row shaded, like a store's fields. */
+.od-table { width: 100%; border-collapse: collapse; border: var(--stroke-edge) solid var(--line-hair); }
+.od-table th { text-align: left; padding: 6px 10px; border-bottom: var(--stroke-edge) solid var(--line-hair); }
+.od-table td { padding: 5px 10px; vertical-align: middle; }
+.od-table tbody tr:nth-child(odd) { background: var(--surface-sunken); }
+.od-table td:last-child { width: 28px; }
+.od-inline.ds-input { padding: 4px 8px; background-color: transparent; border-color: transparent; }
+.od-inline.ds-input:hover, .od-inline.ds-input:focus { background-color: var(--surface-000); border-color: var(--field-line); }
+.od-add-row .ds-input, .od-chip-input.ds-input { width: auto; padding: 4px 28px 4px 8px; font-size: var(--text-sm); }
+.od-rules td:nth-child(2) { width: 190px; position: relative; }
+.od-verb.ds-input { position: absolute; inset: 5px 10px; width: calc(100% - 20px); opacity: 0; cursor: pointer; }
+.od-verb-words { font-size: var(--text-sm); color: var(--ink-soft); border-bottom: var(--stroke-edge) dashed var(--line-edge); }
+
+.od-segments { display: inline-flex; border: var(--stroke-edge) solid var(--line-card); border-radius: var(--radius-xs); overflow: hidden; background: var(--surface-000); }
+.od-segments button {
+  all: unset;
+  cursor: pointer;
+  padding: 3px 9px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+.od-segments button + button { border-left: var(--stroke-edge) solid var(--line-card); }
+.od-segments [aria-checked='true'] { background: var(--ink-000); color: var(--ink-inverse); }
+.od-segments button:disabled { cursor: default; }
+.od-segments button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+.od-status { align-self: flex-start; }
+
+.od-foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding-top: var(--space-4);
+  border-top: var(--stroke-edge) dashed var(--line-hair);
+}
+.od-foot code { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-soft); }
+
+/* The ADR template's six parts, numbered as the template numbers them. */
+.od-tile--wide { grid-column: 1 / -1; }
+.od-progress { display: inline-flex; align-items: center; gap: var(--space-2); margin-left: auto; margin-right: var(--space-3); }
+.od-progress-bar { width: 72px; height: 4px; background: var(--surface-sunken); border-radius: 2px; overflow: hidden; }
+.od-progress-bar > span { display: block; height: 100%; background: var(--accent); transition: width 200ms ease; }
+.od-part { display: flex; flex-direction: column; gap: var(--space-2); padding-top: var(--space-4); border-top: var(--stroke-edge) solid var(--line-hair); }
+.od-part-head { display: flex; align-items: center; gap: var(--space-2); margin: 0; }
+.od-part-head .ds-label { color: var(--ink-000); font-weight: 600; }
+.od-part-n {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: var(--stroke-edge) solid var(--accent);
+  border-radius: var(--radius-xs);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+.od-part--empty .od-part-n { border-style: dashed; color: var(--ink-faint); border-color: var(--line-edge); }
+.od-part-todo { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--state-waiting); }
+/* Boxes grow with what is written in them. */
+.od-words, .od-alt-why, .od-prose { field-sizing: content; }
+.od-words { line-height: 1.55; resize: none; min-height: 3.2em; }
+.od-sub { margin-top: var(--space-2); }
+.od-alts td:first-child { width: 34%; vertical-align: top; }
+.od-alt-name { font-weight: 600; }
+.od-alt-why { resize: none; line-height: 1.45; }
+.od-alts td:nth-child(2) { vertical-align: top; }
+.od-add-row .ds-button + .ds-button { margin-left: var(--space-2); }
+/* Good, bad and follow-up work, a row each, the way the template lists them. */
+.od-consequences { display: flex; flex-direction: column; gap: var(--space-2); }
+.od-consequences .od-tile { display: grid; grid-template-columns: 120px minmax(0, 1fr); align-items: start; gap: var(--space-3); }
+.od-consequences .ds-label { padding-top: 9px; }
+.od-tile--good .ds-label { color: var(--state-good); }
+.od-tile--bad .ds-label { color: var(--state-problem); }
+
+/* Waiting, empty, and what went wrong writing. */
+.op-waiting, .op-empty { flex: 1; display: grid; place-content: center; text-align: center; gap: var(--space-3); padding: var(--space-8); }
+.op-empty h3 { margin: 0; font-size: var(--text-xl); }
+.op-empty p { margin: 0; max-width: 460px; color: var(--ink-soft); line-height: 1.5; }
+.op-empty code { font-family: var(--font-mono); font-size: var(--text-sm); }
+.op-empty .ds-button { justify-self: center; }
+.op-problem {
+  margin: 0;
+  padding: 4px 10px;
+  border-left: var(--stroke-rule) solid var(--state-problem);
+  background: var(--state-problem-wash);
+  color: var(--state-problem);
+  font-size: var(--text-sm);
+}
+
+/* Each repo's changes, with its own commit box. */
+.op-repo-changes { display: flex; flex-direction: column; gap: var(--space-2); padding-top: var(--space-3); border-top: var(--stroke-edge) dashed var(--line-hair); }
+.op-repo-changes-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
+.op-repo-changes .ds-button { align-self: flex-start; }
+
+.od-away { margin: var(--space-2) 0; font-size: var(--text-sm); }
+.od-group button:disabled { opacity: 0.35; cursor: default; }
+.od-draft-row { outline: 1px dashed var(--accent); outline-offset: -1px; }
+.op-committed { margin: 0; padding: var(--space-2) var(--space-3); border-left: var(--stroke-rule) solid var(--state-good); background: var(--state-good-wash); color: var(--state-good); }

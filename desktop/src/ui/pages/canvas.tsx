@@ -24,6 +24,7 @@ import { fromWords, SketchLibrary } from '../components/sketch-library.js'
 import { AgentFace } from '../components/together-layer.js'
 import { SuggestionBar } from '../components/suggestion-bar.js'
 import { Trail } from '../components/trail.js'
+import { OntologyMapView } from '../components/ontology-map/index.js'
 import { MembersSheet } from '../components/members-sheet.js'
 import { RevisionsPanel } from '../components/revisions-panel.js'
 import { togetherOn, useRoom } from '../components/together.js'
@@ -598,6 +599,8 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
   }
   const [showMembers, setShowMembers] = useState(false)
   const [showDesign, setShowDesign] = useState(false)
+  const [showOntology, setShowOntology] = useState(false)
+  const closeOntology = useCallback(() => setShowOntology(false), [])
   const closeDesign = useCallback(() => setShowDesign(false), [])
   // An agent at work on a UI block opens the design view to it, live, once
   // each time it names another; closing the view is respected until then.
@@ -849,6 +852,11 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
               Design system
             </button>
           ) : null}
+          {!sketch ? (
+            <button type="button" className="ds-button ds-button--bare map-bar-toggle" aria-pressed={showOntology} onClick={() => setShowOntology(!showOntology)}>
+              Ontology map
+            </button>
+          ) : null}
           <button
             type="button"
             className={sketch ? 'map-sketching' : 'ds-button map-sketches'}
@@ -1025,6 +1033,8 @@ export const CanvasPage = ({ projectId, onLeave }: { projectId: string; onLeave:
         {agentSetUp !== false ? <AgentWindow connection={agentSetUp} onClose={() => setAgentSetUp(false)} /> : null}
 
         {showMembers && shown ? <MembersSheet projectId={projectId} onClose={() => setShowMembers(false)} /> : null}
+
+        {showOntology ? <OntologyMapView projectId={projectId} onClose={closeOntology} /> : null}
 
         {showDesign && hasDesign && systemShown ? (
           <DesignView
