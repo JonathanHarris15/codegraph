@@ -1,6 +1,6 @@
 {
   "name": "codegraph-app",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Codegraph's skills for an agent working in a set-up repo: set it up, write terms, record decisions, check plans against the ontology map, keep to the design system, and build proposals. Connects the agent to the codegraph app's MCP.",
   "author": {
     "name": "Jonathan Harris"

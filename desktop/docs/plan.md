@@ -368,7 +368,7 @@ hand; contrast measured on the running page.
 
 A project's terms and decisions are files in each repo, the check holds the
 code to them, and the app shows them as a graph and a dictionary (ADRs 0035,
-0036, 0038). Released as 0.6.0.
+0036, 0038). Released as 0.6.0; CG-10.6 and CG-10.7 in 0.6.1.
 
 - **CG-10.1** (done) Terms and ADRs live in `codegraph/terms/` and
   `codegraph/adr/`, Markdown with a YAML head; ADRs on the team's template, six
