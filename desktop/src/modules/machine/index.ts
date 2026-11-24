@@ -1,5 +1,5 @@
 // codegraph: module machine
-// codegraph: front door keepWhole, appFolder, devRendererUrl, keystore, askForFolder, useChooser, FolderAsk, askForPicture, usePicturePicker, mcpServerFile, dataFolder, windowFolder, bringOldFiles, watchFolders, realFolder, sameFolder, githubClientId, githubHost, cloudFolder, firebaseSettings, appVersion, releasesUrl, thisComputer, Keystore
+// codegraph: front door keepWhole, appFolder, devRendererUrl, keystore, askForFolder, useChooser, FolderAsk, askForPicture, usePicturePicker, mcpServerFile, sayWhereMcpIs, whereMcpIs, versionIn, olderVersion, installedSkills, dataFolder, windowFolder, bringOldFiles, watchFolders, realFolder, sameFolder, githubClientId, githubHost, cloudFolder, firebaseSettings, appVersion, releasesUrl, thisComputer, Keystore
 
 /** This computer and the window around the app: where files are kept, the
  *  operating system's keystore, the folder picker, and what the build says.
@@ -89,6 +89,60 @@ export const mcpServerFile = async (): Promise<string> => {
   const desk = await electron()
   const root = desk?.app?.getAppPath?.() ?? process.cwd()
   return join(root, 'out', 'main', 'mcp.js')
+}
+
+/** Where the installed app's MCP is, kept in codegraph's folder each time the
+ *  app opens, so the plugin's launcher always starts the app's own (ADR 0037). */
+const MCP_NOTE = 'mcp.json'
+
+export const sayWhereMcpIs = (folder: string, file: string, version: string): void =>
+  keepWhole(join(folder, MCP_NOTE), JSON.stringify({ file, version }, null, 2) + '\n')
+
+export const whereMcpIs = (folder: string): { file: string; version: string } | null => {
+  try {
+    const said = JSON.parse(readFileSync(join(folder, MCP_NOTE), 'utf8')) as { file?: unknown; version?: unknown }
+    return typeof said.file === 'string' ? { file: said.file, version: typeof said.version === 'string' ? said.version : '' } : null
+  } catch {
+    return null
+  }
+}
+
+/** The version in the package.json in a folder, or '' where there is none. */
+export const versionIn = (folder: string): string => {
+  try {
+    const version = (JSON.parse(readFileSync(join(folder, 'package.json'), 'utf8')) as { version?: unknown }).version
+    return typeof version === 'string' ? version : ''
+  } catch {
+    return ''
+  }
+}
+
+/** Whether one version is older than another, by its numbers. Either being
+ *  unknown ('') is never older. */
+export const olderVersion = (a: string, b: string): boolean => {
+  if (!a || !b) return false
+  const [x, y] = [a, b].map((v) => v.split(/[.-]/).map((n) => Number.parseInt(n, 10) || 0)) as [number[], number[]]
+  for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) < (y[i] ?? 0)
+  return false
+}
+
+/** The version of codegraph's skills Claude Code has installed on this
+ *  computer for a repo: for the person, or for that repo alone. '' for none.
+ *  Read from Claude Code's own record of its plugins (ADR 0037). */
+export const installedSkills = (repo: string): string => {
+  const config = process.env['CLAUDE_CONFIG_DIR'] || join(homedir(), '.claude')
+  type Install = { scope?: unknown; projectPath?: unknown; version?: unknown }
+  let installs: Install[] = []
+  try {
+    const record = JSON.parse(readFileSync(join(config, 'plugins', 'installed_plugins.json'), 'utf8')) as { plugins?: Record<string, unknown> }
+    const entry = record.plugins?.['codegraph-app@codegraph']
+    installs = (Array.isArray(entry) ? entry : entry ? [entry] : []) as Install[]
+  } catch {
+    return ''
+  }
+  const fits = (i: Install): boolean =>
+    typeof i.version === 'string' && (i.scope === 'project' || i.scope === 'local' ? typeof i.projectPath === 'string' && !!repo && sameFolder(i.projectPath, repo) : true)
+  return (installs.find((i) => fits(i) && i.scope !== 'user') ?? installs.find(fits))?.version as string ?? ''
 }
 
 /** The page server while the app is being worked on; '' in a built app. */

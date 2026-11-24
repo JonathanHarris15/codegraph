@@ -3,12 +3,14 @@
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import decisions from './decisions.md?raw'
 import designSystem from './design-system.md?raw'
 import newComputer from './new-computer.md?raw'
 import proposals from './proposals.md?raw'
 import setup from './setup.md?raw'
 import sketches from './sketches.md?raw'
 import tags from './tags.md?raw'
+import terms from './terms.md?raw'
 import workingHere from './working-here.md?raw'
 import type { Edit, Instructions } from './schema.js'
 import { keepWhole } from '../machine/index.js'
@@ -25,6 +27,8 @@ const texts = {
     text: newComputer,
   },
   tags: { about: 'The config, the tags and the words on wires, and what the check holds code to', text: tags },
+  terms: { about: "Writing a repo's terms in codegraph/terms/, and borrowing one another repo defines", text: terms },
+  decisions: { about: 'Recording a decision as an ADR in codegraph/adr/, on the template, with the rules the check holds the code to', text: decisions },
   'design-system': {
     about: "How to set up and keep a repo's design system: DESIGN.md, the theme, UI blocks and their states, recipes, and the live view's page",
     text: designSystem,

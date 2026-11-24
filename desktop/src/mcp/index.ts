@@ -1,8 +1,10 @@
 // codegraph: shell
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
-import { resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { z } from 'zod'
+import { borrow } from '../features/borrow-term.js'
 import { checkCode } from '../features/check-code.js'
 import { describeMap } from '../features/describe-map.js'
 import { describeSketch } from '../features/describe-sketch.js'
@@ -18,7 +20,7 @@ import { useFolder as useAgentsFolder } from '../modules/agents/index.js'
 import { useFolder as useAnnotationsFolder } from '../modules/annotations/index.js'
 import { useFolder as useCardTypesFolder } from '../modules/card-types/index.js'
 import { useFolder as useInstructionsFolder } from '../modules/instructions/index.js'
-import { dataFolder } from '../modules/machine/index.js'
+import { dataFolder, versionIn } from '../modules/machine/index.js'
 import { useFolder as useMembersFolder } from '../modules/members/index.js'
 import { useFolder as useProjectsFolder } from '../modules/projects/index.js'
 import { useFolder as useSketchesFolder } from '../modules/sketches/index.js'
@@ -43,8 +45,16 @@ useMembersFolder(dataFolder())
 useSyncFolder(dataFolder())
 const text = (words: string) => ({ content: [{ type: 'text' as const, text: words }] })
 
+// This MCP is the app's own: its version is the app's, from the package.json
+// two folders up from out/main/mcp.js. The plugin's launcher says which
+// version of the skills started it (ADR 0037).
+const versions = {
+  app: versionIn(resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')),
+  skills: process.env['CODEGRAPH_PLUGIN_VERSION'] ?? '',
+}
+
 const serve = async (): Promise<void> => {
-  const server = new McpServer({ name: 'codegraph', version: '0.1.0' })
+  const server = new McpServer({ name: 'codegraph', version: versions.app || '0.0.0' })
 
   server.tool(
     'map',
@@ -68,10 +78,21 @@ const serve = async (): Promise<void> => {
   )
 
   server.tool(
+    'borrow',
+    "Copies a term another repo of this repo's project defines into this repo's codegraph/terms/, pinned to the commit it was taken at, or copies it again when the check says the copy is stale (ADR 0036). Never write or edit a borrowed term by hand.",
+    {
+      term: z.string().describe('The term, by its name.'),
+      from: z.string().optional().describe('The repo that defines it, when more than one does: its GitHub address or its name.'),
+      repo: z.string().optional().describe('The repo folder; the folder the agent works in if left out.'),
+    },
+    async ({ term, from, repo }) => text(await borrow(here(repo), term, from ?? '')),
+  )
+
+  server.tool(
     'instructions',
-    'What codegraph asks of an agent, by topic: setup (how to set a repo up), new-computer (getting a repo that is already set up working on another computer), tags (the rules), design-system, proposals (making and building a proposal), sketches (drawing one with `draw`), working-here (the block for CLAUDE.md or AGENTS.md).',
-    { topic: z.string().describe('setup, new-computer, tags, design-system, proposals, sketches or working-here') },
-    async ({ topic }) => text(giveInstructions(topic)),
+    'What codegraph asks of an agent, by topic: setup (how to set a repo up), new-computer (getting a repo that is already set up working on another computer), tags (the rules), terms (writing and borrowing terms), decisions (recording an ADR on the template), design-system, proposals (making and building a proposal), sketches (drawing one with `draw`), working-here (the block for CLAUDE.md or AGENTS.md).',
+    { topic: z.string().describe('setup, new-computer, tags, terms, decisions, design-system, proposals, sketches or working-here') },
+    async ({ topic }) => text(giveInstructions(topic, versions)),
   )
 
   server.tool(

@@ -8,7 +8,7 @@ import { useFolder as useCardTypesFolder } from '../modules/card-types/index.js'
 import { useFolder as useGithubFolder, useKeystore } from '../modules/github/index.js'
 import { useFolder as useInstructionsFolder } from '../modules/instructions/index.js'
 import { openFirebaseCloud, openFolderCloud, useCloud } from '../modules/cloud/index.js'
-import { appFolder, bringOldFiles, cloudFolder, devRendererUrl, firebaseSettings, githubHost, keystore, windowFolder } from '../modules/machine/index.js'
+import { appFolder, appVersion, bringOldFiles, cloudFolder, devRendererUrl, firebaseSettings, githubHost, keystore, mcpServerFile, sayWhereMcpIs, windowFolder } from '../modules/machine/index.js'
 import { useFolder as useMembersFolder } from '../modules/members/index.js'
 import { useMirrors } from '../modules/repo/index.js'
 import { signInAgain } from '../modules/session/index.js'
@@ -22,6 +22,8 @@ import { openBridge } from './bridge.js'
 const wireModules = async (): Promise<void> => {
   const home = await appFolder()
   bringOldFiles(await windowFolder(), home)
+  // The plugin's launcher starts whatever MCP this says, so it is always this app's (ADR 0037).
+  sayWhereMcpIs(home, await mcpServerFile(), await appVersion())
   useProjectsFolder(home)
   useSketchesFolder(home)
   useAgentsFolder(home)

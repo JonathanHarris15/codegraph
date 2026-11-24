@@ -1,5 +1,5 @@
 // codegraph: test feature list-projects
-import { mkdirSync, rmSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createProject } from '../src/features/create-project.js'
@@ -8,7 +8,7 @@ import { linkSoftwareSystem } from '../src/features/link-software-system.js'
 import { useFolder as useGithubFolder } from '../src/modules/github/index.js'
 import { useChooser } from '../src/modules/machine/index.js'
 import { addSoftwareSystem, useFolder as useProjectsFolder } from '../src/modules/projects/index.js'
-import { aSoftwareSystem, closeYard, openYard, type Yard } from './yard.js'
+import { aSoftwareSystem, closeYard, git, openYard, type Yard } from './yard.js'
 
 let yard: Yard
 
@@ -117,5 +117,56 @@ describe('the grid of projects', () => {
     mkdirSync(loose)
     await linkSoftwareSystem(id, loose)
     expect((await listProjects())[0]?.systems).toEqual([])
+  })
+})
+
+describe("codegraph's skills in each repo (ADR 0037)", () => {
+  const told = process.env['CLAUDE_CONFIG_DIR']
+  afterEach(() => {
+    if (told === undefined) delete process.env['CLAUDE_CONFIG_DIR']
+    else process.env['CLAUDE_CONFIG_DIR'] = told
+  })
+
+  /** Claude Code's own record of the plugins installed on this computer. */
+  const installed = (installs: Record<string, unknown>): void => {
+    const config = join(yard.path, 'claude')
+    mkdirSync(join(config, 'plugins'), { recursive: true })
+    writeFileSync(join(config, 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: installs }))
+    process.env['CLAUDE_CONFIG_DIR'] = config
+  }
+
+  /** A set-up repo whose committed settings turn the plugin on for everyone on it. */
+  const turnedOn = (name: string): string => {
+    const repo = aSoftwareSystem(yard, name, { setUp: true })
+    mkdirSync(join(repo, '.claude'), { recursive: true })
+    writeFileSync(join(repo, '.claude', 'settings.json'), JSON.stringify({ enabledPlugins: { 'codegraph-app@codegraph': true } }))
+    git(repo, 'add', '-A')
+    git(repo, 'commit', '-m', 'skills')
+    return repo
+  }
+
+  it('says a repo turns the skills on, and that they are not installed on this computer', async () => {
+    installed({})
+    const { id } = await createProject('Mosaic')
+    await linkSoftwareSystem(id, turnedOn('web'))
+    expect((await listProjects())[0]?.systems[0]?.skills).toEqual({ on: true, installed: '', behind: false })
+  })
+
+  it('says when the skills installed here are older than the app', async () => {
+    installed({ 'codegraph-app@codegraph': [{ scope: 'user', version: '0.0.1', installPath: '/x' }] })
+    const { id } = await createProject('Mosaic')
+    await linkSoftwareSystem(id, aSoftwareSystem(yard, 'api', { setUp: true }))
+    expect((await listProjects())[0]?.systems[0]?.skills).toEqual({ on: false, installed: '0.0.1', behind: true })
+  })
+
+  it('counts skills installed for one repo only in that repo', async () => {
+    const repo = turnedOn('web')
+    installed({ 'codegraph-app@codegraph': [{ scope: 'project', projectPath: repo, version: '999.0.0', installPath: '/x' }] })
+    const { id } = await createProject('Mosaic')
+    await linkSoftwareSystem(id, repo)
+    await linkSoftwareSystem(id, aSoftwareSystem(yard, 'api', { setUp: true }))
+    const [web, api] = (await listProjects())[0]!.systems
+    expect(web?.skills).toEqual({ on: true, installed: '999.0.0', behind: false })
+    expect(api?.skills).toEqual({ on: false, installed: '', behind: false })
   })
 })

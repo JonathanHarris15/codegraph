@@ -1,6 +1,7 @@
 // codegraph: feature list-projects in workspace
-// codegraph: uses projects, repo, reader, cloud, members
+// codegraph: uses projects, repo, reader, cloud, members, machine
 import { isConnected } from '../modules/cloud/index.js'
+import { appVersion, installedSkills, olderVersion } from '../modules/machine/index.js'
 import { roleOf, whoIsIn, type Role } from '../modules/members/index.js'
 import { chooseBranch, listProjects as stored, type ProjectMember } from '../modules/projects/index.js'
 import { listPoints, pointFor, type Point } from '../modules/reader/index.js'
@@ -52,6 +53,10 @@ export type SoftwareSystemView = {
   /** With no working copy here, or its folder gone: a folder beside the
    *  project's other repos that is this repo, offered for linking. */
   found: string
+  /** codegraph's skills here (ADR 0037): whether the repo turns them on for
+   *  everyone on it, the version installed on this computer for it ('' for
+   *  none), and whether that is older than this app. */
+  skills: { on: boolean; installed: string; behind: boolean }
 }
 
 export type ProjectView = {
@@ -83,8 +88,9 @@ export const cloudOf = (facts: RepoFacts): Cloud => {
 /** Every project with the live state of each software system under it. Ask it to
  *  fetch first and it asks GitHub what it has before answering. Where there is an
  *  online side, projects need signing in to; none show for no one. */
-export const listProjects = async (fetchFirst = false): Promise<ProjectView[]> =>
-  Promise.all(
+export const listProjects = async (fetchFirst = false): Promise<ProjectView[]> => {
+  const app = await appVersion()
+  return Promise.all(
     (isConnected() && !whoIsIn() ? [] : stored()).map(async (project) => ({
       online: project.online ?? false,
       role: roleOf(project, whoIsIn()?.id ?? ''),
@@ -124,8 +130,13 @@ export const listProjects = async (fetchFirst = false): Promise<ProjectView[]> =
             taggedFiles: facts.taggedFiles,
             sourceFiles: facts.sourceFiles,
             found,
+            skills: (() => {
+              const installed = system.path ? installedSkills(system.path) : ''
+              return { on: facts.skillsOn, installed, behind: olderVersion(installed, app) }
+            })(),
           }
         }),
       ),
     })),
   )
+}

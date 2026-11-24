@@ -7,6 +7,9 @@ import { removeFromMap } from '../features/remove-from-map.js'
 import { renameOnMap } from '../features/rename-on-map.js'
 import { changeRole } from '../features/change-role.js'
 import { changeToken } from '../features/change-token.js'
+import { commitOntology } from '../features/commit-ontology.js'
+import { saveAdr, saveTerm } from '../features/save-ontology.js'
+import { showOntology } from '../features/show-ontology.js'
 import { checkForUpdate } from '../features/check-for-update.js'
 import { reachDevServer } from '../features/reach-dev-server.js'
 import { chooseBranch } from '../features/choose-branch.js'
@@ -94,6 +97,10 @@ export const FEATURES = {
   dropProposal,
   chooseBranch,
   changeToken,
+  showOntology,
+  saveTerm,
+  saveAdr,
+  commitOntology,
   reachDevServer,
   showAnnotations,
   saveAnnotations,

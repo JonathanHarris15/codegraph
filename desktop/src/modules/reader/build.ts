@@ -21,6 +21,7 @@ import { isRecipe, readRecipe } from './recipes.js'
 import { DESIGN, readDesign } from './design.js'
 import { PROPOSAL, readProposal } from './proposal.js'
 import { readPrismaShape } from './prisma.js'
+import { isOntologyFile, readOntology } from './ontology.js'
 import { readShape } from './shape.js'
 import { readTags, type FileTags } from './tags.js'
 
@@ -131,6 +132,7 @@ export const readFacts = (point: Point, files: Map<string, string>): Facts => {
     uiBlocks: [],
     recipes: [],
     mockups: {},
+    ontology: { terms: [], adrs: [] },
   }
   const facts: Facts = { map, tagsOf: new Map(), componentOf: new Map(), links: [], calls: [], problems }
   const unread: string[] = []
@@ -138,6 +140,9 @@ export const readFacts = (point: Point, files: Map<string, string>): Facts => {
   const design = files.get(DESIGN)
   map.design = design === undefined ? null : readDesign(design)
   problems.push(...unread.map((says) => ({ file: PROPOSAL, line: 1, says })))
+  const misread: { file: string; says: string }[] = []
+  map.ontology = readOntology(files, misread)
+  problems.push(...misread.map(({ file, says }) => ({ file, line: 1, says })))
   const done = (): Facts => {
     map.problems = problems.map((p) => p.says)
     return facts
@@ -174,7 +179,7 @@ export const readFacts = (point: Point, files: Map<string, string>): Facts => {
   const kept: { path: string; component: Component; said: FileTags['stores'][number] }[] = []
 
   for (const [path, text] of files) {
-    if (path === CONFIG || path === PROPOSAL || path === DESIGN || isRecipe(path) || path === 'tsconfig.json' || path === 'jsconfig.json') continue
+    if (path === CONFIG || path === PROPOSAL || path === DESIGN || isRecipe(path) || isOntologyFile(path) || path === 'tsconfig.json' || path === 'jsconfig.json') continue
     const tags = readTags(path, text)
     tagsOf.set(path, tags)
     problems.push(...tags.problems.map((says) => ({ file: path, line: 1, says })))
@@ -366,7 +371,7 @@ const besides = (file: string, written: string): string => {
 
 /** Every field in a shape that points at a store, by its place in the
  *  record: photo.ownerId. */
-const pointing = (shape: Shape, before = ''): { place: string; field: Field }[] =>
+export const pointing = (shape: Shape, before = ''): { place: string; field: Field }[] =>
   shape.fields.flatMap((field) => {
     const place = before + field.name
     const inner = (holds: Holds): { place: string; field: Field }[] =>

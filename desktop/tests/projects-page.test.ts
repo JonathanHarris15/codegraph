@@ -66,7 +66,7 @@ describe('the projects screen in the real app', () => {
   it('shows how to connect your agent in a window of its own', async () => {
     await page.getByRole('button', { name: 'Your agent' }).click()
     const window = page.getByRole('dialog', { name: 'Your agent' })
-    expect(await shown(window)).toContain('claude mcp add --scope user codegraph')
+    expect(await shown(window)).toContain('claude plugin install codegraph-app@codegraph')
     await picture('projects-2-agent')
     await window.getByRole('button', { name: 'Close' }).click()
     await window.waitFor({ state: 'detached', timeout: PATIENCE })

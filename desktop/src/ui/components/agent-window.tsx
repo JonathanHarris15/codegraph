@@ -19,9 +19,9 @@ export const AgentWindow = ({
   return (
     <Sheet title="Your agent" onClose={onClose} wide>
       <div className="ds-hint">
-        Your own agent sets repos up and builds what you draw, through the codegraph MCP. Run this once in a
-        terminal to connect Claude Code to it, in every repo on this computer. Then ask it to set a repo up for
-        codegraph.
+        Your own agent sets repos up and builds what you draw. Run this once in a terminal to give Claude Code
+        codegraph's skills and connect it to this app, in every repo on this computer. Then start a new session and
+        ask it to set a repo up for codegraph.
       </div>
       {connection ? (
         <>

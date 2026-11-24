@@ -404,8 +404,62 @@ _Avoid_: annotation, marker, label, comment
 
 **Set up**:
 A software system whose code has been reshaped to fit codegraph's
-conventions, carries tags throughout, and names its projects.
+conventions, carries tags throughout, names its projects, and keeps its ADRs
+and terms in its `codegraph/` folder.
 _Avoid_: installed, configured, onboarded, initialised
+
+## Decisions and terms
+
+**Ontology map**:
+A project's ADRs, rules and terms, and how they point at each other, read
+from the `codegraph/` folder of each of its repos. The map shows what the code
+is; the ontology map says what it may be, and the check holds the one to the
+other.
+_Avoid_: knowledge graph, domain model, glossary (for the whole of it), rulebook
+
+**Ontology graph**:
+The ontology map drawn to be looked at: terms as dots and decisions as squares,
+pulled together by what links them, drifting, each software system in a bubble
+of its own. The one thing in the app called a graph.
+_Avoid_: knowledge graph, network, canvas (that is the map's)
+
+**Dictionary**:
+The ontology map as pages to write in: an index of each software system's terms
+and decisions, and one entry at a time, every part of it a field. Each change is
+written to the entry's file on a branch off the main line.
+_Avoid_: glossary, wiki, editor
+
+**ADR**:
+One decision about a software system, written down with why it was made and
+the rules its code keeps to because of it. Kept one to a file in a set-up
+repo's `codegraph/adr/`. Only an accepted one's rules hold.
+_Avoid_: decision record, design doc, RFC, spec
+
+**Rule**:
+Something the code must keep to because an ADR says so: a component never
+reaches another, only one component reaches a thing, only one module writes a
+store. The check holds the code to it, and a broken rule names its ADR. A
+repo's own rules only add to the ones every set-up repo shares, never loosen
+them.
+_Avoid_: constraint, policy, guardrail
+
+**Term**:
+One word a project uses for one thing, written down: what it means, the words
+to avoid for it, the store whose records it is, and the terms those records
+point at. Kept one to a file in a set-up repo's `codegraph/terms/`. The same
+word can be two terms in two software systems that never reach each other.
+_Avoid_: glossary entry, definition, concept, vocabulary
+
+**Defining repo**:
+The one repo a term is written in: the repo that keeps its records, or, where
+none does, the one the others call. Nobody picks it at setup.
+_Avoid_: home repo, source repo, owner (that is a member)
+
+**Borrowed term**:
+A copy of a term from its defining repo, written by codegraph into a repo that
+uses it, pinned to the commit it was taken at, and never edited by hand. The
+check says when it has been touched, or when the term has moved on since.
+_Avoid_: imported term, mirror, vendored term, shared copy
 
 ## Working together
 
@@ -510,3 +564,17 @@ were kept, and whether a person wrote them or put the default back. The newest
 is what agents are told, and none is ever taken away, so nothing a person has
 written is lost.
 _Avoid_: version, revision, draft, history entry
+
+**Skill**:
+One job codegraph teaches an agent to take up by itself when the work in front
+of it calls for one, such as setting a repo up, writing a term or recording a
+decision, with the steps of that job. What it needs to know it asks codegraph
+for, by topic, so it is never older than the app it talks to.
+_Avoid_: command, prompt, workflow, recipe (that is how a page lays out)
+
+**Plugin**:
+How codegraph's skills reach a person's Claude Code: one install that brings
+the skills and connects the agent to codegraph. It is installed for a person,
+or turned on for everyone on a repo by the repo's own settings. Its version is
+the app's.
+_Avoid_: extension, add-on, package, integration

@@ -1,6 +1,7 @@
 // codegraph: module reader
 import type { UiBlock } from './blocks.js'
 import type { DesignSystem } from './design.js'
+import type { OntologyMap } from './ontology.js'
 import type { Proposal } from './proposal.js'
 import type { Recipe } from './recipes.js'
 
@@ -159,6 +160,9 @@ export type SystemMap = {
   recipes: Recipe[]
   /** The proposal's mockups, by the id of the page each is for, as data URLs. */
   mockups: Record<string, string>
+  /** Its terms and ADRs, from its codegraph folder: its part of the
+   *  project's ontology map (ADR 0035). */
+  ontology: OntologyMap
 }
 
 export const outsideId = (name: string): string => `outside:${name}`

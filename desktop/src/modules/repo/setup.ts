@@ -13,6 +13,9 @@ export type SetupFacts = {
   taggedFiles: number
   /** How many source files there are to tag. */
   sourceFiles: number
+  /** Its committed .claude/settings.json turns codegraph's skills on for
+   *  everyone on the repo (ADR 0037). */
+  skillsOn: boolean
 }
 
 export const CONFIG = 'codegraph.config.json'
@@ -24,6 +27,7 @@ export const noSetup: SetupFacts = {
   projects: [],
   taggedFiles: 0,
   sourceFiles: 0,
+  skillsOn: false,
 }
 
 const lines = (text: string): string[] => (text ? text.split(/\r?\n/) : [])
@@ -38,6 +42,18 @@ export const projectsIn = (config: string): string[] => {
   }
 }
 
+/** codegraph's plugin, as a repo's settings and Claude Code name it. */
+export const SKILLS_PLUGIN = 'codegraph-app@codegraph'
+
+/** A repo's Claude Code settings turn codegraph's skills on. */
+const turnsSkillsOn = (settings: string): boolean => {
+  try {
+    return (JSON.parse(settings) as { enabledPlugins?: Record<string, unknown> }).enabledPlugins?.[SKILLS_PLUGIN] === true
+  } catch {
+    return false
+  }
+}
+
 /** Reads a repo as it stands at one ref — only what git tracks there, so
  *  node_modules and other untracked clutter never counts. */
 export const readSetupAt = async (path: string, ref: string): Promise<SetupFacts> => {
@@ -48,9 +64,10 @@ export const readSetupAt = async (path: string, ref: string): Promise<SetupFacts
   // and tells nothing about a repo with no config.
   if (!config) return noSetup
 
-  const [tagged, listed] = await Promise.all([
+  const [tagged, listed, settings] = await Promise.all([
     git(path, ['grep', '--files-with-matches', '-I', 'codegraph:', ref]),
     git(path, ['ls-tree', '-r', '--name-only', ref]),
+    git(path, ['show', `${ref}:.claude/settings.json`]),
   ])
 
   return {
@@ -60,6 +77,7 @@ export const readSetupAt = async (path: string, ref: string): Promise<SetupFacts
       .map((line) => line.slice(line.indexOf(':') + 1))
       .filter((file) => SOURCE.test(file)).length,
     sourceFiles: lines(listed).filter((file) => SOURCE.test(file)).length,
+    skillsOn: turnsSkillsOn(settings),
   }
 }
 

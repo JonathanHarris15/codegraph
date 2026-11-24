@@ -97,7 +97,7 @@ export type MapShown = {
   suggestions: string[]
 }
 
-const blankMap = (point: Point): SystemMap => ({ point, setUp: false, projects: [], system: '', containers: [], components: [], stores: [], wires: [], outside: [], problems: [], proposal: null, design: null, uiBlocks: [], recipes: [], mockups: {} }) as unknown as SystemMap
+const blankMap = (point: Point): SystemMap => ({ point, setUp: false, projects: [], system: '', containers: [], components: [], stores: [], wires: [], outside: [], problems: [], proposal: null, design: null, uiBlocks: [], recipes: [], mockups: {}, ontology: { terms: [], adrs: [] } }) as unknown as SystemMap
 
 /** Reads one software system, if this member can reach it. With no working copy
  *  its history is fetched from GitHub with their own access, and GitHub's answer

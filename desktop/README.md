@@ -15,8 +15,30 @@ system:
 
 **New project** makes an empty one. **Link a repo** points it at a folder
 already on this computer: the app reads it and remembers where it is. It never
-writes to your repo and never moves code — turning codegraph on inside a repo
-is still `/codegraph:setup` in Claude Code.
+moves code. Turning codegraph on inside a repo is your agent's job: see **Your
+agent** below.
+
+## Your agent
+
+Codegraph's skills reach Claude Code as a plugin, `codegraph-app`, which also
+connects it to this app. **Your agent** on the projects page gives the command;
+run it once in a terminal:
+
+```
+claude plugin marketplace add JonathanHarris15/codegraph && claude plugin install codegraph-app@codegraph
+```
+
+Open the app once afterwards, so it can tell the plugin where it is, then start
+a new session and ask your agent to set a repo up (`/codegraph-app:setup`). An
+MCP added by hand with `claude mcp add` can go.
+
+## The ontology map
+
+A project's terms and decisions live in each repo's `codegraph/` folder. The
+**Ontology map** button on a project's map opens them as a graph to look at and
+a dictionary to write in. What you write there is saved as files on a branch
+off the main line, `ontology`, and committed from the view when you say so;
+nothing reaches GitHub until you push.
 
 **Refresh** fetches from GitHub first, then recounts. Without it the app says
 what git last knew.

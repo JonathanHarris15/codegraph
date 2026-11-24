@@ -2,7 +2,7 @@
 // codegraph: uses projects, reader, repo
 import { findProject } from '../modules/projects/index.js'
 import { changeToken as changed, DESIGN } from '../modules/reader/index.js'
-import { makeBranch, readSoftwareSystem, readWorkingFile, tipOf, writeWorkingFile } from '../modules/repo/index.js'
+import { leaveMainLine, readWorkingFile, writeWorkingFile } from '../modules/repo/index.js'
 
 export type TokenChanged = {
   ok: boolean
@@ -12,16 +12,6 @@ export type TokenChanged = {
 }
 
 const refused = (problem: string): TokenChanged => ({ ok: false, branch: '', problem })
-
-/** A branch name for a change to one token that the repo does not have yet:
- *  design/colors-action, then design/colors-action-2 and on. */
-const freeBranch = async (path: string, id: string): Promise<string> => {
-  const base = `design/${id.replace(/[^a-z0-9-]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase()}`
-  for (let n = 1; ; n++) {
-    const name = n === 1 ? base : `${base}-${n}`
-    if (!(await tipOf(path, `refs/heads/${name}`))) return name
-  }
-}
 
 /** Changes one token's value in a software system's DESIGN.md, in this
  *  member's working copy. Never on the main line: there it makes a branch
@@ -35,12 +25,9 @@ export const changeToken = async (projectId: string, systemId: string, tokenId: 
   const done = changed(text, tokenId, value)
   if ('problem' in done) return refused(done.problem)
 
-  const facts = await readSoftwareSystem(system.path)
-  let branch = facts.branch
-  if (!branch || branch === 'HEAD' || branch === facts.mainLine || ['main', 'master'].includes(branch)) {
-    branch = await freeBranch(system.path, tokenId)
-    if (!(await makeBranch(system.path, branch))) return refused(`Git would not start the branch ${branch}, so nothing was changed.`)
-  }
+  const name = `design/${tokenId.replace(/[^a-z0-9-]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase()}`
+  const branch = await leaveMainLine(system.path, name)
+  if (!branch) return refused(`Git would not start the branch ${name}, so nothing was changed.`)
   writeWorkingFile(system.path, DESIGN, done.text)
   return { ok: true, branch, problem: '' }
 }

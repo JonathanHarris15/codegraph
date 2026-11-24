@@ -1,8 +1,9 @@
 // codegraph: module reader
-// codegraph: front door DESIGN, changeToken, readDesign, DesignSystem, UiBlock, UiOption, UiState, RECIPES, Recipe, Token, TokenGroup, TokenPart, TokenTier, readMap, listPoints, pointFor, checkRepo, proposalProgress, measure, proposalFrom, changesAnything, blankProposal, idOfName, componentName, live, outsideId, storeId, holdsWords, PROPOSAL, PROPOSAL_FOLDER, storeName, shapeGaps, ProposedStore, ProposedField, Point, SystemMap, Component, Container, CodeFile, Store, Shape, Field, Holds, Wire, WireKind, ComponentKind, Mismatch, Proposal, ProposedContainer, ProposedComponent, ProposedWire, Progress, ProposalItem, ItemState, DrawnCard, FromDrawing
+// codegraph: front door DESIGN, changeToken, readDesign, DesignSystem, UiBlock, UiOption, UiState, RECIPES, Recipe, Token, TokenGroup, TokenPart, TokenTier, readMap, listPoints, pointFor, checkRepo, checkOntologyOf, checkAcrossRepos, checkAcross, borrowTerm, ONTOLOGY, termFileFor, adrFileFor, writeTerm, writeAdr, ADR_SECTIONS, OntologyMap, Term, TermLink, HowMany, Adr, AdrSection, AdrStatus, Alternative, Rule, RepoMap, proposalProgress, measure, proposalFrom, changesAnything, blankProposal, idOfName, componentName, live, outsideId, storeId, holdsWords, PROPOSAL, PROPOSAL_FOLDER, storeName, shapeGaps, ProposedStore, ProposedField, Point, SystemMap, Component, Container, CodeFile, Store, Shape, Field, Holds, Wire, WireKind, ComponentKind, Mismatch, Proposal, ProposedContainer, ProposedComponent, ProposedWire, Progress, ProposalItem, ItemState, DrawnCard, FromDrawing
 import { existsSync, readFileSync } from 'node:fs'
 import { extname, join } from 'node:path'
-import { buildMap, type Mismatch } from './build.js'
+import { buildMap, readFacts, type Mismatch } from './build.js'
+import { checkAcross, checkOntology } from './ontology-check.js'
 import { checkFiles } from './check.js'
 import { measure, PROPOSAL_FOLDER, type Progress } from './proposal.js'
 import { live as liveFolder, type Point, type SystemMap } from './schema.js'
@@ -19,6 +20,10 @@ export type { Mismatch } from './build.js'
 export { changeToken, DESIGN, readDesign } from './design.js'
 export type { UiBlock, UiOption, UiState } from './blocks.js'
 export { RECIPES } from './recipes.js'
+export { adrFileFor, borrowTerm, ONTOLOGY, termFileFor, writeAdr, writeTerm } from './ontology.js'
+export { ADR_SECTIONS } from './ontology.js'
+export type { Adr, AdrSection, AdrStatus, Alternative, HowMany, OntologyMap, Rule, Term, TermLink } from './ontology.js'
+export type { RepoMap } from './ontology-check.js'
 export type { Recipe } from './recipes.js'
 export type { DesignSystem, Token, TokenGroup, TokenPart, TokenTier } from './design.js'
 export type {
@@ -107,3 +112,15 @@ export const proposalProgress = async (repo: string, map?: SystemMap): Promise<P
   const base = sha ? await readMap(repo, { kind: 'commit', sha, title: '' }) : null
   return measure(now, now.proposal, base?.setUp ? base : null, (path) => existsSync(join(repo, path)))
 }
+
+export { checkAcross }
+
+/** What does not fit in a repo's ontology map alone, its terms and ADRs and
+ *  the rules they hold the code to, read at one point (ADR 0035). */
+export const checkOntologyOf = async (repo: string, point: Point = liveFolder): Promise<Mismatch[]> =>
+  checkOntology(readFacts(point, await filesAt(repo, point)))
+
+/** What does not fit between the terms of a project's repos on this computer,
+ *  each read in its live folder (ADR 0036), by the repo it is in. */
+export const checkAcrossRepos = async (repos: { address: string; path: string }[]): Promise<{ address: string; mismatch: Mismatch }[]> =>
+  checkAcross(await Promise.all(repos.map(async (r) => ({ address: r.address, map: await readMap(r.path, liveFolder) }))))

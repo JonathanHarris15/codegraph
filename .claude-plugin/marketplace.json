@@ -1,6 +1,18 @@
 {
   "name": "codegraph",
   "description": "Codegraph: keep a codebase in modules, features and UI, with a live map that fills the chat.",
-  "owner": { "name": "Jonathan Harris" },
-  "plugins": [{ "name": "codegraph", "source": "./legacy" }]
+  "owner": {
+    "name": "Jonathan Harris"
+  },
+  "plugins": [
+    {
+      "name": "codegraph",
+      "source": "./legacy"
+    },
+    {
+      "name": "codegraph-app",
+      "source": "./desktop/plugin",
+      "description": "Codegraph's skills and MCP connection for the codegraph desktop app: setup, terms, decisions, grilling plans, the check, the design system and proposals."
+    }
+  ]
 }

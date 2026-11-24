@@ -20,3 +20,14 @@ export const git = async (cwd: string, args: string[], seconds = 20): Promise<st
     return ''
   }
 }
+
+/** One git command's output exactly as git wrote it, last newline and all,
+ *  for a file's words where every byte counts; '' on failure. */
+export const gitRaw = async (cwd: string, args: string[], seconds = 20): Promise<string> => {
+  try {
+    const { stdout } = await started('git', args, { cwd, windowsHide: true, timeout: seconds * 1000, maxBuffer: 8 * 1024 * 1024 })
+    return stdout
+  } catch {
+    return ''
+  }
+}

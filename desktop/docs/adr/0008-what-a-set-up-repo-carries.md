@@ -4,7 +4,7 @@ Date: 2026-11-02
 
 ## Status
 
-Accepted.
+Accepted. ADR 0035 adds a third thing it carries: a `codegraph/` folder of ADRs and terms.
 
 ## Context
 
