@@ -1,7 +1,9 @@
 // codegraph: feature check-code in agent
-// codegraph: uses reader
+// codegraph: uses reader, projects, machine
 // codegraph: command check
-import { checkRepo, proposalProgress, PROPOSAL_FOLDER, type Mismatch, type Progress } from '../modules/reader/index.js'
+import { sameFolder } from '../modules/machine/index.js'
+import { listProjects } from '../modules/projects/index.js'
+import { checkAcrossRepos, checkRepo, proposalProgress, PROPOSAL_FOLDER, type Mismatch, type Progress } from '../modules/reader/index.js'
 
 export type Checked = {
   clean: boolean
@@ -44,8 +46,23 @@ const proposalWords = (progress: Progress): string[] => {
 /** Holds a repo's live folder to its tags and config, and to the proposal on
  *  its branch if there is one, and says what does not fit, one line each,
  *  the way an agent or a person fixes them. */
+/** What does not fit between this repo's terms and those of the other repos of
+ *  its projects on this computer: copies gone stale, words defined twice
+ *  (ADR 0036). */
+const acrossProjects = async (repo: string): Promise<Mismatch[]> => {
+  const found: Mismatch[] = []
+  for (const project of listProjects().filter((p) => p.systems.some((s) => s.path && sameFolder(s.path, repo)))) {
+    const repos = project.systems.filter((s) => s.path).map((s) => ({ address: s.remote || s.name, path: s.path }))
+    const mine = repos.find((r) => sameFolder(r.path, repo))!.address
+    for (const { address, mismatch } of await checkAcrossRepos(repos))
+      if (address === mine && !found.some((f) => f.file === mismatch.file && f.says === mismatch.says)) found.push(mismatch)
+  }
+  return found
+}
+
 export const checkCode = async (repo: string): Promise<Checked> => {
-  const [found, proposal] = await Promise.all([checkRepo(repo), proposalProgress(repo)])
+  const [inRepo, across, proposal] = await Promise.all([checkRepo(repo), acrossProjects(repo), proposalProgress(repo)])
+  const found = [...inRepo, ...across]
   const mismatches = found.filter((m) => !m.onPurpose)
   const exceptions = found.filter((m) => m.onPurpose)
   const onPurpose = exceptions.length

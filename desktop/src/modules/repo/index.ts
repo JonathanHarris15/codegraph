@@ -1,5 +1,5 @@
 // codegraph: module repo
-// codegraph: front door isRepo, remoteName, mainLineRef, isSetUp, readSoftwareSystem, folderName, readWorkingFile, writeWorkingFile, writeProposal, removeProposal, proposalPicture, headOf, makeBranch, switchBranch, useMirrors, mirrorFolder, fetchMirror, cloneWorkingCopy, findWorkingCopy, remoteOf, sameRemote, tipOf, isAncestor, mergeBase, fetchWorkingCopy, proposalsOnBranches, RepoFacts, SetupFacts, Picture, Reach
+// codegraph: front door isRepo, remoteName, mainLineRef, isSetUp, readSoftwareSystem, folderName, readWorkingFile, writeWorkingFile, removeWorkingFile, fileAtHead, changesIn, commitFolder, leaveMainLine, DiffLine, FileChange, writeProposal, removeProposal, proposalPicture, headOf, makeBranch, switchBranch, useMirrors, mirrorFolder, fetchMirror, cloneWorkingCopy, findWorkingCopy, remoteOf, sameRemote, tipOf, isAncestor, mergeBase, fetchWorkingCopy, proposalsOnBranches, RepoFacts, SetupFacts, Picture, Reach
 import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
 import { isRepo, mainLineRef, readGit, remoteName, type GitFacts } from './git.js'
@@ -8,7 +8,9 @@ import { isSetUp, noSetup, readSetupAt, type SetupFacts } from './setup.js'
 
 export { isRepo, isSetUp, mainLineRef, remoteName }
 export { headOf, makeBranch, proposalPicture, removeProposal, writeProposal } from './proposal.js'
-export { readWorkingFile, writeWorkingFile } from './files.js'
+export { readWorkingFile, removeWorkingFile, writeWorkingFile } from './files.js'
+export { changesIn, commitFolder, fileAtHead, leaveMainLine } from './folder.js'
+export type { DiffLine, FileChange } from './folder.js'
 export type { Picture } from './proposal.js'
 export { switchBranch } from './switch.js'
 export type { SetupFacts } from './setup.js'
