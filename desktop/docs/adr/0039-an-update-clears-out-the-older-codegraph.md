@@ -4,7 +4,7 @@ Date: 2026-11-24
 
 ## Status
 
-Proposed. Builds on ADR 0037, and on what a set-up repo carries (ADRs 0008,
+Accepted. Builds on ADR 0037, and on what a set-up repo carries (ADRs 0008,
 0035).
 
 ## Context
