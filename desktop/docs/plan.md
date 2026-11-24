@@ -363,3 +363,38 @@ its label, and watch the live view change as it works.
 Later: one design system shared by several software systems; tokens from Figma;
 suggesting a new UI block or recipe when several pages build the same thing by
 hand; contrast measured on the running page.
+
+## Checkpoint 10: The ontology map
+
+A project's terms and decisions are files in each repo, the check holds the
+code to them, and the app shows them as a graph and a dictionary (ADRs 0035,
+0036, 0038). Released as 0.6.0.
+
+- **CG-10.1** (done) Terms and ADRs live in `codegraph/terms/` and
+  `codegraph/adr/`, Markdown with a YAML head; ADRs on the team's template, six
+  sections. The reader reads them into each map.
+- **CG-10.2** (done) The check holds the code to them: accepted ADRs' rules
+  (never reaches, only through, only writer), a term's store and links against
+  the store's shape, avoid words in code names, missing references, and an
+  accepted ADR with a section left empty.
+- **CG-10.3** (done) Shared terms: one repo defines a term and the others borrow
+  it, a copy pinned to a commit. The MCP's `borrow` writes the copy; `check`
+  says when a copy is edited by hand, stale, or gone, and when two repos that
+  reach each other both define a word.
+- **CG-10.4** (done) The ontology map in the app: the ontology graph to look at,
+  each software system in a bubble, and the dictionary to write in. Edits are
+  written as files on a branch off the main line, shown as a diff, and
+  committed a repo at a time.
+- **CG-10.5** (done) Codegraph's skills, in the `codegraph-app` plugin (ADR
+  0037): setup, terms, decide, grill, check, design and propose. The plugin
+  starts the installed app's MCP; the MCP says when the skills are older than
+  the app, and a repo's row says when they are missing or old. Setup moves a
+  repo's `CONTEXT.md` and `docs/adr/` into `codegraph/` and turns the plugin on.
+- **CG-10.6** (ask) Say on a repo's row when its setup has fallen behind what
+  setup asks now, and hand over a prompt to bring it up to date.
+
+**Try it:** open a project's ontology map, write a term in the dictionary, wire
+it to another in the graph, and commit both from the changes drawer.
+
+Later: borrowing a term from the dictionary; a term's card on the code map
+beside the store it names; rules about what is inside a file.
