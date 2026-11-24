@@ -4,7 +4,7 @@ import { useState, type PointerEvent, type ReactNode } from 'react'
 import type { Said } from '../../modules/wording/index.js'
 import { CARD_SHAPES, drawnShape, lookOf } from './card-looks.js'
 import { Glyph, KindGlyph, LookGlyph, isStore, keeps, kindClass, lookClass } from './kind-glyph.js'
-import { FIELDS_SHOWN, isFrame, nameFit, type DrawnCard, type Placed, type Side, type Spot } from './map-layout.js'
+import { FIELDS_SHOWN, TILES_SHOWN, isFrame, nameFit, type DrawnCard, type Placed, type Side, type Spot } from './map-layout.js'
 import { seamOf, textAreaOf } from './shape-outline.js'
 
 /** How the faces on the board are drawn: a card, and a wire's sentence. They
@@ -119,28 +119,33 @@ const AddField = ({ store, onAdd }: { store: string; onAdd: (field: { name: stri
   )
 }
 
-/** What is inside a card, by name, each with its kind's glyph in its kind's
- *  colour, so a page and a module of one name read as two things. */
-const Chips = ({ card }: { card: DrawnCard }) => (
-  <div className="map-chips">
-    {card.children.slice(0, 6).map((child) => {
-      const look = lookOf(child)
-      return (
-        <span
-          key={child.id}
-          className={`map-chip ${kindClass(child.kind)}${look ? ` ${lookClass(look)}` : ''}${isStore(child.kind) ? ' map-chip--store' : ''}`}
-          title={`${kindWords(child)}: ${child.name}`}
-        >
-          <span className="map-chip-glyph" aria-hidden="true">
-            {look ? <LookGlyph icon={look.icon} size={10} /> : <KindGlyph kind={child.kind} size={10} />}
+/** What is inside a card, by name, as tiles two to a row, each with its
+ *  kind's glyph in its kind's colour, so a page and a module of one name read
+ *  as two things. Six at most: past that, five and a tile for the rest. */
+const Chips = ({ card }: { card: DrawnCard }) => {
+  const many = card.children.length > TILES_SHOWN
+  const shown = many ? card.children.slice(0, TILES_SHOWN - 1) : card.children
+  return (
+    <div className="map-chips">
+      {shown.map((child) => {
+        const look = lookOf(child)
+        return (
+          <span
+            key={child.id}
+            className={`map-chip ${kindClass(child.kind)}${look ? ` ${lookClass(look)}` : ''}${isStore(child.kind) ? ' map-chip--store' : ''}`}
+            title={`${kindWords(child)}: ${child.name}`}
+          >
+            <span className="map-chip-glyph" aria-hidden="true">
+              {look ? <LookGlyph icon={look.icon} size={10} /> : <KindGlyph kind={child.kind} size={10} />}
+            </span>
+            <span className="map-chip-name">{child.name}</span>
           </span>
-          {child.name}
-        </span>
-      )
-    })}
-    {card.children.length > 6 ? <span className="map-chip map-more">+{card.children.length - 6}</span> : null}
-  </div>
-)
+        )
+      })}
+      {many ? <span className="map-chip map-more">+{card.children.length - shown.length} more</span> : null}
+    </div>
+  )
+}
 
 const Inside = ({ card, onAddField }: { card: DrawnCard; onAddField?: (field: { name: string; holds: string }) => void }) => {
   if (isStore(card.kind))

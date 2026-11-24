@@ -195,6 +195,15 @@ anywhere, or click it for a short one: a pointer, part of the note, holding
 nothing at its tip. Delete takes a picked pointer, not its note, and dragging
 its tip back on the note takes it too.
 
+## Between checkpoints: the drawing look
+
+Done at Jonathan's ask, after he picked from ten card designs tried side by
+side. The app now looks like a drawing (ADR 0033): drafting-paper grid,
+square corners, corner marks in each card's kind colour, labels in the code
+face, what is inside a card as tiles, a store's fields as a striped table,
+and square ports where wires meet. Wires into one card join and go in as
+one line to one arrow, with a dot where each joins (ADR 0034).
+
 ## Checkpoint 5: Codegraph sets itself up
 
 Run setup on this repo. The desktop app is reshaped and tagged. Legacy shows

@@ -122,23 +122,15 @@ const linesFor = (text: string, width: number, letter: number): number => {
   return lines
 }
 
-/** How many rows a card's chips take: up to six names and a count of the rest,
- *  each in a pill, wrapped across the card. */
-const chipRows = (names: string[], inside = STORE_INSIDE): number => {
-  const chips = [...names.slice(0, 6), ...(names.length > 6 ? [`+${names.length - 6}`] : [])]
-  let rows = 1
-  let used = 0
-  for (const chip of chips) {
-    // Each name has its kind's glyph before it. Reckoned a little wide, for
-    // names drawn bigger when the board is a little zoomed out.
-    const wide = Math.min(chip.length * 7.5 + 30, inside)
-    if (used && used + 4 + wide > inside) {
-      rows += 1
-      used = wide
-    } else used = used ? used + 4 + wide : wide
-  }
-  return rows
-}
+/** How many of what is inside a card it shows as tiles: all of six, or five
+ *  and a tile saying how many more. */
+export const TILES_SHOWN = 6
+
+/** How many rows a card's tiles take, two to a row. */
+const tileRows = (count: number): number => Math.ceil(Math.min(count, TILES_SHOWN) / 2)
+
+/** How tall a row of tiles is, with the gap under it. */
+const TILE_ROW = 26
 
 /** A store's card is as tall as what it says (two lines at most), the fields
  *  it lists, a line for any more, a line for what an open one takes, the rows
@@ -147,9 +139,11 @@ const chipRows = (names: string[], inside = STORE_INSIDE): number => {
 const storeHeight = (card: DrawnCard): number => {
   const fields = card.fields ?? []
   const lines = Math.min(fields.length, FIELDS_SHOWN) + (fields.length > FIELDS_SHOWN ? 1 : 0) + (card.others ? 1 : 0)
+  // A field's row is 20px, and the table has an edge round it.
+  const table = fields.length || card.others ? lines * 20 + 2 : 0
   const says = card.says ? 5 + Math.min(2, linesFor(card.says, STORE_INSIDE, 6.6)) * 17 : 0
-  const chips = card.children.length ? 8 + chipRows(card.children.map((c) => c.name)) * 20 : 0
-  return 96 + says + lines * 18 + chips + ADD_FIELD_ROW
+  const chips = card.children.length ? 8 + tileRows(card.children.length) * TILE_ROW : 0
+  return 96 + says + table + chips + ADD_FIELD_ROW
 }
 
 /** The row on a store's card where a field is added. */
@@ -173,7 +167,7 @@ const SKETCH_BODY = 32
  *  has no blank foot. On a sketch it keeps a little body below that. */
 const huggedHeight = (card: DrawnCard, inside: number): number => {
   const says = card.says ? 4 + Math.min(2, linesFor(card.says, inside, 7)) * 17 : 0
-  const chips = card.children.length ? 8 + chipRows(card.children.map((c) => c.name), inside) * 20 : 0
+  const chips = card.children.length ? 8 + tileRows(card.children.length) * TILE_ROW : 0
   // The repo a container is in, where its software system is kept in several.
   const repo = card.repoName ? 20 : 0
   return Math.max(LEAST_HEIGHT, 72 + says + repo + chips + (card.snug ? 0 : SKETCH_BODY))
@@ -778,12 +772,19 @@ export const openLevels = ({
  *  several wires into one card arrive apart. */
 export type Slots = { from: number; to: number }
 
-/** Where along its card's side each end of each wire meets it. Every end on
- *  one side of a card gets a place of its own, in the order of where the other
- *  ends are, so two wires between the same two cards, either way round, run
- *  apart and never draw as one. Two cards side by side meet on their facing
+/** Where along its card's side each end of each wire meets it. The wires
+ *  arriving on one side of a card all meet it at one place, so they join and
+ *  go in as one line to one arrow (ADR 0034). Every wire leaving a side has a
+ *  place of its own, and so does each arriving one on a card in `apart`: an
+ *  open card, where each wire has a hub of its own. Places go in the order of
+ *  where the other ends are. Two cards side by side meet on their facing
  *  sides; one above another, on top and bottom. */
-export const endSlots = <W extends { from: string; to: string }>(wires: W[], boxes: Map<string, Box>, keyOf: (wire: W) => string): Map<W, Slots> => {
+export const endSlots = <W extends { from: string; to: string }>(
+  wires: W[],
+  boxes: Map<string, Box>,
+  keyOf: (wire: W) => string,
+  apart: ReadonlySet<string> = new Set(),
+): Map<W, Slots> => {
   const sideOf = (box: Box, other: Box): Side => {
     const dx = other.x + other.w / 2 - (box.x + box.w / 2)
     const dy = other.y + other.h / 2 - (box.y + box.h / 2)
@@ -808,9 +809,19 @@ export const endSlots = <W extends { from: string; to: string }>(wires: W[], box
   }
   const out = new Map<W, Slots>()
   for (const list of ends.values()) {
-    list.sort((a, b) => a.along - b.along || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
-    list.forEach((one, i) => {
-      out.set(one.wire, { ...(out.get(one.wire) ?? { from: 0.5, to: 0.5 }), [one.end]: (i + 1) / (list.length + 1) })
+    // The arrivals on this side take one place between them, where the
+    // middle of what they come from is.
+    const joined = !apart.has(list[0]!.wire[list[0]!.end])
+    const arriving = joined ? list.filter((one) => one.end === 'to') : []
+    const places: { ends: typeof list; along: number; key: string }[] = [
+      ...list.filter((one) => !arriving.includes(one)).map((one) => ({ ends: [one], along: one.along, key: one.key })),
+      ...(arriving.length
+        ? [{ ends: arriving, along: arriving.reduce((sum, one) => sum + one.along, 0) / arriving.length, key: arriving.map((one) => one.key).sort()[0]! }]
+        : []),
+    ]
+    places.sort((a, b) => a.along - b.along || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+    places.forEach((place, i) => {
+      for (const one of place.ends) out.set(one.wire, { ...(out.get(one.wire) ?? { from: 0.5, to: 0.5 }), [one.end]: (i + 1) / (places.length + 1) })
     })
   }
   return out
