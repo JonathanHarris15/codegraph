@@ -6,6 +6,7 @@
 // (ADR 0038).
 import { BookOpen, Search } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Prose } from '../../design-system/prose.js'
 import { adrKey, findingsOf, nameOf, termKey, type Edits, type Model } from './model.js'
 
 type Kind = 'term' | 'word' | 'borrowed' | 'adr'
@@ -118,6 +119,9 @@ const bubble = (ctx: CanvasRenderingContext2D, hull: P[], pad: number): void => 
   ctx.closePath()
 }
 
+/** How soon a second click must follow the first to open the node. */
+const DOUBLE_CLICK_MS = 500
+
 const radius = (n: GNode): number => (n.kind === 'adr' ? 7 + Math.min(n.degree, 6) : n.kind === 'borrowed' ? 6 : 6 + Math.min(n.degree, 6) * 1.6)
 
 /** The colours of the design system, read from the page so the graph follows
@@ -169,6 +173,7 @@ export const GraphView = ({
   const pointer = useRef<{ hover: string; drag: string; linking: string; at: { x: number; y: number } | null }>({ hover: '', drag: '', linking: '', at: null })
   const [picked, setPicked] = useState(focus)
   const pickedRef = useRef(focus)
+  const lastClick = useRef({ id: '', at: 0 })
   pickedRef.current = picked
   const [show, setShow] = useState({ terms: true, decisions: true, borrowed: true })
   const showRef = useRef(show)
@@ -209,6 +214,8 @@ export const GraphView = ({
     for (const n of now.values()) n.degree = graph.links.filter((l) => l.from === n.id || l.to === n.id).length
     links.current = graph.links
     heat.current = Math.max(heat.current, 0.6)
+    // The card reads the picked node from here, so it shows once the nodes are.
+    rerender((n) => n + 1)
   }, [graph])
 
   const visible = (n: GNode): boolean =>
@@ -583,7 +590,17 @@ export const GraphView = ({
       if (hit) {
         hit.held = false
         pointer.current.drag = ''
-        if (!moved) setPicked(hit.id === pickedRef.current ? '' : hit.id)
+        if (!moved) {
+          // A second click on the same node soon after opens it. Counted here,
+          // from the node each press landed on, so a node the forces nudge
+          // between the two clicks still opens.
+          const last = lastClick.current
+          lastClick.current = { id: hit.id, at: u.timeStamp }
+          if (last.id === hit.id && u.timeStamp - last.at < DOUBLE_CLICK_MS) {
+            lastClick.current = { id: '', at: 0 }
+            onOpen(hit.id)
+          } else setPicked(hit.id === pickedRef.current ? '' : hit.id)
+        }
       } else if (!moved) setPicked('')
       heat.current = Math.max(heat.current, 0.3)
     }
@@ -631,10 +648,6 @@ export const GraphView = ({
         onPointerDown={down}
         onPointerMove={hover}
         onWheel={wheel}
-        onDoubleClick={(e) => {
-          const hit = nodeAt(toWorld(e.clientX, e.clientY))
-          if (hit) onOpen(hit.id)
-        }}
       />
 
       <div className="og-find">
@@ -684,24 +697,26 @@ export const GraphView = ({
             {adr ? `ADR ${adr.number} · ${adr.status}` : term?.borrowed ? 'Borrowed term' : 'Term'} · {nameOf(ontology, node.repo)}
           </span>
           <h3>{adr ? adr.title : node.name}</h3>
-          <p>{node.says || 'Nothing written yet.'}</p>
-          {findingsOf(ontology, node.id).map((f) => (
-            <span key={f.says} className={`ds-badge ds-badge--${f.tone}`}>
-              {f.says}
-            </span>
-          ))}
-          {term?.borrowed ? <span className="og-label">Copied from {nameOf(ontology, term.borrowed.from)} @ {term.borrowed.commit}</span> : null}
-          {term?.store && !term.borrowed ? <span className="og-label">Kept in {term.store}</span> : null}
-          {term?.pointsAt.length ? (
-            <div className="og-tiles">
-              {term.pointsAt.map((l) => (
-                <button key={l.term} type="button" className="og-tile" onClick={() => setPicked(termKey({ repo: term.repo, name: l.term }))}>
-                  <span className="og-label">{l.howMany}</span>
-                  {l.term}
-                </button>
-              ))}
-            </div>
-          ) : null}
+          <div className="og-card-body">
+            {node.says.trim() ? <Prose text={node.says} /> : <p>Nothing written yet.</p>}
+            {findingsOf(ontology, node.id).map((f) => (
+              <span key={f.says} className={`ds-badge ds-badge--${f.tone}`}>
+                {f.says}
+              </span>
+            ))}
+            {term?.borrowed ? <span className="og-label">Copied from {nameOf(ontology, term.borrowed.from)} @ {term.borrowed.commit}</span> : null}
+            {term?.store && !term.borrowed ? <span className="og-label">Kept in {term.store}</span> : null}
+            {term?.pointsAt.length ? (
+              <div className="og-tiles">
+                {term.pointsAt.map((l) => (
+                  <button key={l.term} type="button" className="og-tile" onClick={() => setPicked(termKey({ repo: term.repo, name: l.term }))}>
+                    <span className="og-label">{l.howMany}</span>
+                    {l.term}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
           <button type="button" className="ds-button" onClick={() => onOpen(node.id)}>
             <BookOpen size={14} aria-hidden="true" /> Open in the dictionary
           </button>

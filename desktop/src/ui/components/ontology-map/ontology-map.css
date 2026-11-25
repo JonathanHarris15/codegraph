@@ -156,6 +156,8 @@
   top: var(--space-4);
   right: var(--space-4);
   width: 300px;
+  /* Stops above the canvas's foot; a long entry scrolls inside, under its name. */
+  max-height: calc(100% - 2 * var(--space-4));
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -163,7 +165,9 @@
   animation: og-in 180ms ease-out;
 }
 .og-card h3 { margin: 0; font-size: var(--text-xl); font-weight: 600; line-height: 1.2; }
-.og-card p { margin: 0; color: var(--ink-soft); line-height: 1.45; }
+.og-card p, .og-card .ds-prose { margin: 0; color: var(--ink-soft); line-height: 1.45; }
+.og-card-body { display: flex; flex-direction: column; gap: var(--space-2); min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.og-card > .ds-button { flex: none; align-self: flex-start; }
 .og-card .ds-badge { white-space: normal; }
 .og-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .og-tile {
@@ -323,7 +327,7 @@
 .od-tile .ds-input { background-color: var(--surface-000); }
 .od-section { display: flex; flex-direction: column; gap: var(--space-2); }
 
-.od-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.od-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; max-width: 100%; }
 .od-chip {
   display: inline-flex;
   align-items: center;
@@ -364,6 +368,8 @@
 .od-inline.ds-input { padding: 4px 8px; background-color: transparent; border-color: transparent; }
 .od-inline.ds-input:hover, .od-inline.ds-input:focus { background-color: var(--surface-000); border-color: var(--field-line); }
 .od-add-row .ds-input, .od-chip-input.ds-input { width: auto; padding: 4px 28px 4px 8px; font-size: var(--text-sm); }
+/* A picker sizes itself to its longest choice, a whole ADR title; keep it inside its tile. */
+.od-chip-input.ds-input { max-width: 100%; min-width: 0; text-overflow: ellipsis; }
 .od-rules td:nth-child(2) { width: 190px; position: relative; }
 .od-verb.ds-input { position: absolute; inset: 5px 10px; width: calc(100% - 20px); opacity: 0; cursor: pointer; }
 .od-verb-words { font-size: var(--text-sm); color: var(--ink-soft); border-bottom: var(--stroke-edge) dashed var(--line-edge); }
