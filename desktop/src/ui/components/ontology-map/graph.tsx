@@ -6,6 +6,7 @@
 // (ADR 0038).
 import { BookOpen, Search } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Prose } from '../../design-system/prose.js'
 import { adrKey, findingsOf, nameOf, termKey, type Edits, type Model } from './model.js'
 
 type Kind = 'term' | 'word' | 'borrowed' | 'adr'
@@ -697,7 +698,7 @@ export const GraphView = ({
           </span>
           <h3>{adr ? adr.title : node.name}</h3>
           <div className="og-card-body">
-            <p>{node.says || 'Nothing written yet.'}</p>
+            {node.says.trim() ? <Prose text={node.says} /> : <p>Nothing written yet.</p>}
             {findingsOf(ontology, node.id).map((f) => (
               <span key={f.says} className={`ds-badge ds-badge--${f.tone}`}>
                 {f.says}

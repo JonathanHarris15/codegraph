@@ -165,7 +165,7 @@
   animation: og-in 180ms ease-out;
 }
 .og-card h3 { margin: 0; font-size: var(--text-xl); font-weight: 600; line-height: 1.2; }
-.og-card p { margin: 0; color: var(--ink-soft); line-height: 1.45; }
+.og-card p, .og-card .ds-prose { margin: 0; color: var(--ink-soft); line-height: 1.45; }
 .og-card-body { display: flex; flex-direction: column; gap: var(--space-2); min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .og-card > .ds-button { flex: none; align-self: flex-start; }
 .og-card .ds-badge { white-space: normal; }

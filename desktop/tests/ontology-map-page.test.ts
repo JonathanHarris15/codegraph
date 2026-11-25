@@ -54,7 +54,7 @@ beforeAll(async () => {
   // lists it.
   writeFileSync(
     join(repo, 'codegraph', 'adr', '0002-a-long-decision.md'),
-    `---\nadr: 2\nstatus: accepted\nterms: [Note]\n---\n# 2. Every note a person writes is kept whole, in the one place, for as long as they want it kept\n\n## Decision\n\n${'A note is kept whole, and found again by its words. '.repeat(60)}\n`,
+    `---\nadr: 2\nstatus: accepted\nterms: [Note]\n---\n# 2. Every note a person writes is kept whole, in the one place, for as long as they want it kept\n\n## Decision\n\n**Kept whole.** ${'A note is kept whole, and found again by its words. '.repeat(60)}\n\n- Found again by its *words*\n- Kept in one place\n`,
   )
   git(repo, 'add', '-A')
   git(repo, 'commit', '-q', '-m', 'Terms and decisions')
@@ -121,8 +121,14 @@ describe("a project's ontology map", () => {
     const body = card.locator('.og-card-body')
     expect(await body.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true)
     expect(await body.evaluate((el) => getComputedStyle(el).overflowY)).toBe('auto')
+    // Its words are Markdown, shown as they read rather than as marks.
+    expect(await shown(body.locator('strong'))).toBe('Kept whole.')
+    expect(await body.locator('li').count()).toBe(2)
+    expect(await body.textContent()).not.toContain('**')
     await card.getByRole('button', { name: 'Open in the dictionary' }).waitFor({ state: 'visible' })
     await picture('ontology-1b-long-card')
+    await body.evaluate((el) => el.scrollTo(0, el.scrollHeight))
+    await picture('ontology-1c-long-card-end')
   })
 
   it('keeps the picker of decisions to replace inside its tile', async () => {
