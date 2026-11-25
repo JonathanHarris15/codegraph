@@ -50,6 +50,12 @@ beforeAll(async () => {
     join(repo, 'codegraph', 'adr', '0001-notes-are-kept-by-one-module.md'),
     '---\nadr: 1\nstatus: proposed\nterms: [Note]\n---\n# 1. Notes are kept by one module\n\n## Context\n\nNotes were saved from two places.\n',
   )
+  // A decision long enough to overflow the graph's card and widen a picker that
+  // lists it.
+  writeFileSync(
+    join(repo, 'codegraph', 'adr', '0002-a-long-decision.md'),
+    `---\nadr: 2\nstatus: accepted\nterms: [Note]\n---\n# 2. Every note a person writes is kept whole, in the one place, for as long as they want it kept\n\n## Decision\n\n${'A note is kept whole, and found again by its words. '.repeat(60)}\n`,
+  )
   git(repo, 'add', '-A')
   git(repo, 'commit', '-q', '-m', 'Terms and decisions')
   writeFileSync(
@@ -75,6 +81,58 @@ describe("a project's ontology map", () => {
     expect(await view.getByRole('tab', { name: /Graph/ }).getAttribute('aria-selected')).toBe('true')
     await page.waitForTimeout(1500)
     await picture('ontology-1-graph')
+  })
+
+  it('opens a decision in the dictionary when it is double-clicked in the graph', async () => {
+    const view = page.getByRole('region', { name: 'Ontology map' })
+    // Finding a node flies the view to it, so it sits in the middle of the canvas;
+    // with the drift off it stays there.
+    await view.getByRole('button', { name: 'Motion' }).click()
+    await view.getByLabel('Find in the graph').fill('Notes are kept')
+    await page.waitForTimeout(1500)
+    const canvas = view.getByLabel('Ontology graph')
+    const box = (await canvas.boundingBox())!
+    // As a hand does it: two clicks a moment apart, the mouse wobbling a little.
+    const [x, y] = [box.x + box.width / 2, box.y + box.height / 2]
+    await page.mouse.move(x, y)
+    await page.mouse.down()
+    await page.mouse.move(x + 1, y + 1)
+    await page.mouse.up()
+    await page.waitForTimeout(150)
+    await page.mouse.move(x + 2, y)
+    await page.mouse.down({ clickCount: 2 })
+    await page.mouse.up({ clickCount: 2 })
+    const entry = page.getByRole('article', { name: 'ADR 1' })
+    await entry.waitFor({ timeout: PATIENCE })
+    expect(await entry.getByLabel('Decision', { exact: true }).inputValue()).toBe('Notes are kept by one module')
+    expect(await view.getByRole('tab', { name: /Dictionary/ }).getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('keeps a long decision inside the graph, scrolling its words under its name', async () => {
+    const view = page.getByRole('region', { name: 'Ontology map' })
+    // Showing a decision in the graph picks it, and its card opens.
+    await page.getByRole('navigation', { name: 'Terms and decisions' }).getByRole('button', { name: /Every note a person writes/ }).click()
+    await page.getByRole('article', { name: 'ADR 2' }).getByRole('button', { name: 'Show in graph' }).click()
+    const box = (await view.getByLabel('Ontology graph').boundingBox())!
+    const card = view.locator('aside.og-card', { hasText: 'Every note a person writes' })
+    await card.waitFor({ timeout: PATIENCE })
+    const cardBox = (await card.boundingBox())!
+    expect(cardBox.y + cardBox.height).toBeLessThanOrEqual(box.y + box.height)
+    const body = card.locator('.og-card-body')
+    expect(await body.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true)
+    expect(await body.evaluate((el) => getComputedStyle(el).overflowY)).toBe('auto')
+    await card.getByRole('button', { name: 'Open in the dictionary' }).waitFor({ state: 'visible' })
+    await picture('ontology-1b-long-card')
+  })
+
+  it('keeps the picker of decisions to replace inside its tile', async () => {
+    await page.getByRole('tab', { name: /Dictionary/ }).click()
+    await page.getByRole('navigation', { name: 'Terms and decisions' }).getByRole('button', { name: /Notes are kept by one module/ }).click()
+    const entry = page.getByRole('article', { name: 'ADR 1' })
+    const picker = entry.getByLabel('Replace another ADR')
+    const pickerBox = (await picker.boundingBox())!
+    const tileBox = (await picker.locator('xpath=ancestor::div[contains(@class, "od-tile")][1]').boundingBox())!
+    expect(pickerBox.x + pickerBox.width).toBeLessThanOrEqual(tileBox.x + tileBox.width)
   })
 
   it('shows each term in the dictionary as its file says, with what the check finds', async () => {
